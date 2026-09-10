@@ -52,6 +52,54 @@
 **Priority:** P3
 **Depends on:** the keyless decision failing in practice.
 
+### Dark theme (behind an accessibility pass)
+
+**What:** Add the dark variant of the PlainTicker tokens to the Compose theme, honoring the system setting, after verifying every dark pair against the mobile type scale (ink-muted on dark paper at 11–14sp), deciding how the three tone dots read on dark, and running the full `/qa` checklist a second time.
+
+**Why:** The hackathon build forces warm paper (plan §13 Pass 5, D15): one theme is all a zero-slack schedule can QA, and the paper is the memorable thing when the app opens from the dark Seeker wallet. Dark is the most common first request for a reading app used at night; shipping it as a token swap without the contrast pass would put unreadable muted ink in front of users.
+
+**Context:** `DESIGN.md` carries the web dark tokens but they were verified for 16px+ body on a monitor, not for 11sp mono meta on a 6-inch OLED. Gemini (design outside voice) argued for dark as the default from the use scene; the review chose light. Start in `ui/theme/` by adding the dark `colorScheme` behind a flag, then a contrast table, then QA.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** hackathon submission; first post-hackathon release or a user request.
+
+### Large screens: landscape, tablets, two-pane
+
+**What:** Unlock orientation, add `WindowSizeClass`-driven layouts (two-pane list | detail on expanded width), and make the swap sheet's state survive configuration changes (Activity-scoped ViewModel, quote persisted across recreation).
+
+**Why:** The hackathon build is portrait-locked for the Seeker (plan §13 Pass 6, D18). A Play or dApp Store listing beyond Seeker will flag a portrait-only app on tablets and foldables, and rotation mid-signing is currently avoided by the lock rather than handled.
+
+**Context:** Everything is a single scrolling column, so the phone layout degrades fine in multi-window; the work is the two-pane composition and the rotation-safe swap state machine. Attaches to the dApp Store listing TODO.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** a listing beyond the Seeker.
+
+### Profit / loss from the app's own swap receipts
+
+**What:** Compute per-position P&L in Portfolio from receipts the app itself recorded (T10 persists signature, mints, amounts, cost, timestamp locally from day one); positions acquired elsewhere stay without P&L and say so.
+
+**Why:** The chain carries no cost basis, so the hackathon Portfolio shows none (plan §13 Pass 7, D20) rather than an invented number in front of security-researcher judges. The app's own receipts are the one honest source, and P&L on owned positions is a return-visit reason the monetization plan wants.
+
+**Context:** Receipts table lands in T10 (`data/receipts/`). P&L = value − Σ cost for lots bought in-app; sells reduce lots FIFO. Neutral ink, no red/green, per the design rules. Weakness to state in the UI: partial coverage when tokens were bought elsewhere.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** T10 receipts persisted; monetization phase.
+
+### Swap sheet power controls
+
+**What:** A slippage ceiling behind a text disclosure and size presets (25 / 50 / 100%) in the swap sheet.
+
+**Why:** The hackathon sheet is one field, Max, and Jupiter's dynamic slippage (plan §13 Pass 7, D21) so it reads as a reading tool's checkout, not a DEX panel. Larger traders will ask for a ceiling; a swap failing on slippage in the wild is the trigger, not a hunch.
+
+**Context:** Jupiter Swap v2 `/order` accepts `slippageBps`; the sheet already shows the all-in cost line. Add the disclosure as a `HairlineField` row beneath the amount, hidden by default; presets as mono text actions. Keep the no-DEX-chrome rule: nothing appears until the disclosure is opened.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** a user request or an observed slippage failure.
+
 ## SKR track
 
 ### SKR-weighted coverage curation (second layer)
