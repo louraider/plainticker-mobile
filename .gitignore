@@ -15,3 +15,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# API response dumps kept for reference, not source
+resp.json
+*.bak
+
+# per-machine device list
+/.idea/deviceManager.xml
