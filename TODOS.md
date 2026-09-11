@@ -52,13 +52,13 @@
 **Priority:** P3
 **Depends on:** the keyless decision failing in practice.
 
-### Dark theme (behind an accessibility pass)
+### Light theme (behind an accessibility pass)
 
-**What:** Add the dark variant of the PlainTicker tokens to the Compose theme, honoring the system setting, after verifying every dark pair against the mobile type scale (ink-muted on dark paper at 11–14sp), deciding how the three tone dots read on dark, and running the full `/qa` checklist a second time.
+**What:** Add a light variant of the Instrument tokens (cool off-white canvas, never cream; same single blue accent; same hierarchy) to the Compose theme, honoring the system setting, after a contrast pass on the mobile type scale (13sp labels, 12sp mono meta) and a second full `/qa` run.
 
-**Why:** The hackathon build forces warm paper (plan §13 Pass 5, D15): one theme is all a zero-slack schedule can QA, and the paper is the memorable thing when the app opens from the dark Seeker wallet. Dark is the most common first request for a reading app used at night; shipping it as a token swap without the contrast pass would put unreadable muted ink in front of users.
+**Why:** The hackathon build is dark-first by decision (plan §13 Pass 8): the Seeker is an OLED phone opened from a dark wallet, and one theme is all the schedule can QA. Daylight reading is the most likely first request after launch; shipping light as a token swap without the contrast pass would put unreadable muted text in front of users.
 
-**Context:** `DESIGN.md` carries the web dark tokens but they were verified for 16px+ body on a monitor, not for 11sp mono meta on a 6-inch OLED. Gemini (design outside voice) argued for dark as the default from the use scene; the review chose light. Start in `ui/theme/` by adding the dark `colorScheme` behind a flag, then a contrast table, then QA.
+**Context:** `DESIGN.md` section 2 states the constraints for a light variant. Start in `ui/theme/` by adding the light `colorScheme` behind a flag, then a contrast table, then QA.
 
 **Effort:** M
 **Priority:** P3
