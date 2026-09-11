@@ -7,283 +7,198 @@
 <body>
 <x-dc>
 <helmet>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
   <style>
-    body { margin: 0; background: #F5F2EA; color: #18181B; font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-    a { color: #18181B; } a:hover { color: #3F3F46; }
-    @keyframes pt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+    body { margin: 0; background: #0B0F14; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    a { color: #5AA9E6; } a:hover { color: #E8ECF1; }
+    @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
   </style>
 </helmet>
-<div style="width: 412px; min-height: 2400px; overflow: visible; background: #F5F2EA; position: relative; display: flex; flex-direction: column; box-sizing: border-box;">
+<div style="width: 412px; min-height: 2560px; background: #0B0F14; position: relative; display: flex; flex-direction: column; box-sizing: border-box;">
 <div style="height: 24px; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; height: 56px; padding: 0 16px; flex: none;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #3F3F46; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">PLAINTICKER</div>
-  <span></span>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 600; color: #E8ECF1; letter-spacing: -0.01em;">PlainTicker</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #5AA9E6;  padding: 14px 0 14px 16px;">Watch</div>
 </div>
-<div style="display: flex; flex-direction: column; padding: 8px 16px 0 16px; flex: none;">
+<div style="display: flex; flex-direction: column; padding: 12px 20px 0 20px; flex: none;">
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 64px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 64px; letter-spacing: -0.035em;">TSLAx</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 16px; font-weight: 400; color: #B4BCC8; line-height: 22px; margin-top: 6px;">Tesla, Inc.</div>
+</div>
+<div style="display: flex; flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 28px 20px 0 20px; flex: none;">
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Token price</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 40px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 44px; letter-spacing: -0.03em;">$366.17</div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end; padding-bottom: 6px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">NYSE close</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 20px; font-weight: 400; color: #B4BCC8; font-variant-numeric: tabular-nums; line-height: 24px;">365.84</div>
+  </div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
+  <div style="position: relative; height: 14px;">
+    <div style="position: absolute; left: 0; right: 0; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 49%; top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
+    <div style="position: absolute; left: 53%; top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
+  </div>
+  <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Tracking within 0.09% of the NYSE close</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: #5AA9E6; font-variant-numeric: tabular-nums; line-height: 18px;">+0.09%</div>
+  </div>
+</div>
+<div style="height: 28px; flex: none;"></div>
+<div style="display: flex; flex-direction: row; align-items: stretch; gap: 14px; padding: 0 20px; flex: none;">
+  <div style="width: 2px; background: #5AA9E6; animation: breathe 2.4s ease-in-out infinite; flex: none;"></div>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #5AA9E6; line-height: 20px;">Live from the mint</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 400; color: #7F8A99; font-variant-numeric: tabular-nums; line-height: 18px;">slot 445,912,118 · 2 s ago</div>
+  </div>
+</div>
+<div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em; padding: 28px 20px 14px 20px; flex: none;">Backing and controls</div>
+<div style="padding: 0 20px; flex: none;">
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: rgba(232,236,241,0.10); border: 1px solid rgba(232,236,241,0.10);">
+    <div style="grid-column: span 2; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Proof of reserves</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 32px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">100.7%</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">26,101 shares held for 25,924 tokens</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Permanent delegate</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 24px; font-weight: 500; color: #D9A441; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">Yes</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Issuer can move tokens</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Transfers pausable</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 20px; font-weight: 500; color: #D9A441; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">Yes, not paused</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Issuer can pause transfers</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Split multiplier</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 24px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">1.00</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">No pending split</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Transfer hook</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 24px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">None</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">No transfer hook program</div>
+</div>
+  </div>
+</div>
+<div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em; padding: 32px 20px 14px 20px; flex: none;">Against the sector</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 6px 20px;">
   <div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px;">
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 56px; font-weight: 500; color: #18181B; font-variant-numeric: tabular-nums; line-height: 60px; letter-spacing: -0.02em;">TSLAx</div>
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 28px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 34px;">$366.17</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Tesla, Inc.</div>
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 500; color: #18181B; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; padding: 16px 0 16px 16px;">WATCH</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px;">
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">DATA UPDATED 10 SEP 2026 14:55 UTC</div>
-  </div>
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 10px;">tracking within 0.09% of TSLA · NYSE open</div>
-</div>
-<div style="display: flex; flex-direction: column; padding: 32px 16px 12px 16px; flex: none;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">01 — TRUST</div>
-  
-</div>
-<div style="display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 0 16px 12px 16px;">
-  <span style="display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: oklch(0.45 0.15 155); flex: none; animation: pt-pulse 2s ease-in-out infinite;"></span>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">READ FROM MINT · SLOT 445 912 118 · 2 S AGO</div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Proof of reserves</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">26,101 shares held · 25,924 in circulation</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">100.7%</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Permanent delegate</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">issuer can move tokens</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    <span style="display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: oklch(0.48 0.16 70); flex: none;"></span>
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">yes</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Transfers pausable</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">not paused</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    <span style="display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: oklch(0.48 0.16 70); flex: none;"></span>
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">yes</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Split multiplier</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">no pending change</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">1.00</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Transfer hook</div>
-    
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">none</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: column; padding: 32px 16px 12px 16px; flex: none;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">02 — QUALITY</div>
-  
-</div>
-<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Quality</div>
-    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 8px;">
-      <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">8/9</div>
-      <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px;">strong</div>
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 500; color: #B4BCC8; line-height: 20px;">Quality</div>
+    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 10px;">
+      <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 20px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 24px;">8/9</div>
+      <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #7F8A99; line-height: 18px;">strong</div>
     </div>
   </div>
   <div style="position: relative; height: 12px;">
-    <div style="position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: #A8A29E;"></div>
-    <div style="position: absolute; left: 86%; top: 0; width: 2px; height: 12px; background: #18181B;"></div>
+    <div style="position: absolute; left: 0; right: 0; top: 5px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 89%; top: 0; width: 2px; height: 12px; background: #E8ECF1;"></div>
   </div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Return on invested capital</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">sector median 6.1%</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">9.8%</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Gross margin</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">sector median 21.4%</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">17.9%</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: column; padding: 32px 16px 12px 16px; flex: none;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">03 — VALUATION</div>
-  
-</div>
-<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; box-sizing: border-box;">
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 6px 20px;">
   <div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Valuation</div>
-    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 8px;">
-      <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">51</div>
-      <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px;">fair</div>
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 500; color: #B4BCC8; line-height: 20px;">Valuation</div>
+    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 10px;">
+      <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 20px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 24px;">51</div>
+      <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #7F8A99; line-height: 18px;">fair</div>
     </div>
   </div>
   <div style="position: relative; height: 12px;">
-    <div style="position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: #A8A29E;"></div>
-    <div style="position: absolute; left: 51%; top: 0; width: 2px; height: 12px; background: #18181B;"></div>
+    <div style="position: absolute; left: 0; right: 0; top: 5px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 51%; top: 0; width: 2px; height: 12px; background: #E8ECF1;"></div>
   </div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Price / earnings</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">sector median 27.0×</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">92.4×</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Enterprise value / sales</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">sector median 2.4×</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">11.2×</div>
-  </div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: column; padding: 32px 16px 12px 16px; flex: none;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">04 — MOMENTUM</div>
-  
-</div>
-<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; box-sizing: border-box;">
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 6px 20px;">
   <div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Momentum</div>
-    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 8px;">
-      <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">0.79</div>
-      <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px;">high</div>
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 500; color: #B4BCC8; line-height: 20px;">Momentum</div>
+    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 10px;">
+      <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 20px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 24px;">0.79</div>
+      <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #7F8A99; line-height: 18px;">high</div>
     </div>
   </div>
   <div style="position: relative; height: 12px;">
-    <div style="position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: #A8A29E;"></div>
-    <div style="position: absolute; left: 79%; top: 0; width: 2px; height: 12px; background: #18181B;"></div>
+    <div style="position: absolute; left: 0; right: 0; top: 5px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 79%; top: 0; width: 2px; height: 12px; background: #E8ECF1;"></div>
   </div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">52-week position</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">of the low–high range</div>
+<div style="height: 14px; flex: none;"></div>
+<div style="padding: 0 20px; flex: none;">
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: rgba(232,236,241,0.10); border: 1px solid rgba(232,236,241,0.10);">
+    <div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 88px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Return on invested capital</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">9.8%</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">sector median 6.1%</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 88px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Gross margin</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">17.9%</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">sector median 21.4%</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 88px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Price to earnings</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">92.4x</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">sector median 27.0x</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 88px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Enterprise value to sales</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">11.2x</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">sector median 2.4x</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 88px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">52-week position</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">0.79</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">of the low to high range</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 88px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Six-month change vs sector</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 22px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">+14.2 pt</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">relative price change</div>
+</div>
   </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">0.79</div>
-  </div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px; box-sizing: border-box;">
-  <div style="display: flex; flex-direction: column; min-width: 0;">
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">vs sector, 6 months</div>
-    <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 14px; font-weight: 400; color: #5F5F66; line-height: 20px; margin-top: 2px;">relative price change</div>
-  </div>
-  <div style="display: flex; flex-direction: row; align-items: center; gap: 8px; flex: none;">
-    
-    <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 22px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 28px; white-space: nowrap;">+14.2 pt</div>
-  </div>
+<div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em; padding: 32px 20px 14px 20px; flex: none;">F-Score</div>
+<div style="display: flex; flex-direction: row; align-items: baseline; gap: 12px; padding: 0 20px 6px 20px; flex: none;">
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 56px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 60px; letter-spacing: -0.03em;">8</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 16px; font-weight: 400; color: #7F8A99; line-height: 22px;">of 9 signals</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: column; padding: 32px 16px 12px 16px; flex: none;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">05 — F-SCORE</div>
-  
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">Return on assets positive</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="display: flex; flex-direction: row; align-items: baseline; gap: 12px; padding: 0 16px 8px 16px;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 56px; font-weight: 500; color: #18181B; font-variant-numeric: tabular-nums; line-height: 60px; letter-spacing: -0.02em;">8</div>
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #5F5F66; line-height: 22px;">of 9</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">Operating cash flow positive</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Return on assets positive</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">Return on assets improving</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Operating cash flow positive</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">Cash flow exceeds earnings</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Return on assets improving</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">Leverage falling</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Cash flow exceeds earnings</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #7F8A99; line-height: 20px;">Liquidity improving</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #7F8A99; font-variant-numeric: tabular-nums; line-height: 20px;">no</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Leverage falling</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">No new shares issued</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #5F5F66; line-height: 22px;">Liquidity improving</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; line-height: 22px;">—</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">Gross margin improving</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">No new shares issued</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 20px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 20px;">Asset turnover improving</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 20px;">yes</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Gross margin improving</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
+<div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em; padding: 32px 20px 14px 20px; flex: none;">Method</div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 0 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #B4BCC8; line-height: 23px;">Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice.</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #7F8A99; line-height: 18px;">Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close.</div>
 </div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 16px; box-sizing: border-box;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 22px;">Asset turnover improving</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 18px; font-weight: 400; color: #18181B; font-variant-numeric: tabular-nums; line-height: 22px;">✓</div>
-</div>
-<div style="height: 1px; background: #D4D0C5; flex: none;"></div>
-<div style="display: flex; flex-direction: column; padding: 32px 16px 12px 16px; flex: none;">
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">06 — METHOD</div>
-  
-</div>
-<div style="display: flex; flex-direction: column; gap: 12px; padding: 0 16px;">
-  <div style="font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 400; color: #3F3F46; line-height: 24px;">Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice.</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">FILINGS SEC EDGAR XBRL · PRICES JUPITER PRICE V3 · REFERENCE NYSE CLOSE</div>
-</div>
-<div style="display: flex; flex-direction: column; gap: 10px; padding: 32px 16px 48px 16px;">
-  <div style="display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 4px; background: #18181B; color: #F5F2EA; border: 1px solid #18181B; font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 500; color: #F5F2EA;  box-sizing: border-box;">Swap USDC → TSLAx</div>
-  <div style="font-family: 'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; font-weight: 400; color: #5F5F66; font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.08em; line-height: 16px; ">EST. ALL-IN COST 0.09% · LIQUIDITY $1.3M</div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 32px 20px 48px 20px; flex: none;">
+  <div style="display: flex; align-items: center; justify-content: center; height: 56px; background: #5AA9E6; color: #0B0F14; border: 1px solid #5AA9E6; font-family: 'Outfit', system-ui, sans-serif; font-size: 16px; font-weight: 600; color: #0B0F14;  box-sizing: border-box;">Swap USDC to TSLAx</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 400; color: #7F8A99; font-variant-numeric: tabular-nums; line-height: 18px;">est. all-in cost 0.09% · liquidity $1.3M</div>
 </div>
 
 </div>

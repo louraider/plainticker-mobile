@@ -2,7 +2,7 @@
   "artboards": [
     {
       "file": "Onboarding.dc.html",
-      "title": "1 · Onboarding",
+      "title": "1 Onboarding",
       "x": 0,
       "y": 0,
       "w": 412,
@@ -10,68 +10,75 @@
     },
     {
       "file": "List.dc.html",
-      "title": "2 · List",
-      "x": 500,
+      "title": "2 List",
+      "x": 508,
       "y": 0,
       "w": 412,
       "h": 915
     },
     {
       "file": "Main.dc.html",
-      "title": "3 · Detail — first viewport",
-      "x": 1000,
+      "title": "3 Detail, first viewport",
+      "x": 1016,
       "y": 0,
       "w": 412,
       "h": 915
     },
     {
       "file": "SwapSheet.dc.html",
-      "title": "4 · Swap sheet",
-      "x": 1500,
+      "title": "4 Swap sheet",
+      "x": 1524,
       "y": 0,
       "w": 412,
       "h": 915
     },
     {
       "file": "Receipt.dc.html",
-      "title": "5 · Receipt (landed)",
-      "x": 2000,
+      "title": "5 Receipt, landed",
+      "x": 2032,
       "y": 0,
       "w": 412,
       "h": 915
     },
     {
       "file": "DetailFull.dc.html",
-      "title": "3b · Detail — full scroll",
+      "title": "3b Detail, full scroll",
       "x": 0,
-      "y": 1075,
+      "y": 1115,
       "w": 412,
-      "h": 2400
+      "h": 2560
     },
     {
       "file": "Portfolio.dc.html",
-      "title": "6 · Portfolio",
-      "x": 500,
-      "y": 1075,
+      "title": "6 Portfolio",
+      "x": 508,
+      "y": 1115,
       "w": 412,
       "h": 915
     },
     {
       "file": "Watchlist.dc.html",
-      "title": "7 · Watchlist",
-      "x": 1000,
-      "y": 1075,
+      "title": "7 Watchlist",
+      "x": 1016,
+      "y": 1115,
       "w": 412,
       "h": 915
     }
   ],
   "annotations": [
     {
-      "id": "brief",
-      "x": 1500,
-      "y": 1075,
+      "id": "read",
+      "x": 0,
+      "y": -240,
+      "w": 980,
+      "text": "PlainTicker Mobile, direction A Instrument. Seeker, 412dp portrait, dark canvas.\nDesign read: overhaul redesign of a reading tool for tokenized US stocks, crypto-native audience, trust-first content. Dials VARIANCE 5 / MOTION 3 / DENSITY 5. Outfit for UI, JetBrains Mono for every number. One accent (#5AA9E6) for interactive and live state; amber only on explicit issuer-control risk. Sharp corners everywhere.\nSignature elements: the tracking gauge (NYSE tick vs token tick), the breathing live bar, blueprint grids for facts.\nSample data is illustrative. No verdict words, no em dashes, no section numbers."
+    },
+    {
+      "id": "ia",
+      "x": 1524,
+      "y": 1115,
       "w": 420,
-      "text": "PlainTicker Mobile — Seeker, 412dp portrait, warm paper forced.\nBuilt from docs/plan-2026-09-10.md §13 and the MOBILE DELTAS block in DESIGN.md.\nStatic mockups with sample data: TSLAx numbers, F-Score signals, wallet, signature and slot are illustrative.\nRows and rules, never cards · Geist Sans/Mono · one pulse per screen (the live signature) · no BUY/SELL/HOLD anywhere."
+      "text": "IA kept from the plan: trust first (Backing and controls), then fundamentals, then one Swap button after Method; Watch in the header; List / Portfolio / Watchlist as top tabs.\nOne change for mobile: Quality, Valuation and Momentum are one section, Against the sector, with three marker tracks and a six-cell fact grid, instead of three sections with identical layout."
     }
   ],
   "launch": {
