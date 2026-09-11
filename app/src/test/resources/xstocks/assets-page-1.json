@@ -1,0 +1,88 @@
+{
+  "_fixture_note": "One node of a later catalog page, recorded 2026-09-10, deployments trimmed to Solana; hasNextPage=false ends pagination in tests.",
+  "nodes": [
+    {
+      "id": "99737248-25b5-4685-af8b-f09c1096e0dd",
+      "name": "Amer Sports xStock",
+      "symbol": "ASx",
+      "isin": "CH1588660865",
+      "underlyingSymbol": "AS",
+      "underlyingIsin": "USG0260P1024",
+      "underlying": {
+        "symbol": "AS",
+        "isin": "USG0260P1024",
+        "type": null,
+        "listingCountry": "US"
+      },
+      "description": "Amer Sports xStock",
+      "logo": "https://xstocks-metadata.backed.fi/logos/tokens/ASx.png",
+      "isTradingHalted": false,
+      "trading": {
+        "currency": "USD",
+        "tradingHoursMode": "TwentyFourFive",
+        "isTradingHalted": false,
+        "currentPeriod": "extended",
+        "openNow": true,
+        "nextChangeAt": "2026-09-11T00:00:00.000Z",
+        "exchange": {
+          "mic": "XNYS",
+          "abbreviation": "NYSE",
+          "name": "New York Stock Exchange",
+          "timezone": "America/New_York"
+        },
+        "limitsPerPeriod": {
+          "market": {
+            "minOrderFiatValue": 1000,
+            "maxOrderFiatValue": 10000000
+          },
+          "extended": {
+            "minOrderFiatValue": 1000,
+            "maxOrderFiatValue": 10000000
+          },
+          "overnight": {
+            "minOrderFiatValue": 1000,
+            "maxOrderFiatValue": 1000000
+          },
+          "closed": {
+            "minOrderFiatValue": 1000,
+            "maxOrderFiatValue": 0
+          }
+        }
+      },
+      "deployments": [
+        {
+          "address": "XsoxUeZzk47VGpqwE9wLi3DM9xuHSSmnsfXmvZH2bxw",
+          "network": "Solana",
+          "supportsAtomicSwaps": true,
+          "stablecoins": [
+            {
+              "symbol": "USDC",
+              "currency": "USD",
+              "network": "Solana",
+              "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+              "decimals": 6,
+              "issuance": true,
+              "redemption": true,
+              "supportsAtomicSwaps": true,
+              "solanaTokenProgram": "TokenProgram"
+            },
+            {
+              "symbol": "USDG",
+              "currency": "USD",
+              "network": "Solana",
+              "address": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+              "decimals": 6,
+              "issuance": true,
+              "redemption": true,
+              "supportsAtomicSwaps": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "page": {
+    "currentPage": 1,
+    "hasNextPage": false
+  }
+}

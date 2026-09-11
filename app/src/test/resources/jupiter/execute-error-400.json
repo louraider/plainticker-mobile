@@ -1,0 +1,5 @@
+{
+  "_fixture_note": "Live 400 from POST /swap/v2/execute with an undecodable placeholder body, 2026-09-10. Code -2 is Jupiter's decode failure.",
+  "code": -2,
+  "error": "Failed to decode signed transaction"
+}
