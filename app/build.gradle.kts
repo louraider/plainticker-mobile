@@ -18,7 +18,9 @@ val appVersionName: String =
 // Environment only: never a checked-in file, never gradle.properties or local.properties.
 // All four variables must be present, otherwise the release build type stays UNSIGNED
 // (output is app-release-unsigned.apk) and one warning line is printed when a release-ish
-// task is requested. CI decodes KEYSTORE_BASE64 to a temp path and exports these four from
+// task is requested (only while the configuration phase runs: a configuration-cache hit skips
+// it, and the four variables are cache inputs, so setting them invalidates the entry).
+// CI decodes KEYSTORE_BASE64 to a temp path and exports these four from
 // repository secrets (see .github/workflows/release.yml and docs/release-signing.md).
 fun env(name: String): String? = providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
 val envKeystorePath = env("KEYSTORE_PATH")
