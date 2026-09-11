@@ -30,7 +30,7 @@
 
 ### Solana dApp Store listing
 
-**What:** Publish the release APK to the Solana dApp Store: app NFT and release NFT under the publisher NFT created in Week 1, listing copy carrying "Not available to US persons" and the not-investment-advice line, screenshots, and a dry run of the `dapp-store` CLI against the tagged `v1.0.0-hackathon` build.
+**What:** Publish the release APK to the Solana dApp Store: App NFT and release NFT under the Publisher Portal account (KYC/KYB) set up in Week 1; there is no publisher NFT mint anymore, see docs/dapp-store-publishing.md, listing copy carrying "Not available to US persons" and the not-investment-advice line, screenshots, and a dry run of the `dapp-store` CLI against the tagged `v1.0.0-hackathon` build.
 
 **Why:** The hackathon announcement: "Winners must publish their app on the Solana dApp Store to claim their prize." A win without a listing forfeits the prize.
 
@@ -38,7 +38,7 @@
 
 **Effort:** M
 **Priority:** P2
-**Depends on:** hackathon results; publisher NFT from Week 1.
+**Depends on:** hackathon results; Publisher Portal account, KYC/KYB and App NFT from Week 1; publication within 30 calendar days of the winner announcement (Terms 9.3).
 
 ### Jupiter Developer Platform key + firewall (contingency)
 
