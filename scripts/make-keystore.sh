@@ -26,11 +26,16 @@ if ! command -v keytool >/dev/null 2>&1; then
   exit 2
 fi
 
-REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-mkdir -p "$OUT_DIR"
+# Both paths go through `pwd -P` so they compare in the same form: on Git Bash `git rev-parse
+# --show-toplevel` prints C:/Users/... while `pwd -P` prints /c/Users/..., and a raw prefix
+# check between the two never matches.
+REPO_ROOT="$(cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)" && pwd -P)"
+created_dir=0
+if [ ! -d "$OUT_DIR" ]; then mkdir -p "$OUT_DIR"; created_dir=1; fi
 ABS_OUT="$(cd "$OUT_DIR" && pwd -P)"
 case "$ABS_OUT/" in
   "$REPO_ROOT"/*)
+    [ "$created_dir" -eq 1 ] && rmdir "$OUT_DIR" 2>/dev/null
     echo "refusing: $ABS_OUT is inside the repository ($REPO_ROOT). Pick a directory outside it." >&2
     exit 2 ;;
 esac

@@ -76,9 +76,9 @@ The pattern is assembled at run time so this file does not contain them either:
 git grep -nwiE "$(printf 'b%sy|s%sll|h%sld' u e o)" -- app/src
 ```
 
-Must be empty once the spike code is deleted (T10 replaces it with the swap sheet, verb
-"Swap"). Until then the only hits are in `app/src/main/java/com/myapp/MainViewModel.kt` and
-`app/src/main/java/com/myapp/ui/spike/`.
+Must be empty. It is empty today (checked 2026-09-11 after T5); T10's swap sheet uses the
+verb "Swap". Run it again on the final commit, and once without `-w` to catch the verbs
+hidden inside identifiers.
 
 ## 8. Local and environment files are untracked
 
@@ -86,18 +86,30 @@ Must be empty once the spike code is deleted (T10 replaces it with the swap shee
 git ls-files | grep -iE '(^|/)(local\.properties|\.env[^/]*|resp\.json)$'   # must be empty
 ```
 
-## 9. Docs the public expects
+## 9. Vendored and IDE files: decide what goes public
+
+These are tracked today and will be visible the moment the flag flips:
+
+```bash
+git ls-files -- .agents .claude skills-lock.json .idea | cut -d/ -f1-2 | sort -u
+```
+
+`.agents/skills/` and `.claude/skills/` are third-party skill docs (check their licence
+allows redistribution or drop them from the repo before the flip); `.idea/` files carry local
+paths and run configurations. Keep, relicense or `git rm --cached` each one deliberately.
+
+## 10. Docs the public expects
 
 - `README.md` with the Security & threat model section and the integrator section (T15).
 - `server/rpc-proxy/` mirrors the forwarder source (plan section 5).
 - `docs/release-signing.md`, `docs/build-notes.md`, this file.
 
-## 10. CI is green on `main`
+## 11. CI is green on `main`
 
 Both jobs of `.github/workflows/ci.yml` (unit tests; redaction guard including `--history`)
 green on the commit about to be exposed. The four release secrets are set (`gh secret list`).
 
-## 11. Flip, then verify
+## 12. Flip, then verify
 
 1. Settings -> Change visibility -> Public.
 2. Re-run CI on `main`; confirm the Actions log shows no secret value (GitHub masks them, the
