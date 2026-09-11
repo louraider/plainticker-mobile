@@ -27,7 +27,7 @@ fun PortfolioScreen(
             Text("Connect your wallet to see the xStocks you own")
             Text("Connect wallet", modifier = Modifier.clickable { viewModel.connect() })
         } else {
-            Text("Connected ${account.address}" + (account.label?.let { "  ($it)" } ?: ""))
+            Text("Connected ${account.address.take(4)}...${account.address.takeLast(4)}" + (account.label?.let { "  ($it)" } ?: ""))
             Text("Disconnect", modifier = Modifier.clickable { viewModel.disconnect() })
             Text("Refresh", modifier = Modifier.clickable { viewModel.refresh() })
             state.lamports?.let { Text("SOL ${it / 1_000_000_000.0}") }
