@@ -53,6 +53,7 @@ class MainViewModel : ViewModel() {
     val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()
 
     override fun onCleared() {
+        super.onCleared()
         httpClient.close()
     }
 
@@ -169,7 +170,7 @@ class MainViewModel : ViewModel() {
                 )
                 log.appendLine("GET /order: ${tOrder}ms")
 
-                val unsigned = order.transaction
+                val unsigned = order.transaction?.takeIf { order.isSignable }
                 if (unsigned == null) {
                     log.appendLine("order carried no transaction, nothing to sign")
                 } else {

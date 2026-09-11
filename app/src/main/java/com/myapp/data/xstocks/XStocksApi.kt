@@ -2,6 +2,7 @@ package com.myapp.data.xstocks
 
 import com.myapp.data.net.HttpClientFactory
 import com.myapp.data.net.bodyOrThrow
+import com.myapp.data.net.nullableBodyOrThrow
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
@@ -13,11 +14,16 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 
 /**
- * xStocks public API v2. No key; endpoints and shapes per its OpenAPI document.
+ * xStocks public API v2. No key; endpoints and shapes per its OpenAPI document
+ * (https://api.xstocks.fi/api-docs/v2/openapi.json) and live answers on 2026-09-10.
  *
  * The catalog is ~830 assets served 100 per page at roughly 560 KB a page (every asset
  * lists its deployments on ten networks), so [catalogPages] streams pages as they land and
  * callers cache the result rather than refetching per screen.
+ *
+ * Symbols go into URL paths, so every symbol is checked against [SYMBOL] first: a value
+ * that is not a plain token symbol (a stray "../", a "?network=") is refused with an
+ * [IllegalArgumentException] before any request is built.
  */
 class XStocksApi(
     private val client: HttpClient,
@@ -52,18 +58,21 @@ class XStocksApi(
 
     /** One asset by its token symbol, e.g. "TSLAx". */
     suspend fun asset(symbol: String): XStockAsset =
-        client.get("$baseUrl/assets/${symbol.trim()}") { browserIdentity() }.bodyOrThrow()
+        client.get("$baseUrl/assets/${symbolPath(symbol)}") { browserIdentity() }.bodyOrThrow()
 
     /** Current scaledUiAmount multiplier for [symbol] on [network]. */
     suspend fun multiplier(symbol: String, network: String = XStockAsset.NETWORK_SOLANA): Multiplier =
-        client.get("$baseUrl/assets/${symbol.trim()}/multiplier") {
+        client.get("$baseUrl/assets/${symbolPath(symbol)}/multiplier") {
             browserIdentity()
             parameter("network", network)
         }.bodyOrThrow()
 
-    /** Proof of reserves for one symbol. */
-    suspend fun proofOfReserves(symbol: String): ProofOfReserves =
-        client.get("$baseUrl/proof-of-reserves/${symbol.trim()}") { browserIdentity() }.bodyOrThrow()
+    /**
+     * Proof of reserves for one symbol, or null: the API answers 200 with a JSON `null`
+     * for a symbol it has no reserves data for.
+     */
+    suspend fun proofOfReserves(symbol: String): ProofOfReserves? =
+        client.get("$baseUrl/proof-of-reserves/${symbolPath(symbol)}") { browserIdentity() }.nullableBodyOrThrow()
 
     /** One page of proof-of-reserves rows. */
     suspend fun proofOfReservesPage(page: Int = 0, pageSize: Int = MAX_PAGE_SIZE): ProofOfReservesPage =
@@ -90,11 +99,21 @@ class XStocksApi(
         header(HttpHeaders.UserAgent, HttpClientFactory.BROWSER_USER_AGENT)
     }
 
+    /** The trimmed symbol, or an [IllegalArgumentException] when it could not be a token symbol. */
+    private fun symbolPath(symbol: String): String {
+        val trimmed = symbol.trim()
+        require(SYMBOL.matches(trimmed)) { "not an xStock symbol: '$symbol'" }
+        return trimmed
+    }
+
     companion object {
         const val BASE_URL = "https://api.xstocks.fi/api/v2/public"
         const val MAX_PAGE_SIZE = 100
 
         /** Hard stop on pagination: ~830 assets today; 50 pages is five times that. */
         const val MAX_PAGES = 50
+
+        /** Token symbols as xStocks spells them ("TSLAx", "SPYx"): letters, digits, '.', '-', '_'. */
+        private val SYMBOL = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,19}")
     }
 }

@@ -193,4 +193,15 @@ class PlainTickerApiTest {
         val e = expectThrows<RateLimitedException> { api(mock).getAnalysis("JPM") }
         assertNull(e.retryAfterSeconds)
     }
+
+    @Test
+    fun `a null Piotroski signal is kept as unknown and not counted as passed`() {
+        val fscore = HttpClientFactory.json.decodeFromString(
+            FScore.serializer(),
+            """{"score":7,"scale":"0-9","signals":[true,true,null,false,true,true,true,true,true]}""",
+        )
+        assertEquals(9, fscore.signals.size)
+        assertNull(fscore.signals[2])
+        assertEquals(7, fscore.passedCount)
+    }
 }

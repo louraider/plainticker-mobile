@@ -88,15 +88,20 @@ data class Axis(
     val tone: Tone? = null,
 )
 
-/** Piotroski F-score: nine boolean signals, summed. */
+/**
+ * Piotroski F-score. `signals` holds the nine checks in fixed order: true = passed,
+ * false = evaluated and failed, null = unknown (the server widened this from boolean on
+ * 2026-06-16 when the data behind a check is missing, e.g. a bank with no COGS).
+ * `score` counts only the true ones; so does [passedCount].
+ */
 @Serializable
 data class FScore(
     val score: Int? = null,
     val scale: String? = null,
     val breakdown: FScoreBreakdown? = null,
-    val signals: List<Boolean> = emptyList(),
+    val signals: List<Boolean?> = emptyList(),
 ) {
-    val passedCount: Int get() = signals.count { it }
+    val passedCount: Int get() = signals.count { it == true }
 }
 
 @Serializable
