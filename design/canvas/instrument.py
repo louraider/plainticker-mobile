@@ -19,10 +19,10 @@ FONTS = "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;fa
 
 # ----- sample data (illustrative, consistent across screens) -----
 D = dict(
-    ticker="TSLAx", company="Tesla, Inc.", price="$366.17", ref="365.84", premium="+0.09%",
+    ticker="TSLAx", company="Tesla, Inc.", price="$366.17", ref="$365.84", premium="+0.09%",
     slot="445,912,118", ago="2 s ago",
     por="100.7%", por_sub="26,101 shares held for 25,924 tokens",
-    receive="0.01364", paid="5.00", balance="10.00", sig="4xQm…9tHe", rslot="445,912,340", secs="12.7 s",
+    receive="0.01364", paid="5.00", balance="10.00", sig="4xQm…9tHe", rslot="445,912,340", secs="3.1 s",
     wallet="3kF9…Qm2v",
 )
 
@@ -78,20 +78,29 @@ def tabs(active):
         items.append(f'<div style="{t(14, 600 if on else 500, INK if on else MUTED)} padding: 12px 0 14px 0; border-bottom: 2px solid {ACCENT if on else "transparent"};">{name}</div>')
     return f"""<div style="display: flex; flex-direction: row; gap: 24px; padding: 0 20px; border-bottom: 1px solid {LINE}; flex: none;">{''.join(items)}</div>"""
 
-def heading(text, top=32):
-    return f'<div style="{t(20, 600, INK, "line-height: 26px; letter-spacing: -0.01em;")} padding: {top}px 20px 14px 20px; flex: none;">{text}</div>'
+def heading(text, top=32, right=""):
+    r = f'<div style="{m(13, 500, MUTED, "line-height: 18px;")}">{right}</div>' if right else ""
+    return f"""<div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; padding: {top}px 20px 14px 20px; flex: none;">
+  <div style="{t(20, 600, INK, 'line-height: 26px; letter-spacing: -0.01em;')}">{text}</div>
+  {r}
+</div>"""
 
-def live(label, meta_text):
+def live(label, meta_text, pulse=True):
+    anim = " animation: breathe 2.4s ease-in-out infinite;" if pulse else ""
     return f"""<div style="display: flex; flex-direction: row; align-items: stretch; gap: 14px; padding: 0 20px; flex: none;">
-  <div style="width: 2px; background: {ACCENT}; animation: breathe 2.4s ease-in-out infinite; flex: none;"></div>
+  <div style="width: 2px; background: {ACCENT};{anim} flex: none;"></div>
   <div style="display: flex; flex-direction: column; gap: 2px;">
     <div style="{t(14, 600, ACCENT, 'line-height: 20px;')}">{label}</div>
     <div style="{m(12, 400, MUTED, 'line-height: 18px;')}">{meta_text}</div>
   </div>
 </div>"""
 
-def cell(label, value, sub="", span=1, value_size=24, tone=None, min_h=96):
-    subhtml = f'<div style="{t(13, 400, INK2, "line-height: 18px;")}">{sub}</div>' if sub else ""
+def cell(label, value, sub="", span=1, value_size=24, tone=None, min_h=96, sub_mono=False):
+    if sub:
+        style = m(12, 400, INK2, "line-height: 18px;") if sub_mono else t(13, 400, INK2, "line-height: 18px;")
+        subhtml = f'<div style="{style}">{sub}</div>'
+    else:
+        subhtml = ""
     return f"""<div style="grid-column: span {span}; background: {BG}; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: {min_h}px; box-sizing: border-box;">
   <div style="{t(13, 500, MUTED, 'line-height: 18px;')}">{label}</div>
   <div style="{m(value_size, 500, tone or INK, 'line-height: 1.1; letter-spacing: -0.01em;')}">{value}</div>
@@ -106,7 +115,7 @@ def grid(cells):
 </div>"""
 
 def track(label, value, state, pos_pct):
-    return f"""<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 6px 20px;">
+    return f"""<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 6px 20px; flex: none;">
   <div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px;">
     <div style="{t(15, 500, INK2, 'line-height: 20px;')}">{label}</div>
     <div style="display: flex; flex-direction: row; align-items: baseline; gap: 10px;">
@@ -126,13 +135,13 @@ def signal(name, ok=True):
   <div style="{m(14, 500, INK if ok else MUTED, 'line-height: 20px;')}">{'yes' if ok else 'no'}</div>
 </div>"""
 
-def button(label, primary=True):
-    if primary:
-        style = f"background: {ACCENT}; color: {BG}; border: 1px solid {ACCENT};"
-        color = BG
-    else:
-        style = f"background: transparent; color: {INK}; border: 1px solid {LINE_STRONG};"
-        color = INK
+def button(label, kind="primary"):
+    if kind == "primary":
+        style = f"background: {ACCENT}; color: {BG}; border: 1px solid {ACCENT};"; color = BG
+    elif kind == "secondary":
+        style = f"background: transparent; color: {INK}; border: 1px solid {LINE_STRONG};"; color = INK
+    else:  # disabled
+        style = f"background: transparent; color: {MUTED}; border: 1px solid {LINE};"; color = MUTED
     return f'<div style="display: flex; align-items: center; justify-content: center; height: 56px; {style} {t(16, 600, color)} box-sizing: border-box;">{label}</div>'
 
 def field(label, value, unit="", action="", placeholder=False, value_style=None):
@@ -150,12 +159,13 @@ def field(label, value, unit="", action="", placeholder=False, value_style=None)
   </div>
 </div>"""
 
-def list_row(ticker, company, right_main, right_sub="", sub="", muted=False, trailing="", last=False):
+def list_row(ticker, company, right_main="", right_sub="", sub="", muted=False, trailing="", last=False):
     tc = MUTED if muted else INK
     cc = MUTED if muted else INK2
+    rm = f'<div style="{m(18 if not muted else 15, 500 if not muted else 400, tc, "line-height: 22px; white-space: nowrap;")}">{right_main}</div>' if right_main else ""
     rs = f'<div style="{t(13, 400, MUTED, "line-height: 18px;")}">{right_sub}</div>' if right_sub else ""
     s = f'<div style="{m(12, 400, MUTED, "line-height: 18px;")}">{sub}</div>' if sub else ""
-    tr = f'<div style="{t(14, 600, MUTED)} padding: 10px 0 10px 16px; flex: none;">{trailing}</div>' if trailing else ""
+    tr = f'<div style="{t(14, 600, ACCENT)} padding: 10px 0 10px 16px; flex: none;">{trailing}</div>' if trailing else ""
     border = "" if last else f"border-bottom: 1px solid {LINE};"
     return f"""<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; padding: 12px 20px; box-sizing: border-box; {border}">
   <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
@@ -167,7 +177,7 @@ def list_row(ticker, company, right_main, right_sub="", sub="", muted=False, tra
   </div>
   <div style="display: flex; flex-direction: row; align-items: center; flex: none;">
     <div style="display: flex; flex-direction: row; align-items: baseline; gap: 8px;">
-      <div style="{m(18 if not muted else 15, 500 if not muted else 400, tc, 'line-height: 22px; white-space: nowrap;')}">{right_main}</div>
+      {rm}
       {rs}
     </div>
     {tr}
@@ -177,15 +187,16 @@ def list_row(ticker, company, right_main, right_sub="", sub="", muted=False, tra
 def strip(text):
     return f'<div style="padding: 12px 20px; border-bottom: 1px solid {LINE}; {t(13, 500, INK2, "line-height: 18px;")} flex: none;">{text}</div>'
 
-def gauge(premium_text, premium_value):
+def gauge(left_text, premium_value, pos_pct):
+    # reference tick fixed at 50%; token tick placed on a +-0.5% scale (0.09% -> 59%)
     return f"""<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
   <div style="position: relative; height: 14px;">
     <div style="position: absolute; left: 0; right: 0; top: 6px; height: 1px; background: {LINE_STRONG};"></div>
-    <div style="position: absolute; left: 49%; top: 2px; width: 1px; height: 10px; background: {MUTED};"></div>
-    <div style="position: absolute; left: 53%; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>
+    <div style="position: absolute; left: 50%; top: 2px; width: 1px; height: 10px; background: {MUTED};"></div>
+    <div style="position: absolute; left: {pos_pct}%; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>
   </div>
   <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
-    <div style="{t(13, 400, INK2, 'line-height: 18px;')}">{premium_text}</div>
+    <div style="{t(13, 400, INK2, 'line-height: 18px;')}">{left_text}</div>
     <div style="{m(13, 500, ACCENT, 'line-height: 18px;')}">{premium_value}</div>
   </div>
 </div>"""
@@ -207,32 +218,33 @@ def detail_top():
     <div style="{m(20, 400, INK2, 'line-height: 24px;')}">{D['ref']}</div>
   </div>
 </div>
-{gauge('Tracking within 0.09% of the NYSE close', D['premium'])}
+{gauge('Token vs NYSE close, scale 0.5%', D['premium'], 59)}
 <div style="height: 28px; flex: none;"></div>
 {live('Live from the mint', f"slot {D['slot']} · {D['ago']}")}
 {heading('Backing and controls', top=28)}
 {grid([
-    cell('Proof of reserves', D['por'], D['por_sub'], span=2, value_size=32),
+    cell('Proof of reserves', D['por'], D['por_sub'], span=2, value_size=32, sub_mono=True),
     cell('Permanent delegate', 'Yes', 'Issuer can move tokens', tone=CAUTION),
-    cell('Transfers pausable', 'Yes, not paused', 'Issuer can pause transfers', tone=CAUTION, value_size=20),
+    cell('Transfers pausable', 'Yes', 'Not paused now, issuer can pause', tone=CAUTION),
     cell('Split multiplier', '1.00', 'No pending split'),
     cell('Transfer hook', 'None', 'No transfer hook program'),
 ])}
 """
 
 def detail_rest():
-    return f"""{heading('Against the sector')}
+    return f"""{heading('Against the sector', right='composite 0.71')}
 {track('Quality', '8/9', 'strong', 89)}
 {track('Valuation', '51', 'fair', 51)}
 {track('Momentum', '0.79', 'high', 79)}
 <div style="height: 14px; flex: none;"></div>
 {grid([
-    cell('Return on invested capital', '9.8%', 'sector median 6.1%', value_size=22, min_h=88),
+    cell('Sector rank', '14 of 62', 'Technology hardware, by composite', span=2, value_size=22, min_h=88),
+    cell('Return on capital', '9.8%', 'sector median 6.1%', value_size=22, min_h=88),
     cell('Gross margin', '17.9%', 'sector median 21.4%', value_size=22, min_h=88),
     cell('Price to earnings', '92.4x', 'sector median 27.0x', value_size=22, min_h=88),
-    cell('Enterprise value to sales', '11.2x', 'sector median 2.4x', value_size=22, min_h=88),
-    cell('52-week position', '0.79', 'of the low to high range', value_size=22, min_h=88),
-    cell('Six-month change vs sector', '+14.2 pt', 'relative price change', value_size=22, min_h=88),
+    cell('EV to sales', '11.2x', 'sector median 2.4x', value_size=22, min_h=88),
+    cell('52-week position', '0.83', 'of the low to high range', value_size=22, min_h=88),
+    cell('Six months vs sector', '+14.2 pt', 'relative price change', value_size=22, min_h=88),
 ])}
 {heading('F-Score')}
 <div style="display: flex; flex-direction: row; align-items: baseline; gap: 12px; padding: 0 20px 6px 20px; flex: none;">
@@ -260,10 +272,14 @@ def detail_rest():
 """
 
 def screen_main():
-    return frame(detail_top())
+    tail = f"""{heading('Against the sector', right='composite 0.71')}
+{track('Quality', '8/9', 'strong', 89)}
+{track('Valuation', '51', 'fair', 51)}
+"""
+    return frame(detail_top() + tail)
 
 def screen_detail_full():
-    return frame(detail_top() + detail_rest(), height=2560, clip=False)
+    return frame(detail_top() + detail_rest(), height=2640, clip=False)
 
 # ----- List -----
 def list_rows():
@@ -279,7 +295,7 @@ def list_rows():
 def screen_list():
     body = f"""{header()}
 {tabs('List')}
-{strip('Today: 2 watched, next report AAPLx in 3 days')}
+{strip('Today: 3 watched, next report TSLAx on Oct 22')}
 <div style="height: 22px; flex: none;"></div>
 {field('Search', 'Ticker or company', placeholder=True, value_style=t(16, 400, MUTED, 'line-height: 24px;'))}
 {heading('Analyzed', top=30)}
@@ -295,7 +311,7 @@ def screen_onboarding():
     behind = f"""<div style="position: absolute; inset: 0; opacity: 0.25; pointer-events: none; display: flex; flex-direction: column;">
 {header()}
 {tabs('List')}
-{strip('Today: 2 watched, next report AAPLx in 3 days')}
+{strip('Today: 3 watched, next report TSLAx on Oct 22')}
 {heading('Analyzed', top=30)}
 {list_rows()}
 </div>"""
@@ -308,10 +324,10 @@ def screen_onboarding():
     <div style="color: {INK};">Not a price forecast. Not investment advice.</div>
   </div>
   <div style="display: flex; flex-direction: row; align-items: flex-start; gap: 14px; min-height: 48px;">
-    <div style="width: 20px; height: 20px; border: 1px solid {ACCENT}; background: {ACCENT}; flex: none; margin-top: 1px;"></div>
+    <div style="width: 20px; height: 20px; border: 1px solid {LINE_STRONG}; flex: none; margin-top: 1px; box-sizing: border-box;"></div>
     <div style="{t(14, 400, INK2, 'line-height: 20px;')}">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</div>
   </div>
-  {button('Read the list')}
+  {button('Read the list', kind='disabled')}
 </div>"""
     return frame(behind + panel)
 
@@ -323,8 +339,12 @@ def sheet(inner):
   {inner}
 </div>""")
 
-def sheet_cell(label, value, sub="", span=1, value_size=22):
-    subhtml = f'<div style="{t(13, 400, INK2, "line-height: 18px;")}">{sub}</div>' if sub else ""
+def sheet_cell(label, value, sub="", span=1, value_size=22, sub_mono=False):
+    if sub:
+        style = m(12, 400, INK2, "line-height: 18px;") if sub_mono else t(13, 400, INK2, "line-height: 18px;")
+        subhtml = f'<div style="{style}">{sub}</div>'
+    else:
+        subhtml = ""
     return f"""<div style="grid-column: span {span}; background: {ELEV}; padding: 14px 16px 16px 16px; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box;">
   <div style="{t(13, 500, MUTED, 'line-height: 18px;')}">{label}</div>
   <div style="{m(value_size, 500, INK, 'line-height: 1.1; letter-spacing: -0.01em;')}">{value}</div>
@@ -341,14 +361,14 @@ def sheet_grid(cells):
 def screen_swap():
     inner = f"""<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 20px 8px 20px;">
   <div style="{m(22, 500, INK, 'line-height: 28px;')}">USDC to TSLAx</div>
-  {text_action('Sell instead', pad='10px 0 10px 12px')}
+  {text_action('TSLAx to USDC', pad='10px 0 10px 12px')}
 </div>
 <div style="height: 14px;"></div>
 {field('Amount, USDC', D['paid'], action='Max')}
 <div style="padding: 10px 20px 0 20px; {m(12, 400, MUTED, 'line-height: 18px;')}">Balance {D['balance']} USDC</div>
 <div style="height: 22px;"></div>
 {sheet_grid([
-    sheet_cell('You receive', f"{D['receive']} TSLAx", f"1 TSLAx = {D['price']}, reference {D['ref']}", span=2, value_size=28),
+    sheet_cell('You receive', f"{D['receive']} TSLAx", f"1 TSLAx = {D['price']}, reference {D['ref']}", span=2, value_size=28, sub_mono=True),
     sheet_cell('All-in cost', '0.09%', 'Route Metis'),
     sheet_cell('Liquidity', '$1.3M', 'Quote refreshes at tap'),
 ])}
@@ -359,7 +379,7 @@ def screen_swap():
     return sheet(inner)
 
 def screen_receipt():
-    inner = f"""<div style="padding: 8px 0 0 0;">{live('Landed', f"confirmed in {D['secs']}")}</div>
+    inner = f"""<div style="padding: 8px 0 0 0;">{live('Landed', f"confirmed in {D['secs']}", pulse=False)}</div>
 <div style="display: flex; flex-direction: column; gap: 4px; padding: 22px 20px 0 20px;">
   <div style="{t(13, 500, MUTED, 'line-height: 18px;')}">Received</div>
   <div style="{m(40, 500, INK, 'line-height: 44px; letter-spacing: -0.03em;')}">{D['receive']} TSLAx</div>
@@ -367,12 +387,12 @@ def screen_receipt():
 <div style="height: 22px;"></div>
 {sheet_grid([
     sheet_cell('Paid', f"{D['paid']} USDC"),
-    sheet_cell('All-in cost paid', '0.09%', 'quote 0.09%, fill +0.00%'),
+    sheet_cell('All-in cost paid', '0.09%', 'quote 0.09%, fill +0.00%', sub_mono=True),
     sheet_cell('Signature', D['sig'], 'Tap to copy', span=2, value_size=18),
     sheet_cell('Slot', D['rslot'], '', span=2, value_size=18),
 ])}
 <div style="display: flex; flex-direction: column; gap: 10px; padding: 24px 20px 0 20px;">
-  {button('View in Portfolio', primary=False)}
+  {button('View in Portfolio', kind='secondary')}
 </div>"""
     return sheet(inner)
 
@@ -383,14 +403,17 @@ def screen_portfolio():
 {tabs('Portfolio')}
 {heading('Holdings')}
 <div style="display: flex; flex-direction: column; gap: 4px; padding: 0 20px 6px 20px; flex: none;">
-  <div style="{m(40, 500, INK, 'line-height: 44px; letter-spacing: -0.03em;')}">$1,284.02</div>
+  <div style="{m(40, 500, INK, 'line-height: 44px; letter-spacing: -0.03em;')}">$1,289.01</div>
   <div style="{t(13, 400, MUTED, 'line-height: 18px;')}">3 xStocks, priced by Jupiter</div>
 </div>
 <div style="height: 18px; flex: none;"></div>
-{list_row('TSLAx', 'Tesla, Inc.', '$732.34', '', '2 TSLAx · +0.09% vs NYSE close')}
+{list_row('TSLAx', 'Tesla, Inc.', '$737.33', '', '2.01364 TSLAx · +0.09% vs NYSE close')}
 {list_row('NVDAx', 'NVIDIA Corp.', '$366.05', '', '2.1 NVDAx · -0.04% vs NYSE close')}
 {list_row('AAPLx', 'Apple Inc.', '$185.63', '', '0.8 AAPLx · +0.01% vs NYSE close', last=True)}
-<div style="padding: 20px 20px 0 20px; {t(13, 400, MUTED, 'line-height: 18px;')} flex: none;">Cost basis is not read from the chain.</div>
+<div style="padding: 16px 20px 0 20px; {t(13, 400, MUTED, 'line-height: 18px;')} flex: none;">Cost basis is not read from the chain.</div>
+{heading('Recent swaps', top=30)}
+{list_row('5.00 USDC', 'to 0.01364 TSLAx', '', '', f"Today 14:57 · {D['sig']}")}
+{list_row('20.00 USDC', 'to 0.11464 NVDAx', '', '', 'Sep 4 · 9pLd…3kRw', last=True)}
 """
     return frame(body)
 
@@ -399,11 +422,18 @@ def screen_watchlist():
     body = f"""{header()}
 {tabs('Watchlist')}
 {heading('Watched')}
-{list_row('AAPLx', 'Apple Inc.', 'in 3 d', 'reports', '+0.01% vs NYSE close · 2 d old', trailing='Unwatch')}
-{list_row('NVDAx', 'NVIDIA Corp.', 'in 41 d', 'reports', '-0.04% vs NYSE close · 1 d old', trailing='Unwatch')}
-{list_row('TSLAx', 'Tesla, Inc.', 'no date', '', '+0.09% vs NYSE close · 2 d old', trailing='Unwatch', last=True)}
-<div style="display: flex; flex-direction: column; gap: 4px; padding: 20px 20px 0 20px; flex: none;">
-  <div style="{t(13, 400, INK2, 'line-height: 18px;')}">Daily digest at 08:00. Notifications on.</div>
+{list_row('TSLAx', 'Tesla, Inc.', sub='Reports Oct 22 · +0.09% vs NYSE close', trailing='Unwatch')}
+{list_row('AAPLx', 'Apple Inc.', sub='Reports Oct 30 · +0.01% vs NYSE close', trailing='Unwatch')}
+{list_row('NVDAx', 'NVIDIA Corp.', sub='Reports Nov 19 · -0.04% vs NYSE close', trailing='Unwatch', last=True)}
+{heading('Daily digest', top=30)}
+<div style="padding: 0 20px; flex: none;">
+  <div style="background: {ELEV}; border: 1px solid {LINE}; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="{m(12, 400, MUTED, 'line-height: 18px;')}">Today 08:00</div>
+    <div style="{t(15, 400, INK, 'line-height: 22px;')}">3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.</div>
+  </div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 16px 20px 0 20px; flex: none;">
+  <div style="{t(13, 400, INK2, 'line-height: 18px;')}">Notifications on, delivered at 08:00.</div>
   <div style="{t(13, 400, MUTED, 'line-height: 18px;')}">Checked 3 h ago.</div>
 </div>
 """
@@ -431,15 +461,15 @@ canvas = {
         {"file": "Main.dc.html", "title": "3 Detail, first viewport", "x": X(2), "y": 0, "w": W, "h": H},
         {"file": "SwapSheet.dc.html", "title": "4 Swap sheet", "x": X(3), "y": 0, "w": W, "h": H},
         {"file": "Receipt.dc.html", "title": "5 Receipt, landed", "x": X(4), "y": 0, "w": W, "h": H},
-        {"file": "DetailFull.dc.html", "title": "3b Detail, full scroll", "x": X(0), "y": H + 200, "w": W, "h": 2560},
+        {"file": "DetailFull.dc.html", "title": "3b Detail, full scroll", "x": X(0), "y": H + 200, "w": W, "h": 2640},
         {"file": "Portfolio.dc.html", "title": "6 Portfolio", "x": X(1), "y": H + 200, "w": W, "h": H},
         {"file": "Watchlist.dc.html", "title": "7 Watchlist", "x": X(2), "y": H + 200, "w": W, "h": H},
     ],
     "annotations": [
-        {"id": "read", "x": X(0), "y": -240, "w": 980,
-         "text": "PlainTicker Mobile, direction A Instrument. Seeker, 412dp portrait, dark canvas.\nDesign read: overhaul redesign of a reading tool for tokenized US stocks, crypto-native audience, trust-first content. Dials VARIANCE 5 / MOTION 3 / DENSITY 5. Outfit for UI, JetBrains Mono for every number. One accent (#5AA9E6) for interactive and live state; amber only on explicit issuer-control risk. Sharp corners everywhere.\nSignature elements: the tracking gauge (NYSE tick vs token tick), the breathing live bar, blueprint grids for facts.\nSample data is illustrative. No verdict words, no em dashes, no section numbers."},
+        {"id": "read", "x": X(0), "y": -220, "w": 980,
+         "text": "PlainTicker Mobile, direction Instrument. Seeker, 412dp portrait, dark canvas.\nA reading tool for tokenized US stocks: the token's own facts first (reserves, issuer controls, split multiplier, live from the mint), then the company against its sector, then one Swap. Outfit for words, JetBrains Mono for every number. One blue accent for interaction and live state; amber only on issuer-control risk. Sharp corners.\nSignature elements: the tracking gauge (token tick against the NYSE close), the live bar, blueprint grids for facts.\nSample data is illustrative."},
         {"id": "ia", "x": X(3), "y": H + 200, "w": 420,
-         "text": "IA kept from the plan: trust first (Backing and controls), then fundamentals, then one Swap button after Method; Watch in the header; List / Portfolio / Watchlist as top tabs.\nOne change for mobile: Quality, Valuation and Momentum are one section, Against the sector, with three marker tracks and a six-cell fact grid, instead of three sections with identical layout."},
+         "text": "Screen order kept from the plan: trust first, fundamentals second, one Swap after Method; Watch in the header; List, Portfolio and Watchlist as top tabs.\nOne change for mobile: Quality, Valuation and Momentum share one section, Against the sector, with three marker tracks and a fact grid, instead of three sections with the same layout."},
     ],
     "launch": {"view": "canvas"},
 }

@@ -46,7 +46,7 @@
       "x": 0,
       "y": 1115,
       "w": 412,
-      "h": 2560
+      "h": 2640
     },
     {
       "file": "Portfolio.dc.html",
@@ -69,16 +69,16 @@
     {
       "id": "read",
       "x": 0,
-      "y": -240,
+      "y": -220,
       "w": 980,
-      "text": "PlainTicker Mobile, direction A Instrument. Seeker, 412dp portrait, dark canvas.\nDesign read: overhaul redesign of a reading tool for tokenized US stocks, crypto-native audience, trust-first content. Dials VARIANCE 5 / MOTION 3 / DENSITY 5. Outfit for UI, JetBrains Mono for every number. One accent (#5AA9E6) for interactive and live state; amber only on explicit issuer-control risk. Sharp corners everywhere.\nSignature elements: the tracking gauge (NYSE tick vs token tick), the breathing live bar, blueprint grids for facts.\nSample data is illustrative. No verdict words, no em dashes, no section numbers."
+      "text": "PlainTicker Mobile, direction Instrument. Seeker, 412dp portrait, dark canvas.\nA reading tool for tokenized US stocks: the token's own facts first (reserves, issuer controls, split multiplier, live from the mint), then the company against its sector, then one Swap. Outfit for words, JetBrains Mono for every number. One blue accent for interaction and live state; amber only on issuer-control risk. Sharp corners.\nSignature elements: the tracking gauge (token tick against the NYSE close), the live bar, blueprint grids for facts.\nSample data is illustrative."
     },
     {
       "id": "ia",
       "x": 1524,
       "y": 1115,
       "w": 420,
-      "text": "IA kept from the plan: trust first (Backing and controls), then fundamentals, then one Swap button after Method; Watch in the header; List / Portfolio / Watchlist as top tabs.\nOne change for mobile: Quality, Valuation and Momentum are one section, Against the sector, with three marker tracks and a six-cell fact grid, instead of three sections with identical layout."
+      "text": "Screen order kept from the plan: trust first, fundamentals second, one Swap after Method; Watch in the header; List, Portfolio and Watchlist as top tabs.\nOne change for mobile: Quality, Valuation and Momentum share one section, Against the sector, with three marker tracks and a fact grid, instead of three sections with the same layout."
     }
   ],
   "launch": {
