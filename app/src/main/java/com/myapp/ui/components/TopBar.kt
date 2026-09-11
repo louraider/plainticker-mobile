@@ -47,18 +47,19 @@ fun TopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        // The wordmark is decorative for a screen reader; the content speaks for itself. When a
+        // debug long press hangs on it, it stays reachable instead of being a hidden target.
         val titleModifier = if (onTitleLongPress != null) {
             Modifier.combinedClickable(onLongClick = onTitleLongPress, onClick = {})
         } else {
-            Modifier
+            Modifier.semantics { hideFromAccessibility() }
         }
-        // The wordmark is decorative for a screen reader; the content speaks for itself.
         Text(
             text = title,
             style = PlainTickerType.wordmark,
             color = Ink,
             maxLines = 1,
-            modifier = titleModifier.semantics { hideFromAccessibility() },
+            modifier = titleModifier,
         )
         when {
             action != null && onAction != null -> TextAction(label = action, onClick = onAction)
