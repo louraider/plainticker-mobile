@@ -1,0 +1,7 @@
+# Shell scripts and the Gradle wrapper must stay LF: CI runs them on Linux.
+*.sh      text eol=lf
+gradlew   text eol=lf
+gradlew.bat text eol=crlf
+*.yml     text eol=lf
+*.jks     binary
+*.keystore binary

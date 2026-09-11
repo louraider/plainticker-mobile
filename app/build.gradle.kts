@@ -4,6 +4,43 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// ---- Version -------------------------------------------------------------------------------
+// Driven by -PversionCode=<int> -PversionName=<string>; release.yml derives both from the git
+// tag (v1.2.3 -> versionName 1.2.3, versionCode 10203). Local builds fall back to 1 / 0.1.0.
+val appVersionCode: Int = providers.gradleProperty("versionCode").orNull?.let { raw ->
+    raw.toIntOrNull()?.takeIf { it > 0 }
+        ?: throw GradleException("-PversionCode must be a positive integer, got '$raw'")
+} ?: 1
+val appVersionName: String =
+    providers.gradleProperty("versionName").orNull?.takeIf { it.isNotBlank() } ?: "0.1.0"
+
+// ---- Release signing -----------------------------------------------------------------------
+// Environment only: never a checked-in file, never gradle.properties or local.properties.
+// All four variables must be present, otherwise the release build type stays UNSIGNED
+// (output is app-release-unsigned.apk) and one warning line is printed when a release-ish
+// task is requested. CI decodes KEYSTORE_BASE64 to a temp path and exports these four from
+// repository secrets (see .github/workflows/release.yml and docs/release-signing.md).
+fun env(name: String): String? = providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+val envKeystorePath = env("KEYSTORE_PATH")
+val envKeystorePassword = env("KEYSTORE_PASSWORD")
+val envKeyAlias = env("KEY_ALIAS")
+val envKeyPassword = env("KEY_PASSWORD")
+val releaseSigningConfigured =
+    envKeystorePath != null && envKeystorePassword != null && envKeyAlias != null && envKeyPassword != null
+
+if (!releaseSigningConfigured) {
+    val touchesRelease = gradle.startParameter.taskNames.any { name ->
+        name.contains("release", ignoreCase = true) ||
+            name.substringAfterLast(':') in setOf("assemble", "build", "bundle")
+    }
+    if (touchesRelease) {
+        logger.warn(
+            "WARNING: release signing not configured (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, " +
+                "KEY_PASSWORD must all be set); the release build type stays unsigned."
+        )
+    }
+}
+
 android {
     namespace = "com.myapp"
     compileSdk = 37
@@ -12,10 +49,25 @@ android {
         applicationId = "com.myapp"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                val keystore = rootDir.resolve(envKeystorePath!!)
+                if (!keystore.isFile) {
+                    throw GradleException("KEYSTORE_PATH points to a missing file: ${keystore.absolutePath}")
+                }
+                storeFile = keystore
+                storePassword = envKeystorePassword
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -32,6 +84,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = if (releaseSigningConfigured) signingConfigs.getByName("release") else null
         }
     }
     compileOptions {
