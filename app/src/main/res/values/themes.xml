@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.Myapp" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Dark only. The window paints Canvas so no light frame flashes before Compose draws. -->
+    <style name="Theme.Myapp" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/canvas</item>
+        <item name="android:colorBackground">@color/canvas</item>
+    </style>
 </resources>
