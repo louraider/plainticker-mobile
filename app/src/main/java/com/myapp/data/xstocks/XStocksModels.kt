@@ -1,5 +1,6 @@
 package com.myapp.data.xstocks
 
+import com.myapp.data.net.LenientLongSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -33,8 +34,9 @@ data class XStockAsset(
     /** Token symbol, e.g. "TSLAx". */
     val symbol: String = "",
     val isin: String? = null,
-    /** Underlying equity ticker, e.g. "TSLA". Joins to PlainTicker. */
+    /** Deprecated upstream in favour of `underlying.symbol`; an empty string when there is no backing collateral. */
     val underlyingSymbol: String? = null,
+    /** Deprecated upstream in favour of `underlying.isin`; an empty string when not recorded. */
     val underlyingIsin: String? = null,
     val underlying: Underlying? = null,
     val description: String? = null,
@@ -49,9 +51,15 @@ data class XStockAsset(
     /** The Solana mint, or null when this asset is not deployed there. */
     val solanaMint: String? get() = solanaDeployment?.address
 
-    /** Best available underlying ticker; falls back to the symbol minus its "x". */
+    /**
+     * Underlying equity ticker for the PlainTicker join. `underlying.symbol` is the
+     * authoritative field; the deprecated `underlyingSymbol` is an empty string when there
+     * is no backing collateral, so a blank never wins. Last resort: the symbol minus its "x".
+     */
     val underlyingTicker: String
-        get() = underlyingSymbol ?: underlying?.symbol ?: symbol.removeSuffix("x")
+        get() = underlying?.symbol?.takeIf { it.isNotBlank() }
+            ?: underlyingSymbol?.takeIf { it.isNotBlank() }
+            ?: symbol.removeSuffix("x")
 
     companion object {
         const val NETWORK_SOLANA = "Solana"
@@ -107,7 +115,11 @@ data class LimitsPerPeriod(
     val closed: OrderLimits? = null,
 )
 
-/** Fiat order bounds in the asset's trading currency. A max of 0 means no orders. */
+/**
+ * Order bounds for the xStocks instant venue (xChange), in fiat CENTS of the trading
+ * currency: 1000 = 10.00. A max of 0 means that venue is closed in the period; a null min
+ * means no minimum. Informational only: this app swaps through Jupiter, not xChange.
+ */
 @Serializable
 data class OrderLimits(
     val minOrderFiatValue: Double? = null,
@@ -149,8 +161,11 @@ data class Multiplier(
     val currentMultiplier: Double = 1.0,
     /** The scheduled next value, 0 when none is scheduled. */
     val newMultiplier: Double = 0.0,
-    /** Epoch of the scheduled change as the API sends it, 0 when none. */
-    val activationDateTime: Long = 0L,
+    /**
+     * When the scheduled change activates, as the API sends it (a JSON number, kept whole),
+     * 0 when none. Lenient because the spec types it `number` and the live value is `0`.
+     */
+    @Serializable(with = LenientLongSerializer::class) val activationDateTime: Long = 0L,
     /** "FeeAccrual" | "Dividend" | "Split" | "ReverseSplit" | "Administrative", or null. */
     val reason: String? = null,
 ) {

@@ -8,6 +8,7 @@ import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.serializer
 import java.io.IOException
 
 /**
@@ -59,4 +60,16 @@ internal fun extractErrorCode(body: String): String? = runCatching {
 internal suspend inline fun <reified T> HttpResponse.bodyOrThrow(): T {
     if (!status.isSuccess()) throw toApiException()
     return body()
+}
+
+/**
+ * Like [bodyOrThrow], but a 2xx whose body is the JSON literal `null` (or nothing) yields
+ * null. xStocks answers GET /proof-of-reserves/{symbol} that way for a symbol it has no
+ * reserves data for, and a typed null beats a parse failure there.
+ */
+internal suspend inline fun <reified T : Any> HttpResponse.nullableBodyOrThrow(): T? {
+    if (!status.isSuccess()) throw toApiException()
+    val text = bodyAsText().trim()
+    if (text.isEmpty() || text == "null") return null
+    return HttpClientFactory.json.decodeFromString(serializer<T>(), text)
 }
