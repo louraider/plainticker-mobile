@@ -31,7 +31,7 @@ A light variant is deferred (TODOS.md). If it is ever built it must keep the hie
 - Scale (sp): hero ticker 64 mono 500 tracking -0.035em · hero price 40 mono 500 -0.03em · big value (total, received) 40 mono 500 · section heading 20 Outfit 600 -0.01em · fact value 22 to 32 mono 500 · track value 20 mono 500 · list ticker 18 mono 500 · body 15 Outfit 400 line-height 23 · label 13 Outfit 500 Muted · meta 12 mono 400 Muted · button 16 Outfit 600 · text action 14 Outfit 600 Accent.
 - No uppercase transforms, no positive letter-spacing labels, no section numbers, no em or en dashes in any visible string (use a period, comma, colon or hyphen). Sentence case everywhere. Font scale honored to 1.3x; numerals never wrap (single line, autosize down on the hero row only).
 
-Fonts are bundled as resources on Android (Outfit and JetBrains Mono, SIL Open Font License). On the canvas they load from Google Fonts.
+Fonts are bundled as resources on Android (Outfit and JetBrains Mono, SIL Open Font License). On the canvas they load from Google Fonts. Bundled versions, upstream sources and license files are listed in docs/fonts.md; the OFL texts ship in app/src/main/assets/licenses/.
 
 ## 4. Components (Compose names)
 
