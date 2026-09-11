@@ -59,6 +59,7 @@ fun AppNavHost(
             DetailScreen(
                 viewModel = viewModel(factory = factory),
                 swapViewModel = viewModel(factory = factory),
+                watchlistViewModel = viewModel(factory = factory),
                 onBack = { navController.popBackStack() },
             )
         }
