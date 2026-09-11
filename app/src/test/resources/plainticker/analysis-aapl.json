@@ -1,0 +1,90 @@
+{
+  "_fixture_note": "Recorded live from GET https://www.plainticker.com/api/v1/AAPL on 2026-09-10 (schema v1.1). Two blocks the app does not consume were removed before committing: the one-word `verdict` block and the analyst-consensus `forward` block, because this repository carries no recommendation vocabulary. Everything else is verbatim. The parser ignores unknown keys, this one included.",
+  "ticker": "AAPL",
+  "company": "Apple Inc.",
+  "sector": "Information Technology",
+  "as_of": "2026-09-08T13:25:30.278Z",
+  "axes": {
+    "quality": {
+      "value": 8,
+      "scale": "0-9",
+      "position": 0.8888888888888888,
+      "state": "strong",
+      "label_uk": "Сильна",
+      "label_en": "Strong",
+      "tone": "positive"
+    },
+    "valuation": {
+      "value": 51.09338940069774,
+      "scale": "0-100",
+      "position": 0.5109338940069774,
+      "state": "fair",
+      "label_uk": "Помірна",
+      "label_en": "Moderate",
+      "tone": "caution"
+    },
+    "momentum": {
+      "value": 0.7926150733434499,
+      "scale": "0-1",
+      "position": 0.7926150733434499,
+      "state": "high",
+      "label_uk": "Близько до 52w max",
+      "label_en": "Near 52-week high",
+      "tone": "caution"
+    }
+  },
+  "fscore": {
+    "score": 8,
+    "scale": "0-9",
+    "breakdown": {
+      "profitability": 3,
+      "leverageLiquidity": 3,
+      "efficiency": 2
+    },
+    "signals": [
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "composite_percentile": 51,
+  "setup": {
+    "score": 3,
+    "scale": "0-5",
+    "criteria": [
+      {
+        "key": "quality",
+        "passed": true
+      },
+      {
+        "key": "growing",
+        "passed": true
+      },
+      {
+        "key": "cheaper",
+        "passed": false
+      },
+      {
+        "key": "fcfMargin",
+        "passed": true
+      },
+      {
+        "key": "notTopped",
+        "passed": false
+      }
+    ]
+  },
+  "method": {
+    "is_prediction": false,
+    "kind": "classification",
+    "statement_uk": "Класифікація фундаменталів проти сектора — не прогноз ціни і не інвестиційна порада.",
+    "statement_en": "Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice.",
+    "schema_version": "v1.1"
+  }
+}

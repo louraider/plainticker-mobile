@@ -1,0 +1,53 @@
+{
+  "_fixture_note": "GOLDEN REGRESSION. Field set copied from a live GET /swap/v2/order for 5 USDC -> TSLAx on 2026-09-10 (Metis route, swapType aggregator, no expireAt). Amounts are the spike's real numbers (inAmount 5000000, outAmount 1366141). Redacted: taker and fee payers replaced by the system program id 11111111111111111111111111111111, transaction replaced by base64('REDACTED'), requestId/blockheight normalised. Nothing here identifies a wallet or a transaction. The parser ignores this key.",
+  "swapType": "aggregator",
+  "router": "metis",
+  "guaranteedPrice": false,
+  "requestId": "01a08b00-0000-7000-8000-00000000cafe",
+  "inAmount": "5000000",
+  "outAmount": "1366141",
+  "otherAmountThreshold": "1352479",
+  "swapMode": "ExactIn",
+  "slippageBps": 100,
+  "priceImpactPct": "-0.00046103",
+  "routePlan": [
+    {
+      "percent": 100,
+      "bps": 10000,
+      "usdValue": 4.999342,
+      "swapInfo": {
+        "ammKey": "9p7abUFv31ycgu9kckvnoqMMvBy67dqTDM2m6HP9xokN",
+        "label": "Whirlpool",
+        "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+        "inAmount": "5000000",
+        "outAmount": "1367508"
+      }
+    }
+  ],
+  "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "feeBps": 11,
+  "platformFee": {
+    "feeBps": 10,
+    "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  "taker": "11111111111111111111111111111111",
+  "gasless": false,
+  "jitOptimized": false,
+  "signatureFeeLamports": 5000,
+  "signatureFeePayer": "11111111111111111111111111111111",
+  "prioritizationFeeLamports": 69,
+  "prioritizationFeePayer": "11111111111111111111111111111111",
+  "rentFeeLamports": 0,
+  "rentFeePayer": null,
+  "transaction": "UkVEQUNURUQ=",
+  "lastValidBlockHeight": "423986571",
+  "inUsdValue": 4.999342,
+  "outUsdValue": 4.99462,
+  "swapUsdValue": 4.999342,
+  "priceImpact": -0.046103,
+  "mode": "ultra",
+  "totalTime": 61
+}

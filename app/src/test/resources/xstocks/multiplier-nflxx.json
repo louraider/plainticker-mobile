@@ -1,0 +1,7 @@
+{
+  "_fixture_note": "Live GET /assets/NFLXx/multiplier?network=Solana, 2026-09-10: a token that has been through a 10:1 split.",
+  "currentMultiplier": 10,
+  "newMultiplier": 0,
+  "activationDateTime": 0,
+  "reason": null
+}

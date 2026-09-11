@@ -1,0 +1,47 @@
+{
+  "_fixture_note": "Hand-built to the /api/v1/summary contract (schema v1.1) agreed 2026-09-10; the route was not yet live when this was written. Row values are illustrative. Row 3 carries nulls in every optional field plus a key the client has never heard of.",
+  "schema": "v1.1",
+  "generated_at": "2026-09-10T18:00:00.000Z",
+  "rows": [
+    {
+      "ticker": "AAPL",
+      "company": "Apple Inc.",
+      "headline": "Strong quality, moderate valuation, near its 52-week high",
+      "tone": "caution",
+      "setup_score": 3,
+      "composite": 0.71,
+      "fscore": 8,
+      "sector": "Information Technology",
+      "computed_at": "2026-09-08T13:25:30.278Z",
+      "stale": false,
+      "age_days": 2
+    },
+    {
+      "ticker": "JPM",
+      "company": "JPMorgan Chase & Co.",
+      "headline": "High quality at a fair price",
+      "tone": "positive",
+      "setup_score": 4,
+      "composite": 0.66,
+      "fscore": 7,
+      "sector": "Financials",
+      "computed_at": "2026-09-01T03:00:00.000Z",
+      "stale": true,
+      "age_days": 9
+    },
+    {
+      "ticker": "XYZ",
+      "company": null,
+      "headline": null,
+      "tone": null,
+      "setup_score": null,
+      "composite": null,
+      "fscore": null,
+      "sector": null,
+      "computed_at": "2026-09-09T03:00:00.000Z",
+      "stale": false,
+      "age_days": 1,
+      "_extra": "a key the client has never heard of"
+    }
+  ]
+}
