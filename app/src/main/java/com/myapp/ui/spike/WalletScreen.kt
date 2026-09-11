@@ -161,7 +161,7 @@ fun WalletScreenCapabilitiesPreview() {
     MyappTheme {
         WalletScreen(
             state = WalletUiState(
-                address = "Ho5vmods3ZvjAegHJ8mZTnDa1zbp2Rw4HDNy8Ni2bjfU",
+                address = "11111111111111111111111111111111",
                 capabilities = "cluster: solana:mainnet\n" +
                     "tx versions: legacy, 0\n" +
                     "max tx/request: 0\n" +

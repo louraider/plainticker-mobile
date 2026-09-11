@@ -94,11 +94,7 @@ class SolanaRpcApi(
         if (encoding != null) put("encoding", encoding.wire)
     }
 
-    private fun pubkey(value: String): String {
-        val trimmed = value.trim()
-        require(BASE58_PUBKEY.matches(trimmed)) { "not a base58 pubkey: '$value'" }
-        return trimmed
-    }
+    private fun pubkey(value: String): String = requireBase58(value)
 
     companion object {
         const val BASE_URL = "https://www.plainticker.com/api/v1/rpc"
@@ -123,10 +119,16 @@ class SolanaRpcApi(
 
         private val BASE58_PUBKEY = Regex("[1-9A-HJ-NP-Za-km-z]{32,44}")
 
+        /** The trimmed value, or an [IllegalArgumentException] when it is not a base58 pubkey. */
+        fun requireBase58(value: String): String {
+            val trimmed = value.trim()
+            require(BASE58_PUBKEY.matches(trimmed)) { "not a base58 pubkey: '$value'" }
+            return trimmed
+        }
+
         /** The exact params array of the pinned getProgramAccounts, for the contract test and the forwarder. */
         fun skrStakeParams(wallet: String): JsonArray {
-            val staker = wallet.trim()
-            require(BASE58_PUBKEY.matches(staker)) { "not a base58 pubkey: '$wallet'" }
+            val staker = requireBase58(wallet)
             return buildJsonArray {
                 add(KnownPrograms.SKR_STAKING)
                 addJsonObject {

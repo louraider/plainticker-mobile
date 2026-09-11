@@ -10,6 +10,7 @@ import com.myapp.data.jupiter.SwapError
 import com.myapp.data.jupiter.SwapOrder
 import com.myapp.wallet.WalletOutcome
 import com.myapp.wallet.WalletSession
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,6 +92,8 @@ class SwapViewModel(
             phase(SwapPhase.QUOTING)
             val order = try {
                 swapApi.order(KnownMints.USDC, outputMint, usdcAmountRaw, taker)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: SwapError) {
                 return@launch fail(e.message ?: "Quote refused")
             } catch (e: Exception) {
@@ -102,7 +105,8 @@ class SwapViewModel(
 
             phase(SwapPhase.SIGNING)
             val signed = when (val outcome = wallet.call { it.signTransactions(arrayOf(Base64.getDecoder().decode(unsigned))) }) {
-                is WalletOutcome.Success -> outcome.value.signedPayloads.first()
+                is WalletOutcome.Success -> outcome.value.signedPayloads.firstOrNull()
+                    ?: return@launch fail("The wallet returned no signed transaction")
                 is WalletOutcome.NoWallet -> return@launch fail("No compatible wallet found")
                 is WalletOutcome.Cancelled -> return@launch cancelled()
                 is WalletOutcome.Error -> return@launch fail(outcome.message)
@@ -116,6 +120,8 @@ class SwapViewModel(
             phase(SwapPhase.EXECUTING)
             val result = try {
                 swapApi.execute(Base64.getEncoder().encodeToString(signed), order.requestId)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: SwapError) {
                 return@launch fail(e.message ?: "Execute refused", needsFreshOrder = e.needsFreshOrder)
             } catch (e: Exception) {
