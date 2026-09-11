@@ -49,8 +49,8 @@ class MainActivity : ComponentActivity() {
                         onSignMessage = { viewModel.signMessage(sender, "Hello from Myapp!") },
                         onDisconnect = { viewModel.disconnect(sender) },
                         onProbeCapabilities = { viewModel.probeCapabilities(sender) },
-                        onBuyTsla = {
-                            viewModel.buyXStock(sender, "TSLAx", MainViewModel.TSLAX_MINT)
+                        onSwapTsla = {
+                            viewModel.swapForXStock(sender, "TSLAx", MainViewModel.TSLAX_MINT)
                         },
                         modifier = Modifier.padding(innerPadding),
                     )
@@ -67,7 +67,7 @@ fun WalletScreen(
     onSignMessage: () -> Unit,
     onDisconnect: () -> Unit,
     onProbeCapabilities: () -> Unit,
-    onBuyTsla: () -> Unit,
+    onSwapTsla: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -102,9 +102,9 @@ fun WalletScreen(
         }
 
         if (state.address != null) {
-            Button(onClick = onBuyTsla, enabled = !state.isLoading) {
+            Button(onClick = onSwapTsla, enabled = !state.isLoading) {
                 Text(
-                    if (MainViewModel.SUBMIT_SWAPS) "Buy \$5 TSLAx (REAL)"
+                    if (BuildConfig.SUBMIT_SWAPS) "Swap \$5 USDC for TSLAx (REAL)"
                     else "Quote + sign \$5 TSLAx (no submit)"
                 )
             }
@@ -158,7 +158,7 @@ fun WalletScreenDisconnectedPreview() {
             onSignMessage = {},
             onDisconnect = {},
             onProbeCapabilities = {},
-            onBuyTsla = {},
+            onSwapTsla = {},
         )
     }
 }
@@ -183,7 +183,7 @@ fun WalletScreenCapabilitiesPreview() {
             onSignMessage = {},
             onDisconnect = {},
             onProbeCapabilities = {},
-            onBuyTsla = {},
+            onSwapTsla = {},
         )
     }
 }

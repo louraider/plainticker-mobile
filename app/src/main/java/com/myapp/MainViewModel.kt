@@ -5,6 +5,10 @@ import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.funkatronics.encoders.Base58
+import com.myapp.data.KnownMints
+import com.myapp.data.jupiter.JupiterSwapApi
+import com.myapp.data.jupiter.SwapError
+import com.myapp.data.net.HttpClientFactory
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
@@ -14,11 +18,9 @@ import com.solana.mobilewalletadapter.common.ProtocolContract
 import com.solana.publickey.SolanaPublicKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class WalletUiState(
     val address: String? = null,
@@ -44,8 +46,15 @@ class MainViewModel : ViewModel() {
         blockchain = Solana.Mainnet
     }
 
+    private val httpClient = HttpClientFactory.create()
+    private val swapApi = JupiterSwapApi(httpClient)
+
     private val _uiState = MutableStateFlow(WalletUiState())
     val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()
+
+    override fun onCleared() {
+        httpClient.close()
+    }
 
     /**
      * Asks the connected wallet what it can do. Signs nothing, spends nothing.
@@ -115,8 +124,9 @@ class MainViewModel : ViewModel() {
     /**
      * The spike that decides whether this product exists: quote, sign, land.
      *
-     * Flip SUBMIT_SWAPS to true to actually move money. With it false the flow stops
-     * after signing, which costs nothing and expires harmlessly - only /execute submits.
+     * BuildConfig.SUBMIT_SWAPS guards the one call that moves money. It is false in every
+     * debug build, so the flow stops after signing, which costs nothing and expires
+     * harmlessly; only a release build submits through /execute.
      *
      * Timings are reported because the open question is not whether the calls work, it is
      * whether the wallet round-trip fits inside an RFQ quote's usable window. The maker
@@ -125,7 +135,7 @@ class MainViewModel : ViewModel() {
      * called here, at the tap, rather than when a preview is rendered.
      */
     @Suppress("DEPRECATION")
-    fun buyXStock(
+    fun swapForXStock(
         sender: ActivityResultSender,
         symbol: String,
         outputMint: String,
@@ -142,15 +152,13 @@ class MainViewModel : ViewModel() {
             val log = StringBuilder()
             try {
                 val t0 = System.currentTimeMillis()
-                val order = withContext(Dispatchers.IO) {
-                    JupiterSwap.order(JupiterSwap.USDC_MINT, outputMint, usdcAmount, taker)
-                }
+                val order = swapApi.order(KnownMints.USDC, outputMint, usdcAmount, taker)
                 val tOrder = System.currentTimeMillis() - t0
                 val nowSec = System.currentTimeMillis() / 1000
 
                 log.appendLine("USDC -> $symbol")
-                log.appendLine("in  ${order.inAmount / 1e6} USDC  (\$${"%.2f".format(order.inUsdValue)})")
-                log.appendLine("out ${order.outAmount}  raw  (\$${"%.2f".format(order.outUsdValue)})")
+                log.appendLine("in  ${order.inAmountRaw / 1e6} USDC  (\$${"%.2f".format(order.inUsdValue)})")
+                log.appendLine("out ${order.outAmountRaw}  raw  (\$${"%.2f".format(order.outUsdValue)})")
                 log.appendLine("all-in cost ${"%.2f".format(order.allInCostPct)}%")
                 log.appendLine("router=${order.router} type=${order.swapType} gasless=${order.gasless}")
                 log.appendLine("feeBps=${order.feeBps} platformBps=${order.platformFeeBps} slipBps=${order.slippageBps}")
@@ -161,46 +169,54 @@ class MainViewModel : ViewModel() {
                 )
                 log.appendLine("GET /order: ${tOrder}ms")
 
-                val t1 = System.currentTimeMillis()
-                val signResult = walletAdapter.transact(sender) {
-                    signTransactions(arrayOf(android.util.Base64.decode(order.transactionBase64, Base64.DEFAULT)))
-                }
-                val tSign = System.currentTimeMillis() - t1
-                log.appendLine("wallet round-trip: ${tSign}ms")
+                val unsigned = order.transaction
+                if (unsigned == null) {
+                    log.appendLine("order carried no transaction, nothing to sign")
+                } else {
+                    val t1 = System.currentTimeMillis()
+                    val signResult = walletAdapter.transact(sender) {
+                        signTransactions(arrayOf(Base64.decode(unsigned, Base64.DEFAULT)))
+                    }
+                    val tSign = System.currentTimeMillis() - t1
+                    log.appendLine("wallet round-trip: ${tSign}ms")
 
-                when (signResult) {
-                    is TransactionResult.Success -> {
-                        val signed = signResult.payload.signedPayloads.first()
-                        val leftAfterSign = order.secondsLeft(System.currentTimeMillis() / 1000)
-                        log.appendLine(
-                            "signed ${signed.size} bytes" +
-                                (leftAfterSign?.let { ", ${it}s left on quote" } ?: "")
-                        )
+                    when (signResult) {
+                        is TransactionResult.Success -> {
+                            val signed = signResult.payload.signedPayloads.first()
+                            val leftAfterSign = order.secondsLeft(System.currentTimeMillis() / 1000)
+                            log.appendLine(
+                                "signed ${signed.size} bytes" +
+                                    (leftAfterSign?.let { ", ${it}s left on quote" } ?: "")
+                            )
 
-                        if (!SUBMIT_SWAPS) {
-                            log.appendLine()
-                            log.appendLine("STOPPED: SUBMIT_SWAPS=false, nothing submitted.")
-                            log.appendLine("No money moved. Set SUBMIT_SWAPS=true to land it.")
-                        } else {
-                            val t2 = System.currentTimeMillis()
-                            val exec = withContext(Dispatchers.IO) {
-                                JupiterSwap.execute(
-                                    android.util.Base64.encodeToString(signed, Base64.NO_WRAP),
+                            if (!BuildConfig.SUBMIT_SWAPS) {
+                                log.appendLine()
+                                log.appendLine("STOPPED: SUBMIT_SWAPS=false (debug build), nothing submitted.")
+                                log.appendLine("No money moved. Only a release build lands it.")
+                            } else {
+                                val t2 = System.currentTimeMillis()
+                                val exec = swapApi.execute(
+                                    Base64.encodeToString(signed, Base64.NO_WRAP),
                                     order.requestId,
                                 )
+                                log.appendLine("POST /execute: ${System.currentTimeMillis() - t2}ms")
+                                log.appendLine("status=${exec.status} code=${exec.code ?: "-"}")
+                                exec.signature?.let { log.appendLine("signature: $it") }
+                                exec.error?.let { log.appendLine("error: $it") }
+                                exec.errorOrNull()?.takeIf { it.needsFreshOrder }?.let {
+                                    log.appendLine("quote gone: needs a fresh /order and a second approval")
+                                }
+                                log.appendLine("total: ${System.currentTimeMillis() - t0}ms")
                             }
-                            log.appendLine("POST /execute: ${System.currentTimeMillis() - t2}ms")
-                            log.appendLine("status=${exec.status} code=${exec.code ?: "-"}")
-                            exec.signature?.let { log.appendLine("signature: $it") }
-                            exec.error?.let { log.appendLine("error: $it") }
-                            log.appendLine("total: ${System.currentTimeMillis() - t0}ms")
                         }
+                        is TransactionResult.NoWalletFound ->
+                            log.appendLine("no wallet: ${signResult.message}")
+                        is TransactionResult.Failure ->
+                            log.appendLine("sign failed: ${signResult.message} (${signResult.e::class.simpleName})")
                     }
-                    is TransactionResult.NoWalletFound ->
-                        log.appendLine("no wallet: ${signResult.message}")
-                    is TransactionResult.Failure ->
-                        log.appendLine("sign failed: ${signResult.message} (${signResult.e::class.simpleName})")
                 }
+            } catch (e: SwapError) {
+                log.appendLine("${e.stage.name.lowercase()} refused: ${e.message}")
             } catch (e: Exception) {
                 log.appendLine("threw: ${e::class.simpleName}: ${e.message}")
             }
@@ -209,10 +225,7 @@ class MainViewModel : ViewModel() {
     }
 
     companion object {
-        /** Guard on the one call that moves money. Flip deliberately, never by default. */
-        const val SUBMIT_SWAPS = false
-
-        const val TSLAX_MINT = "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
+        const val TSLAX_MINT = KnownMints.TSLAX
     }
 
     fun connect(sender: ActivityResultSender) {
