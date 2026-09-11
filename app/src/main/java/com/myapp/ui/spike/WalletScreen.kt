@@ -25,7 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.myapp.BuildConfig
 import com.myapp.MainViewModel
 import com.myapp.WalletUiState
-import com.myapp.ui.theme.MyappTheme
+import com.myapp.ui.theme.PlainTickerTheme
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 /**
@@ -143,7 +143,7 @@ fun WalletScreen(
 @Preview(showBackground = true)
 @Composable
 fun WalletScreenDisconnectedPreview() {
-    MyappTheme {
+    PlainTickerTheme {
         WalletScreen(
             state = WalletUiState(),
             onConnect = {},
@@ -158,7 +158,7 @@ fun WalletScreenDisconnectedPreview() {
 @Preview(showBackground = true)
 @Composable
 fun WalletScreenCapabilitiesPreview() {
-    MyappTheme {
+    PlainTickerTheme {
         WalletScreen(
             state = WalletUiState(
                 address = "11111111111111111111111111111111",
