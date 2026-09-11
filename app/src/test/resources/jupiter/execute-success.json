@@ -1,0 +1,17 @@
+{
+  "_fixture_note": "Synthetic: the shape of a landed POST /execute answer per Jupiter's Ultra docs. The signature is 88 x '1' (base58 of all zeros), a placeholder and never a real one.",
+  "status": "Success",
+  "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+  "slot": "367000000",
+  "code": 0,
+  "inputAmountResult": "5000000",
+  "outputAmountResult": "1366141",
+  "swapEvents": [
+    {
+      "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "inputAmount": "5000000",
+      "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+      "outputAmount": "1366141"
+    }
+  ]
+}

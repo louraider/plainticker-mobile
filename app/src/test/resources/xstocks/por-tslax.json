@@ -1,0 +1,14 @@
+{
+  "_fixture_note": "Live GET /proof-of-reserves/TSLAx, 2026-09-10.",
+  "symbol": "TSLAx",
+  "timestamp": "2026-09-10T20:51:24.651Z",
+  "sharesHeld": "196869",
+  "circulatingSupply": "196340.26085951860836",
+  "holdings": [
+    {
+      "provider": "Alpaca",
+      "quantity": "196869",
+      "symbol": "TSLA"
+    }
+  ]
+}

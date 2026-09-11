@@ -1,0 +1,39 @@
+{
+  "_fixture_note": "First two nodes of live GET /proof-of-reserves?page=0, 2026-09-10, page block verbatim.",
+  "nodes": [
+    {
+      "symbol": "XRXx",
+      "timestamp": "2026-09-10T20:49:22.669Z",
+      "sharesHeld": "4082",
+      "circulatingSupply": "3880.3515380051873531",
+      "holdings": [
+        {
+          "provider": "Alpaca",
+          "quantity": "4082",
+          "symbol": "XRX"
+        }
+      ]
+    },
+    {
+      "symbol": "FLNCx",
+      "timestamp": "2026-09-10T20:49:14.879Z",
+      "sharesHeld": "1414",
+      "circulatingSupply": "1402.5249500988649699",
+      "holdings": [
+        {
+          "provider": "Alpaca",
+          "quantity": "1414",
+          "symbol": "FLNC"
+        }
+      ]
+    }
+  ],
+  "page": {
+    "currentPage": 0,
+    "pageSize": 100,
+    "totalPages": 9,
+    "totalNodes": 830,
+    "hasNextPage": true,
+    "hasPreviousPage": false
+  }
+}
