@@ -26,7 +26,8 @@ enum class HomeTab(val label: String) {
 
 /**
  * Placeholder home: a plain TabRow over the three tab screens. The ViewModels are scoped
- * to the home back-stack entry, so switching tabs keeps their state.
+ * to the home back-stack entry, so switching tabs keeps their state. The real anatomy
+ * (TopBar, TopTabs, TodayStrip) lands with DT8.
  */
 @Composable
 fun HomeScreen(
@@ -34,6 +35,7 @@ fun HomeScreen(
     onOpenDetail: (String) -> Unit,
     onOpenSpike: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onOpenGallery: (() -> Unit)? = null,
 ) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
     val tabs = HomeTab.entries
@@ -51,6 +53,9 @@ fun HomeScreen(
         }
         if (onOpenSpike != null) {
             Text("Open wallet spike (debug build only)", modifier = Modifier.clickable(onClick = onOpenSpike))
+        }
+        if (onOpenGallery != null) {
+            Text("Open component gallery (debug build only)", modifier = Modifier.clickable(onClick = onOpenGallery))
         }
         when (tabs[selected]) {
             HomeTab.LIST -> ListScreen(viewModel = viewModel(factory = factory), onOpenDetail = onOpenDetail)
