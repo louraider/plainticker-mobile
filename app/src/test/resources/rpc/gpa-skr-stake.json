@@ -1,0 +1,29 @@
+{
+  "_fixture_note": "Hand-built to the JSON-RPC shape getProgramAccounts returns for encoding base64 with dataSlice {offset:105,length:8}: each account's data is the 8-byte little-endian principal (6 decimals). 100 SKR and 25.5 SKR. Pubkeys are synthetic; no real wallet or stake account appears here.",
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "pubkey": "Stake1Account1111111111111111111111111111111",
+      "account": {
+        "lamports": 2422320,
+        "owner": "SKRskrmtL83pcL4YqLWt6iPefDqwXQWHSw9S9vz94BZ",
+        "data": ["AOH1BQAAAAA=", "base64"],
+        "executable": false,
+        "rentEpoch": 18446744073709551615,
+        "space": 220
+      }
+    },
+    {
+      "pubkey": "Stake2Account1111111111111111111111111111111",
+      "account": {
+        "lamports": 2422320,
+        "owner": "SKRskrmtL83pcL4YqLWt6iPefDqwXQWHSw9S9vz94BZ",
+        "data": ["YBmFAQAAAAA=", "base64"],
+        "executable": false,
+        "rentEpoch": 18446744073709551615,
+        "space": 220
+      }
+    }
+  ],
+  "id": 1
+}
