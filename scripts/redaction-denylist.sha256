@@ -1,0 +1,12 @@
+# redaction-denylist.sha256 — read by scripts/redaction-guard.sh
+#
+# One entry per line: the SHA-256 (64 hex chars) of a base58 identifier that must never
+# appear in this repository, optionally followed by a label. The identifier itself goes
+# NOWHERE in the repo, not even in this file; only its hash does.
+#
+#   printf %s '<identifier>' | sha256sum | cut -d' ' -f1
+#
+# Lines starting with '#' are ignored. The guard fails if an active line is not a hex digest.
+2246dcff0edadcf67df1c2dc870c1c8cfc52747f46cca06a0dbd1cc8f8e2ca1b  founder wallet public key
+#<sha256 here>  transaction signature of the Sep 10 spike swap — founder fills in
+#<sha256 here>  founder SKR stake account — founder fills in
