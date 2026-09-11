@@ -13,14 +13,15 @@ import com.myapp.AppContainer
 import com.myapp.BuildConfig
 import com.myapp.ui.appViewModelFactory
 import com.myapp.ui.detail.DetailScreen
+import com.myapp.ui.gallery.GalleryScreen
 import com.myapp.ui.home.HomeScreen
 import com.myapp.ui.onboarding.OnboardingScreen
 import com.myapp.ui.spike.SpikeScreen
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 /**
- * onboarding (once) -> home (list | portfolio | watchlist) -> detail/{ticker}; plus the
- * spike screen in debug builds for manual wallet QA.
+ * onboarding (once) -> home (list | portfolio | watchlist) -> detail/{ticker}; plus, in debug
+ * builds, the spike screen for manual wallet QA and the component gallery for design QA.
  */
 @Composable
 fun AppNavHost(
@@ -50,6 +51,7 @@ fun AppNavHost(
                 factory = factory,
                 onOpenDetail = { ticker -> navController.navigate(Routes.detail(ticker)) },
                 onOpenSpike = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.SPIKE) }) else null,
+                onOpenGallery = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.GALLERY) }) else null,
             )
         }
         composable(
@@ -66,6 +68,9 @@ fun AppNavHost(
         if (BuildConfig.DEBUG) {
             composable(Routes.SPIKE) {
                 SpikeScreen(sender = sender)
+            }
+            composable(Routes.GALLERY) {
+                GalleryScreen(onBack = { navController.popBackStack() })
             }
         }
     }
