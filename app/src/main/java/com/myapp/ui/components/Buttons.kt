@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.myapp.ui.components
 
 import androidx.compose.foundation.BorderStroke
@@ -14,9 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RippleConfiguration
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -29,9 +35,13 @@ import com.myapp.ui.theme.Ink
 import com.myapp.ui.theme.Line
 import com.myapp.ui.theme.LineStrong
 import com.myapp.ui.theme.Muted
+import com.myapp.ui.theme.PlainTickerRippleAlpha
 import com.myapp.ui.theme.PlainTickerType
 
 private val ButtonPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp)
+
+/** The theme ripple is Accent, invisible on an Accent fill; the primary button ripples in Canvas. */
+private val PrimaryRipple = RippleConfiguration(color = Canvas, rippleAlpha = PlainTickerRippleAlpha)
 
 /** 56dp, Accent fill, Canvas text 16/600, radius 0. Renders as [DisabledButton] when not enabled. */
 @Composable
@@ -46,16 +56,18 @@ fun PrimaryButton(
     } else {
         val interactionSource = remember { MutableInteractionSource() }
         ButtonFrame(modifier = modifier, interactionSource = interactionSource) {
-            Button(
-                onClick = onClick,
-                modifier = Modifier.fillMaxSize(),
-                shape = RectangleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Canvas),
-                elevation = null,
-                contentPadding = ButtonPadding,
-                interactionSource = interactionSource,
-            ) {
-                Text(text = label, style = PlainTickerType.button, maxLines = 1)
+            CompositionLocalProvider(LocalRippleConfiguration provides PrimaryRipple) {
+                Button(
+                    onClick = onClick,
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RectangleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Canvas),
+                    elevation = null,
+                    contentPadding = ButtonPadding,
+                    interactionSource = interactionSource,
+                ) {
+                    Text(text = label, style = PlainTickerType.button, maxLines = 1)
+                }
             }
         }
     }

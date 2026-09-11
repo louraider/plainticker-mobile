@@ -89,16 +89,16 @@ val PlainTickerShapes: Shapes = Shapes(
     extraLarge = Sharp,
 )
 
-/** Pressed state: Accent ripple at 10 percent (DESIGN.md section 6). */
-private val PlainTickerRipple = RippleConfiguration(
-    color = Accent,
-    rippleAlpha = RippleAlpha(
-        draggedAlpha = 0.10f,
-        focusedAlpha = 0.10f,
-        hoveredAlpha = 0.06f,
-        pressedAlpha = 0.10f,
-    ),
+/** Pressed state: a ripple at 10 percent (DESIGN.md section 6). */
+val PlainTickerRippleAlpha: RippleAlpha = RippleAlpha(
+    draggedAlpha = 0.10f,
+    focusedAlpha = 0.10f,
+    hoveredAlpha = 0.06f,
+    pressedAlpha = 0.10f,
 )
+
+/** The theme ripple is Accent; a surface filled with Accent (PrimaryButton) ripples in Canvas instead. */
+private val PlainTickerRipple = RippleConfiguration(color = Accent, rippleAlpha = PlainTickerRippleAlpha)
 
 private val PlainTickerSelection = TextSelectionColors(
     handleColor = Accent,
