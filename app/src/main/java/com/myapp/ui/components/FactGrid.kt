@@ -50,7 +50,8 @@ data class FactCell(
 
 /**
  * The blueprint grid: two columns, 1dp Line gaps and border, cells on the surface. Exactly as many
- * cells as facts; an odd trailing cell leaves an empty half. Each cell speaks one sentence.
+ * cells as facts (no facts, no grid); an odd trailing cell leaves an empty half. Each cell speaks
+ * one sentence.
  */
 @Composable
 fun FactGrid(
@@ -59,6 +60,7 @@ fun FactGrid(
     surface: Color = Canvas,
     minCellHeight: Dp = 96.dp,
 ) {
+    if (cells.isEmpty()) return
     val rows = remember(cells) { packRows(cells) }
     Column(
         modifier = modifier

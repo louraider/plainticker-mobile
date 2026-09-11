@@ -43,8 +43,10 @@ fun TopTabs(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth()) {
-        // 8dp row inset plus 12dp per tab puts the first label at 20dp and 24dp between labels,
-        // while every tab's touch target is at least 48dp wide and tall.
+        // 8dp row inset plus 12dp per tab puts the first label at 20dp and 24dp between labels.
+        // defaultMinSize comes before width(IntrinsicSize.Max): the intrinsic width fixes the
+        // constraints, so a minimum applied after it would be ignored and a short label could
+        // fall under the 48dp target.
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp).selectableGroup()) {
             items.forEachIndexed { index, item ->
                 val on = index == selected
@@ -59,8 +61,8 @@ fun TopTabs(
                             role = Role.Tab,
                             onClick = { onSelect(index) },
                         )
-                        .width(IntrinsicSize.Max)
                         .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                        .width(IntrinsicSize.Max)
                         .padding(horizontal = 12.dp),
                 ) {
                     Text(
