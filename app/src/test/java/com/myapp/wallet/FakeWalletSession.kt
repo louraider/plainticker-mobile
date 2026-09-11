@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * Each [call], [connect] or [disconnect] consumes the next queued outcome. A queued
  * `Success` must carry the type the caller expects (a [WalletAccount] for connect, the
  * block's result for call); running out of script is a test bug and throws.
+ *
+ * With [operations] set, [call] instead runs the block against that [FakeAdapterOperations]
+ * and wraps its result in `Success`, so a test sees what the ViewModel asked the wallet to
+ * do; the script is then only consumed by [connect] and [disconnect].
  */
 class FakeWalletSession : WalletSession {
 
@@ -18,6 +22,9 @@ class FakeWalletSession : WalletSession {
     override val account: StateFlow<WalletAccount?> = accounts.asStateFlow()
 
     private val script = ArrayDeque<WalletOutcome<Any?>>()
+
+    /** When set, [call] runs its block here instead of answering from the script. */
+    var operations: FakeAdapterOperations? = null
 
     var callCount = 0
         private set
@@ -39,7 +46,8 @@ class FakeWalletSession : WalletSession {
 
     override suspend fun <T> call(block: suspend (AdapterOperations) -> T): WalletOutcome<T> {
         callCount++
-        return next()
+        val ops = operations ?: return next()
+        return WalletOutcome.Success(block(ops))
     }
 
     override suspend fun connect(): WalletOutcome<WalletAccount> {

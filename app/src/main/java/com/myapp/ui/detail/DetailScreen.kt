@@ -12,21 +12,28 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myapp.ui.swap.SwapPlaceholder
 import com.myapp.ui.swap.SwapViewModel
+import com.myapp.ui.watchlist.WatchlistViewModel
 
 /** Placeholder: the state as text. The trust layer and sections land with T9/DT6. */
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
     swapViewModel: SwapViewModel,
+    watchlistViewModel: WatchlistViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
+    val watchlist by watchlistViewModel.state.collectAsStateWithLifecycle()
 
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("Back", modifier = Modifier.clickable(onClick = onBack))
         Text((state.symbol ?: state.ticker) + (state.asset?.name?.let { "  $it" } ?: ""))
+        Text(
+            if (state.ticker in watchlist.tickers) "Unwatch" else "Watch",
+            modifier = Modifier.clickable { watchlistViewModel.toggle(state.ticker) },
+        )
 
         if (state.isLoading) Text("Loading")
         if (state.catalogUnavailable) Text("xStocks catalog unavailable")
