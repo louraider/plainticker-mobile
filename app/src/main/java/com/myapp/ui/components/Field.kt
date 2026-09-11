@@ -1,5 +1,6 @@
 package com.myapp.ui.components
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -20,9 +21,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,7 +41,9 @@ import com.myapp.ui.theme.PlainTickerType
  * The only text field: label above (13 Muted), the value in mono 36 (numbers) or Outfit 16
  * (words), a 1dp Line strong underline that turns Accent while focused, an Accent caret, one
  * text action right (Max, Clear). The label never doubles as the placeholder; [placeholder] is
- * a Muted hint in the value slot and disappears on the first character.
+ * a Muted hint in the value slot and disappears on the first character. A tap anywhere on the
+ * block (label, value, underline) focuses the input, so the 16sp words variant is a 48dp target
+ * without growing past the canvas; the text action keeps its own tap.
  */
 @Composable
 fun Field(
@@ -55,9 +61,16 @@ fun Field(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
+    val focusRequester = remember { FocusRequester() }
     val textStyle = (if (mono) PlainTickerType.fieldValue else PlainTickerType.fieldText).copy(color = Ink)
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .pointerInput(enabled) {
+                // Children (the input, the text action) consume their own taps first.
+                if (enabled) detectTapGestures { focusRequester.requestFocus() }
+            },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text = label, style = PlainTickerType.label, color = Muted)
@@ -83,6 +96,7 @@ fun Field(
                     modifier = Modifier
                         .weight(1f)
                         .alignByBaseline()
+                        .focusRequester(focusRequester)
                         .semantics { contentDescription = label },
                     enabled = enabled,
                     textStyle = textStyle,

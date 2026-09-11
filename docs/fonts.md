@@ -10,7 +10,7 @@ resources, so type renders the same offline and on every device. Compose maps th
 | JetBrains Mono | 400, 500 | 2.304 | github.com/JetBrains/JetBrainsMono release `v2.304`, `fonts/ttf/` inside `JetBrainsMono-2.304.zip` | `jetbrains_mono_regular.ttf`, `jetbrains_mono_medium.ttf` |
 
 Static instances, not the variable fonts: the app needs three and two weights, the static files are
-smaller in total, and they avoid variable-font weight snapping on older Android releases.
+smaller in total, and they are not subject to variable-font weight snapping on older Android releases.
 
 ## Licenses
 
