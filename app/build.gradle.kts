@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -18,7 +19,13 @@ android {
     }
 
     buildTypes {
+        // SUBMIT_SWAPS guards the one call that moves money (POST /execute). Debug builds
+        // stop after signing; only a release build submits. T6 owns signing and CI.
+        debug {
+            buildConfigField("boolean", "SUBMIT_SWAPS", "false")
+        }
         release {
+            buildConfigField("boolean", "SUBMIT_SWAPS", "true")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -32,6 +39,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
@@ -50,7 +58,15 @@ dependencies {
     implementation(libs.mobile.wallet.adapter.clientlib.ktx)
     implementation(libs.multimult)
     implementation(libs.web3.solana)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)
+    testImplementation(libs.ktor.client.mock)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
