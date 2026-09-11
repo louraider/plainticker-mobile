@@ -138,7 +138,7 @@ class XStocksApiTest {
     @Test
     fun `proof of reserves for one symbol parses with a coverage ratio`() = runTest {
         val mock = MockApi { respondJson(Fixtures.read("xstocks/por-tslax.json")) }
-        val por = api(mock).proofOfReserves("TSLAx")
+        val por = checkNotNull(api(mock).proofOfReserves("TSLAx"))
 
         assertEquals("/api/v2/public/proof-of-reserves/TSLAx", mock.lastRequest.url.encodedPath)
         assertEquals("TSLAx", por.symbol)
@@ -190,5 +190,53 @@ class XStocksApiTest {
         val e = expectThrows<ApiException> { api(mock).multiplier("TSLAx") }
         assertEquals(400, e.status)
         assertEquals("Validation error", e.errorCode)
+    }
+
+    @Test
+    fun `symbols are validated before they reach a path`() = runTest {
+        val mock = MockApi { respondJson("{}") }
+        expectThrows<IllegalArgumentException> { api(mock).asset("../proof-of-reserves") }
+        expectThrows<IllegalArgumentException> { api(mock).multiplier("TSLAx?network=Ethereum") }
+        expectThrows<IllegalArgumentException> { api(mock).proofOfReserves("") }
+        expectThrows<IllegalArgumentException> { api(mock).asset("TSLAx/multiplier") }
+        assertEquals(0, mock.requests.size)
+
+        api(mock).asset(" TSLAx ")
+        assertEquals("/api/v2/public/assets/TSLAx", mock.lastRequest.url.encodedPath)
+    }
+
+    @Test
+    fun `proof of reserves for a symbol without data is null on a 200 null body`() = runTest {
+        val mock = MockApi { respondJson("null") }
+        assertNull(api(mock).proofOfReserves("NOPEx"))
+        assertEquals("/api/v2/public/proof-of-reserves/NOPEx", mock.lastRequest.url.encodedPath)
+    }
+
+    @Test
+    fun `multiplier activation time accepts a float literal or a numeric string`() {
+        val json = HttpClientFactory.json
+        val scheduled = json.decodeFromString(
+            Multiplier.serializer(),
+            """{"currentMultiplier":1,"newMultiplier":2,"activationDateTime":1767225600.0,"reason":"Split"}""",
+        )
+        assertEquals(1767225600L, scheduled.activationDateTime)
+        assertEquals(2.0, scheduled.newMultiplier, 0.0)
+        assertTrue(scheduled.hasScheduledChange)
+        assertEquals("Split", scheduled.reason)
+
+        val idle = json.decodeFromString(
+            Multiplier.serializer(),
+            """{"currentMultiplier":1,"newMultiplier":0,"activationDateTime":"0","reason":null}""",
+        )
+        assertEquals(0L, idle.activationDateTime)
+        assertFalse(idle.hasScheduledChange)
+    }
+
+    @Test
+    fun `underlying ticker prefers underlying_symbol and never returns the blank deprecated field`() {
+        assertEquals("TSLA", XStockAsset(symbol = "TSLAx", underlyingSymbol = "", underlying = Underlying(symbol = "TSLA")).underlyingTicker)
+        assertEquals("XRX", XStockAsset(symbol = "XRXx", underlyingSymbol = "XRX", underlying = null).underlyingTicker)
+        assertEquals("ABC", XStockAsset(symbol = "ABCx", underlyingSymbol = "", underlying = Underlying(symbol = "")).underlyingTicker)
+        assertEquals("2888", XStockAsset(symbol = "2888x", underlyingSymbol = "OLD", underlying = Underlying(symbol = "2888")).underlyingTicker)
     }
 }
