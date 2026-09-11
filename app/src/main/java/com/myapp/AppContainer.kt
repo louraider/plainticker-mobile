@@ -1,0 +1,83 @@
+package com.myapp
+
+import android.content.Context
+import com.myapp.core.Clock
+import com.myapp.core.WallClock
+import com.myapp.data.jupiter.JupiterPriceApi
+import com.myapp.data.jupiter.JupiterSwapApi
+import com.myapp.data.net.HttpClientFactory
+import com.myapp.data.plainticker.PlainTickerApi
+import com.myapp.data.rpc.SolanaRpcApi
+import com.myapp.data.xstocks.XStocksApi
+import com.myapp.prefs.OnboardingStore
+import com.myapp.prefs.SharedPrefsOnboardingStore
+import com.myapp.prefs.SharedPrefsWatchlistStore
+import com.myapp.prefs.WatchlistStore
+import com.myapp.repo.CachedCatalogRepository
+import com.myapp.repo.CachedPriceRepository
+import com.myapp.repo.CatalogRepository
+import com.myapp.repo.ForwarderRpcRepository
+import com.myapp.repo.PlainTickerSummaryRepository
+import com.myapp.repo.PriceRepository
+import com.myapp.repo.RpcRepository
+import com.myapp.repo.SummaryRepository
+import com.myapp.wallet.MwaWalletSession
+import com.myapp.wallet.WalletSessionHolder
+import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
+import io.ktor.client.HttpClient
+
+/**
+ * Manual dependency graph (plan D9: no Hilt). One instance per process, owned by
+ * [PlainTickerApp]; ViewModels receive what they need through
+ * [com.myapp.ui.appViewModelFactory].
+ */
+interface AppContainer {
+    val clock: Clock
+    val httpClient: HttpClient
+
+    val plainTickerApi: PlainTickerApi
+    val xStocksApi: XStocksApi
+    val jupiterPriceApi: JupiterPriceApi
+    val jupiterSwapApi: JupiterSwapApi
+    val rpcApi: SolanaRpcApi
+
+    val summaryRepository: SummaryRepository
+    val catalogRepository: CatalogRepository
+    val priceRepository: PriceRepository
+    val rpcRepository: RpcRepository
+
+    val walletAdapter: MobileWalletAdapter
+    val walletSession: WalletSessionHolder
+
+    val onboardingStore: OnboardingStore
+    val watchlistStore: WatchlistStore
+}
+
+class DefaultAppContainer(context: Context) : AppContainer {
+    private val app: Context = context.applicationContext
+    private val prefs by lazy { app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+
+    override val clock: Clock = WallClock
+    override val httpClient: HttpClient by lazy { HttpClientFactory.create() }
+
+    override val plainTickerApi: PlainTickerApi by lazy { PlainTickerApi(httpClient) }
+    override val xStocksApi: XStocksApi by lazy { XStocksApi(httpClient) }
+    override val jupiterPriceApi: JupiterPriceApi by lazy { JupiterPriceApi(httpClient) }
+    override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }
+    override val rpcApi: SolanaRpcApi by lazy { SolanaRpcApi(httpClient) }
+
+    override val summaryRepository: SummaryRepository by lazy { PlainTickerSummaryRepository(plainTickerApi) }
+    override val catalogRepository: CatalogRepository by lazy { CachedCatalogRepository(xStocksApi, clock) }
+    override val priceRepository: PriceRepository by lazy { CachedPriceRepository(jupiterPriceApi, clock) }
+    override val rpcRepository: RpcRepository by lazy { ForwarderRpcRepository(rpcApi) }
+
+    override val walletAdapter: MobileWalletAdapter by lazy { MwaWalletSession.defaultAdapter() }
+    override val walletSession: WalletSessionHolder by lazy { WalletSessionHolder(walletAdapter) }
+
+    override val onboardingStore: OnboardingStore by lazy { SharedPrefsOnboardingStore(prefs) }
+    override val watchlistStore: WatchlistStore by lazy { SharedPrefsWatchlistStore(prefs) }
+
+    companion object {
+        const val PREFS_NAME = "plainticker"
+    }
+}
