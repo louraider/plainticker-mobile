@@ -1,0 +1,4 @@
+{
+  "_fixture_note": "Live 400 from GET /swap/v2/order with a bad outputMint, 2026-09-10.",
+  "error": "Invalid outputMint"
+}
