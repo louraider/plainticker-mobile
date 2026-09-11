@@ -3,9 +3,11 @@
 #
 # What it does
 #   1. Lists tracked files (git ls-files), skipping binaries, this script and the denylist.
-#   2. Extracts every base58-looking run with the length of a Solana public key (32-44 chars)
-#      or of a transaction signature (86-88 chars).
-#   3. Hashes each distinct token with SHA-256 and compares it with every active line of
+#   2. Extracts every maximal base58 run of 32+ characters. A run with the length of a Solana
+#      public key (32-44) or of a transaction signature (86-88) is a candidate as it stands; a
+#      longer run is also cut into every 32-44 (and, past 88, every 86-88) character window, so
+#      an identifier glued to other base58 characters is still found.
+#   3. Hashes each distinct candidate with SHA-256 and compares it with every active line of
 #      scripts/redaction-denylist.sha256. Any hit -> exit 1.
 #   Tokens are never printed. A hit reports file:line, the first 12 hex chars of the hash and
 #   the first 4 chars of the token, so a public CI log cannot leak what the guard protects.
@@ -17,14 +19,16 @@
 # Also fatal: a tracked *.jks / *.keystore; a denylist line that is not a hex digest
 # (someone pasted the identifier instead of its hash); an empty denylist.
 #
-# Portable to bash 3.2 (macOS): no associative arrays, no mapfile.
+# Portable to bash 3.2 (macOS): no associative arrays, no mapfile. Hashing goes through one
+# perl process (Digest::SHA is core perl and ships with git) and falls back to sha256sum/shasum
+# per token when perl is missing.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
 SELF="scripts/redaction-guard.sh"
 DENYLIST="scripts/redaction-denylist.sha256"
-B58='[1-9A-HJ-NP-Za-km-z]{32,88}'
+B58='[1-9A-HJ-NP-Za-km-z]{32,}'
 MODE="${1:-}"
 
 case "$MODE" in
@@ -37,6 +41,18 @@ sha256() {
     printf %s "$1" | sha256sum | cut -d' ' -f1
   else
     printf %s "$1" | shasum -a 256 | cut -d' ' -f1
+  fi
+}
+
+# stdin: one token per line -> stdout: "<sha256> <token>" per line
+hash_all() {
+  if perl -MDigest::SHA=sha256_hex -e 1 >/dev/null 2>&1; then
+    perl -MDigest::SHA=sha256_hex -ne 'chomp; next unless length; print sha256_hex($_), " ", $_, "\n"'
+  else
+    while IFS= read -r t; do
+      [ -n "$t" ] || continue
+      printf '%s %s\n' "$(sha256 "$t")" "$t"
+    done
   fi
 }
 
@@ -66,37 +82,41 @@ if git ls-files | grep -qiE '\.(jks|keystore)$'; then
   fail=1
 fi
 
-# --- 3. collect candidates as  <location>:<token>  (location = path:line or rev:path:line) ----
+# --- 3. collect runs as  <location>:<run>  (location = path:line or rev:path:line) ----------
 TMP="$(mktemp)"
-trap 'rm -f "$TMP"' EXIT
+HASHES="$(mktemp)"
+trap 'rm -f "$TMP" "$HASHES"' EXIT
 
 if [ "$MODE" = "--history" ]; then
   git rev-list --all | while read -r rev; do
     git grep -I -n -o -E "$B58" "$rev" -- . ":(exclude)$SELF" ":(exclude)$DENYLIST" 2>/dev/null || true
   done > "$TMP"
 else
-  git ls-files -z \
-    | grep -z -v -x -F -e "$SELF" -e "$DENYLIST" \
+  git ls-files -z -- . ":(exclude)$SELF" ":(exclude)$DENYLIST" \
     | xargs -0 grep -I -H -n -o -s -E "$B58" > "$TMP" || true
 fi
 
-# --- 4. hash every distinct token of key/signature length and compare ------------------------
+# --- 4. candidates: whole runs of key/signature length + every such window of longer runs ----
+awk -F: '{
+  t = $NF; n = length(t)
+  if ((n >= 32 && n <= 44) || (n >= 86 && n <= 88)) print t
+  if (n > 44) for (L = 32; L <= 44; L++) for (i = 1; i + L - 1 <= n; i++) print substr(t, i, L)
+  if (n > 88) for (L = 86; L <= 88; L++) for (i = 1; i + L - 1 <= n; i++) print substr(t, i, L)
+}' "$TMP" | sort -u | hash_all > "$HASHES"
+scanned=$(wc -l < "$HASHES" | tr -d ' ')
+
+# --- 5. compare hashes with the denylist and report every hit -------------------------------
 hits=0
-scanned=0
-while IFS= read -r tok; do
+while IFS=' ' read -r h tok; do
   [ -n "$tok" ] || continue
-  scanned=$((scanned + 1))
-  h="$(sha256 "$tok")"
-  if printf '%s\n' "$DENY" | grep -qxF "$h"; then
-    hits=$((hits + 1))
-    fail=1
-    echo "redaction-guard: FAIL - denylisted identifier (sha256 ${h:0:12}..., starts '${tok:0:4}') at:" >&2
-    grep -F -- ":$tok" "$TMP" | sed "s/:$tok\$//" | sort -u | sed 's/^/    /' >&2
-  fi
-done < <(awk -F: '{ t=$NF; n=length(t); if ((n>=32 && n<=44) || (n>=86 && n<=88)) print t }' "$TMP" | sort -u)
+  hits=$((hits + 1))
+  fail=1
+  echo "redaction-guard: FAIL - denylisted identifier (sha256 ${h:0:12}..., starts '${tok:0:4}') at:" >&2
+  grep -F -- "$tok" "$TMP" | awk -F: '{ NF--; print }' OFS=: | sort -u | sed 's/^/    /' >&2
+done < <(awk 'NR == FNR { deny[$1] = 1; next } ($1 in deny) { print }' <(printf '%s\n' "$DENY") "$HASHES")
 
 if [ "$fail" -ne 0 ]; then
-  echo "redaction-guard: FAILED ($hits denylisted identifier(s); $scanned distinct tokens scanned; mode: ${MODE:-working-tree})" >&2
+  echo "redaction-guard: FAILED ($hits denylisted identifier(s); $scanned distinct candidates scanned; mode: ${MODE:-working-tree})" >&2
   exit 1
 fi
-echo "redaction-guard: OK - $scanned distinct base58 tokens scanned, none denylisted (mode: ${MODE:-working-tree})"
+echo "redaction-guard: OK - $scanned distinct base58 candidates scanned, none denylisted (mode: ${MODE:-working-tree})"
