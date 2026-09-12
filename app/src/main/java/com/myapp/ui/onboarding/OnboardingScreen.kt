@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -12,7 +13,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/** Placeholder: promise, self-certification checkbox, one action. Final copy and layout are DT11. */
+/**
+ * Placeholder: promise, self-certification checkbox, one action, laid out between the two system
+ * bars. Final copy and the bottom-anchored panel (its button absorbing the navigation inset) are DT11.
+ */
 @Composable
 fun OnboardingScreen(
     viewModel: OnboardingViewModel,
@@ -25,7 +29,7 @@ fun OnboardingScreen(
         if (state.completed) onDone()
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().systemBarsPadding()) {
         Text("PlainTicker")
         Text("Tokenized stocks, read before you swap.")
         Text(state.certificationText)

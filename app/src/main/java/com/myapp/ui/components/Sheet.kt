@@ -31,7 +31,8 @@ import com.myapp.ui.theme.PlainTickerType
 /**
  * The modal sheet (swap, receipt): Elevated surface, radius 0, a 1dp Line strong top edge and a
  * 28x2dp handle instead of the Material pill, the default slide with no bounce. The scrim is
- * Canvas at 82 percent, matching the canvas mockups.
+ * Canvas at 82 percent, matching the canvas mockups. The content is padded by [SheetInsets]: the
+ * navigation bar and the keyboard at the bottom, the status bar once the sheet is dragged up to it.
  */
 @Composable
 fun Sheet(
@@ -50,6 +51,7 @@ fun Sheet(
         tonalElevation = 0.dp,
         scrimColor = Canvas.copy(alpha = 0.82f),
         dragHandle = { SheetHandle() },
+        contentWindowInsets = { SheetInsets },
         content = content,
     )
 }

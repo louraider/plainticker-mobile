@@ -3,6 +3,7 @@ package com.myapp.ui.detail
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -11,11 +12,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myapp.ui.Fmt
+import com.myapp.ui.components.TopBar
 import com.myapp.ui.swap.SwapPlaceholder
 import com.myapp.ui.swap.SwapViewModel
 import com.myapp.ui.watchlist.WatchlistViewModel
 
-/** Placeholder: the state as text. The trust layer and sections land with T9/DT6. */
+/**
+ * Placeholder: the state as text under the real TopBar (Watch as its action, DT5), the scrolling
+ * column ending above the navigation bar. The trust layer and sections land with T9/DT6.
+ */
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
@@ -28,13 +33,13 @@ fun DetailScreen(
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
     val watchlist by watchlistViewModel.state.collectAsStateWithLifecycle()
 
-    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+        TopBar(
+            action = if (state.ticker in watchlist.tickers) "Unwatch" else "Watch",
+            onAction = { watchlistViewModel.toggle(state.ticker) },
+        )
         Text("Back", modifier = Modifier.clickable(onClick = onBack))
         Text((state.symbol ?: state.ticker) + (state.asset?.name?.let { "  $it" } ?: ""))
-        Text(
-            if (state.ticker in watchlist.tickers) "Unwatch" else "Watch",
-            modifier = Modifier.clickable { watchlistViewModel.toggle(state.ticker) },
-        )
 
         if (state.isLoading) Text("Loading")
         if (state.catalogUnavailable) Text("xStocks catalog unavailable")

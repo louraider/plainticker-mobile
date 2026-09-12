@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Dark only. The window paints Canvas so no light frame flashes before Compose draws. -->
+    <!-- Dark only. The window paints Canvas so no light frame flashes before Compose draws, and
+         both system bars are transparent from the first frame; MainActivity.enableEdgeToEdge
+         then lays the content out under them with light icons. -->
     <style name="Theme.Myapp" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/canvas</item>
         <item name="android:colorBackground">@color/canvas</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
