@@ -46,6 +46,7 @@ import com.myapp.data.xstocks.MarketStatus
 import com.myapp.data.xstocks.Reserves
 import com.myapp.data.xstocks.Underlying
 import com.myapp.data.xstocks.XStockAsset
+import com.myapp.ui.Copy
 import com.myapp.ui.components.Banner
 import com.myapp.ui.components.FactCell
 import com.myapp.ui.components.FactGrid
@@ -61,6 +62,7 @@ import com.myapp.ui.components.SkeletonBar
 import com.myapp.ui.components.TopBar
 import com.myapp.ui.components.Track
 import com.myapp.ui.swap.SwapPlaceholder
+import com.myapp.ui.text
 import com.myapp.ui.swap.SwapState
 import com.myapp.ui.swap.SwapToken
 import com.myapp.ui.swap.SwapViewModel
@@ -476,13 +478,6 @@ private fun AbsentRow(label: String) {
         Text(text = label, style = PlainTickerType.rowLabel, color = Ink2, modifier = Modifier.weight(1f))
         Text(text = stringResource(R.string.detail_not_available_filer), style = PlainTickerType.small, color = Muted)
     }
-}
-
-/** The one place a [Copy] becomes a string: words come from strings.xml, raw text from the source. */
-@Composable
-internal fun Copy.text(): String = when (this) {
-    is Copy.Words -> stringResource(id, *args.toTypedArray())
-    is Copy.Raw -> text
 }
 
 // ---- Measurements ------------------------------------------------------------------------------
