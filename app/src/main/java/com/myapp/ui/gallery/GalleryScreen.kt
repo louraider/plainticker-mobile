@@ -4,10 +4,8 @@ package com.myapp.ui.gallery
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -57,8 +55,13 @@ import com.myapp.ui.components.TodayStrip
 import com.myapp.ui.components.TopBar
 import com.myapp.ui.components.TopTabs
 import com.myapp.ui.components.Track
+import com.myapp.ui.swap.SheetContent
+import com.myapp.ui.swap.SwapActions
+import com.myapp.ui.swap.SwapAmount
+import com.myapp.ui.swap.SwapSheetBody
+import com.myapp.ui.swap.SwapState
+import com.myapp.ui.swap.sheet
 import com.myapp.ui.theme.Canvas
-import com.myapp.ui.theme.Elevated
 import com.myapp.ui.theme.Ink
 import com.myapp.ui.theme.Ink2
 import com.myapp.ui.theme.Muted
@@ -274,79 +277,54 @@ fun GalleryScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
         )
         Heading(text = "Receipt, landed")
-        SheetSurface { ReceiptSample() }
+        SheetSurface { SwapSheetBody(content = receiptContent(), actions = GalleryNoActions) }
         Spacer(Modifier.height(48.dp))
     }
 
     if (sheetOpen) {
+        // The real sheet over a real state, so a cell the product drops cannot live on here.
         Sheet(onDismissRequest = { sheetOpen = false }) {
-            SwapSheetSample(amount = amount, onAmount = { amount = it }, onSwap = { sheetOpen = false })
+            SwapSheetBody(
+                content = amountContent(amount),
+                actions = GalleryNoActions.copy(
+                    onAmountChanged = { amount = it },
+                    onMax = { amount = "20.2" },
+                    onSubmit = { sheetOpen = false },
+                    onClose = { sheetOpen = false },
+                ),
+            )
         }
     }
 }
 
-@Composable
-private fun ColumnScope.SwapSheetSample(
-    amount: String,
-    onAmount: (String) -> Unit,
-    onSwap: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(text = "USDC to TSLAx", style = PlainTickerType.sheetTitle, color = Ink)
-        TextAction(
-            label = "TSLAx to USDC",
-            onClick = {},
-            contentPadding = PaddingValues(start = 12.dp, top = 10.dp, end = 0.dp, bottom = 10.dp),
-        )
-    }
-    Spacer(Modifier.height(14.dp))
-    Field(
-        label = "Amount, USDC",
-        value = amount,
-        onValueChange = onAmount,
-        action = "Max",
-        onAction = { onAmount("10.00") },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-    )
-    Text(
-        text = "Balance 10.00 USDC",
-        style = PlainTickerType.meta,
-        color = Muted,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
-    )
-    Spacer(Modifier.height(22.dp))
-    FactGrid(cells = GallerySamples.swapQuote, surface = Elevated, minCellHeight = 0.dp)
-    Column(
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        PrimaryButton(label = "Swap USDC to TSLAx", onClick = onSwap)
-        Text(text = "Signs in Seed Vault Wallet. Not investment advice.", style = PlainTickerType.small, color = Muted)
-    }
-}
+/** The amount step of the real machine, typed into. */
+private fun amountContent(typed: String): SheetContent = SwapState.Amount(
+    leg = GallerySamples.swapLeg,
+    funds = GallerySamples.swapFunds.copy(tokenRaw = 1_360_437L),
+    input = SwapAmount.parse(typed, USDC_DECIMALS, GallerySamples.swapFunds.usdcRaw),
+).sheet(nowMillis = 0L, submitSwaps = true)!!
 
-@Composable
-private fun ColumnScope.ReceiptSample() {
-    Box(Modifier.padding(top = 8.dp)) {
-        LiveBar(label = "Landed", meta = "confirmed in 3.1 s", live = false)
-    }
-    Column(
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(text = "Received", style = PlainTickerType.label, color = Muted)
-        Text(text = "0.01364 TSLAx", style = PlainTickerType.bigValue, color = Ink, maxLines = 1, softWrap = false)
-    }
-    Spacer(Modifier.height(22.dp))
-    FactGrid(cells = GallerySamples.receipt, surface = Elevated, minCellHeight = 0.dp)
-    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 40.dp)) {
-        SecondaryButton(label = "View in Portfolio", onClick = {})
-    }
-}
+/** The landed receipt of the real machine, with a fill that beat its quote. */
+private fun receiptContent(): SheetContent = SwapState.Landed(
+    leg = GallerySamples.swapLeg,
+    quote = GallerySamples.swapQuote,
+    fill = GallerySamples.swapFill,
+    requoted = false,
+    timing = GallerySamples.swapTiming,
+).sheet(nowMillis = 0L, submitSwaps = true)!!
+
+private const val USDC_DECIMALS = 6
+
+/** The gallery presses nothing; each screen wires these to its own view model. */
+private val GalleryNoActions = SwapActions(
+    onAmountChanged = {},
+    onMax = {},
+    onFlip = {},
+    onSubmit = {},
+    onEdit = {},
+    onClose = {},
+    onViewPortfolio = {},
+)
 
 @InstrumentPreviews
 @Composable
