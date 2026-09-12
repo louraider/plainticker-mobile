@@ -164,7 +164,6 @@
     <string name="detail_analysis_unavailable">Analysis unavailable</string>
     <string name="detail_no_xstock">This ticker has no xStock on Solana</string>
     <string name="detail_analysis_age">Analysis from %1$s</string>
-    <string name="detail_stale_banner">Analysis from %1$s</string>
     <string name="banner_market_closed">The NYSE is closed, the reference is the last close</string>
     <string name="banner_market_closed_local">The NYSE is closed by the local schedule, the venue did not answer</string>
     <string name="banner_market_halted">Trading in this asset is halted by the issuer</string>
