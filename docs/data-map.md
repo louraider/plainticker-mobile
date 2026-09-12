@@ -78,7 +78,26 @@ Joined live: `/api/v1/summary` (179 tickers) against the xStocks Solana catalog,
 
 The thirteen deepest pools all track the NYSE close within 0.8 percent: NVDAx, TSLAx, AAPLx, MSTRx, HOODx, MSFTx, COINx, GOOGLx, MCDx, METAx, AMZNx, PLTRx, KOx. Below roughly $10k the quote stops meaning anything: UBERx reads +152.13 percent on a pool holding $80, APPx +89.34 percent on $34, CRWDx -42.15 percent on $48, ASMLx +30.42 percent on $61.
 
-This is a product decision, not a rendering one, and it is open. The premium against the NYSE close is one of the two things a row exists to show and the tracking gauge is the signature element of the Detail screen, yet for most rows the premium is either absent or arithmetic noise off a dead pool. Presenting a $34 pool's quote as a tracking figure contradicts the trust-first stance the whole product is built on. `liquidity` is already in the Price v3 response, so a rule costs nothing to implement once it is chosen: suppress the premium below a floor and say why, mark it, sort by it, or leave it as is.
+The premium against the NYSE close is one of the two things a row exists to show and the tracking gauge is the signature element of the Detail screen, yet for most rows the premium is either absent or arithmetic noise off a dead pool. Presenting a $34 pool's quote as a tracking figure contradicts the trust-first stance the whole product is built on.
+
+**Decided 2026-09-12: show the pool depth and withhold the noise.** The rule is `TrackingQuality` (`data/jupiter/TrackingQuality.kt`), pure and unit tested, and it is the only place the floor exists. It reads `liquidity` off the Price v3 entry, which is already parsed and already in the production response, and answers with one of three cases:
+
+| Case | When | What the surface draws |
+|---|---|---|
+| `Tracked` | pool at or above `MIN_POOL_USD` | the signed premium against the NYSE close, and the gauge on Detail. Unchanged from before |
+| `Thin` | pool below the floor | no premium and no gauge. The row states the pool instead |
+| `Untracked` | Jupiter priced the token but sent no `liquidity` | no premium and no gauge, and no pool number to state |
+
+`MIN_POOL_USD` is **$10,000**, from the counts above: at or above $100k the 13 deepest tracked within 0.8 percent, the $10k to $100k band deviated by about 2 percent (a real spread on a shallow venue, still a description of the market), and under $10k the number stopped describing anything (UBERx +152.13 percent on $80, APPx +89.34 percent on $34, CRWDx -42.15 percent on $48, ASMLx +30.42 percent on $61). Thirty-two of the 55 priced tokens sit under the floor, four report no depth at all. The floor is not $100k because that would take the premium off six readable rows for a precision the row never claims.
+
+The copy, all of it in `strings.xml` and gated by `CopyLintTest`, with money through `Fmt.compactMoney` ("$34", "$12.5k", "$1.3M"):
+
+| Where | `Thin` | `Untracked` |
+|---|---|---|
+| List row meta | `Pool holds $34, too thin to track` | `Pool depth not reported` |
+| In place of the gauge | `Pool holds $34, too thin to track the NYSE close` | `Pool depth not reported, tracking cannot be checked` |
+
+The row's meta line keeps its shape: the sentence takes the premium's half, the analysis age keeps the half after the middle dot, and the row stays one line and 64dp. The sentence is Muted on the row and Ink 2 under the price, never Caution: a shallow pool is a fact about the token, not an issuer-control risk (DESIGN.md section 2). Sorting and sections are untouched and nothing is filtered out: the choice was disclosure, not curation. Written up as DESIGN.md section 1.1.
 
 ### Detail (T9)
 
