@@ -60,10 +60,11 @@ import com.myapp.ui.components.SignalRow
 import com.myapp.ui.components.SkeletonBar
 import com.myapp.ui.components.TopBar
 import com.myapp.ui.components.Track
-import com.myapp.ui.swap.SwapPhase
 import com.myapp.ui.swap.SwapPlaceholder
-import com.myapp.ui.swap.SwapUiState
+import com.myapp.ui.swap.SwapState
+import com.myapp.ui.swap.SwapToken
 import com.myapp.ui.swap.SwapViewModel
+import com.myapp.ui.swap.quoteOrNull
 import com.myapp.ui.theme.Ink
 import com.myapp.ui.theme.Ink2
 import com.myapp.ui.theme.Muted
@@ -99,9 +100,17 @@ fun DetailScreen(
         swap = swap,
         onToggleWatch = viewModel::toggleWatch,
         onSwap = {
-            state.mint?.let { mint -> swapViewModel.start(mint, state.symbol ?: state.ticker, DEMO_USDC_RAW) }
+            state.mint?.let { mint ->
+                swapViewModel.open(
+                    SwapToken(
+                        mint = mint,
+                        symbol = state.symbol ?: state.ticker,
+                        decimals = state.chain.valueOrNull?.facts?.decimals ?: MintFacts.XSTOCK_DECIMALS,
+                    )
+                )
+            }
         },
-        onResetSwap = swapViewModel::reset,
+        onResetSwap = swapViewModel::close,
         modifier = modifier,
     )
 }
@@ -109,7 +118,7 @@ fun DetailScreen(
 @Composable
 internal fun DetailContent(
     state: DetailUiState,
-    swap: SwapUiState,
+    swap: SwapState,
     onToggleWatch: () -> Unit,
     onSwap: () -> Unit,
     onResetSwap: () -> Unit,
@@ -411,12 +420,12 @@ private fun MethodBlock(method: MethodContent) {
 @Composable
 private fun SwapBlock(
     state: DetailUiState,
-    swap: SwapUiState,
+    swap: SwapState,
     onSwap: () -> Unit,
     onResetSwap: () -> Unit,
 ) {
     val label = state.swapLabel ?: return
-    val cost = state.costLine(swap.order?.allInCostPct)
+    val cost = state.costLine(swap.quoteOrNull?.allInCostPct)
     Column(
         modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = SwapGap),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -427,7 +436,7 @@ private fun SwapBlock(
             enabled = state.mint != null && !swap.isBusy,
         )
         cost?.let { Text(text = it.text(), style = PlainTickerType.meta, color = Muted) }
-        if (swap.phase != SwapPhase.IDLE) {
+        if (swap !is SwapState.Closed) {
             SwapPlaceholder(state = swap, enabled = false, onSwap = onSwap, onReset = onResetSwap)
         }
     }
@@ -496,9 +505,6 @@ private val SpanValueSize = 32.sp
 private const val SkeletonFactRows = 3
 private const val SkeletonAnalysisRows = 4
 
-/** 5 USDC (6 decimals), the spike's amount, until the sheet has an amount field (T10). */
-private const val DEMO_USDC_RAW = 5_000_000L
-
 // ---- Previews ----------------------------------------------------------------------------------
 
 private val PreviewAsset = XStockAsset(
@@ -565,7 +571,7 @@ private val PreviewState = DetailUiState(
 @Composable
 private fun DetailPreview() {
     PreviewCanvas {
-        DetailContent(PreviewState, SwapUiState(), onToggleWatch = {}, onSwap = {}, onResetSwap = {})
+        DetailContent(PreviewState, SwapState.Closed(), onToggleWatch = {}, onSwap = {}, onResetSwap = {})
     }
 }
 
@@ -575,7 +581,7 @@ private fun DetailLoadingPreview() {
     PreviewCanvas {
         DetailContent(
             DetailUiState(ticker = "TSLA", nowMillis = PreviewNow),
-            SwapUiState(),
+            SwapState.Closed(),
             onToggleWatch = {},
             onSwap = {},
             onResetSwap = {},
@@ -596,7 +602,7 @@ private fun DetailDegradedPreview() {
                 reserves = Piece.Absent,
                 split = Piece.Failed,
             ),
-            SwapUiState(),
+            SwapState.Closed(),
             onToggleWatch = {},
             onSwap = {},
             onResetSwap = {},
