@@ -85,3 +85,5 @@ Cream or paper backgrounds; Geist or Inter; numbered section labels; uppercase t
 ## 9. Brand glyph
 
 Adaptive launcher icon: Canvas background, JetBrains Mono "P" in Ink with a 2dp Accent tick beneath it (the gauge tick), exported as vector paths; monochrome layer for themed icons; splash background Canvas with no branding image; notification small icon is the same glyph in monochrome.
+
+Implementation: `design/brand/glyph.py` traces the P from the bundled JetBrains Mono Medium with fontTools and writes `res/drawable/ic_launcher_foreground.xml` (Ink glyph at cap height 40 of the 108 viewport, Accent tick 2 high and 5 below the baseline, the whole block inside the 66 safe zone), `ic_launcher_monochrome.xml` and the 24 notification icon `ic_stat_plainticker.xml`. `res/mipmap-anydpi-v26/` holds the two adaptive icons over `@color/ic_launcher_background`, an alias of Canvas; no bitmap icons ship. The splash is `Theme.PlainTicker.Starting` (core-splashscreen): Canvas background, the same foreground vector as the icon, no branding image, then `Theme.PlainTicker`. `BrandAssetsTest` checks all of this from disk.
