@@ -9,6 +9,7 @@ import com.myapp.data.KnownMints
 import com.myapp.data.jupiter.JupiterSwapApi
 import com.myapp.data.jupiter.SwapError
 import com.myapp.data.net.HttpClientFactory
+import com.myapp.ui.Fmt
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
@@ -158,9 +159,9 @@ class MainViewModel : ViewModel() {
                 val nowSec = System.currentTimeMillis() / 1000
 
                 log.appendLine("USDC -> $symbol")
-                log.appendLine("in  ${order.inAmountRaw / 1e6} USDC  (\$${"%.2f".format(order.inUsdValue)})")
-                log.appendLine("out ${order.outAmountRaw}  raw  (\$${"%.2f".format(order.outUsdValue)})")
-                log.appendLine("all-in cost ${"%.2f".format(order.allInCostPct)}%")
+                log.appendLine("in  ${Fmt.tokenAmount(order.inAmountRaw, decimals = 6)} USDC  (${Fmt.price(order.inUsdValue)})")
+                log.appendLine("out ${Fmt.count(order.outAmountRaw)}  raw  (${Fmt.price(order.outUsdValue)})")
+                log.appendLine("all-in cost ${Fmt.percent(order.allInCostPct, signed = false)}")
                 log.appendLine("router=${order.router} type=${order.swapType} gasless=${order.gasless}")
                 log.appendLine("feeBps=${order.feeBps} platformBps=${order.platformFeeBps} slipBps=${order.slippageBps}")
                 log.appendLine(

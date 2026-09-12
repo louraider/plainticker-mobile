@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.myapp.ui.Fmt
 
 /** Placeholder: connect, then the positions as text. Row anatomy lands with T11/DT8. */
 @Composable
@@ -27,10 +28,10 @@ fun PortfolioScreen(
             Text("Connect your wallet to see the xStocks you own")
             Text("Connect wallet", modifier = Modifier.clickable { viewModel.connect() })
         } else {
-            Text("Connected ${account.address.take(4)}...${account.address.takeLast(4)}" + (account.label?.let { "  ($it)" } ?: ""))
+            Text("Connected ${Fmt.shortKey(account.address)}" + (account.label?.let { "  ($it)" } ?: ""))
             Text("Disconnect", modifier = Modifier.clickable { viewModel.disconnect() })
             Text("Refresh", modifier = Modifier.clickable { viewModel.refresh() })
-            state.lamports?.let { Text("SOL ${it / 1_000_000_000.0}") }
+            state.lamports?.let { Text("SOL ${Fmt.tokenAmount(it, decimals = 9)}") }
 
             when {
                 state.isLoading -> Text("Loading positions")
@@ -40,12 +41,12 @@ fun PortfolioScreen(
                 }
                 state.isEmpty -> Text("No xStocks in this wallet yet")
                 else -> {
-                    Text("Total ${state.totalUsd ?: "-"}")
+                    Text("Total ${state.totalUsd?.let(Fmt::price) ?: "-"}")
                     if (state.pricesUnavailable) Text("Prices unavailable")
                     state.positions.forEach { position ->
                         Text(
-                            "${position.symbol}  ${position.quantity}  value ${position.valueUsd ?: "-"}" +
-                                "  (raw ${position.amountRaw} x ${position.multiplier})",
+                            "${position.symbol}  ${Fmt.tokenAmount(position.quantity)}  value ${position.valueUsd?.let(Fmt::price) ?: "-"}" +
+                                "  (raw ${Fmt.count(position.amountRaw)} x ${Fmt.decimal(position.multiplier)})",
                             modifier = Modifier.fillMaxWidth().clickable { onOpenDetail(position.ticker) },
                         )
                     }
