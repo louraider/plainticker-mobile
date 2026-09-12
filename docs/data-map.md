@@ -106,8 +106,8 @@ The row's meta line keeps its shape: the sentence takes the premium's half, the 
 | Hero ticker | catalog `symbol` | 64 mono |
 | Company | `company` | 16 Ink 2 |
 | Token price | Price v3 `usdPrice` | `Fmt.price` |
-| NYSE close | Price v3 `stockData.price` | `Fmt.price`; null -> "Reference price unavailable" caution line, gauge hidden |
-| Gauge | `(usdPrice / stockData.price - 1)` | scale 0.5 percent; caption "Token vs NYSE close, scale 0.5%"; value `Fmt.percent`; when market open per catalog `trading` calendar the caption says "Tracking within {abs}% of the NYSE close" |
+| NYSE close | Price v3 `stockData.price` | `Fmt.price`; the label is "NYSE close" while the exchange is shut and "NYSE price" during its session (`MarketStatus.priceLabel`); null -> "Reference price unavailable" in the gauge's own slot, in Ink 2 and never Caution, gauge hidden |
+| Gauge | `TrackingQuality.of(entry)`, never arithmetic in a composable | scale 0.5 percent; caption "Token vs NYSE close, scale 0.5%", or "Token vs NYSE price" during the exchange session; value `Fmt.percent`; below the liquidity floor the pool sentence takes the whole slot |
 | Live bar meta | `getAccountInfo` context `slot` and fetch time | "slot {Fmt.slot} · {Fmt.relativeAgo}"; hollow (not live) when the RPC call failed |
 | Proof of reserves | xStocks PoR `sharesHeld`, `tokensInCirculation` | ratio `Fmt.percent(unsigned)` value; sub "{shares} shares held for {tokens} tokens" mono |
 | Permanent delegate | mint extension `permanentDelegate.delegate` | present -> "Yes" Caution + "Issuer can move tokens"; absent -> "None" |
@@ -118,12 +118,12 @@ The row's meta line keeps its shape: the sentence takes the premium's half, the 
 | Track Valuation | `axes.valuation.value` rounded | value "51", state `label_en` lowercased ("moderate" -> show "fair"? no: show `label_en` as is) |
 | Track Momentum | `axes.momentum.value` | 2 decimals, state `label_en` |
 | Heading right | `composite_percentile` | "composite {n}" |
-| Fact grid (Against the sector) | not in the v1.1 payload | v1.1 exposes no ROIC, margins, P/E or 52-week facts; the canvas sample cells are placeholders. Decision for T9: render the three tracks and the composite only, OR request an additive `facts` block from the server (leaf metrics with sector medians). Default: tracks only until the server adds facts. |
+| Fact grid (Against the sector) | not in the v1.1 payload | **Decided for T9: there is none.** v1.1 exposes no ROIC, margins, P/E or 52-week facts, so the section is the composite in the heading and the three tracks; the canvas cells are placeholders and `DetailScreenTest` fails if one of their string ids reaches the screen. An additive `facts` block server-side would revive it. |
 | F-Score numeral | `fscore.score` | "8" + "of 9 signals" |
-| Signal rows | `fscore.signals[9]` | names in this fixed order: Return on assets positive; Operating cash flow positive; Return on assets improving; Cash flow exceeds earnings; Leverage falling; Liquidity improving; No new shares issued; Gross margin improving; Asset turnover improving. null -> "n/a" muted |
+| Signal rows | `fscore.signals[9]` | names in this fixed order: Return on assets positive; Operating cash flow positive; Return on assets improving; Cash flow exceeds earnings; Leverage falling; Liquidity improving; No new shares issued; Gross margin improving; Asset turnover improving. null -> "n/a" Muted, never "no" (`SignalRow` takes a nullable) |
 | Method body | `method.statement_en` | 15 Ink 2 |
 | Method sources | static string | "Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close." |
-| Analysis age | `as_of` | header meta "Analysis from {Fmt.ageOld}" only when > 24 h |
+| Analysis age | `as_of` | "Analysis from {Fmt.relativeAgo}" at the top of Method, only when > 24 h |
 | Not served | detail 404 `unsupported_ticker` or `not_available` | trust layer still renders from chain + xStocks; fundamentals replaced by one row "Analysis not yet available" |
 | forward.* | all fields | not rendered in the hackathon build (design decision); may feed a later "Expectations" section |
 
@@ -170,6 +170,33 @@ Three more decisions the T9 data half fixes:
   `MarketStatus.priceLabel`: within a percentage during the exchange session, against the NYSE
   close in every other period, which includes extended, overnight and a halt.
 
+#### The composition, built 2026-09-12 (T9 UI half, DT6)
+
+`DetailScreen.kt` places; `DetailModel.kt` decides. Every sentence and numeral the screen draws is
+a pure function over `DetailUiState` (`DetailModelTest`, 47 cases), so each Pass 2 state is a unit
+test rather than a device run, and `DetailScreenTest` reads the composition from source to pin the
+section order, the absence of arithmetic in it, and the fact that no word is chosen there.
+
+Five decisions the composition fixes:
+
+- **The reference is a close only while the exchange is shut.** The right label of the price row and
+  the gauge caption both come from `MarketStatus.priceLabel`: "NYSE close" and "Token vs NYSE close"
+  out of session, "NYSE price" and "Token vs NYSE price" in it. The two arg-taking strings
+  `detail_price_tracking_within` and `detail_price_vs_close` are gone: the gauge already prints the
+  signed premium on its right, so a caption repeating it was the same number twice.
+- **Five cells under "Backing and controls"**, which packs the two-column grid exactly: proof of
+  reserves spanning the first row, then permanent delegate, transfers pausable, split multiplier and
+  transfer hook. `defaultAccountState` and the on-chain supply are read by `MintFacts` and not drawn;
+  their strings are in `strings.xml` for whoever adds a second grid.
+- **Caution reaches exactly two values**, the permanent delegate and pausable transfers, and only
+  where the mint actually carries the extension. A revoked delegate is "None" in Ink. A mint that
+  could not be read is "Unknown" with "The mint could not be read" under it, in Ink: an absence of
+  facts is never drawn as an absence of risk, and never as a warning either.
+- **The live bar breathes for one minute**, the forwarder's own cache window, then goes static while
+  the meta line keeps counting. It is announced by its slot, not by the ticking age, so a polite
+  live region does not interrupt a reader every second.
+- **The Swap button keeps the placeholder's wiring** (T10 owns the sheet). Its mono line states the
+  pool until an order exists, then "est. all-in cost 0.09% · liquidity $1.3M".
 ### Swap sheet (T10)
 
 | Cell | Field |
