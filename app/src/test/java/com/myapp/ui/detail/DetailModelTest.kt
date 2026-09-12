@@ -556,6 +556,23 @@ class DetailModelTest {
     }
 
     @Test
+    fun `a numeral the payload withholds is not the SEC-null case while a signal was evaluated`() {
+        val partial = served(
+            analysis = AnalysisState.Served(
+                payload(
+                    fscore = FScore(
+                        score = null,
+                        scale = "0-9",
+                        signals = listOf(true, null, null, null, null, null, null, null, null),
+                    ),
+                ),
+            ),
+        ).fScore!!
+        assertNull(partial.score)
+        assertFalse("one signal was answered, so the nine rows still stand", partial.unavailable)
+    }
+
+    @Test
     fun `a filer with no F-Score keeps the heading and says it is not available, never a zero`() {
         val none = served(analysis = AnalysisState.Served(payload(fscore = null))).fScore!!
         assertNull(none.score)
@@ -653,6 +670,12 @@ class DetailModelTest {
         )
         assertEquals(DetailBanner.HALTED, served(market = closed.copy(state = MarketState.HALTED)).banner)
         assertNull("no venue answer yet is not a banner", served(market = null).banner)
+        // The weekday schedule knows no holidays, so an open only it claims is named as its claim
+        // rather than passed off as the venue's own answer.
+        assertEquals(
+            DetailBanner.OPEN_LOCAL,
+            served(market = open.copy(source = MarketSource.LOCAL_SCHEDULE)).banner,
+        )
     }
 
     @Test

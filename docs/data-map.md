@@ -166,7 +166,9 @@ Three more decisions the T9 data half fixes:
 - **Trading hours.** `MarketHours` (`data/xstocks/MarketHours.kt`) is one pure function over a
   clock. The asset's own `trading` block decides whenever it is there, including against the
   calendar; the fifteen-line Monday to Friday 09:30 to 16:00 America/New_York schedule is reached
-  only by an asset with no block, and the answer says which source spoke. The price row reads
+  only by an asset with no block, and the answer says which source spoke. The schedule knows no
+  holidays, so a session only it claims is drawn as its claim: the banner reads "The NYSE is open
+  by the local schedule, the venue did not answer" rather than nothing at all. The price row reads
   `MarketStatus.priceLabel`: within a percentage during the exchange session, against the NYSE
   close in every other period, which includes extended, overnight and a halt.
 
@@ -193,7 +195,9 @@ Five decisions the composition fixes:
   could not be read is "Unknown" with "The mint could not be read" under it, in Ink: an absence of
   facts is never drawn as an absence of risk, and never as a warning either.
 - **The live bar breathes for one minute**, the forwarder's own cache window, then goes static while
-  the meta line keeps counting. It is announced by its slot, not by the ticking age, so a polite
+  the meta line keeps counting. Both need a clock that moves, so `DetailViewModel` re-reads the wall
+  clock once a second while the state is collected; taken once at the refresh it is older than the
+  read it is compared against and the age is stuck at "0 s ago" for ever. It is announced by its slot, not by the ticking age, so a polite
   live region does not interrupt a reader every second.
 - **The Swap button keeps the placeholder's wiring** (T10 owns the sheet). Its mono line states the
   pool until an order exists, then "est. all-in cost 0.09% · liquidity $1.3M".
