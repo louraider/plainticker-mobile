@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.myapp.ui.Fmt
 
 /** Placeholder for the swap sheet (T10/DT7): the phase and the quote as text. */
 @Composable
@@ -22,7 +23,7 @@ fun SwapPlaceholder(
         )
         Text("phase ${state.phase}")
         state.order?.let { order ->
-            Text("in ${order.inAmountRaw} raw USDC  out ${order.outAmountRaw} raw  all-in cost ${order.allInCostPct}%")
+            Text("in ${Fmt.tokenAmount(order.inAmountRaw, decimals = 6)} USDC  out ${Fmt.count(order.outAmountRaw)} raw  all-in cost ${Fmt.percent(order.allInCostPct, signed = false)}")
             Text("router ${order.router}  type ${order.swapType}  gasless ${order.gasless}")
         }
         state.message?.let { Text(it) }
