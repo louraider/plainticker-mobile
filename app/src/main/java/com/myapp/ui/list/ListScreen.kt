@@ -214,7 +214,7 @@ private fun rowMeta(row: ListRow): String? {
             tracking.premiumPct?.let { stringResource(R.string.list_row_meta_premium, Fmt.percent(it)) }
 
         is TrackingQuality.Thin ->
-            stringResource(R.string.list_row_meta_thin, Fmt.compactMoney(tracking.poolUsd))
+            stringResource(R.string.list_row_meta_thin, Fmt.compactMoney(tracking.poolUsd, roundDown = true))
 
         TrackingQuality.Untracked -> stringResource(R.string.list_row_meta_pool_unknown)
 
