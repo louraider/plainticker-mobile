@@ -26,6 +26,18 @@
 **Priority:** P3
 **Depends on:** hackathon submission; which foreign tickers matter most (phase-3 reserves list).
 
+### ABNB reads missing_eps: a diluted-EPS tag gap in EDGAR extraction
+
+**What:** Find why `extractAnnualSeries` finds no `us-gaap:EarningsPerShareDiluted` at an endpoint year for ABNB, and widen the tag or unit matching if the fact is present under another tag (for example `EarningsPerShareBasicAndDiluted`) or another unit shape.
+
+**Why:** After PR #109 every phase-3 ticker explains its null CAGR. Eight read `negative_eps_base`, which is the honest answer for a company that lost money. ABNB reads `missing_eps`, which is not a fact about the company but a fact about our extraction: Airbnb has reported diluted EPS for years. One ticker out of ten mis-attributing a data gap to the filer is exactly the kind of small dishonesty the trust-first pitch cannot afford if a judge checks.
+
+**Context:** Reason published by `computeEpsCagr3y` in `lib/methodology/sec-realized-growth.ts`; the series comes from `extractAnnualSeries` in `lib/data/edgar/extract.ts`, which reads only `us-gaap:EarningsPerShareDiluted` and is anchored on the net-income concept, so a year without the pinned fact drops out entirely. Verified live 2026-09-12: ABNB `epsCagr3yReason = "missing_eps"`, `epsTrajectory = null`. MU, the other unexplained null, turned out to have a real CAGR of -0.70 and was never a gap. Related to the IFRS mapping TODO above: both are tag-vocabulary problems in the same extractor.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** hackathon submission; nothing renders `forward` in the hackathon build.
+
 ## Mobile (plainticker-mobile)
 
 ### Solana dApp Store listing
