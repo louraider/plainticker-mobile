@@ -16,7 +16,13 @@ import com.myapp.ui.watchlist.WatchlistViewModel
 /** One ViewModel per screen, each built from [AppContainer]; the detail ticker comes from the route. */
 fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
     initializer {
-        ListViewModel(container.summaryRepository, container.catalogRepository, container.priceRepository)
+        ListViewModel(
+            container.summaryRepository,
+            container.catalogRepository,
+            container.priceRepository,
+            container.snapshotRepository,
+            container.watchlistStore,
+        )
     }
     initializer {
         val ticker = checkNotNull(createSavedStateHandle().get<String>(Routes.ARG_TICKER)) {

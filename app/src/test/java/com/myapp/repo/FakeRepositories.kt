@@ -5,6 +5,9 @@ import com.myapp.data.jupiter.PriceFetch
 import com.myapp.data.net.ApiException
 import com.myapp.data.plainticker.AnalysisPayload
 import com.myapp.data.plainticker.SummaryResponse
+import com.myapp.data.snapshot.ListSnapshot
+import com.myapp.data.snapshot.SnapshotAsset
+import com.myapp.data.snapshot.SnapshotRow
 import com.myapp.data.rpc.RpcAccount
 import com.myapp.data.rpc.RpcEncoding
 import com.myapp.data.rpc.SkrStake
@@ -12,6 +15,7 @@ import com.myapp.data.rpc.TokenBalance
 import com.myapp.data.xstocks.Deployment
 import com.myapp.data.xstocks.Underlying
 import com.myapp.data.xstocks.XStockAsset
+import java.time.LocalDate
 
 class FakeSummaryRepository(
     var summaryResult: Result<SummaryResponse> = Result.success(SummaryResponse("v1.1", "2026-09-10T18:00:00.000Z")),
@@ -69,6 +73,19 @@ class FakePriceRepository(
     }
 }
 
+class FakeSnapshotRepository(
+    /** null is "no snapshot shipped with this build", the state that leaves the list empty. */
+    var snapshot: ListSnapshot? = null,
+) : SnapshotRepository {
+    var calls = 0
+        private set
+
+    override suspend fun listSnapshot(): ListSnapshot? {
+        calls++
+        return snapshot
+    }
+}
+
 class FakeRpcRepository(
     var balances: Result<List<TokenBalance>> = Result.success(emptyList()),
     var lamports: Result<Long> = Result.success(0L),
@@ -97,6 +114,13 @@ fun xStock(symbol: String, ticker: String, mint: String, name: String = "$ticker
     underlying = Underlying(symbol = ticker, type = "Equity", listingCountry = "US"),
     deployments = listOf(Deployment(address = mint, network = XStockAsset.NETWORK_SOLANA, supportsAtomicSwaps = true)),
 )
+
+/** A bundled snapshot of one analyzed row and its token, as the assets carry them. */
+fun snapshot(
+    capturedOn: LocalDate? = LocalDate.of(2026, 9, 12),
+    rows: List<SnapshotRow> = emptyList(),
+    assets: List<SnapshotAsset> = emptyList(),
+): ListSnapshot = ListSnapshot(capturedOn = capturedOn, rows = rows, assets = assets)
 
 fun price(usd: Double, reference: Double? = null): PriceEntry = PriceEntry(
     usdPrice = usd,
