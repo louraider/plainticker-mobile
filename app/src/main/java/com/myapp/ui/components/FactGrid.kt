@@ -2,6 +2,7 @@ package com.myapp.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -46,6 +50,13 @@ data class FactCell(
     val subMono: Boolean = false,
     val tone: FactTone = FactTone.Neutral,
     val valueSize: TextUnit = 24.sp,
+    /**
+     * What tapping the cell does, for a fact that is also a handle: the receipt's signature is
+     * copied this way. Null on every cell that is only a fact, which is nearly all of them.
+     */
+    val onTap: (() -> Unit)? = null,
+    /** What a screen reader says the tap does ("Copy the signature"). Required by [onTap]. */
+    val tapLabel: String? = null,
 )
 
 /**
@@ -125,12 +136,22 @@ private fun FactCellView(
         append(cell.label).append(": ").append(spoken(cell.value))
         cell.sub?.let { append(", ").append(spoken(it)) }
     }
+    val tap = cell.onTap
     Column(
         modifier = modifier
             .background(surface)
+            .then(if (tap == null) Modifier else Modifier.clickable(role = Role.Button, onClick = tap))
             .defaultMinSize(minHeight = minHeight)
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 18.dp)
-            .clearAndSetSemantics { contentDescription = description },
+            // The cell speaks one sentence, so its own text nodes are cleared; a tappable cell
+            // has to put its action back, since clearing took the clickable's semantics with it.
+            .clearAndSetSemantics {
+                contentDescription = description
+                if (tap != null) {
+                    role = Role.Button
+                    onClick(label = cell.tapLabel) { tap(); true }
+                }
+            },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text = cell.label, style = PlainTickerType.label, color = Muted)
