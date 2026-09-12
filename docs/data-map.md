@@ -220,15 +220,18 @@ Five decisions the composition fixes:
 
 | Cell | Field |
 |---|---|
-| Header | "USDC to {symbol}"; flip only when the wallet holds the token |
-| Amount | user input, `Fmt.tokenAmount` for the balance line from USDC token account |
-| You receive | `/order` `outAmount` / 10^decimals, `Fmt.tokenAmount` |
-| Rate line | `usdPrice` and `stockData.price` |
-| All-in cost | `Order.allInCostPct` (fee bps + platform fee bps + price impact) |
+| Header | "USDC to {symbol}"; the direction text action beneath it only when the wallet's token balance is above zero |
+| Amount | user input, `Fmt.tokenAmount` for the balance line from the USDC token account |
+| You receive | `/order` `outAmount` / 10^decimals, `Fmt.tokenAmount`; sub line is `otherAmountThreshold` as the worst case |
+| All-in cost | `Order.allInCostPct` (fee bps + platform fee bps + price impact); sub line is the route |
 | Route | `Order.router` ("metis" -> "Metis") |
-| Liquidity | not in `/order`; use Price v3 liquidity if exposed, else omit the cell |
-| Countdown | `Order.secondsLeft` when `hasExpiry` (RFQ only) |
-| Receipt | `/execute` signature, slot, `outAmount` actual; "quote {x}% · fill {y}%" from quoted vs actual |
+| SOL needed | `signatureFeeLamports + rentFeeLamports + prioritizationFeeLamports`, nine decimals; sub names the rent when there is one |
+| Countdown | `Order.secondsLeft` when `hasExpiry` (RFQ only); nothing at all otherwise |
+| Receipt | `/execute` signature, slot, `outputAmountResult` as the fill; "quote {x}%, fill {y}%" from quoted vs actual |
+
+Dropped from the canvas: the **rate line** (`usdPrice` and `stockData.price` are a Detail reading and
+the sheet does not fetch Price v3) and the **Liquidity** cell (no field in `/order`, and the sheet
+makes no second call to find one). Both are recorded under the sheet's own block below.
 
 #### The order, verified live 2026-09-12 (T10)
 
@@ -260,6 +263,51 @@ What is decided away from the composition, and belongs to no other layer:
 | Sanitized errors | `SwapFailure` | a `@StringRes` per failure; upstream text goes to `SwapDebugLog` and can reach no state |
 | The fill | `SwapFill` | `/execute` `outputAmountResult`, not the quote's `outAmount`; `allInCostPaidPct` is the quote's cost corrected by that ratio |
 | The flip | `SwapLeg.flipped()` | the same machine with the mints exchanged, offered only when the wallet's token balance is above zero |
+
+#### The sheet itself (T10, DT7, built 2026-09-12)
+
+`ui/swap/SwapSheetModel.kt` turns a `SwapState` and the wall clock into a `SheetContent`; the
+composition in `SwapSheet.kt` draws that and computes nothing. Every state of plan section 13
+Pass 2 is a unit test over the model, so what the sheet says is checked without a device.
+
+| Slot | What fills it |
+|---|---|
+| Header | the pair, either way round; the direction action only when `funds.tokenRaw > 0` |
+| Field | the amount step only, with the typed text untouched and the balance beneath |
+| Phase | the live bar: "Getting quote", "Confirm in Wallet", "Landing", each with its own elapsed seconds; breathing only while a call is in flight |
+| Cost block | from `Quoting` onward, three cells carrying the five facts; a skeleton while the order is in flight; one line on the amount step saying the cost is quoted at the tap |
+| Notice | one slot, in priority order: no USDC at all, a cancelled approval, an amount problem, a shortfall, a failure |
+| Debug band | every state, whenever `SUBMIT_SWAPS` is false |
+| Receipt | replaces the whole anatomy on `Landed` |
+| Buttons | at most two, and none at all while `/execute` is in flight |
+
+**Three places the canvas was not followed, and why.**
+
+1. **No cost cells on the amount step.** The canvas draws "You receive" and "All-in cost" there.
+   `GET /order` shares a 0.5 rps bucket with Price v3 and is spent at the tap, so a preview would
+   either be stale by the time it is acted on or would consume the quote the swap itself needs.
+   The block says so in words instead of leaving a gap: "The cost is quoted when you tap Swap, not
+   before."
+2. **No Liquidity cell and no rate line.** Neither has a field in `/order`, and the sheet makes no
+   second call. The cell is dropped rather than left blank; Detail already carries the pool size on
+   its cost line, where a Price v3 read has been made.
+3. **The direction action sits beneath the header, not beside it.** "USDC to TSLAx" at mono 22 plus
+   "TSLAx to USDC" at Outfit 14 fits a 400dp frame at a 1.0 font scale and clips at 1.3. Beneath, it
+   also gets a clean 48dp target of its own.
+
+Two smaller calls: the receipt's headline sets the numeral at 40sp and the ticker beside it at 20,
+because a 14-character pair at 40sp leaves the screen at a 1.3 font scale; and SOL figures keep all
+nine decimals where every other token quantity is trimmed to six, since a 6,450 lamport fee trimmed
+to six reads "0.000006", which is not what is charged.
+
+**A submission in flight cannot be dismissed.** `close()` cancels the job carrying `POST /execute`,
+so the sheet refuses its own dismiss while the state is `Landing`, and offers no button there
+either. Every other state dismisses normally.
+
+**The debug build never draws a receipt.** `SUBMIT_SWAPS` is false in debug, the machine stops at
+`Signed`, and the sheet's terminal there reads "Signed, not submitted" with the wallet round trip
+beside it, over a band that says the same thing. There is no signature, no slot and no fill on that
+surface because there is nothing to put in them.
 
 #### Receipts, local (T10) -> read by Portfolio (T11)
 
