@@ -4,6 +4,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
@@ -120,6 +121,9 @@ object Fmt {
         val t = instant.atOffset(ZoneOffset.UTC)
         return "${MONTHS[t.monthValue - 1]} ${t.dayOfMonth}"
     }
+
+    /** A calendar day, for a stamp that carries no time of day: "12 Sep 2026". */
+    fun day(date: LocalDate): String = "${date.dayOfMonth} ${MONTHS[date.monthValue - 1]} ${date.year}"
 
     // ---- Relative time --------------------------------------------------------------------
 

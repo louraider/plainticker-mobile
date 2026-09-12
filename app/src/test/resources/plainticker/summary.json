@@ -1,12 +1,12 @@
 {
-  "_fixture_note": "Hand-built to the /api/v1/summary contract (schema v1.1) agreed 2026-09-10; the route was not yet live when this was written. Row values are illustrative. Row 3 carries nulls in every optional field plus a key the client has never heard of.",
+  "_fixture_note": "Hand-built to the /api/v1/summary contract (schema v1.1) agreed 2026-09-10; the route was not yet live when this was written. Row values are illustrative. Row 1 carries the Ukrainian headline production really serves, so a test can prove no rendered string comes from it. Row 2 is stale. Row 3 carries nulls in every optional field, has no xStock behind it, and adds a key the client has never heard of.",
   "schema": "v1.1",
   "generated_at": "2026-09-10T18:00:00.000Z",
   "rows": [
     {
       "ticker": "AAPL",
       "company": "Apple Inc.",
-      "headline": "Strong quality, moderate valuation, near its 52-week high",
+      "headline": "Сигнали збігаються: дешева якість проти сектора",
       "tone": "caution",
       "setup_score": 3,
       "composite": 0.71,
@@ -19,7 +19,7 @@
     {
       "ticker": "JPM",
       "company": "JPMorgan Chase & Co.",
-      "headline": "High quality at a fair price",
+      "headline": "Міцна якість за справедливою ціною",
       "tone": "positive",
       "setup_score": 4,
       "composite": 0.66,
