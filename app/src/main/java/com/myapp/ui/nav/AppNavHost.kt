@@ -31,9 +31,7 @@ fun AppNavHost(
 ) {
     val navController = rememberNavController()
     val factory = remember(container) { appViewModelFactory(container) }
-    val startDestination = remember(container) {
-        if (container.onboardingStore.isOnboarded()) Routes.HOME else Routes.ONBOARDING
-    }
+    val startDestination = remember(container) { Routes.start(container.onboardingStore.isOnboarded()) }
 
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
         composable(Routes.ONBOARDING) {
