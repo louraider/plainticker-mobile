@@ -66,6 +66,8 @@
     <string name="list_stale_banner">No fresh analysis, the newest is %1$s</string>
     <string name="list_snapshot_banner">List from a bundled snapshot, captured %1$s</string>
     <string name="list_snapshot_banner_undated">List from a bundled snapshot</string>
+    <string name="list_snapshot_refreshing">List from a bundled snapshot of %1$s, refreshing now</string>
+    <string name="list_snapshot_refreshing_undated">List from a bundled snapshot, refreshing now</string>
     <string name="list_today_watched">Today: %1$s watched</string>
     <string name="list_row_meta_age">Analysis %1$s</string>
     <string name="list_state_strong">strong</string>

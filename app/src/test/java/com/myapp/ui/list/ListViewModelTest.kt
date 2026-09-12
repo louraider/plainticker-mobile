@@ -19,6 +19,15 @@ import com.myapp.repo.FakeCatalogRepository
 import com.myapp.repo.FakePriceRepository
 import com.myapp.repo.FakeSnapshotRepository
 import com.myapp.repo.FakeSummaryRepository
+import com.myapp.repo.Gate
+import com.myapp.repo.HeldCatalogRepository
+import com.myapp.repo.HeldPriceRepository
+import com.myapp.repo.HeldSummaryRepository
+import com.myapp.repo.CatalogRepository
+import com.myapp.repo.PriceRepository
+import com.myapp.repo.SnapshotRepository
+import com.myapp.repo.SummaryRepository
+import com.myapp.prefs.WatchlistStore
 import com.myapp.repo.price
 import com.myapp.repo.snapshot
 import com.myapp.repo.xStock
@@ -63,12 +72,25 @@ class ListViewModelTest {
     )
 
     private fun viewModel(
-        summaries: FakeSummaryRepository = FakeSummaryRepository(Result.success(summary())),
-        catalog: FakeCatalogRepository = FakeCatalogRepository(Result.success(catalog())),
-        prices: FakePriceRepository = FakePriceRepository(),
-        snapshots: FakeSnapshotRepository = FakeSnapshotRepository(),
-        watchlist: InMemoryWatchlistStore = InMemoryWatchlistStore(),
+        summaries: SummaryRepository = FakeSummaryRepository(Result.success(summary())),
+        catalog: CatalogRepository = FakeCatalogRepository(Result.success(catalog())),
+        prices: PriceRepository = FakePriceRepository(),
+        snapshots: SnapshotRepository = FakeSnapshotRepository(),
+        watchlist: WatchlistStore = InMemoryWatchlistStore(),
     ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist)
+
+    /** The bundled snapshot as the assets carry it: a whole list, dated, and with no price. */
+    private fun bundled() = snapshot(
+        capturedOn = LocalDate.of(2026, 9, 12),
+        rows = listOf(
+            SnapshotRow(ticker = "AAPL", company = "Apple Inc.", composite = 83.80406, tone = Tone.POSITIVE, ageDays = 2),
+            SnapshotRow(ticker = "BKNG", company = "Booking Holdings Inc.", composite = 80.28, tone = Tone.CAUTION),
+        ),
+        assets = listOf(
+            SnapshotAsset(symbol = "AAPLx", ticker = "AAPL", name = "Apple xStock", mint = aaplMint),
+            SnapshotAsset(symbol = "TSLAx", ticker = "TSLA", name = "Tesla xStock", mint = tslaMint),
+        ),
+    )
 
     // ---- The join ----------------------------------------------------------------------
 
@@ -81,7 +103,7 @@ class ListViewModelTest {
 
         vm.state.test {
             assertTrue(awaitItem().isLoading)
-            val state = awaitUntil { !it.isLoading && it.analyzed.all { row -> row.priceUsd != null } }
+            val state = awaitUntil { !it.refreshing && it.analyzed.all { row -> row.priceUsd != null } }
 
             assertNull(state.banner)
             assertFalse(state.catalogUnavailable)
@@ -129,7 +151,7 @@ class ListViewModelTest {
         val vm = viewModel()
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             assertTrue("XYZ has no xStock", state.analyzed.none { it.ticker == "XYZ" })
             assertTrue("and it is not a price-only row either", state.withoutAnalysis.none { it.ticker == "XYZ" })
             cancelAndIgnoreRemainingEvents()
@@ -147,7 +169,7 @@ class ListViewModelTest {
 
         val vm = viewModel()
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             assertEquals(71.0, state.analyzed[0].composite!!, 1e-9)
             assertEquals(66.0, state.analyzed[1].composite!!, 1e-9)
             cancelAndIgnoreRemainingEvents()
@@ -174,7 +196,7 @@ class ListViewModelTest {
         val vm = viewModel(summaries = FakeSummaryRepository(Result.success(production)))
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             assertEquals(listOf("84", "1"), state.analyzed.map { Fmt.decimal(it.composite!!, decimals = 0) })
             cancelAndIgnoreRemainingEvents()
         }
@@ -186,7 +208,7 @@ class ListViewModelTest {
         val vm = viewModel(summaries = FakeSummaryRepository(Result.success(doubled)))
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             val tickers = state.analyzed.map { it.ticker }
             assertEquals(tickers.distinct(), tickers)
             // The first row served wins, so the list keeps the server's own ordering.
@@ -201,7 +223,7 @@ class ListViewModelTest {
         val vm = viewModel()
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             val rows = state.analyzed + state.withoutAnalysis
             assertTrue(rows.isNotEmpty())
             rows.forEach { row ->
@@ -220,7 +242,7 @@ class ListViewModelTest {
         val vm = viewModel()
 
         vm.state.test {
-            val mixed = awaitUntil { !it.isLoading }
+            val mixed = awaitUntil { !it.refreshing }
             val jpm = mixed.analyzed.single { it.ticker == "JPM" }
             assertTrue(jpm.stale)
             assertEquals(9, jpm.ageDays)
@@ -233,7 +255,7 @@ class ListViewModelTest {
         val stale = viewModel(summaries = FakeSummaryRepository(Result.success(allStale)))
 
         stale.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             assertEquals(2, state.analyzed.size)
             assertTrue(state.analyzed.all { it.stale })
             assertEquals(ListBanner.Stale(2), state.banner)
@@ -252,7 +274,7 @@ class ListViewModelTest {
         )
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             // The analysis is the product: a list that quietly turns into a price-only catalog
             // has to say so, and offer the retry, rather than look like a catalog of nothing.
             assertTrue(state.analysisUnavailable)
@@ -273,7 +295,7 @@ class ListViewModelTest {
         )
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             assertFalse("nothing failed, so this is not an outage", state.failed)
             assertNull(state.banner)
             assertTrue(state.isEmpty)
@@ -289,7 +311,7 @@ class ListViewModelTest {
         val vm = viewModel(catalog = FakeCatalogRepository(Result.failure(IOException("offline"))), prices = prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             assertTrue(state.catalogUnavailable)
             assertEquals(ListBanner.CatalogUnavailable, state.banner)
             // Nothing is known about tokens, so every classified row is kept rather than dropped.
@@ -325,7 +347,9 @@ class ListViewModelTest {
         )
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading && it.analyzed.any { row -> row.priceUsd != null } }
+            // The snapshot now paints before the network is asked, so this waits for the
+            // network to have settled as a failure: that is the state this test is about.
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.priceUsd != null } }
             assertEquals(1, snapshots.calls)
             assertTrue(state.fromSnapshot)
             assertFalse(state.failed)
@@ -350,7 +374,7 @@ class ListViewModelTest {
         )
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.refreshing }
             assertTrue(state.failed)
             assertEquals(ListBanner.Unavailable, state.banner)
             assertTrue(state.analyzed.isEmpty())
@@ -359,10 +383,136 @@ class ListViewModelTest {
 
             vm.refresh()
             awaitUntil { it.isLoading }
-            awaitUntil { !it.isLoading }
+            awaitUntil { !it.refreshing }
             assertEquals("Retry asks the sources again", 2, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ---- The bundled snapshot paints first -----------------------------------------------
+
+    @Test
+    fun `the bundled snapshot paints before any network answer, with no price and a dated banner`() = runTest {
+        val network = Gate()
+        val summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary())))
+        val assets = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(catalog())))
+        val jupiter = HeldPriceRepository(
+            Gate(),
+            FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
+        )
+        val vm = viewModel(
+            summaries = summaries,
+            catalog = assets,
+            prices = jupiter,
+            snapshots = FakeSnapshotRepository(bundled()),
+        )
+
+        vm.state.test {
+            val painted = awaitUntil { it.analyzed.isNotEmpty() }
+
+            assertEquals("no source answered, and the list is drawn anyway", 0, summaries.summaryCalls)
+            assertFalse("a drawn list is not loading", painted.isLoading)
+            assertTrue(painted.fromSnapshot)
+            assertTrue(painted.refreshing)
+            assertEquals(ListBanner.SnapshotRefreshing(LocalDate.of(2026, 9, 12)), painted.banner)
+
+            // The snapshot obeys the same join rules as the live sources: BKNG has no xStock, so
+            // it is not a row, and the composite is the percentile.
+            assertEquals(listOf("AAPLx"), painted.analyzed.map { it.symbol })
+            assertEquals(83.80406, painted.analyzed[0].composite!!, 1e-9)
+            assertEquals(listOf("TSLAx"), painted.withoutAnalysis.map { it.symbol })
+
+            // The snapshot carries no price, so a snapshot row shows its analysis and nothing
+            // where the premium goes. It is never a stale quote.
+            val rows = painted.analyzed + painted.withoutAnalysis
+            assertTrue(rows.all { it.priceUsd == null })
+            assertTrue(rows.all { it.premiumPct == null })
+            assertTrue(rows.all { it.tracking == null })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a live answer replaces the snapshot in place and the banner goes`() = runTest {
+        val network = Gate()
+        val summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary())))
+        val assets = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(catalog())))
+        val vm = viewModel(
+            summaries = summaries,
+            catalog = assets,
+            prices = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
+            snapshots = FakeSnapshotRepository(bundled()),
+        )
+
+        vm.state.test {
+            val painted = awaitUntil { it.fromSnapshot }
+            assertEquals(listOf("AAPL"), painted.analyzed.map { it.ticker })
+
+            network.release()
+            val live = awaitUntil { !it.fromSnapshot && !it.refreshing }
+
+            assertNull("nothing on screen is a snapshot any more, so no banner", live.banner)
+            assertNull(live.snapshotCapturedOn)
+            assertFalse(live.isLoading)
+            assertFalse(live.failed)
+
+            // The live summary is on screen, not the snapshot's two rows.
+            assertEquals(listOf("AAPL", "JPM"), live.analyzed.map { it.ticker })
+            assertEquals(71.0, live.analyzed[0].composite!!, 1e-9)
+            assertEquals(listOf("TSLAx"), live.withoutAnalysis.map { it.symbol })
+            assertEquals("2026-09-10T18:00:00.000Z", live.generatedAt)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failed network keeps the snapshot on screen and offers the retry`() = runTest {
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.failure(IOException("offline"))),
+            catalog = FakeCatalogRepository(Result.failure(IOException("offline"))),
+            snapshots = FakeSnapshotRepository(bundled()),
+        )
+
+        vm.state.test {
+            val settled = awaitUntil { !it.refreshing }
+
+            assertTrue("the outage path still draws the snapshot", settled.fromSnapshot)
+            assertFalse(settled.failed)
+            // Settled, so this is the banner that offers a retry, not the one that says a
+            // refresh is already running.
+            assertEquals(ListBanner.Snapshot(LocalDate.of(2026, 9, 12)), settled.banner)
+            assertEquals(listOf("AAPLx"), settled.analyzed.map { it.symbol })
+            assertEquals(listOf("TSLAx"), settled.withoutAnalysis.map { it.symbol })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a source landing mid-run never starts a second price fetch`() = runTest {
+        val jupiter = Gate()
+        val network = Gate()
+        val prices = HeldPriceRepository(jupiter, FakePriceRepository(Result.success(emptyMap())))
+        val vm = viewModel(
+            summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary()))),
+            catalog = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(catalog()))),
+            prices = prices,
+            snapshots = FakeSnapshotRepository(bundled()),
+        )
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.fromSnapshot)
+        assertEquals("the snapshot's mints are out with Jupiter", 1, prices.calls)
+
+        // Both live sources land while that run is still out. Neither may start another.
+        network.release()
+        advanceUntilIdle()
+        assertEquals("a source landing mid-run does not restart the price fetch", 1, prices.calls)
+
+        jupiter.release()
+        advanceUntilIdle()
+        assertEquals("one run at a time, start to finish", 1, prices.maxInFlight)
+        // The queued follow-up prices the live mint set the held run never saw.
+        assertEquals(listOf(aaplMint, jpmMint, tslaMint), prices.requested.last())
     }
 
     // ---- Prices ------------------------------------------------------------------------
@@ -391,7 +541,7 @@ class ListViewModelTest {
         val vm = wide(mints, prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading && it.pricesPartial }
+            val state = awaitUntil { !it.refreshing && it.pricesPartial }
             assertEquals(ListBanner.PricesPartial, state.banner)
             val rows = state.analyzed + state.withoutAnalysis
             assertEquals(20, rows.count { it.priceUsd != null })
@@ -411,7 +561,7 @@ class ListViewModelTest {
         val vm = wide(mints, prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading && it.pricesUnavailable }
+            val state = awaitUntil { !it.refreshing && it.pricesUnavailable }
             assertEquals(ListBanner.PricesUnavailable, state.banner)
             assertFalse(state.pricesPartial)
             assertEquals(40, (state.analyzed + state.withoutAnalysis).size)
@@ -427,7 +577,7 @@ class ListViewModelTest {
         val vm = viewModel(prices = prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading && it.analyzed.any { row -> row.priceUsd != null } }
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.priceUsd != null } }
             assertNull("an answered but unpriced mint raises no banner", state.banner)
             assertFalse(state.pricesPartial)
             assertFalse(state.pricesUnavailable)
@@ -463,7 +613,7 @@ class ListViewModelTest {
         val vm = viewModel(prices = prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading && it.analyzed.all { row -> row.priceUsd != null } }
+            val state = awaitUntil { !it.refreshing && it.analyzed.all { row -> row.priceUsd != null } }
             val aapl = state.analyzed.first { it.ticker == "AAPL" }
 
             assertNull("a premium off a dead pool never reaches the row", aapl.premiumPct)
@@ -497,7 +647,7 @@ class ListViewModelTest {
         val vm = viewModel(prices = prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading && it.analyzed.all { row -> row.priceUsd != null } }
+            val state = awaitUntil { !it.refreshing && it.analyzed.all { row -> row.priceUsd != null } }
 
             val aapl = state.analyzed.first { it.ticker == "AAPL" }
             assertTrue(aapl.tracking is TrackingQuality.Tracked)
@@ -519,7 +669,7 @@ class ListViewModelTest {
         val vm = viewModel(prices = prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading && it.analyzed.any { row -> row.priceUsd != null } }
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.priceUsd != null } }
             val aapl = state.analyzed.first { it.ticker == "AAPL" }
 
             assertEquals(TrackingQuality.Untracked, aapl.tracking)
@@ -540,7 +690,7 @@ class ListViewModelTest {
         val vm = viewModel(prices = prices)
 
         vm.state.test {
-            awaitUntil { !it.isLoading }
+            awaitUntil { !it.refreshing }
             val calls = prices.requested.size
 
             vm.search("jp")
@@ -601,7 +751,7 @@ class ListViewModelTest {
         val vm = viewModel(watchlist = watchlist)
 
         vm.state.test {
-            assertEquals(2, awaitUntil { !it.isLoading }.watched)
+            assertEquals(2, awaitUntil { !it.refreshing }.watched)
             watchlist.add("NVDA")
             assertEquals(3, awaitUntil { it.watched == 3 }.watched)
             watchlist.remove("AAPL")
@@ -616,11 +766,11 @@ class ListViewModelTest {
         val vm = viewModel(summaries = summaries)
 
         vm.state.test {
-            awaitUntil { !it.isLoading }
+            awaitUntil { !it.refreshing }
             assertEquals(1, summaries.summaryCalls)
             vm.refresh()
             awaitUntil { it.isLoading }
-            awaitUntil { !it.isLoading }
+            awaitUntil { !it.refreshing }
             assertEquals(2, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
