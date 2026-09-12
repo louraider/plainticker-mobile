@@ -62,6 +62,13 @@ enum class DetailBanner(@StringRes val text: Int) {
 
     /** No venue block answered, so the weekday schedule decided and the banner says so. */
     CLOSED_LOCAL(R.string.banner_market_closed_local),
+
+    /**
+     * The weekday schedule reads as a session and no venue block confirmed it. The schedule knows
+     * no holidays, so an open it alone claims is named as the schedule's claim: the price row is
+     * labelled live off that answer, and a reader is told where it came from.
+     */
+    OPEN_LOCAL(R.string.banner_market_open_local),
 }
 
 /**
@@ -194,14 +201,16 @@ val DetailUiState.tokenNotice: Copy?
         else -> words(R.string.detail_no_xstock)
     }
 
-/** Where the venue is. Nothing to say while it is in its own session. */
+/** Where the venue is. Nothing to say while the venue itself reports its own session. */
 val DetailUiState.banner: DetailBanner?
     get() {
         val market = market ?: return null
+        val guessed = market.source == MarketSource.LOCAL_SCHEDULE
         return when {
             market.halted -> DetailBanner.HALTED
+            market.regularSession && guessed -> DetailBanner.OPEN_LOCAL
             market.regularSession -> null
-            market.source == MarketSource.LOCAL_SCHEDULE -> DetailBanner.CLOSED_LOCAL
+            guessed -> DetailBanner.CLOSED_LOCAL
             else -> DetailBanner.CLOSED
         }
     }
