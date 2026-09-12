@@ -16,15 +16,16 @@ fun interface AssetSource {
     fun open(path: String): InputStream?
 }
 
-/** The bundled outage snapshot of the List, or null when there is none to read. */
+/** The bundled snapshot of the List, or null when there is none to read. */
 interface SnapshotRepository {
     suspend fun listSnapshot(): ListSnapshot?
 }
 
 /**
- * Reads the two assets `scripts/capture-list-snapshot.mjs` writes. It is only ever asked when
- * both live sources have already failed, so the read is off the critical path; it still happens
- * on the IO dispatcher, and the parsed result is kept so a second outage costs nothing.
+ * Reads the two assets `scripts/capture-list-snapshot.mjs` writes. It is now asked on every
+ * launch, before a single network call, because the List draws it first and replaces it in
+ * place: this read is on the critical path to the first row, which is why it happens on the IO
+ * dispatcher and why the parsed result is kept rather than read twice.
  *
  * A missing, truncated or unparseable asset is not an error to shout about: it means the app
  * has no fallback, the caller draws its "unavailable" banner, and the reason is swallowed here
