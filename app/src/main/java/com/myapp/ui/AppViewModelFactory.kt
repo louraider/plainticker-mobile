@@ -28,7 +28,15 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         val ticker = checkNotNull(createSavedStateHandle().get<String>(Routes.ARG_TICKER)) {
             "the detail route carries no ticker"
         }
-        DetailViewModel(ticker, container.summaryRepository, container.catalogRepository, container.priceRepository)
+        DetailViewModel(
+            ticker,
+            container.summaryRepository,
+            container.catalogRepository,
+            container.priceRepository,
+            container.mintRepository,
+            container.watchlistStore,
+            container.clock,
+        )
     }
     initializer {
         SwapViewModel(container.jupiterSwapApi, container.walletSession, container.clock)

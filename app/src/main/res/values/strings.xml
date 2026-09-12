@@ -81,9 +81,16 @@
     <string name="detail_live_label">Live from the mint</string>
     <string name="detail_live_meta">slot %1$s · %2$s</string>
     <string name="detail_live_a11y">Live from the mint, updated %1$s</string>
+    <string name="detail_live_unread_label">Mint not read</string>
+    <string name="detail_live_unread_meta">The forwarder did not answer, so nothing below is from the chain</string>
+    <string name="detail_price_tracking_within">Tracking within %1$s of the NYSE close</string>
+    <string name="detail_price_vs_close">%1$s vs NYSE close</string>
     <string name="detail_heading_backing">Backing and controls</string>
     <string name="detail_fact_por">Proof of reserves</string>
     <string name="detail_fact_por_sub">%1$s shares held for %2$s tokens</string>
+    <string name="detail_fact_por_custodian_sub">%1$s shares held by %2$s for %3$s tokens</string>
+    <string name="detail_fact_por_absent_sub">xStocks publishes no reserves for this token</string>
+    <string name="detail_fact_por_failed_sub">Reserves could not be read</string>
     <string name="detail_fact_delegate">Permanent delegate</string>
     <string name="detail_fact_delegate_sub">Issuer can move tokens</string>
     <string name="detail_fact_delegate_none_sub">No issuer delegate</string>
@@ -94,8 +101,17 @@
     <string name="detail_fact_split">Split multiplier</string>
     <string name="detail_fact_split_sub">No pending split</string>
     <string name="detail_fact_split_pending_sub">Split pending</string>
+    <string name="detail_fact_split_changes_sub">Changes to %1$s on %2$s</string>
+    <string name="detail_fact_split_from_mint">read from the mint</string>
+    <string name="detail_fact_split_from_xstocks">from xStocks, the mint was not read</string>
     <string name="detail_fact_hook">Transfer hook</string>
     <string name="detail_fact_hook_sub">No transfer hook program</string>
+    <string name="detail_fact_hook_runs_sub">A program runs on every transfer</string>
+    <string name="detail_fact_fresh_account">New account state</string>
+    <string name="detail_fact_fresh_account_open_sub">A new account can receive this token</string>
+    <string name="detail_fact_fresh_account_frozen_sub">A new account starts frozen until the issuer unfreezes it</string>
+    <string name="detail_fact_supply">Supply on chain</string>
+    <string name="detail_fact_supply_sub">%1$s tokens at %2$s decimals</string>
     <string name="detail_heading_sector">Against the sector</string>
     <string name="detail_composite">composite %1$s</string>
     <string name="detail_track_quality">Quality</string>
@@ -137,7 +153,13 @@
     <string name="detail_not_available_filer">not available for this filer</string>
     <string name="detail_reference_unavailable">Reference price unavailable</string>
     <string name="detail_onchain_unavailable">on-chain data unavailable</string>
+    <string name="detail_value_unknown">Unknown</string>
+    <string name="detail_chain_unread_sub">The mint could not be read</string>
+    <string name="detail_analysis_unavailable">Analysis unavailable</string>
     <string name="detail_stale_banner">Analysis from %1$s</string>
+    <string name="banner_market_closed">The NYSE is closed, the reference is the last close</string>
+    <string name="banner_market_closed_local">The NYSE is closed by the local schedule, the venue did not answer</string>
+    <string name="banner_market_halted">Trading in this asset is halted by the issuer</string>
 
     <!-- Swap sheet -->
     <string name="swap_direction">%1$s to %2$s</string>
