@@ -126,6 +126,71 @@ class JupiterSwapApiTest {
         }
     }
 
+    // ---- GOLDEN: the 2026-09-12 /order that corrects task T10 ------------------------------
+
+    @Test
+    fun `golden - the 2026-09-12 order names three SOL costs, and the rent is not the plan's constant`() = runTest {
+        val text = Fixtures.read("jupiter/order-usdc-tslax-5-rent.json")
+        val topLevelKeys = (HttpClientFactory.json.parseToJsonElement(text) as JsonObject).keys
+        assertFalse("a Metis order carries no expireAt", "expireAt" in topLevelKeys)
+        assertTrue(text.contains("\"taker\": \"$placeholderTaker\""))
+        assertTrue(text.contains("\"transaction\": \"UkVEQUNURUQ=\""))
+
+        val mock = MockApi { respondJson(text) }
+        val order = api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 5_000_000L, placeholderTaker)
+
+        // Every cost is its own field with its own payer, so nothing is inferred and nothing is
+        // a constant. The SOL the wallet needs is these three added up.
+        assertEquals(5_000L, order.signatureFeeLamports)
+        assertEquals(1_488_440L, order.rentFeeLamports)
+        assertEquals(1_450L, order.prioritizationFeeLamports)
+        assertEquals(1_494_890L, order.signatureFeeLamports + order.rentFeeLamports + order.prioritizationFeeLamports)
+        assertEquals(placeholderTaker, order.signatureFeePayer)
+        assertEquals(placeholderTaker, order.rentFeePayer)
+        assertEquals(placeholderTaker, order.prioritizationFeePayer)
+
+        // Task T10 says to add the 165-byte classic token account rent as a constant. This quote
+        // charges a Token-2022 account instead, and it knows whether the account already exists.
+        assertTrue("the plan's constant is not what this route charges", order.rentFeeLamports != 2_039_280L)
+
+        // The worst case can be stated beside the estimate, from the order's own threshold.
+        assertEquals(1_360_437L, order.outAmountRaw)
+        assertEquals("1346933", order.otherAmountThreshold)
+        assertEquals(100, order.slippageBps)
+        assertEquals(10, order.feeBps)
+        assertEquals(10, order.platformFeeBps)
+
+        // Liquid names route this way and the taker pays, so no SOL is never the pitch.
+        assertEquals("metis", order.router)
+        assertEquals("aggregator", order.swapType)
+        assertEquals("ultra", order.mode)
+        assertFalse(order.gasless)
+
+        assertNull(order.expireAt)
+        assertFalse(order.hasExpiry)
+        assertNull("no expiry is never an expired quote", order.secondsLeft(System.currentTimeMillis() / 1000))
+
+        assertEquals(0.586, order.allInCostPct, 1e-9)
+    }
+
+    @Test
+    fun `the three codes task T10 names are the requotable ones`() {
+        val requotable = listOf(
+            SwapError.CODE_NOT_FULLY_SIGNED,
+            SwapError.CODE_QUOTE_EXPIRED,
+            SwapError.CODE_REJECTED_BY_MAKER,
+        )
+        requotable.forEach { code ->
+            assertTrue("$code should requote", SwapError.fromCode(code, null, SwapError.Stage.EXECUTE).requotable)
+        }
+        // needsFreshOrder stays the narrower fact: the quote itself went.
+        assertFalse(SwapError.fromCode(SwapError.CODE_NOT_FULLY_SIGNED, null, SwapError.Stage.EXECUTE).needsFreshOrder)
+        listOf(-2, -4, null).forEach { code ->
+            assertFalse("$code should not requote", SwapError.fromCode(code, null, SwapError.Stage.EXECUTE).requotable)
+        }
+        assertFalse(SwapError.Http(SwapError.Stage.EXECUTE, 502, null).requotable)
+    }
+
     // ---- error mapping ----------------------------------------------------------------------
 
     @Test

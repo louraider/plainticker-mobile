@@ -49,6 +49,16 @@ sealed class SwapError(
     val needsFreshOrder: Boolean
         get() = code == CODE_QUOTE_EXPIRED || code == CODE_REJECTED_BY_MAKER
 
+    /**
+     * The three codes task T10 names as one automatic requote: -1003, -2003 and -2004. All three
+     * mean the signed bytes are dead, so a fresh GET /order is the only way on, and fresh bytes
+     * need a fresh wallet approval. [needsFreshOrder] is the narrower fact that the quote itself
+     * went; -1003 is our own signature set being incomplete, which a rebuilt order is also the
+     * only cure for, so the machine requotes on it and the two properties stay distinct.
+     */
+    val requotable: Boolean
+        get() = code == CODE_NOT_FULLY_SIGNED || needsFreshOrder
+
     companion object {
         const val CODE_NOT_FULLY_SIGNED = -1003
         const val CODE_QUOTE_EXPIRED = -2003
