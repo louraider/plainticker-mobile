@@ -10,22 +10,37 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import com.myapp.R
 import com.myapp.ui.theme.Ink
 import com.myapp.ui.theme.Ink2
 import com.myapp.ui.theme.Muted
 import com.myapp.ui.theme.PlainTickerType
 
-/** One F-Score signal, 44dp: the name 15 Ink 2 left, "yes" or "no" in mono 14 right. */
+/**
+ * One F-Score signal, 44dp: the name 15 Ink 2 left, the answer in mono 14 right.
+ *
+ * Three answers, not two. The server widened `fscore.signals` from boolean to nullable when the
+ * filings behind a check are missing (docs/data-map.md), and a check nobody could evaluate is not
+ * a check the company failed, so a null reads "n/a" in Muted and never "no".
+ */
 @Composable
 fun SignalRow(
     name: String,
-    ok: Boolean,
+    ok: Boolean?,
     modifier: Modifier = Modifier,
 ) {
-    val word = if (ok) "yes" else "no"
+    val word = stringResource(
+        when (ok) {
+            true -> R.string.word_yes
+            false -> R.string.word_no
+            null -> R.string.word_na
+        },
+    )
+    val passed = ok == true
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -38,13 +53,13 @@ fun SignalRow(
         Text(
             text = name,
             style = PlainTickerType.rowText,
-            color = if (ok) Ink2 else Muted,
+            color = if (passed) Ink2 else Muted,
             modifier = Modifier.weight(1f),
         )
         Text(
             text = word,
             style = PlainTickerType.monoRow,
-            color = if (ok) Ink else Muted,
+            color = if (passed) Ink else Muted,
             maxLines = 1,
         )
     }
@@ -57,6 +72,7 @@ private fun SignalRowPreview() {
         Column {
             SignalRow(name = "Return on assets positive", ok = true)
             SignalRow(name = "Liquidity improving", ok = false)
+            SignalRow(name = "Gross margin improving", ok = null)
         }
     }
 }
