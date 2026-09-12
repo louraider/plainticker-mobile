@@ -28,6 +28,7 @@ import com.myapp.data.xstocks.ProofOfReserves
 import com.myapp.data.xstocks.Trading
 import com.myapp.data.xstocks.Underlying
 import com.myapp.data.xstocks.XStockAsset
+import kotlinx.coroutines.CompletableDeferred
 import java.math.BigInteger
 import java.time.LocalDate
 
@@ -243,3 +244,73 @@ fun xStockTrading(
     trading: Trading,
     name: String = "$ticker xStock",
 ): XStockAsset = xStock(symbol, ticker, mint, name).copy(trading = trading)
+
+/**
+ * A latch a test opens when it wants the network to answer. Every held repository below waits on
+ * one, so a test can assert what the screen draws while a source is still out, which is the whole
+ * point of painting the bundled snapshot first.
+ */
+class Gate {
+    private val opened = CompletableDeferred<Unit>()
+
+    fun release() {
+        opened.complete(Unit)
+    }
+
+    suspend fun await() {
+        opened.await()
+    }
+}
+
+/** `/summary` that does not answer until [gate] is released. */
+class HeldSummaryRepository(
+    private val gate: Gate,
+    private val inner: FakeSummaryRepository = FakeSummaryRepository(),
+) : SummaryRepository by inner {
+    val summaryCalls: Int get() = inner.summaryCalls
+
+    override suspend fun summary(): SummaryResponse {
+        gate.await()
+        return inner.summary()
+    }
+}
+
+/** The catalog that does not answer until [gate] is released. */
+class HeldCatalogRepository(
+    private val gate: Gate,
+    private val inner: FakeCatalogRepository = FakeCatalogRepository(),
+) : CatalogRepository by inner {
+    override suspend fun catalog(): List<XStockAsset> {
+        gate.await()
+        return inner.catalog()
+    }
+}
+
+/**
+ * Jupiter that does not answer until [gate] is released, and that records how many price calls
+ * were ever inside it at once. [maxInFlight] above one is a screen that started a second price
+ * run while the first was still out.
+ */
+class HeldPriceRepository(
+    private val gate: Gate,
+    private val inner: FakePriceRepository = FakePriceRepository(),
+) : PriceRepository by inner {
+    val requested: List<List<String>> get() = inner.requested
+    var calls = 0
+        private set
+    var maxInFlight = 0
+        private set
+    private var inFlight = 0
+
+    override suspend fun pricesFirst(mints: List<String>, limit: Int): PriceFetch {
+        calls++
+        inFlight++
+        maxInFlight = maxOf(maxInFlight, inFlight)
+        try {
+            gate.await()
+            return inner.pricesFirst(mints, limit)
+        } finally {
+            inFlight--
+        }
+    }
+}

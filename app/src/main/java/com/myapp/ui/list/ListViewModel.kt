@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -83,7 +84,15 @@ sealed interface ListBanner {
     /** Offline tier: nothing to draw, the user gets one Retry. */
     data object Unavailable : ListBanner
 
-    /** Offline tier: both routes failed and the rows came from the bundled snapshot. */
+    /**
+     * Offline tier: the bundled snapshot is on screen and the network is still being asked.
+     * This is the cold-start banner and the only honest thing to say while snapshot rows are
+     * drawn: they are a capture of a named day, not the live list, and they are about to be
+     * replaced. It carries no Retry, because a retry is exactly what is already running.
+     */
+    data class SnapshotRefreshing(val capturedOn: LocalDate?) : ListBanner
+
+    /** Offline tier: the network has settled and the rows still come from the bundled snapshot. */
     data class Snapshot(val capturedOn: LocalDate?) : ListBanner
 
     /** Stale tier: every analysis on screen is old; [newestDays] is the youngest of them. */
@@ -117,6 +126,12 @@ data class ListUiState(
     /** Both sources failed and there was no snapshot to fall back to. */
     val failed: Boolean = false,
     val fromSnapshot: Boolean = false,
+    /**
+     * A source is still being asked, so what is on screen may still be replaced. It is what
+     * separates the two snapshot banners: refreshing while the network is still out, settled
+     * once every source has either answered or failed.
+     */
+    val refreshing: Boolean = false,
     val catalogUnavailable: Boolean = false,
     /** `/summary` did not answer while the catalog did, so no row on screen has an analysis. */
     val analysisUnavailable: Boolean = false,
@@ -136,6 +151,7 @@ data class ListUiState(
     val banner: ListBanner?
         get() = when {
             failed -> ListBanner.Unavailable
+            fromSnapshot && refreshing -> ListBanner.SnapshotRefreshing(snapshotCapturedOn)
             fromSnapshot -> ListBanner.Snapshot(snapshotCapturedOn)
             allStaleDays != null -> ListBanner.Stale(allStaleDays)
             catalogUnavailable -> ListBanner.CatalogUnavailable
@@ -154,6 +170,20 @@ data class ListUiState(
  * row draws as an integer, not as a raw float; an analyzed company with no xStock is not an
  * xStock row, so it is in neither section; and the meta line's premium comes from Price v3.
  *
+ * **The bundled snapshot draws first.** docs/data-map.md timed a cold start at seventeen seconds
+ * to the first row, nearly all of it the 4.31 MB xStocks catalog, which a row cannot do without
+ * because it carries the symbol and the mint. The snapshot is that catalog and that analysis,
+ * already on the device, so it is read and published before any network call is made and the
+ * network then replaces it in place. Three rules keep that honest:
+ *
+ * 1. A snapshot row carries no price, because the snapshot carries none. It shows its analysis
+ *    and nothing where the premium goes. Prices come from Jupiter, live, or not at all.
+ * 2. The reader is told, in the one banner slot, that the list is a bundled snapshot of a named
+ *    day and is being refreshed. The banner stands for exactly as long as any part of what is on
+ *    screen still comes from the snapshot, and goes when nothing does.
+ * 3. The replacement is a data swap. Rows are rebuilt from the newer source in the same sort
+ *    order, and nothing about the arrival is animated, so live data landing is never a jump.
+ *
  * Prices are asked for on refresh and never per recomposition: the first screenful so the top
  * of the list draws with numbers, then the rest, which the repository serves from its cache for
  * the window already fetched. Jupiter's keyless budget is 0.5 requests per second, so the run
@@ -171,9 +201,33 @@ class ListViewModel(
     private val _state = MutableStateFlow(ListUiState(isLoading = true, watched = watchlist.tickers.value.size))
     val state: StateFlow<ListUiState> = _state.asStateFlow()
 
+    // ---- What each source has contributed so far ----------------------------------------
+    // The screen is a function of these, recomputed by [republish] whenever one of them moves.
+    // Keeping the sources apart rather than only their joined result is what lets a later
+    // source replace an earlier one in place, without either having to know about the other.
+
+    private var snapshotRows: List<SummaryRow> = emptyList()
+    private var snapshotAssets: List<XStockAsset> = emptyList()
+    private var snapshotCapturedOn: LocalDate? = null
+    private var haveSnapshot = false
+
+    /** `/summary` rows, null until it answers; [summarySettled] separates "not yet" from "never". */
+    private var liveRows: List<SummaryRow>? = null
+    private var summarySettled = false
+    private var generatedAt: String? = null
+
+    private var liveAssets: List<XStockAsset> = emptyList()
+
+    /** True when [liveAssets] is a whole catalog rather than the first pages of one. */
+    private var catalogWhole = false
+    private var catalogSettled = false
+
     private var allAnalyzed: List<ListRow> = emptyList()
     private var allWithoutAnalysis: List<ListRow> = emptyList()
     private var refreshJob: Job? = null
+    private var priceJob: Job? = null
+    private var pricesQueued = false
+    private var pricedMints: List<String>? = null
 
     init {
         viewModelScope.launch {
@@ -184,51 +238,44 @@ class ListViewModel(
 
     fun refresh() {
         refreshJob?.cancel()
+        priceJob?.cancel()
+        forgetSources()
+        _state.update { it.copy(isLoading = true, failed = false, refreshing = true) }
+
         refreshJob = viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, failed = false) }
+            // The bundled snapshot, before a single network call. It is a whole list that is
+            // already on the device, so there is no reason for the reader to watch skeletons
+            // while the catalog is paid for.
+            runCatching { snapshots.listSnapshot() }.getOrNull()?.takeUnless { it.isEmpty }?.let { snapshot ->
+                snapshotRows = snapshot.rows.map { it.toSummaryRow() }
+                snapshotAssets = snapshot.assets.map { it.toXStockAsset() }
+                snapshotCapturedOn = snapshot.capturedOn
+                haveSnapshot = true
+                republish()
+                schedulePrices()
+            }
 
-            val summary = runCatching { summaries.summary() }
-            val assets = runCatching { catalog.catalog() }
-
-            if (summary.isFailure && assets.isFailure) {
-                val snapshot = runCatching { snapshots.listSnapshot() }.getOrNull()
-                if (snapshot == null || snapshot.rows.isEmpty()) {
-                    publishNothing()
-                    return@launch
+            // Both halves at once. They used to run one after the other, which put the 378 ms
+            // analysis behind the seven-second catalog for no reason at all.
+            val summary = launch {
+                val answer = runCatching { summaries.summary() }
+                liveRows = answer.getOrNull()?.rows
+                generatedAt = answer.getOrNull()?.generatedAt
+                summarySettled = true
+                republish()
+                schedulePrices()
+            }
+            val assets = launch {
+                runCatching {
+                    liveAssets = catalog.catalog()
+                    catalogWhole = true
                 }
-                publishRows(
-                    rows = snapshot.rows.map { it.toSummaryRow() },
-                    assets = snapshot.assets.map { it.toXStockAsset() },
-                    catalogKnown = snapshot.assets.isNotEmpty(),
-                    analysisKnown = snapshot.rows.isNotEmpty(),
-                    generatedAt = null,
-                    snapshotCapturedOn = snapshot.capturedOn,
-                    fromSnapshot = true,
-                )
-            } else {
-                publishRows(
-                    rows = summary.getOrNull()?.rows.orEmpty(),
-                    assets = assets.getOrNull().orEmpty(),
-                    catalogKnown = assets.isSuccess,
-                    // A failed /summary used to pass silently: the catalog drew 672 price-only
-                    // rows and nothing on screen said the analysis, which is the product, was
-                    // missing rather than absent for those tickers.
-                    analysisKnown = summary.isSuccess,
-                    generatedAt = summary.getOrNull()?.generatedAt,
-                    snapshotCapturedOn = null,
-                    fromSnapshot = false,
-                )
+                catalogSettled = true
+                republish()
+                schedulePrices()
             }
-
-            // The repository contract is that pricing never throws, but a broken contract must
-            // cost the prices, not the screen: this runs after the rows are already published.
-            try {
-                fetchPrices()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failed: Exception) {
-                _state.update { it.copy(pricesUnavailable = true, pricesPartial = false) }
-            }
+            joinAll(summary, assets)
+            republish()
         }
     }
 
@@ -246,15 +293,86 @@ class ListViewModel(
 
     // ---- Join ---------------------------------------------------------------------------
 
-    private fun publishRows(
-        rows: List<SummaryRow>,
-        assets: List<XStockAsset>,
-        catalogKnown: Boolean,
-        analysisKnown: Boolean,
-        generatedAt: String?,
-        snapshotCapturedOn: LocalDate?,
-        fromSnapshot: Boolean,
-    ) {
+    private fun forgetSources() {
+        snapshotRows = emptyList()
+        snapshotAssets = emptyList()
+        snapshotCapturedOn = null
+        haveSnapshot = false
+        liveRows = null
+        summarySettled = false
+        generatedAt = null
+        liveAssets = emptyList()
+        catalogWhole = false
+        catalogSettled = false
+        pricesQueued = false
+        pricedMints = null
+    }
+
+    /**
+     * The catalog the screen joins against. While the live catalog is still arriving it does not
+     * replace the snapshot wholesale: it lands on top of it, keyed by ticker, so a row the reader
+     * is already looking at is refined in place rather than vanishing and coming back.
+     */
+    private fun assetsOnScreen(): List<XStockAsset> = when {
+        catalogWhole -> liveAssets
+        liveAssets.isEmpty() -> snapshotAssets
+        !haveSnapshot -> liveAssets
+        else -> {
+            val merged = LinkedHashMap<String, XStockAsset>(snapshotAssets.size + liveAssets.size)
+            snapshotAssets.forEach { merged[it.underlyingTicker.uppercase()] = it } // lint-allow uppercase: map key
+            liveAssets.forEach { merged[it.underlyingTicker.uppercase()] = it } // lint-allow uppercase: map key
+            merged.values.toList()
+        }
+    }
+
+    /** Draws the screen from whatever the sources have so far. Never animates: this is a swap. */
+    private fun republish() {
+        val rows = liveRows ?: snapshotRows
+        val assets = assetsOnScreen()
+
+        // Only a whole catalog may be used to decide that a ticker has no xStock. The bundled
+        // snapshot is one, so the list has its final shape from the first frame and no row is
+        // dropped and then re-added as the live pages land.
+        val catalogKnown = catalogWhole || haveSnapshot
+
+        // A failed /summary used to pass silently: the catalog drew 672 price-only rows and
+        // nothing on screen said the analysis, which is the product, was missing rather than
+        // absent for those tickers. It counts as unavailable only once it has actually failed
+        // and the snapshot has no rows to stand in for it.
+        val analysisKnown = liveRows != null || snapshotRows.isNotEmpty() || !summarySettled
+        val catalogDown = catalogSettled && !catalogWhole && liveAssets.isEmpty() && !haveSnapshot
+        val analysisDown = summarySettled && liveRows == null && snapshotRows.isEmpty()
+        val failed = analysisDown && catalogDown
+
+        // The snapshot is on screen while it is still supplying either half. The moment the
+        // analysis is live and the catalog is whole, nothing drawn comes from it.
+        val fromSnapshot = !failed && haveSnapshot && (liveRows == null || !catalogWhole)
+        val refreshing = !(summarySettled && catalogSettled)
+        val nothingOnScreen = !haveSnapshot && liveRows == null && liveAssets.isEmpty()
+
+        if (failed) {
+            allAnalyzed = emptyList()
+            allWithoutAnalysis = emptyList()
+            _state.update {
+                it.copy(
+                    isLoading = false,
+                    failed = true,
+                    fromSnapshot = false,
+                    refreshing = refreshing,
+                    snapshotCapturedOn = null,
+                    analyzed = emptyList(),
+                    withoutAnalysis = emptyList(),
+                    catalogUnavailable = true,
+                    analysisUnavailable = true,
+                    pricesUnavailable = false,
+                    pricesPartial = false,
+                    allStaleDays = null,
+                    generatedAt = null,
+                )
+            }
+            return
+        }
+
         val byTicker = assets
             .filter { it.solanaMint != null }
             .associateBy { it.underlyingTicker.uppercase() } // lint-allow uppercase: map key
@@ -287,44 +405,25 @@ class ListViewModel(
             .map { it.toPriceOnlyRow() }
             .sortedBy { it.symbol }
 
-        allAnalyzed = analyzed
-        allWithoutAnalysis = withoutAnalysis
+        // Prices already on screen survive the swap: a row keeps the quote Jupiter gave it when a
+        // later source refines its analysis or its symbol, so the numbers never blink out.
+        val priced = (allAnalyzed + allWithoutAnalysis).mapNotNull { row -> row.mint?.let { it to row } }.toMap()
+        allAnalyzed = analyzed.map { it.carryingPriceFrom(priced) }
+        allWithoutAnalysis = withoutAnalysis.map { it.carryingPriceFrom(priced) }
 
         _state.update {
             it.copy(
-                isLoading = false,
+                isLoading = nothingOnScreen && refreshing,
                 failed = false,
                 fromSnapshot = fromSnapshot,
-                snapshotCapturedOn = snapshotCapturedOn,
-                analyzed = analyzed.matching(it.query),
-                withoutAnalysis = withoutAnalysis.matching(it.query),
-                catalogUnavailable = !catalogKnown,
+                refreshing = refreshing,
+                snapshotCapturedOn = snapshotCapturedOn.takeIf { _ -> fromSnapshot },
+                analyzed = allAnalyzed.matching(it.query),
+                withoutAnalysis = allWithoutAnalysis.matching(it.query),
+                catalogUnavailable = catalogDown,
                 analysisUnavailable = !analysisKnown,
-                pricesUnavailable = false,
-                pricesPartial = false,
-                allStaleDays = staleDays(analyzed),
+                allStaleDays = staleDays(allAnalyzed),
                 generatedAt = generatedAt,
-            )
-        }
-    }
-
-    private fun publishNothing() {
-        allAnalyzed = emptyList()
-        allWithoutAnalysis = emptyList()
-        _state.update {
-            it.copy(
-                isLoading = false,
-                failed = true,
-                fromSnapshot = false,
-                snapshotCapturedOn = null,
-                analyzed = emptyList(),
-                withoutAnalysis = emptyList(),
-                catalogUnavailable = true,
-                analysisUnavailable = true,
-                pricesUnavailable = false,
-                pricesPartial = false,
-                allStaleDays = null,
-                generatedAt = null,
             )
         }
     }
@@ -341,13 +440,50 @@ class ListViewModel(
 
     // ---- Prices -------------------------------------------------------------------------
 
-    /** The visible window first, then the rest; the repository serves the window from cache. */
-    private suspend fun fetchPrices() {
-        val mints = (allAnalyzed.mapNotNull { it.mint } + allWithoutAnalysis.mapNotNull { it.mint })
+    /**
+     * Asks for the prices of whatever is on screen now. Two rules, both of them about not
+     * spending Jupiter's 0.5 requests per second twice on the same thing:
+     *
+     * - One run at a time. A source landing while a run is out does not restart it; it queues a
+     *   single follow-up for when the current run finishes, so the newest set of mints is always
+     *   the one that ends up priced and this screen never has two runs in flight.
+     * - A set of mints that has not changed is not asked about again, so a refinement that
+     *   leaves the tokens alone (a company name, an analysis) costs nothing.
+     */
+    private fun schedulePrices() {
+        val mints = priceableMints()
+        if (mints.isEmpty() || mints == pricedMints) return
+        if (priceJob?.isActive == true) {
+            pricesQueued = true
+            return
+        }
+        priceJob = viewModelScope.launch {
+            do {
+                pricesQueued = false
+                val wanted = priceableMints()
+                if (wanted.isNotEmpty() && wanted != pricedMints) {
+                    pricedMints = wanted
+                    // The repository contract is that pricing never throws, but a broken contract
+                    // must cost the prices, not the screen: the rows are already published.
+                    try {
+                        fetchPrices(wanted)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failed: Exception) {
+                        _state.update { it.copy(pricesUnavailable = true, pricesPartial = false) }
+                    }
+                }
+            } while (pricesQueued)
+        }
+    }
+
+    private fun priceableMints(): List<String> =
+        (allAnalyzed.mapNotNull { it.mint } + allWithoutAnalysis.mapNotNull { it.mint })
             .distinct()
             .take(PRICE_BUDGET)
-        if (mints.isEmpty()) return
 
+    /** The visible window first, then the rest; the repository serves the window from cache. */
+    private suspend fun fetchPrices(mints: List<String>) {
         val window = prices.pricesFirst(mints, FIRST_SCREENFUL)
         applyPrices(window)
         if (mints.size > FIRST_SCREENFUL) {
@@ -391,6 +527,16 @@ class ListViewModel(
             referencePriceUsd = entry?.stockData?.price,
             poolUsd = entry?.liquidity,
         )
+
+    /** The quote this row's mint already had, if any. A rebuilt row must not lose its price. */
+    private fun ListRow.carryingPriceFrom(already: Map<String, ListRow>): ListRow {
+        val previous = mint?.let { already[it] } ?: return this
+        return copy(
+            priceUsd = previous.priceUsd,
+            referencePriceUsd = previous.referencePriceUsd,
+            poolUsd = previous.poolUsd,
+        )
+    }
 
     // ---- Search -------------------------------------------------------------------------
 
