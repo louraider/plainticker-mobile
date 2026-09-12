@@ -8,10 +8,12 @@ import com.myapp.data.xstocks.FileCatalogCache
 import com.myapp.data.xstocks.XStocksApi
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -140,6 +142,73 @@ class CachedCatalogRepositoryTest {
     fun `a build with no catalog file still works, it just pays every launch`() = runTest {
         val mock = catalogApi()
         assertEquals(3, repository(mock, disk = null).catalog().size)
+        assertEquals(2, catalogRequests(mock))
+    }
+
+
+    // ---- The catalog as it arrives -----------------------------------------------------------
+
+    @Test
+    fun `page zero publishes before page one, and the set only ever grows`() = runTest {
+        val mock = catalogApi()
+        val updates = repository(mock, cache()).catalogUpdates().toList()
+
+        assertEquals("one publish per page, plus the whole catalog at the end", 3, updates.size)
+        assertEquals(listOf("XRXx", "TSLAx"), updates[0].assets.map { it.symbol })
+        assertFalse("the first pages of a catalog are not a catalog", updates[0].whole)
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), updates.last().assets.map { it.symbol })
+        assertTrue(updates.last().whole)
+        updates.zipWithNext { earlier, later ->
+            assertTrue("a page shrank the catalog", later.assets.size >= earlier.assets.size)
+        }
+    }
+
+    @Test
+    fun `a stale catalog paints first and the network refreshes behind it`() = runTest {
+        val disk = cache()
+        // Written long ago, and carrying a token xStocks has since dropped.
+        disk.write(listOf(xStock("OLDx", "OLD", "XsMintOld")), capturedAtMillis = 0L)
+        now = CatalogCache.TTL_MS + 1
+
+        val mock = catalogApi()
+        val updates = repository(mock, disk).catalogUpdates().toList()
+
+        // Before a single request, the stale catalog is on its way to the screen.
+        assertEquals(listOf("OLDx"), updates.first().assets.map { it.symbol })
+        assertTrue("a stale catalog is still a whole one", updates.first().whole)
+        assertTrue("and it refreshed behind that paint", updates.size > 2)
+        assertEquals(2, catalogRequests(mock))
+
+        // The live catalog wins once it is whole, so the dropped token goes with it.
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), updates.last().assets.map { it.symbol })
+        assertTrue(updates.last().whole)
+        assertEquals("and the file was brought forward", now, disk.read()!!.capturedAtMillis)
+    }
+
+    @Test
+    fun `a fresh catalog on disk is the whole answer and asks the network nothing`() = runTest {
+        val disk = cache()
+        repository(catalogApi(), disk).catalog()
+
+        val next = catalogApi()
+        val updates = repository(next, disk).catalogUpdates().toList()
+
+        assertEquals("one publish, straight off the disk", 1, updates.size)
+        assertTrue(updates.single().whole)
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), updates.single().assets.map { it.symbol })
+        assertEquals(0, catalogRequests(next))
+    }
+
+    @Test
+    fun `the memory cache answers the stream too, without touching the disk`() = runTest {
+        val disk = cache()
+        val mock = catalogApi()
+        val repo = repository(mock, disk)
+        repo.catalog()
+
+        val updates = repo.catalogUpdates().toList()
+        assertEquals(1, updates.size)
+        assertTrue(updates.single().whole)
         assertEquals(2, catalogRequests(mock))
     }
 
