@@ -287,6 +287,28 @@ class FmtTest {
         assertEquals("1,204 d old", Fmt.daysOld(1_204))
     }
 
+    // ---- durations ------------------------------------------------------------------------
+
+    @Test
+    fun `a running phase counts whole seconds, floored and never negative`() {
+        assertEquals("0 s", Fmt.seconds(0L))
+        assertEquals("a phase 310 ms in has not reached a second", "0 s", Fmt.seconds(310L))
+        assertEquals("9 s", Fmt.seconds(9_900L))
+        assertEquals("14 s", Fmt.seconds(14_400L))
+        assertEquals("a clock read before the phase began is not a negative wait", "0 s", Fmt.seconds(-500L))
+        assertEquals("1,000 s", Fmt.seconds(1_000_000L))
+    }
+
+    @Test
+    fun `a measured phase keeps its tenth`() {
+        assertEquals("3.1 s", Fmt.secondsExact(3_100L))
+        assertEquals("the wallet round trip, as measured on the Seeker", "12.7 s", Fmt.secondsExact(12_700L))
+        assertEquals("14.4 s", Fmt.secondsExact(14_400L))
+        assertEquals("a whole second keeps no trailing zero", "3 s", Fmt.secondsExact(3_000L))
+        assertEquals("0.3 s", Fmt.secondsExact(310L))
+        assertEquals("0 s", Fmt.secondsExact(-500L))
+    }
+
     // ---- keys -----------------------------------------------------------------------------
 
     @Test
