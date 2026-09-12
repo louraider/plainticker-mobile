@@ -45,7 +45,11 @@ def trace(viewport, cap, gap, tick):
     glyph = glyph_set[font.getBestCmap()[ord("P")]]
     bounds = BoundsPen(glyph_set)
     glyph.draw(bounds)
-    x_min, _, x_max, y_max = bounds.bounds  # the P sits on the baseline and has no overshoot
+    x_min, y_min, x_max, y_max = bounds.bounds
+    # The layout maps font y=0 to the baseline and y_max to the cap line, so the glyph must sit on
+    # the baseline with no overshoot below it (true for the flat-footed P; a swap of glyph or font
+    # fails here instead of drifting).
+    assert y_min == 0, f"glyph bottom is {y_min}, not on the baseline"
 
     scale = cap / y_max
     width = (x_max - x_min) * scale
@@ -107,7 +111,9 @@ def main():
     )
     (DRAWABLE / "ic_launcher_monochrome.xml").write_text(vector(108, glyph, WHITE, tick, WHITE, mono), newline="\n")
 
-    glyph24, tick24, _ = trace(viewport=24, cap=14, gap=2, tick=1.5)
+    glyph24, tick24, block24 = trace(viewport=24, cap=14, gap=2, tick=1.5)
+    # A 24 status bar icon keeps 2 of padding on every side (the 20 live area).
+    assert all(2 <= v <= 22 for v in block24), f"notification glyph leaves the 20 live area: {block24}"
     stat = (
         "  Notification small icon: the brand glyph in white on transparent, the system tints it.\n"
         "  Cap height 14 of the 24 viewport, tick 1.5 high, 2 below the baseline."
