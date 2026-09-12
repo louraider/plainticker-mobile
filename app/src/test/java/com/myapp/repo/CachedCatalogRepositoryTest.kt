@@ -5,6 +5,8 @@ import com.myapp.data.MockApi
 import com.myapp.data.respondJson
 import com.myapp.data.xstocks.CatalogCache
 import com.myapp.data.xstocks.FileCatalogCache
+import com.myapp.data.xstocks.StoredCatalog
+import com.myapp.data.xstocks.XStockAsset
 import com.myapp.data.xstocks.XStocksApi
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
@@ -210,6 +212,55 @@ class CachedCatalogRepositoryTest {
         assertEquals(1, updates.size)
         assertTrue(updates.single().whole)
         assertEquals(2, catalogRequests(mock))
+    }
+
+
+    /** A catalog file that also counts what was asked of it. */
+    private class CountingCache(private val inner: CatalogCache) : CatalogCache {
+        var reads = 0
+            private set
+        var writes = 0
+            private set
+
+        override suspend fun read(): StoredCatalog? {
+            reads++
+            return inner.read()
+        }
+
+        override suspend fun write(assets: List<XStockAsset>, capturedAtMillis: Long) {
+            writes++
+            inner.write(assets, capturedAtMillis)
+        }
+    }
+
+    @Test
+    fun `one launch writes the file once, however many times the catalog is asked for`() = runTest {
+        val disk = CountingCache(cache())
+        val mock = catalogApi()
+        val repo = repository(mock, disk)
+
+        // The List streams it, then two other screens ask for it the ordinary way.
+        repo.catalogUpdates().toList()
+        repo.catalog()
+        repo.catalog()
+
+        assertEquals("written once, by the run that fetched it", 1, disk.writes)
+        assertEquals("and fetched once", 2, catalogRequests(mock))
+    }
+
+    @Test
+    fun `the next launch reads the file once and writes nothing`() = runTest {
+        repository(catalogApi(), cache()).catalogUpdates().toList()
+
+        val disk = CountingCache(cache())
+        val next = catalogApi()
+        val repo = repository(next, disk)
+        repo.catalogUpdates().toList()
+        repo.catalog()
+
+        assertEquals("nothing to write, it is already right", 0, disk.writes)
+        assertEquals(0, catalogRequests(next))
+        assertEquals("and the file is read once, not once per screen", 1, disk.reads)
     }
 
 
