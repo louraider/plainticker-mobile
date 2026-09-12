@@ -32,7 +32,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `the button follows the box in both directions`() {
+    fun `canContinue follows the box in both directions`() {
         val store = InMemoryOnboardingStore()
         val vm = OnboardingViewModel(store)
 
