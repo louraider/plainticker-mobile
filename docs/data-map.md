@@ -63,6 +63,23 @@ The placeholder list was run against production on the device. It loaded 179 ana
 - **Rows with no xStock are mixed into Analyzed** (BKNG appeared with no `x` suffix). They belong under "Without analysis" or nowhere.
 - The home tab row is still the template Material `TabRow`, so inactive tabs are blue instead of Muted, and the placeholder rows have no side padding. `TopTabs` exists and is used in the gallery.
 
+#### The liquidity floor, measured 2026-09-12
+
+Joined live: `/api/v1/summary` (179 tickers) against the xStocks Solana catalog, then every matched mint priced through Jupiter Price v3 in paced chunks.
+
+| | count |
+|---|---|
+| analyzed xStocks reaching the Analyzed section | 157 |
+| of those, Jupiter returns a `usdPrice` | 55 |
+| of those, liquidity at or above $100k | 13 |
+| liquidity $10k to $100k | 6 |
+| liquidity $1k to $10k | 10 |
+| liquidity below $1k | 22 |
+
+The thirteen deepest pools all track the NYSE close within 0.8 percent: NVDAx, TSLAx, AAPLx, MSTRx, HOODx, MSFTx, COINx, GOOGLx, MCDx, METAx, AMZNx, PLTRx, KOx. Below roughly $10k the quote stops meaning anything: UBERx reads +152.13 percent on a pool holding $80, APPx +89.34 percent on $34, CRWDx -42.15 percent on $48, ASMLx +30.42 percent on $61.
+
+This is a product decision, not a rendering one, and it is open. The premium against the NYSE close is one of the two things a row exists to show and the tracking gauge is the signature element of the Detail screen, yet for most rows the premium is either absent or arithmetic noise off a dead pool. Presenting a $34 pool's quote as a tracking figure contradicts the trust-first stance the whole product is built on. `liquidity` is already in the Price v3 response, so a rule costs nothing to implement once it is chosen: suppress the premium below a floor and say why, mark it, sort by it, or leave it as is.
+
 ### Detail (T9)
 
 | Cell | Field | Rule |
