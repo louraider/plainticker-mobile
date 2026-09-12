@@ -46,8 +46,9 @@ fun HomeScreen(
     onOpenSpike: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onOpenGallery: (() -> Unit)? = null,
+    initialTab: Int = HomeTab.LIST.ordinal,
 ) {
-    var selected by rememberSaveable { mutableIntStateOf(0) }
+    var selected by rememberSaveable { mutableIntStateOf(initialTab.coerceIn(HomeTab.entries.indices)) }
     val tabs = HomeTab.entries
     val labels = tabs.map { stringResource(it.label) }
 
