@@ -85,6 +85,7 @@ class DetailScreenTest {
                 "TrustBlock(state)",
                 "FundamentalsBlock(state)",
                 "SwapBlock(state = state",
+                "SwapSheet(state = swap",
             ),
         )
     }
