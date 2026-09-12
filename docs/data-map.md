@@ -63,6 +63,21 @@ The placeholder list was run against production on the device. It loaded 179 ana
 - **Rows with no xStock are mixed into Analyzed** (BKNG appeared with no `x` suffix). They belong under "Without analysis" or nowhere.
 - The home tab row is still the template Material `TabRow`, so inactive tabs are blue instead of Muted, and the placeholder rows have no side padding. `TopTabs` exists and is used in the gallery.
 
+#### Seventeen seconds to first content, measured on the Seeker 2026-09-13
+
+Walked the merged build on the real phone. The list is correct and the liquidity floor works in the wild: APPx shows "Pool holds $34, too thin to track" where a naive screen would have drawn +89 percent, NVDAx shows "+0.12% vs NYSE close · 6 d old", composites render as integers, no Cyrillic reaches the dump, and ABNBx correctly shows no age at all because its analysis is under a day old. Detail is right too: the pool sentence stands where the gauge would be, the live bar's clock ticks, proof of reserves names Alpaca as custodian, and permanent delegate and pausable transfers are the only two values in Caution.
+
+**The problem is the wait.** From launch to the first row: skeletons at 6 s, skeletons at 11 s, rows at 17 s. Timed from a desktop connection, the cause is not the analysis:
+
+| call | time | size |
+|---|---|---|
+| `/api/v1/summary` | 378 ms | 44 KB |
+| xStocks catalog, 8 sequential pages | 7,457 ms | 4.31 MB |
+
+The catalog is the whole cost, and it is paid before a single row can draw because rows need the symbol and the mint. On a phone the parse of 4.3 MB adds to it. Nothing renders until it finishes.
+
+This matters more than its size suggests: the list is the first thing a judge opens, and the demo video opens on it. Three fixes, all client side and none needing an API key: paint the bundled snapshot immediately and let the network refresh over it, which T8 already built for the outage path and which turns the wait into nothing; render after page 0 and keep paging in the background, so rows appear at about a second; and cache the catalog on disk so the second launch pays nothing. A slim server-side catalog carrying only symbol, underlying, mint, name and the trading block would cut 4.31 MB to tens of kilobytes, but that is PlainTicker server work and the client fixes land sooner.
+
 #### The liquidity floor, measured 2026-09-12
 
 Joined live: `/api/v1/summary` (179 tickers) against the xStocks Solana catalog, then every matched mint priced through Jupiter Price v3 in paced chunks.
