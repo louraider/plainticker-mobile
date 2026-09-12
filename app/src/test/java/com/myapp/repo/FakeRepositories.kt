@@ -1,6 +1,7 @@
 package com.myapp.repo
 
 import com.myapp.data.jupiter.PriceEntry
+import com.myapp.data.jupiter.PriceFetch
 import com.myapp.data.net.ApiException
 import com.myapp.data.plainticker.AnalysisPayload
 import com.myapp.data.plainticker.SummaryResponse
@@ -46,12 +47,25 @@ class FakeCatalogRepository(
 
 class FakePriceRepository(
     var result: Result<Map<String, PriceEntry>> = Result.success(emptyMap()),
+    /** Mints Jupiter never answered about, reported by [pricesFirst] as unfetched. */
+    var unfetched: Set<String> = emptySet(),
 ) : PriceRepository {
     val requested = mutableListOf<List<String>>()
 
     override suspend fun prices(mints: Collection<String>): Map<String, PriceEntry> {
         requested += mints.toList()
         return result.getOrThrow()
+    }
+
+    override suspend fun pricesFirst(mints: List<String>, limit: Int): PriceFetch {
+        val window = if (limit >= 0) mints.take(limit) else mints
+        requested += window
+        val inWindow = window.toSet()
+        return PriceFetch(
+            priced = result.getOrNull().orEmpty().filterKeys { it in inWindow },
+            unfetched = unfetched.intersect(inWindow),
+            failure = result.exceptionOrNull(),
+        )
     }
 }
 
