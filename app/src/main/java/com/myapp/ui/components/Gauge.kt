@@ -74,7 +74,7 @@ private fun GaugeTrack(
 ) {
     val fraction = gaugePosition(tokenPremiumPct, scalePct)
     val premiumText = Fmt.percent(tokenPremiumPct)
-    val caption = "$referenceLabel, scale ${Fmt.plain(scalePct)}%"
+    val caption = stringResource(R.string.detail_gauge_caption, referenceLabel, Fmt.plain(scalePct) + "%")
     val description = "$referenceLabel: ${spoken(premiumText)}"
     Column(
         modifier = modifier

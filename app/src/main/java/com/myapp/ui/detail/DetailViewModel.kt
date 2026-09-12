@@ -15,9 +15,13 @@ import com.myapp.repo.PriceRepository
 import com.myapp.repo.SummaryRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -63,7 +67,24 @@ class DetailViewModel(
         viewModelScope.launch {
             watchlist.tickers.collect { watched -> _state.update { it.copy(watched = key in watched) } }
         }
+        viewModelScope.launch { keepTheClockMoving() }
         refresh()
+    }
+
+    /**
+     * Every age on this screen is read against [DetailUiState.nowMillis], so that field has to
+     * move. Taken once at the refresh it would be older than the reads it is compared against, and
+     * the live bar would breathe for ever over a meta line that says "0 s ago" however old the
+     * read is. The clock is re-read every second, and only while something is collecting the
+     * state, so an unobserved screen costs nothing.
+     */
+    private suspend fun keepTheClockMoving() {
+        _state.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { observed ->
+            while (observed) {
+                delay(TICK_MILLIS)
+                _state.update { it.copy(nowMillis = clock.nowMillis()) }
+            }
+        }
     }
 
     /** Adds or removes this ticker from the one watchlist the whole app shares. */
@@ -225,6 +246,11 @@ class DetailViewModel(
                 ),
             )
         }
+    }
+
+    companion object {
+        /** How often the wall clock is re-read while the screen is observed. */
+        internal const val TICK_MILLIS = 1_000L
     }
 }
 
