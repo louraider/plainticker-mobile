@@ -88,13 +88,13 @@ class ListViewModel(
             val rows = summary.getOrNull()?.rows.orEmpty()
             val byTicker = assets.getOrNull().orEmpty()
                 .filter { it.solanaMint != null }
-                .associateBy { it.underlyingTicker.uppercase() }
+                .associateBy { it.underlyingTicker.uppercase() } // lint-allow uppercase: map key
 
-            val analyzed = rows.map { row -> row.toListRow(byTicker[row.ticker.uppercase()]) }
+            val analyzed = rows.map { row -> row.toListRow(byTicker[row.ticker.uppercase()]) } // lint-allow uppercase: map key
                 .sortedWith(compareBy<ListRow, Double?>(nullsLast(reverseOrder())) { it.composite }.thenBy { it.ticker })
-            val analyzedTickers = analyzed.map { it.ticker.uppercase() }.toSet()
+            val analyzedTickers = analyzed.map { it.ticker.uppercase() }.toSet() // lint-allow uppercase: map key
             val withoutAnalysis = byTicker.values
-                .filter { it.underlyingTicker.uppercase() !in analyzedTickers }
+                .filter { it.underlyingTicker.uppercase() !in analyzedTickers } // lint-allow uppercase: map key
                 .map { it.toPriceOnlyRow() }
                 .sortedBy { it.symbol }
 

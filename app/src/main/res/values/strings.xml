@@ -1,3 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  UI copy of PlainTicker Mobile, direction "Instrument". Sources: DESIGN.md section 7,
+  design/canvas/instrument.py (labels, headings, onboarding sentences) and docs/plan-2026-09-10.md
+  section 13 Pass 2 (empty, error and stale states). Guarded by CopyLintTest: no verdict words,
+  no em or en dash, no exclamation mark, no emoji, no marketing words, at most one middle dot per
+  string. Every number arrives as an argument already formatted by com.myapp.ui.Fmt.
+-->
 <resources>
-    <string name="app_name">Myapp</string>
+    <string name="app_name">PlainTicker</string>
+
+    <!-- Shared -->
+    <string name="tab_list">List</string>
+    <string name="tab_portfolio">Portfolio</string>
+    <string name="tab_watchlist">Watchlist</string>
+    <string name="action_watch">Watch</string>
+    <string name="action_watching">Watching</string>
+    <string name="action_unwatch">Unwatch</string>
+    <string name="action_max">Max</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_close">Close</string>
+    <string name="action_back">Back</string>
+    <string name="action_enable">Enable</string>
+    <string name="action_requote">Requote</string>
+    <string name="action_connect_wallet">Connect wallet</string>
+    <string name="action_read_the_list">Read the list</string>
+    <string name="action_view_in_portfolio">View in Portfolio</string>
+    <string name="action_browse_analyzed">Browse analyzed stocks</string>
+    <string name="action_open_ticker">Open %1$s</string>
+    <string name="word_yes">yes</string>
+    <string name="word_no">no</string>
+    <string name="value_yes">Yes</string>
+    <string name="value_no">No</string>
+    <string name="value_none">None</string>
+    <string name="value_missing">-</string>
+    <string name="state_loading">Loading</string>
+    <string name="banner_offline">Offline, data as of %1$s</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_headline">Tokenized stocks, read before you swap.</string>
+    <string name="onboarding_body_chain">Every xStock page starts with what the token itself says: reserves, issuer controls and the split multiplier, read live from the Solana mint.</string>
+    <string name="onboarding_body_fundamentals">Then the company against its sector: quality, valuation, momentum and F-Score, from SEC filings.</string>
+    <string name="onboarding_body_disclaimer">Not a price forecast. Not investment advice.</string>
+    <string name="onboarding_certify">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</string>
+    <string name="onboarding_continue">Read the list</string>
+
+    <!-- List -->
+    <string name="list_today">Today: %1$s watched, next report %2$s on %3$s</string>
+    <string name="list_today_stale">Checked %1$s, tap to refresh</string>
+    <string name="list_search_label">Search</string>
+    <string name="list_search_placeholder">Ticker or company</string>
+    <string name="list_heading_analyzed">Analyzed</string>
+    <string name="list_heading_without_analysis">Without analysis</string>
+    <string name="list_row_meta">%1$s vs NYSE close · %2$s</string>
+    <string name="list_row_meta_price_only">%1$s vs NYSE close</string>
+    <string name="list_search_empty">No xStock matches \'%1$s\'</string>
+    <string name="list_error_unavailable">Analysis list unavailable</string>
+    <string name="list_prices_unavailable">Prices unavailable</string>
+
+    <!-- Detail -->
+    <string name="detail_token_price">Token price</string>
+    <string name="detail_nyse_close">NYSE close</string>
+    <string name="detail_gauge_caption">Token vs NYSE close, scale %1$s</string>
+    <string name="detail_live_label">Live from the mint</string>
+    <string name="detail_live_meta">slot %1$s · %2$s</string>
+    <string name="detail_live_a11y">Live from the mint, updated %1$s</string>
+    <string name="detail_heading_backing">Backing and controls</string>
+    <string name="detail_fact_por">Proof of reserves</string>
+    <string name="detail_fact_por_sub">%1$s shares held for %2$s tokens</string>
+    <string name="detail_fact_delegate">Permanent delegate</string>
+    <string name="detail_fact_delegate_sub">Issuer can move tokens</string>
+    <string name="detail_fact_delegate_none_sub">No issuer delegate</string>
+    <string name="detail_fact_pausable">Transfers pausable</string>
+    <string name="detail_fact_pausable_sub">Not paused now, issuer can pause</string>
+    <string name="detail_fact_pausable_paused_sub">Transfers are paused</string>
+    <string name="detail_fact_pausable_none_sub">Cannot be paused</string>
+    <string name="detail_fact_split">Split multiplier</string>
+    <string name="detail_fact_split_sub">No pending split</string>
+    <string name="detail_fact_split_pending_sub">Split pending</string>
+    <string name="detail_fact_hook">Transfer hook</string>
+    <string name="detail_fact_hook_sub">No transfer hook program</string>
+    <string name="detail_heading_sector">Against the sector</string>
+    <string name="detail_composite">composite %1$s</string>
+    <string name="detail_track_quality">Quality</string>
+    <string name="detail_track_valuation">Valuation</string>
+    <string name="detail_track_momentum">Momentum</string>
+    <string name="detail_fact_sector_rank">Sector rank</string>
+    <string name="detail_fact_sector_rank_value">%1$s of %2$s</string>
+    <string name="detail_fact_sector_rank_sub">%1$s, by composite</string>
+    <string name="detail_fact_return_on_capital">Return on capital</string>
+    <string name="detail_fact_gross_margin">Gross margin</string>
+    <string name="detail_fact_price_to_earnings">Price to earnings</string>
+    <string name="detail_fact_ev_to_sales">EV to sales</string>
+    <string name="detail_fact_52_week">52-week position</string>
+    <string name="detail_fact_52_week_sub">of the low to high range</string>
+    <string name="detail_fact_six_months">Six months vs sector</string>
+    <string name="detail_fact_six_months_sub">relative price change</string>
+    <string name="detail_fact_sector_median">sector median %1$s</string>
+    <string name="detail_heading_fscore">F-Score</string>
+    <string name="detail_fscore_of">of %1$s signals</string>
+    <string name="detail_fscore_a11y">F-Score %1$s of %2$s</string>
+    <string name="signal_roa_positive">Return on assets positive</string>
+    <string name="signal_cfo_positive">Operating cash flow positive</string>
+    <string name="signal_roa_improving">Return on assets improving</string>
+    <string name="signal_accruals">Cash flow exceeds earnings</string>
+    <string name="signal_leverage_falling">Leverage falling</string>
+    <string name="signal_liquidity_improving">Liquidity improving</string>
+    <string name="signal_no_new_shares">No new shares issued</string>
+    <string name="signal_gross_margin_improving">Gross margin improving</string>
+    <string name="signal_asset_turnover_improving">Asset turnover improving</string>
+    <string name="detail_heading_method">Method</string>
+    <string name="detail_method_body">Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice.</string>
+    <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close.</string>
+    <string name="detail_swap_button">Swap %1$s to %2$s</string>
+    <string name="detail_cost_line">est. all-in cost %1$s · liquidity %2$s</string>
+    <string name="detail_analysis_pending">Analysis not yet available</string>
+    <string name="detail_analysis_pending_action">Watch to be notified</string>
+    <string name="detail_analysis_incomplete">Analysis incomplete for this filer</string>
+    <string name="detail_value_unavailable">unavailable</string>
+    <string name="detail_not_available_filer">not available for this filer</string>
+    <string name="detail_reference_unavailable">Reference price unavailable</string>
+    <string name="detail_onchain_unavailable">on-chain data unavailable</string>
+    <string name="detail_stale_banner">Analysis from %1$s</string>
+
+    <!-- Swap sheet -->
+    <string name="swap_direction">%1$s to %2$s</string>
+    <string name="swap_amount_label">Amount, %1$s</string>
+    <string name="swap_balance">Balance %1$s %2$s</string>
+    <string name="swap_you_receive">You receive</string>
+    <string name="swap_rate_sub">1 %1$s = %2$s, reference %3$s</string>
+    <string name="swap_all_in_cost">All-in cost</string>
+    <string name="swap_route">Route %1$s</string>
+    <string name="swap_liquidity">Liquidity</string>
+    <string name="swap_quote_refresh">Quote refreshes at tap</string>
+    <string name="swap_button">Swap %1$s to %2$s</string>
+    <string name="swap_signs_in">Signs in Seed Vault Wallet. Not investment advice.</string>
+    <string name="swap_getting_quote">Getting quote</string>
+    <string name="swap_confirm_in_wallet">Confirm in Wallet · %1$s</string>
+    <string name="swap_landing">Landing · %1$s</string>
+    <string name="swap_quote_valid">quote valid %1$s</string>
+    <string name="swap_enter_amount">Enter an amount</string>
+    <string name="swap_needs_sol">Needs %1$s SOL for fee and token account, you have %2$s</string>
+    <string name="swap_no_usdc">No USDC in this wallet</string>
+    <string name="swap_order_failed">Order failed</string>
+    <string name="swap_quote_expired">Quote expired</string>
+    <string name="swap_cancelled">Cancelled in Wallet</string>
+    <string name="swap_debug_banner">Debug build · signed, not submitted</string>
+
+    <!-- Receipt -->
+    <string name="receipt_landed">Landed</string>
+    <string name="receipt_confirmed_in">confirmed in %1$s</string>
+    <string name="receipt_received">Received</string>
+    <string name="receipt_paid">Paid</string>
+    <string name="receipt_cost_paid">All-in cost paid</string>
+    <string name="receipt_cost_sub">quote %1$s, fill %2$s</string>
+    <string name="receipt_signature">Signature</string>
+    <string name="receipt_tap_to_copy">Tap to copy</string>
+    <string name="receipt_copied">Copied</string>
+    <string name="receipt_slot">Slot</string>
+    <string name="receipt_view_portfolio">View in Portfolio</string>
+
+    <!-- Portfolio -->
+    <string name="portfolio_heading_holdings">Holdings</string>
+    <string name="portfolio_priced_by">%1$s xStocks, priced by Jupiter</string>
+    <string name="portfolio_row_meta">%1$s · %2$s vs NYSE close</string>
+    <string name="portfolio_cost_basis">Cost basis is not read from the chain.</string>
+    <string name="portfolio_heading_recent_swaps">Recent swaps</string>
+    <string name="portfolio_swap_row_company">to %1$s</string>
+    <string name="portfolio_swap_row_meta">%1$s · %2$s</string>
+    <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
+    <string name="portfolio_empty">No xStocks in this wallet yet</string>
+    <string name="portfolio_error_unavailable">On-chain data unavailable</string>
+
+    <!-- Watchlist -->
+    <string name="watchlist_heading_watched">Watched</string>
+    <string name="watchlist_row_meta">Reports %1$s · %2$s vs NYSE close</string>
+    <string name="watchlist_row_no_date">No report date</string>
+    <string name="watchlist_heading_digest">Daily digest</string>
+    <string name="watchlist_notifications_on">Notifications on, delivered at %1$s.</string>
+    <string name="watchlist_checked">Checked %1$s.</string>
+    <string name="watchlist_empty">Nothing watched yet, tap Watch on any stock</string>
+    <string name="watchlist_notifications_off">Notifications off</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_watchlist">Watchlist</string>
+    <string name="notification_reports_in">%1$s reports in %2$s</string>
+    <string name="notification_digest">Watchlist digest: %1$s stocks, %2$s premium moved</string>
 </resources>
