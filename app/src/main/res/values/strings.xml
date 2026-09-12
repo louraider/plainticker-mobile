@@ -57,6 +57,16 @@
     <string name="list_search_empty">No xStock matches \'%1$s\'</string>
     <string name="list_error_unavailable">Analysis list unavailable</string>
     <string name="list_prices_unavailable">Prices unavailable</string>
+    <string name="list_prices_partial">Some prices are unavailable</string>
+    <string name="list_catalog_unavailable">xStocks catalog unavailable</string>
+    <string name="list_stale_banner">No fresh analysis, the newest is %1$s</string>
+    <string name="list_snapshot_banner">List from a bundled snapshot, captured %1$s</string>
+    <string name="list_snapshot_banner_undated">List from a bundled snapshot</string>
+    <string name="list_today_watched">Today: %1$s watched</string>
+    <string name="list_row_meta_age">Analysis %1$s</string>
+    <string name="list_state_strong">strong</string>
+    <string name="list_state_fair">fair</string>
+    <string name="list_state_weak">weak</string>
 
     <!-- Detail -->
     <string name="detail_token_price">Token price</string>
@@ -186,4 +196,8 @@
     <string name="notification_channel_watchlist">Watchlist</string>
     <string name="notification_reports_in">%1$s reports in %2$s</string>
     <string name="notification_digest">Watchlist digest: %1$s stocks, %2$s premium moved</string>
+
+    <!-- Debug builds only -->
+    <string name="debug_open_wallet_spike">Open the wallet spike</string>
+    <string name="debug_open_gallery">Open the component gallery</string>
 </resources>
