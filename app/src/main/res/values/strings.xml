@@ -199,5 +199,4 @@
 
     <!-- Debug builds only -->
     <string name="debug_open_wallet_spike">Open the wallet spike</string>
-    <string name="debug_open_gallery">Open the component gallery</string>
 </resources>

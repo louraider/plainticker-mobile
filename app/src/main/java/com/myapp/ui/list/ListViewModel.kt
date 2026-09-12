@@ -47,6 +47,13 @@ data class ListRow(
     val display: String get() = symbol ?: ticker
 
     /**
+     * The age the meta line shows, in whole days: an analysis younger than a day has no age
+     * worth printing, the same rule Detail keeps for its header ("only when more than 24 h",
+     * docs/data-map.md). It would otherwise read "Analysis 0 d old" on the freshest rows.
+     */
+    val ageForMeta: Int? get() = ageDays?.takeIf { it >= 1 }
+
+    /**
      * The token's premium against the NYSE close, in percent. Null when either side is missing,
      * so a row whose price never arrived loses the premium and keeps everything else.
      */

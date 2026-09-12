@@ -1,7 +1,6 @@
 package com.myapp.ui.home
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,7 +55,7 @@ fun HomeScreen(
         Column(Modifier.fillMaxWidth()) {
             TopBar(onTitleLongPress = onOpenGallery)
             TopTabs(items = labels, selected = selected, onSelect = { selected = it })
-            DebugActions(onOpenSpike = onOpenSpike, onOpenGallery = onOpenGallery)
+            DebugActions(onOpenSpike = onOpenSpike)
         }
     }
 
@@ -83,19 +82,15 @@ fun HomeScreen(
     }
 }
 
-/** Debug builds only: the wallet spike and the component gallery, as text actions. */
+/**
+ * Debug builds only: one text action to the wallet spike. The component gallery has its own way
+ * in, a long press on the wordmark (see TopBar), so it costs the header no width: two actions
+ * side by side do not fit the 400dp frame and the second one was clipped on the device.
+ */
 @Composable
-private fun DebugActions(onOpenSpike: (() -> Unit)?, onOpenGallery: (() -> Unit)?) {
-    if (onOpenSpike == null && onOpenGallery == null) return
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (onOpenSpike != null) {
-            TextAction(label = stringResource(R.string.debug_open_wallet_spike), onClick = onOpenSpike)
-        }
-        if (onOpenGallery != null) {
-            TextAction(label = stringResource(R.string.debug_open_gallery), onClick = onOpenGallery)
-        }
+private fun DebugActions(onOpenSpike: (() -> Unit)?) {
+    if (onOpenSpike == null) return
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        TextAction(label = stringResource(R.string.debug_open_wallet_spike), onClick = onOpenSpike)
     }
 }

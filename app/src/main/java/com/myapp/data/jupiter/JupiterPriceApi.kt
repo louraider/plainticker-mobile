@@ -1,5 +1,6 @@
 package com.myapp.data.jupiter
 
+import com.myapp.data.net.HttpClientFactory
 import com.myapp.data.net.RateLimitedException
 import com.myapp.data.net.bodyOrThrow
 import io.ktor.client.HttpClient
@@ -7,6 +8,9 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /**
  * What one run of [JupiterPriceApi.prices] could and could not answer.
@@ -51,6 +55,7 @@ class JupiterPriceApi(
     private val client: HttpClient,
     private val baseUrl: String = BASE_URL,
     private val sleep: suspend (Long) -> Unit = { millis -> delay(millis) },
+    private val json: Json = HttpClientFactory.json,
 ) {
     /**
      * USD prices keyed by mint, fetched [MAX_IDS_PER_REQUEST] at a time. Does not throw for
@@ -90,15 +95,28 @@ class JupiterPriceApi(
 
     /** One request. A transport, status or decoding failure comes back as a value, not a throw. */
     private suspend fun attempt(chunk: List<String>): Result<Map<String, PriceEntry?>> = try {
-        val page: Map<String, PriceEntry?> = client.get(baseUrl) {
+        val page: JsonObject = client.get(baseUrl) {
             parameter("ids", chunk.joinToString(","))
         }.bodyOrThrow()
-        Result.success(page)
+        Result.success(page.mapValues { (_, value) -> entryOrNull(value) })
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failed: Exception) {
         Result.failure(failed)
     }
+
+    /**
+     * One value of the answer map, or null when it carries no price.
+     *
+     * Jupiter lists a mint it cannot price right now with the rest of its metadata and no
+     * `usdPrice` key at all: on 2026-09-12, 39 of 50 xStocks in one chunk came back that way.
+     * Decoding the map in one go made those 39 throw a missing-field error that took the 11
+     * real prices with them, which is why the device showed "Prices unavailable" for the whole
+     * list. Each entry is decoded on its own, so an entry with no price is exactly what the
+     * contract says it is: a mint Jupiter answered about and has no price for.
+     */
+    private fun entryOrNull(value: JsonElement): PriceEntry? =
+        runCatching { json.decodeFromJsonElement(PriceEntry.serializer(), value) }.getOrNull()
 
     /** Retry-After when the gateway sends one, never shorter than the standing backoff. */
     private fun backoffMillis(refused: RateLimitedException): Long =
