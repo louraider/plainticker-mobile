@@ -20,6 +20,7 @@ import com.myapp.data.xstocks.MarketState
 import com.myapp.data.xstocks.MarketStatus
 import com.myapp.data.xstocks.Reserves
 import com.myapp.repo.mintFacts
+import com.myapp.ui.Copy
 import com.myapp.repo.scaled
 import com.myapp.repo.xStock
 import org.junit.Assert.assertEquals
