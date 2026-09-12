@@ -1,0 +1,62 @@
+{
+  "_fixture_note": "Hand-built to the jsonParsed shape of getAccountInfo for a Token-2022 xStock mint with a scheduled scaled UI amount change: the multiplier is 1 today and becomes 4 at unix second 1789948800 (2026-09-21 00:00 UTC), the shape a four for one split takes on chain. Transfers are paused right now, the transfer hook names a real program and fresh accounts start frozen, so the fixture also exercises the three facts the TSLAx capture leaves at their quiet value. Mint, authorities and slot are synthetic.",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "context": { "slot": 446100002, "apiVersion": "4.3.0-alpha.2" },
+    "value": {
+      "lamports": 1002410158,
+      "data": {
+        "program": "spl-token-2022",
+        "parsed": {
+          "info": {
+            "decimals": 8,
+            "extensions": [
+              {
+                "extension": "permanentDelegate",
+                "state": { "delegate": "De1egate1111111111111111111111111111111111" }
+              },
+              {
+                "extension": "defaultAccountState",
+                "state": { "accountState": "frozen" }
+              },
+              {
+                "extension": "scaledUiAmountConfig",
+                "state": {
+                  "authority": "Mu1tip1ierAuth11111111111111111111111111111",
+                  "multiplier": "1",
+                  "newMultiplier": "4",
+                  "newMultiplierEffectiveTimestamp": 1789948800
+                }
+              },
+              {
+                "extension": "pausableConfig",
+                "state": {
+                  "authority": "Pausab1eAuth11111111111111111111111111111",
+                  "paused": true
+                }
+              },
+              {
+                "extension": "transferHook",
+                "state": {
+                  "authority": "HookAuthority11111111111111111111111111111",
+                  "programId": "HookProgram111111111111111111111111111111"
+                }
+              }
+            ],
+            "freezeAuthority": "FreezeAuth11111111111111111111111111111111",
+            "isInitialized": true,
+            "mintAuthority": "MintAuth1111111111111111111111111111111111",
+            "supply": "500000000000"
+          },
+          "type": "mint"
+        },
+        "space": 420
+      },
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "executable": false,
+      "rentEpoch": 18446744073709552000,
+      "space": 420
+    }
+  }
+}
