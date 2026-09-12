@@ -246,6 +246,36 @@ The demo wallet holds no Token-2022 account today, so its first buy does pay thi
 
 Also on the quote: `router: "metis"`, `swapType: "aggregator"`, `mode: "ultra"`, `gasless: false`, so the taker pays and "no SOL required" is never the pitch. **No `expireAt` field at all**: bounded by `lastValidBlockHeight` and slippage, so the countdown belongs only to quotes that carry `expireAt` and its absence means no expiry, never expired. `slippageBps: 100` with `otherAmountThreshold` 1,346,933 against `outAmount` 1,360,437, so the worst case can be stated honestly beside the estimate. `feeBps: 10` plus a 10 bps platform fee on the input mint. All-in from the dollar values, `1 - outUsdValue / inUsdValue`, was 0.586 percent on the deepest xStock; the same pair measured 0.08 percent and then 1.44 percent fifteen minutes apart on 2026-09-10, so all-in cost belongs on the screen per quote, never in a fixed disclaimer. `requestId` is what `POST /swap/v2/execute` needs beside the signed transaction.
 
+#### The machine behind the sheet (T10, built 2026-09-12)
+
+The flow is a sealed state machine in `ui/swap/SwapState.kt`, with the transitions drawn at the top of that file: `Closed -> Opening -> Amount -> Quoting -> {Shortfall | AwaitingWallet} -> {Landing -> {Landed | Failed} | Signed}`, plus `edit()` back to `Amount` from `Shortfall` and `Failed`, and a cancelled approval back to `Amount` with the typed amount intact. `SwapTiming` measures each phase, so the sheet states the wallet round trip rather than guessing it.
+
+What is decided away from the composition, and belongs to no other layer:
+
+| Rule | Where | What it reads |
+|---|---|---|
+| The amount | `SwapAmount.parse` | typed text against the USDC balance from `getTokenAccountsByOwner`; BigDecimal only, never a float; refuses empty, non-number, too many decimals, zero or less, over balance, all before any request |
+| The SOL check | `SolCost.isCoveredBy` | `signatureFeeLamports + rentFeeLamports + prioritizationFeeLamports` from the order, against `getBalance`; runs after the quote and **before** the wallet opens |
+| One requote | `SwapError.requotable` | -1003, -2003, -2004 from `/execute`, once; the retry reaches `AwaitingWallet(requote = true)` because fresh bytes need a fresh approval |
+| Sanitized errors | `SwapFailure` | a `@StringRes` per failure; upstream text goes to `SwapDebugLog` and can reach no state |
+| The fill | `SwapFill` | `/execute` `outputAmountResult`, not the quote's `outAmount`; `allInCostPaidPct` is the quote's cost corrected by that ratio |
+| The flip | `SwapLeg.flipped()` | the same machine with the mints exchanged, offered only when the wallet's token balance is above zero |
+
+#### Receipts, local (T10) -> read by Portfolio (T11)
+
+The chain carries no cost basis, so the app writes its own record when a swap lands: `data/receipts/`, a serialized JSON file behind `ReceiptStore` (not Room: append-only, read whole, a few hundred rows, and ksp is not worth a module's build budget). Newest first, capped at 200, the signature is the row identity so one landing is one row.
+
+| Field | From |
+|---|---|
+| `signature` | `/execute` `signature` |
+| `inputMint`, `inputSymbol`, `inputDecimals` | the leg being spent |
+| `inputAmountRaw` | `/execute` `inputAmountResult`, falling back to the quote's `inAmount` |
+| `outputMint`, `outputSymbol`, `outputDecimals` | the leg being received |
+| `outputAmountRaw` | `/execute` `outputAmountResult`, never `outAmount` |
+| `allInCostPct` | the cost actually paid, the quote's all-in corrected by the fill ratio |
+| `route` | `Order.router`, as a name ("Metis") |
+| `landedAtMillis`, `slot` | wall clock at the landing; `/execute` `slot` |
+
 ### Portfolio (T11)
 
 | Cell | Field |
