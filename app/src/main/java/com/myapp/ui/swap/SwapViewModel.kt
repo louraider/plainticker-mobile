@@ -16,11 +16,14 @@ import com.myapp.repo.RpcRepository
 import com.myapp.wallet.WalletOutcome
 import com.myapp.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Base64
 
 /**
@@ -73,6 +76,8 @@ class SwapViewModel(
     private val clock: Clock,
     private val submitSwaps: Boolean = BuildConfig.SUBMIT_SWAPS,
     private val debugLog: SwapDebugLog = SwapDebugLog.ANDROID,
+    /** Where the receipt is written. viewModelScope runs on Main, and a file write does not. */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SwapState>(SwapState.Closed())
@@ -291,9 +296,11 @@ class SwapViewModel(
                 outAmountRaw = answer.outputAmountResult?.toLongOrNull() ?: quote.outAmountRaw,
                 slot = answer.slot?.toLongOrNull(),
             )
-            val landed = SwapState.Landed(leg, quote, fill, requote, timing)
-            receipts.record(receiptOf(leg, quote, fill, clock.nowMillis()))
-            _state.value = landed
+            // The record is written before the state says it landed, so the receipt screen and
+            // Portfolio can never disagree about whether this swap happened.
+            val receipt = receiptOf(leg, quote, fill, clock.nowMillis())
+            withContext(ioDispatcher) { receipts.record(receipt) }
+            _state.value = SwapState.Landed(leg, quote, fill, requote, timing)
             return
         }
     }
