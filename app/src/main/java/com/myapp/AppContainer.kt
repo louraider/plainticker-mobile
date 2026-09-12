@@ -16,7 +16,9 @@ import com.myapp.prefs.WatchlistStore
 import com.myapp.repo.CachedCatalogRepository
 import com.myapp.repo.CachedPriceRepository
 import com.myapp.repo.CatalogRepository
+import com.myapp.repo.ForwarderMintRepository
 import com.myapp.repo.ForwarderRpcRepository
+import com.myapp.repo.MintRepository
 import com.myapp.repo.PlainTickerSummaryRepository
 import com.myapp.repo.AssetSource
 import com.myapp.repo.BundledSnapshotRepository
@@ -48,6 +50,7 @@ interface AppContainer {
     val catalogRepository: CatalogRepository
     val priceRepository: PriceRepository
     val rpcRepository: RpcRepository
+    val mintRepository: MintRepository
     val snapshotRepository: SnapshotRepository
 
     val walletAdapter: MobileWalletAdapter
@@ -74,6 +77,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val catalogRepository: CatalogRepository by lazy { CachedCatalogRepository(xStocksApi, clock) }
     override val priceRepository: PriceRepository by lazy { CachedPriceRepository(jupiterPriceApi, clock) }
     override val rpcRepository: RpcRepository by lazy { ForwarderRpcRepository(rpcApi) }
+    override val mintRepository: MintRepository by lazy { ForwarderMintRepository(rpcRepository, clock) }
 
     // The bundled outage snapshot lives in assets; a missing one simply means no fallback.
     override val snapshotRepository: SnapshotRepository by lazy {
