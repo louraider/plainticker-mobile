@@ -10,6 +10,8 @@ import com.myapp.data.plainticker.PlainTickerApi
 import com.myapp.data.receipts.FileReceiptStore
 import com.myapp.data.receipts.ReceiptStore
 import com.myapp.data.rpc.SolanaRpcApi
+import com.myapp.data.xstocks.CatalogCache
+import com.myapp.data.xstocks.FileCatalogCache
 import com.myapp.data.xstocks.XStocksApi
 import com.myapp.prefs.OnboardingStore
 import com.myapp.prefs.SharedPrefsOnboardingStore
@@ -79,7 +81,15 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val rpcApi: SolanaRpcApi by lazy { SolanaRpcApi(httpClient) }
 
     override val summaryRepository: SummaryRepository by lazy { PlainTickerSummaryRepository(plainTickerApi) }
-    override val catalogRepository: CatalogRepository by lazy { CachedCatalogRepository(xStocksApi, clock) }
+    // cacheDir, not filesDir: the catalog is a copy of something the network can always serve
+    // again, so the system is welcome to reclaim it. Losing it costs one refetch.
+    private val catalogCache: CatalogCache by lazy {
+        FileCatalogCache(java.io.File(app.cacheDir, CatalogCache.FILE_NAME))
+    }
+
+    override val catalogRepository: CatalogRepository by lazy {
+        CachedCatalogRepository(xStocksApi, clock, catalogCache)
+    }
     override val priceRepository: PriceRepository by lazy { CachedPriceRepository(jupiterPriceApi, clock) }
     override val rpcRepository: RpcRepository by lazy { ForwarderRpcRepository(rpcApi) }
     override val mintRepository: MintRepository by lazy { ForwarderMintRepository(rpcRepository, clock) }
