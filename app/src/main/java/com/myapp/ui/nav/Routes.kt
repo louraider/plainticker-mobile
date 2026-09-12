@@ -10,5 +10,5 @@ object Routes {
     const val GALLERY = "gallery"
 
     /** The detail route for one underlying ticker, e.g. "detail/AAPL". */
-    fun detail(ticker: String): String = "detail/${ticker.trim().uppercase()}"
+    fun detail(ticker: String): String = "detail/${ticker.trim().uppercase()}" // lint-allow uppercase: route key
 }
