@@ -52,8 +52,10 @@
     <string name="list_search_placeholder">Ticker or company</string>
     <string name="list_heading_analyzed">Analyzed</string>
     <string name="list_heading_without_analysis">Without analysis</string>
-    <string name="list_row_meta">%1$s vs NYSE close · %2$s</string>
-    <string name="list_row_meta_price_only">%1$s vs NYSE close</string>
+    <string name="list_row_meta_premium">%1$s vs NYSE close</string>
+    <string name="list_row_meta_thin">Pool holds %1$s, too thin to track</string>
+    <string name="list_row_meta_pool_unknown">Pool depth not reported</string>
+    <string name="list_row_meta_join">%1$s · %2$s</string>
     <string name="list_search_empty">No xStock matches \'%1$s\'</string>
     <string name="list_error_unavailable">Analysis list unavailable</string>
     <string name="list_prices_unavailable">Prices unavailable</string>
@@ -74,6 +76,8 @@
     <string name="detail_token_price">Token price</string>
     <string name="detail_nyse_close">NYSE close</string>
     <string name="detail_gauge_caption">Token vs NYSE close, scale %1$s</string>
+    <string name="detail_gauge_thin">Pool holds %1$s, too thin to track the NYSE close</string>
+    <string name="detail_gauge_pool_unknown">Pool depth not reported, tracking cannot be checked</string>
     <string name="detail_live_label">Live from the mint</string>
     <string name="detail_live_meta">slot %1$s · %2$s</string>
     <string name="detail_live_a11y">Live from the mint, updated %1$s</string>

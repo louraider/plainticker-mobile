@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myapp.R
+import com.myapp.data.jupiter.TrackingQuality
 import com.myapp.ui.Fmt
 import com.myapp.ui.components.Banner
 import com.myapp.ui.components.Field
@@ -193,17 +194,36 @@ private fun PriceOnlyRow(row: ListRow, last: Boolean, onOpenDetail: (String) -> 
 }
 
 /**
- * The premium against the NYSE close and the age of the analysis, one middle dot between them.
- * Either half can be missing: an unpriced row keeps its age, an unanalyzed one keeps its premium,
- * an analysis from today prints no age at all, and a row with neither has no meta line.
+ * What the quote is worth, then the age of the analysis, one middle dot between them.
+ *
+ * Above the liquidity floor the first half is the premium against the NYSE close and nothing
+ * here changed. Below it [TrackingQuality] withholds the premium, so the row states the pool
+ * instead (docs/data-map.md, "The liquidity floor, measured 2026-09-12"): a pool of $34 makes a
+ * quoted premium arithmetic rather than a price, and the reader is owed the reason. The sentence
+ * is a fact about the token and not a risk flag, so it stays in the Muted meta line and never
+ * takes Caution, which DESIGN.md section 2 keeps for issuer control.
+ *
+ * Either half can be missing: an unpriced row keeps its age, an analysis from today prints no
+ * age at all, and a row with neither has no meta line. It is one line in every case, so no row
+ * grows taller than the 64dp the list is drawn on.
  */
 @Composable
 private fun rowMeta(row: ListRow): String? {
-    val premium = row.premiumPct?.let { Fmt.percent(it) }
+    val quote = when (val tracking = row.tracking) {
+        is TrackingQuality.Tracked ->
+            tracking.premiumPct?.let { stringResource(R.string.list_row_meta_premium, Fmt.percent(it)) }
+
+        is TrackingQuality.Thin ->
+            stringResource(R.string.list_row_meta_thin, Fmt.compactMoney(tracking.poolUsd))
+
+        TrackingQuality.Untracked -> stringResource(R.string.list_row_meta_pool_unknown)
+
+        null -> null
+    }
     val age = row.ageForMeta?.let { Fmt.daysOld(it) }
     return when {
-        premium != null && age != null -> stringResource(R.string.list_row_meta, premium, age)
-        premium != null -> stringResource(R.string.list_row_meta_price_only, premium)
+        quote != null && age != null -> stringResource(R.string.list_row_meta_join, quote, age)
+        quote != null -> quote
         age != null -> stringResource(R.string.list_row_meta_age, age)
         else -> null
     }
@@ -266,6 +286,7 @@ private fun sampleRow(
     price: Double,
     reference: Double,
     ageDays: Int,
+    poolUsd: Double? = 250_000.0,
 ) = ListRow(
     ticker = ticker,
     symbol = symbol,
@@ -277,6 +298,7 @@ private fun sampleRow(
     ageDays = ageDays,
     priceUsd = price,
     referencePriceUsd = reference,
+    poolUsd = poolUsd,
     analyzed = true,
 )
 
@@ -286,6 +308,7 @@ private fun samplePriceOnlyRow(
     company: String,
     price: Double,
     reference: Double,
+    poolUsd: Double? = 250_000.0,
 ) = ListRow(
     ticker = ticker,
     symbol = symbol,
@@ -297,6 +320,7 @@ private fun samplePriceOnlyRow(
     ageDays = null,
     priceUsd = price,
     referencePriceUsd = reference,
+    poolUsd = poolUsd,
     analyzed = false,
 )
 
@@ -306,11 +330,15 @@ private val PreviewState = ListUiState(
         sampleRow("TSLA", "TSLAx", "Tesla, Inc.", 71.0, RowState.STRONG, 366.17, 365.84, 2),
         sampleRow("NVDA", "NVDAx", "NVIDIA Corp.", 68.0, RowState.STRONG, 182.11, 182.18, 1),
         sampleRow("AAPL", "AAPLx", "Apple Inc.", 61.0, RowState.FAIR, 232.54, 232.52, 2),
+        // Below the floor, as APPx read live on 2026-09-12: +89.34% quoted off a pool of $34.
+        sampleRow("APP", "APPx", "AppLovin Corp.", 58.0, RowState.FAIR, 1_158.76, 612.00, 2, poolUsd = 34.0),
+        // Priced, with no depth reported: unknown, which is not the same as deep.
+        sampleRow("UNH", "UNHx", "UnitedHealth Group", 52.0, RowState.FAIR, 331.20, 338.38, 1, poolUsd = null),
         sampleRow("COIN", "COINx", "Coinbase Global", 47.0, RowState.WEAK, 301.08, 300.84, 3),
     ),
     withoutAnalysis = listOf(
         samplePriceOnlyRow("TSM", "TSMx", "Taiwan Semiconductor", 264.10, 263.97),
-        samplePriceOnlyRow("ASML", "ASMLx", "ASML Holding", 812.40, 812.48),
+        samplePriceOnlyRow("ASML", "ASMLx", "ASML Holding", 1_059.61, 812.48, poolUsd = 61.0),
     ),
 )
 

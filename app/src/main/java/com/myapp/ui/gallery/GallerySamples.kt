@@ -27,6 +27,9 @@ object GallerySamples {
     const val REFERENCE = "\$365.84"
     const val PREMIUM_PCT = 0.09
     const val PREMIUM_TEXT = "+0.09%"
+
+    /** The pool behind the sample quote, the same $1.3M the cost line names. */
+    const val POOL_USD = 1_300_000.0
     const val LIVE_META = "slot 445,912,118 · 2 s ago"
     const val TODAY = "Today: 3 watched, next report TSLAx on Oct 22"
     const val COMPOSITE = "composite 0.71"

@@ -45,7 +45,7 @@ class OnboardingScreenTest {
             "app_name", "onboarding_headline", "onboarding_body_chain", "onboarding_body_fundamentals",
             "onboarding_body_disclaimer", "onboarding_certify", "onboarding_continue",
             "tab_list", "tab_portfolio", "tab_watchlist",
-            "list_today", "list_heading_analyzed", "list_row_meta",
+            "list_today", "list_heading_analyzed", "list_row_meta_premium", "list_row_meta_join",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
             assertTrue("OnboardingScreen.kt does not read R.string.$name", "R.string.$name" in scan.code)

@@ -147,8 +147,8 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
                 ticker = row.ticker,
                 company = row.company,
                 meta = stringResource(
-                    R.string.list_row_meta,
-                    Fmt.percent(row.premiumPct),
+                    R.string.list_row_meta_join,
+                    stringResource(R.string.list_row_meta_premium, Fmt.percent(row.premiumPct)),
                     Fmt.daysOld(row.ageDays),
                 ),
                 valueRight = Fmt.decimal(row.composite, decimals = 0),
