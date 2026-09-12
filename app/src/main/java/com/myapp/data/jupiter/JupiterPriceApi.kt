@@ -1,39 +1,118 @@
 package com.myapp.data.jupiter
 
+import com.myapp.data.net.RateLimitedException
 import com.myapp.data.net.bodyOrThrow
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+
+/**
+ * What one run of [JupiterPriceApi.prices] could and could not answer.
+ *
+ * Every mint asked for lands in exactly one of three states, and a caller has to tell them
+ * apart:
+ *  - in [priced]: Jupiter quoted it;
+ *  - in neither [priced] nor [unfetched]: Jupiter answered and has no price for it, which
+ *    is a legitimate result and not a failure;
+ *  - in [unfetched]: the request carrying it never came back, so its price is unknown
+ *    rather than absent. [failure] is the first error behind [unfetched], null otherwise.
+ */
+data class PriceFetch(
+    val priced: Map<String, PriceEntry> = emptyMap(),
+    val unfetched: Set<String> = emptySet(),
+    val failure: Throwable? = null,
+) {
+    /** True when at least one request never came back, so what is on screen is incomplete. */
+    val isPartial: Boolean get() = unfetched.isNotEmpty()
+
+    /** True when the keyless bucket refused: worth asking again, not a broken endpoint. */
+    val wasRateLimited: Boolean get() = failure is RateLimitedException
+
+    companion object {
+        val EMPTY = PriceFetch()
+    }
+}
 
 /**
  * Jupiter Price v3: the app's single price source (list and detail alike).
  *
- * Keyless, 0.5 requests/second, up to 50 mints per call, so the list screen batches every
- * visible mint into as few calls as possible and never quotes per row.
+ * Keyless, 0.5 requests per second, up to 50 mints per call. Measured on 2026-09-12 the
+ * bucket serves about five rapid calls and then answers 429, which used to throw out of
+ * this function and discard the chunks that had already succeeded, so one 429 cost every
+ * price on the list. Now each chunk stands on its own: calls are [SPACING_MS] apart, a
+ * refused chunk waits [BACKOFF_MS] and is tried once more, and whatever came back is
+ * returned together with the mints that did not.
+ *
+ * [sleep] is injected so tests pace without waiting.
  */
 class JupiterPriceApi(
     private val client: HttpClient,
     private val baseUrl: String = BASE_URL,
+    private val sleep: suspend (Long) -> Unit = { millis -> delay(millis) },
 ) {
     /**
-     * USD prices keyed by mint. Mints Jupiter cannot price are simply absent from the
-     * result, so callers treat a missing key as "no price", not as an error.
+     * USD prices keyed by mint, fetched [MAX_IDS_PER_REQUEST] at a time. Does not throw for
+     * a chunk that failed; read [PriceFetch] for how "no price" and "no answer" differ.
      */
-    suspend fun prices(mints: List<String>): Map<String, PriceEntry> {
+    suspend fun prices(mints: List<String>): PriceFetch {
         val wanted = mints.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-        if (wanted.isEmpty()) return emptyMap()
-        val out = LinkedHashMap<String, PriceEntry>(wanted.size)
-        for (chunk in wanted.chunked(MAX_IDS_PER_REQUEST)) {
-            val page: Map<String, PriceEntry?> = client.get(baseUrl) {
-                parameter("ids", chunk.joinToString(","))
-            }.bodyOrThrow()
-            for ((mint, entry) in page) if (entry != null) out[mint] = entry
+        if (wanted.isEmpty()) return PriceFetch.EMPTY
+
+        val priced = LinkedHashMap<String, PriceEntry>(wanted.size)
+        val unfetched = LinkedHashSet<String>()
+        var failure: Throwable? = null
+
+        wanted.chunked(MAX_IDS_PER_REQUEST).forEachIndexed { index, chunk ->
+            // Pacing sits between calls, so the first chunk goes out at once.
+            if (index > 0) sleep(SPACING_MS)
+
+            var answer = attempt(chunk)
+            val refused = answer.exceptionOrNull() as? RateLimitedException
+            if (refused != null) {
+                sleep(backoffMillis(refused))
+                answer = attempt(chunk)
+            }
+
+            val page = answer.getOrNull()
+            if (page == null) {
+                // This chunk carries no answer either way. The run keeps going: a 429 is
+                // one empty bucket, not a verdict on the next fifty mints.
+                unfetched += chunk
+                if (failure == null) failure = answer.exceptionOrNull()
+            } else {
+                for ((mint, entry) in page) if (entry != null) priced[mint] = entry
+            }
         }
-        return out
+        return PriceFetch(priced, unfetched, failure)
     }
+
+    /** One request. A transport, status or decoding failure comes back as a value, not a throw. */
+    private suspend fun attempt(chunk: List<String>): Result<Map<String, PriceEntry?>> = try {
+        val page: Map<String, PriceEntry?> = client.get(baseUrl) {
+            parameter("ids", chunk.joinToString(","))
+        }.bodyOrThrow()
+        Result.success(page)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failed: Exception) {
+        Result.failure(failed)
+    }
+
+    /** Retry-After when the gateway sends one, never shorter than the standing backoff. */
+    private fun backoffMillis(refused: RateLimitedException): Long =
+        refused.retryAfterSeconds?.times(1_000L)?.coerceIn(BACKOFF_MS, MAX_BACKOFF_MS) ?: BACKOFF_MS
 
     companion object {
         const val BASE_URL = "https://api.jup.ag/price/v3"
         const val MAX_IDS_PER_REQUEST = 50
+
+        /** The documented keyless budget is 0.5 requests per second. */
+        const val SPACING_MS = 2_000L
+
+        /** A refused chunk waits longer than the pacing before its one retry. */
+        const val BACKOFF_MS = 4_000L
+        const val MAX_BACKOFF_MS = 10_000L
     }
 }
