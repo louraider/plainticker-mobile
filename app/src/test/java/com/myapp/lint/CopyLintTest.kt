@@ -14,8 +14,10 @@ import org.junit.Test
  *
  * Kotlin sources go through [KotlinScan], a small lexer: string literals come out with their
  * escapes decoded and their templates followed (a word inside "${...}" is scanned as code, a
- * literal nested in a template is scanned as a literal), comments are dropped. So a verdict word
- * in a KDoc is not a finding and a hex color in a string is.
+ * literal nested in a template is scanned as a literal), comments are dropped. So a hex color in
+ * a string is a finding and one in a comment is not. The verdict rule is the exception: the
+ * repository goes public, so it also reads every Kotlin source under src/main and src/test and
+ * the whole strings.xml raw, comments included.
  *
  * Rules that are meant for lookup keys and not for display carry a per-line opt out: a
  * `.uppercase()` on a line whose comment says `lint-allow uppercase` is a key, not a transform.
@@ -63,6 +65,20 @@ class CopyLintTest {
         get() = uiFiles.flatMap { f -> f.scan.literals.map { Text(f.path, it.line, it.text) } }
 
     private val stringsRaw: String by lazy { stringsXml.readText() }
+
+    /** strings.xml line by line, comments included. */
+    private val stringsRawLines: List<Text>
+        get() = rawLines(stringsXml, stringsRaw)
+
+    /** Every Kotlin source under src/main and src/test, line by line, comments included. */
+    private val rawKotlinLines: List<Text> by lazy {
+        listOf("src/main/java", "src/test/java").map { File(module, it) }
+            .flatMap { root -> root.walkTopDown().filter { it.isFile && it.extension == "kt" }.sortedBy { it.path }.toList() }
+            .flatMap { f -> rawLines(f, f.readText()) }
+    }
+
+    private fun rawLines(file: File, text: String): List<Text> =
+        text.split('\n').mapIndexed { i, line -> Text(display(file), i + 1, line.trimEnd('\r')) }
 
     private val resources: List<Resource> by lazy { parseResources(stringsRaw) }
 
@@ -146,6 +162,19 @@ class CopyLintTest {
         .filter { t -> t.text.count { it == '\u00B7' } > 1 }
         .map { Finding("more than one middle dot", it.file, it.line, quote(it.text)) }
 
+    /**
+     * Sentence case (DESIGN.md section 3, no uppercase tracked eyebrows): a word of four or more
+     * capitals is a finding unless it is one of the initialisms the copy needs. Tickers such as
+     * TSLAx end in a lowercase letter and pass; SEC, SOL, UTC and EV are too short to match.
+     */
+    private val capsWord = Regex("""\b[A-Z]{4,}\b""")
+    private val initialisms = setOf("NYSE", "NASDAQ", "USDC", "EDGAR", "XBRL")
+
+    private fun capsFindings(texts: List<Text>): List<Finding> = texts.flatMap { t ->
+        capsWord.findAll(t.text).filter { it.value !in initialisms }
+            .map { Finding("all-caps word", t.file, t.line, "${quote(t.text)} <- ${it.value}") }.toList()
+    }
+
     private val uppercaseCall = Regex("""\.(uppercase|uppercaseChar|toUpperCase)\s*\(|::(uppercase|toUpperCase)\b|\bTextTransform\b""")
     private val smallCapsFeature = Regex("""\b(smcp|c2sc|pcap|c2pc)\b""")
     private val allowUppercase = "lint-allow uppercase"
@@ -204,8 +233,25 @@ class CopyLintTest {
         """Role\.|contentDescription|[sS]emantics|\b(Button|OutlinedButton|TextButton|FilledTonalButton|ElevatedButton|IconButton|ModalBottomSheet)\s*\(""",
     )
 
-    private val clickableModifier = Regex("""\.(clickable|selectable|toggleable)\s*([({])""")
+    private val clickableModifier = Regex("""\.(clickable|combinedClickable|selectable|toggleable)\s*([({])""")
     private val roleArgument = Regex("""\brole\s*=""")
+
+    /** Every clickable, combinedClickable, selectable or toggleable modifier in [files] must pass `role =`. */
+    private fun clickableRoleFindings(files: List<KtFile>): List<Finding> = files.flatMap { f ->
+        val code = f.scan.code
+        clickableModifier.findAll(code).mapNotNull { m ->
+            val line = lineAt(code, m.range.first)
+            val name = m.groupValues[1]
+            if (m.groupValues[2] == "{") {
+                Finding("clickable without a role", f.path, line, "$name { } cannot name a role; pass role = Role.Button")
+            } else {
+                val open = m.range.last
+                val args = code.substring(open + 1, closingParen(code, open))
+                if (roleArgument.containsMatchIn(args)) null
+                else Finding("clickable without a role", f.path, line, "$name(...) without role =")
+            }
+        }.toList()
+    }
 
     /** Names of the composables in [code] that take a function-typed `on*` parameter, with their line. */
     private fun clickHandlers(code: String): List<Triple<String, String, Int>> =
@@ -219,14 +265,19 @@ class CopyLintTest {
     // ---- Tests: copy -----------------------------------------------------------------------
 
     @Test
-    fun `no verdict words in string resources or ui literals`() {
-        assertClean(verdictFindings(resourceTexts + uiLiterals))
+    fun `no verdict words in strings xml or any kotlin source, comments included`() {
+        assertTrue("expected the module's Kotlin sources", rawKotlinLines.size > 1_000)
+        assertClean(verdictFindings(stringsRawLines + resourceTexts + uiLiterals + rawKotlinLines))
     }
 
     @Test
     fun `no em or en dash in strings xml or ui literals`() {
-        val rawLines = stringsRaw.split('\n').mapIndexed { i, line -> Text(display(stringsXml), i + 1, line.trimEnd('\r')) }
-        assertClean(dashFindings(rawLines + resourceTexts + uiLiterals))
+        assertClean(dashFindings(stringsRawLines + resourceTexts + uiLiterals))
+    }
+
+    @Test
+    fun `no all-caps words in strings xml`() {
+        assertClean(capsFindings(resourceTexts))
     }
 
     @Test
@@ -304,6 +355,15 @@ class CopyLintTest {
         ).forEach { assertEquals(it, 1, bannedWordFindings(seed(it)).size) }
         assertEquals("two banned words, two findings", 2, bannedWordFindings(seed("Unlock insights")).size)
         assertEquals(1, middleDotFindings(seed("a \u00B7 b \u00B7 c")).size)
+        assertEquals(1, capsFindings(seed("01 TRUST")).size)
+        assertEquals(1, capsFindings(seed("PLAINTICKER")).size)
+        assertEquals(0, capsFindings(seed("TSLAx vs NYSE close, in USDC, from SEC EDGAR XBRL, EV to sales")).size)
+
+        val gestures = "val a = Modifier.combinedClickable(onLongClick = x, onClick = {})\n" +
+            "val b = Modifier.clickable { }\n" +
+            "val c = Modifier.clickable(role = Role.Button, onClick = {})\n" +
+            "val d = Modifier.toggleable(value = on, onValueChange = {})"
+        assertEquals(3, clickableRoleFindings(listOf(KtFile("g.kt", gestures, KotlinScan(gestures)))).size)
 
         val bad = KtFile("seed.kt", "val x = label.uppercase()\nval y = Color(0xFF6750A4)\nval z = Color.Red\nval f = \"smcp\"", KotlinScan("val x = label.uppercase()\nval y = Color(0xFF6750A4)\nval z = Color.Red\nval f = \"smcp\""))
         assertEquals(2, uppercaseFindings(listOf(bad)).size)
@@ -325,7 +385,7 @@ class CopyLintTest {
         ).map { Text("seed", 1, it) }
         assertClean(
             verdictFindings(ok) + dashFindings(ok) + exclamationFindings(ok) + pictographFindings(ok) +
-                bannedWordFindings(ok) + middleDotFindings(ok),
+                bannedWordFindings(ok) + middleDotFindings(ok) + capsFindings(ok),
         )
     }
 
@@ -379,22 +439,7 @@ class CopyLintTest {
 
     @Test
     fun `every clickable modifier in the components names a role`() {
-        val findings = componentFiles.flatMap { f ->
-            val code = f.scan.code
-            clickableModifier.findAll(code).mapNotNull { m ->
-                val line = lineAt(code, m.range.first)
-                val name = m.groupValues[1]
-                if (m.groupValues[2] == "{") {
-                    Finding("clickable without a role", f.path, line, "$name { } cannot name a role; pass role = Role.Button")
-                } else {
-                    val open = m.range.last
-                    val args = code.substring(open + 1, closingParen(code, open))
-                    if (roleArgument.containsMatchIn(args)) null
-                    else Finding("clickable without a role", f.path, line, "$name(...) without role =")
-                }
-            }.toList()
-        }
-        assertClean(findings)
+        assertClean(clickableRoleFindings(componentFiles))
     }
 
     // ---- Support ----------------------------------------------------------------------------

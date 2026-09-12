@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -48,9 +49,15 @@ fun TopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         // The wordmark is decorative for a screen reader; the content speaks for itself. When a
-        // debug long press hangs on it, it stays reachable instead of being a hidden target.
+        // debug long press hangs on it, it stays reachable as a labelled button instead of being
+        // a hidden target.
         val titleModifier = if (onTitleLongPress != null) {
-            Modifier.combinedClickable(onLongClick = onTitleLongPress, onClick = {})
+            Modifier.combinedClickable(
+                role = Role.Button,
+                onLongClickLabel = "Open the component gallery",
+                onLongClick = onTitleLongPress,
+                onClick = {},
+            )
         } else {
             Modifier.semantics { hideFromAccessibility() }
         }

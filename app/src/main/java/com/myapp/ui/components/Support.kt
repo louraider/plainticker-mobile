@@ -18,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import com.myapp.ui.theme.Accent
 import com.myapp.ui.theme.Canvas
 import com.myapp.ui.theme.PlainTickerTheme
-import java.math.BigDecimal
 
 /** The three preview frames from plan section 13 Pass 6: 360, 412 and 412 at 1.3x font scale. */
 @Preview(name = "360", widthDp = 360, showBackground = true, backgroundColor = 0xFF0B0F14)
@@ -69,7 +68,3 @@ internal fun spoken(value: String): String = value
     .replace(Multiple, " times")
     .replace(LeadingPlus, "plus ")
     .replace(LeadingMinus, "minus ")
-
-/** "0.5" for 0.5, "1" for 1.0: a number for a caption, without trailing zeros. */
-internal fun plainNumber(value: Double): String =
-    BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()

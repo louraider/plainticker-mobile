@@ -42,8 +42,15 @@ class FmtTest {
     fun `price puts the sign before the dollar and never on zero`() {
         assertEquals("-$1.50", Fmt.price(-1.5))
         assertEquals("-$0.4213", Fmt.price(-0.4213))
-        assertEquals("$0.0000", Fmt.price(0.0))
-        assertEquals("$0.0000", Fmt.price(-0.0))
+        assertEquals("$0.00", Fmt.price(-0.0))
+        assertEquals("$0.00", Fmt.price(-0.00004))
+    }
+
+    @Test
+    fun `price renders zero with two decimals like any whole amount`() {
+        assertEquals("$0.00", Fmt.price(0.0))
+        assertEquals("$0.00", Fmt.price(0.00004))
+        assertEquals("$0.0001", Fmt.price(0.00005))
     }
 
     @Test
@@ -112,6 +119,18 @@ class FmtTest {
         assertEquals("-0.50", Fmt.decimal(-0.5))
         assertEquals("1,234.57", Fmt.decimal(1234.567))
         assertEquals("-", Fmt.decimal(Double.NaN))
+    }
+
+    @Test
+    fun `plain trims trailing zeros for captions and scales`() {
+        assertEquals("0.5", Fmt.plain(0.5))
+        assertEquals("1", Fmt.plain(1.0))
+        assertEquals("1,000.25", Fmt.plain(1000.25))
+        assertEquals("0.000001", Fmt.plain(0.0000014))
+        assertEquals("0", Fmt.plain(0.0000004))
+        assertEquals("2.5", Fmt.plain(2.4999, maxDecimals = 2))
+        assertEquals("-2.5", Fmt.plain(-2.5))
+        assertEquals("-", Fmt.plain(Double.NaN))
     }
 
     // ---- token amounts --------------------------------------------------------------------

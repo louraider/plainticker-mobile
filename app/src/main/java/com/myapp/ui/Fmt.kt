@@ -30,13 +30,14 @@ object Fmt {
 
     /**
      * A USD amount: "$366.17" with two decimals, four when the rounded absolute value is
-     * below one dollar ("$0.4213"). Negative amounts carry the sign first ("-$1.50").
+     * below one dollar ("$0.4213"). Zero is "$0.00": it has no sub-cent digits to keep, and a
+     * zero total reads as money, not as a bug. Negative amounts carry the sign first ("-$1.50").
      */
     fun price(usd: Double): String {
         if (!usd.isFinite()) return MISSING
         val exact = BigDecimal.valueOf(usd)
         val fine = exact.setScale(4, RoundingMode.HALF_UP)
-        val scaled = if (fine.abs() < BigDecimal.ONE) fine else exact.setScale(2, RoundingMode.HALF_UP)
+        val scaled = if (fine.signum() != 0 && fine.abs() < BigDecimal.ONE) fine else exact.setScale(2, RoundingMode.HALF_UP)
         return sign(scaled) + "$" + grouped(scaled)
     }
 
@@ -78,19 +79,24 @@ object Fmt {
         return sign(scaled) + grouped(scaled)
     }
 
+    /**
+     * A number with up to [maxDecimals] decimals, six by default, trailing zeros trimmed, for
+     * captions and stated scales: "0.5" (the gauge scale), "1", "1,000.25". Token quantities have
+     * the same shape and their own name, [tokenAmount].
+     */
+    fun plain(value: Double, maxDecimals: Int = 6): String =
+        if (value.isFinite()) trimmed(BigDecimal.valueOf(value), maxDecimals) else MISSING
+
     // ---- Token amounts --------------------------------------------------------------------
 
     /**
      * A token quantity with up to [maxDecimals] decimals, six by default, trailing zeros
      * trimmed: "2.01364", "2", "0.01364".
      */
-    fun tokenAmount(amount: BigDecimal, maxDecimals: Int = 6): String {
-        val scaled = amount.setScale(maxDecimals, RoundingMode.HALF_UP).stripTrailingZeros()
-        return sign(scaled) + grouped(scaled)
-    }
+    fun tokenAmount(amount: BigDecimal, maxDecimals: Int = 6): String = trimmed(amount, maxDecimals)
 
     fun tokenAmount(amount: Double, maxDecimals: Int = 6): String =
-        if (amount.isFinite()) tokenAmount(BigDecimal.valueOf(amount), maxDecimals) else MISSING
+        if (amount.isFinite()) trimmed(BigDecimal.valueOf(amount), maxDecimals) else MISSING
 
     /**
      * A token quantity from its base units: [raw] with [decimals] on-chain decimals, so
@@ -156,6 +162,12 @@ object Fmt {
     // ---- Internals ------------------------------------------------------------------------
 
     private fun sign(value: BigDecimal): String = if (value.signum() < 0) "-" else ""
+
+    /** Rounded half-up to [maxDecimals], trailing zeros trimmed, comma thousands. */
+    private fun trimmed(value: BigDecimal, maxDecimals: Int): String {
+        val scaled = value.setScale(maxDecimals, RoundingMode.HALF_UP).stripTrailingZeros()
+        return sign(scaled) + grouped(scaled)
+    }
 
     /** The absolute value with comma thousands in the integer part; the scale is kept as is. */
     private fun grouped(value: BigDecimal): String {

@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import com.myapp.ui.Fmt
 import com.myapp.ui.theme.Accent
 import com.myapp.ui.theme.Ink2
 import com.myapp.ui.theme.LineStrong
@@ -39,7 +40,7 @@ fun Gauge(
     scalePct: Double = 0.5,
 ) {
     val fraction = gaugePosition(tokenPremiumPct, scalePct)
-    val caption = "$referenceLabel, scale ${plainNumber(scalePct)}%"
+    val caption = "$referenceLabel, scale ${Fmt.plain(scalePct)}%"
     val description = "$referenceLabel: ${spoken(premiumText)}"
     Column(
         modifier = modifier

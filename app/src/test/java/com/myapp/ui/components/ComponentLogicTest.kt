@@ -1,5 +1,6 @@
 package com.myapp.ui.components
 
+import com.myapp.ui.Fmt
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -50,10 +51,10 @@ class ComponentLogicTest {
     }
 
     @Test
-    fun `plain number drops trailing zeros`() {
-        assertEquals("0.5", plainNumber(0.5))
-        assertEquals("1", plainNumber(1.0))
-        assertEquals("0.25", plainNumber(0.25))
-        assertEquals("2", plainNumber(2.0))
+    fun `gauge caption scale is formatted by Fmt without trailing zeros`() {
+        assertEquals("0.5", Fmt.plain(0.5))
+        assertEquals("1", Fmt.plain(1.0))
+        assertEquals("0.25", Fmt.plain(0.25))
+        assertEquals("2", Fmt.plain(2.0))
     }
 }
