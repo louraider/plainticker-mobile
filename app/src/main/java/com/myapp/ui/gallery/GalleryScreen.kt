@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -83,9 +84,10 @@ fun GalleryScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Canvas)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding(),
     ) {
-        TopBar(action = "Watch", onAction = {}, insets = WindowInsets(0), onTitleLongPress = onBack)
+        TopBar(action = "Watch", onAction = {}, onTitleLongPress = onBack)
         Banner(text = "Debug gallery, sample data from the canvas", action = "Close", onAction = onBack)
         TopTabs(items = GallerySamples.tabs, selected = tab, onSelect = { tab = it })
         TodayStrip(text = GallerySamples.TODAY)
