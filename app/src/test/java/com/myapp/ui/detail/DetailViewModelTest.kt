@@ -34,6 +34,7 @@ import com.myapp.repo.proofOfReserves
 import com.myapp.repo.scaled
 import com.myapp.repo.xStock
 import com.myapp.repo.xStockTrading
+import com.myapp.ui.Copy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
