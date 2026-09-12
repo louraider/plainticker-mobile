@@ -1,154 +1,368 @@
 package com.myapp.ui.swap
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myapp.BuildConfig
 import com.myapp.core.Clock
 import com.myapp.data.KnownMints
+import com.myapp.data.jupiter.ExecuteResult
 import com.myapp.data.jupiter.JupiterSwapApi
 import com.myapp.data.jupiter.SwapError
 import com.myapp.data.jupiter.SwapOrder
+import com.myapp.data.receipts.ReceiptStore
+import com.myapp.data.receipts.SwapReceipt
+import com.myapp.repo.RpcRepository
 import com.myapp.wallet.WalletOutcome
 import com.myapp.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Base64
 
-/** The honest phases of a swap, in the order the sheet shows them (plan section 13, Pass 3). */
-enum class SwapPhase {
-    IDLE,
-    CONNECTING,
-    QUOTING,
-    SIGNING,
-    EXECUTING,
-    /** Debug builds stop here: signed, nothing submitted, no money moved. */
-    SIGNED_NOT_SUBMITTED,
-    LANDED,
-    CANCELLED,
-    FAILED,
-}
+/**
+ * Where the raw upstream text goes, which is never to a screen.
+ *
+ * Jupiter answers an integrator, not a reader: "Failed to decode signed transaction", "not fully
+ * signed", a gateway page. Those sentences are worth keeping, because they are the only thing
+ * that explains a failure after the fact, and they belong in a log rather than in front of a
+ * person who cannot act on them.
+ */
+fun interface SwapDebugLog {
+    fun raw(line: String)
 
-data class SwapUiState(
-    val phase: SwapPhase = SwapPhase.IDLE,
-    val inputMint: String = KnownMints.USDC,
-    val outputMint: String? = null,
-    val outputSymbol: String? = null,
-    val inputAmountRaw: Long = 0L,
-    val order: SwapOrder? = null,
-    val signature: String? = null,
-    val message: String? = null,
-    /** The quote expired or the maker declined: the same bytes can never be resubmitted. */
-    val needsFreshOrder: Boolean = false,
-    val phaseStartedAtMillis: Long? = null,
-) {
-    val isBusy: Boolean
-        get() = phase == SwapPhase.CONNECTING || phase == SwapPhase.QUOTING ||
-            phase == SwapPhase.SIGNING || phase == SwapPhase.EXECUTING
+    companion object {
+        /** Debug builds only: a release build keeps no upstream text at all. */
+        val ANDROID = SwapDebugLog { line -> if (BuildConfig.DEBUG) Log.d("SwapMachine", line) }
+    }
 }
 
 /**
- * Quote at the tap, sign in the wallet, land through Jupiter: the spike's flow with the
- * wallet behind [WalletSession]. [submitSwaps] is BuildConfig.SUBMIT_SWAPS, false in every
- * debug build, so the flow stops after signing there.
+ * The swap machine. Its states, and every transition between them, are [SwapState].
+ *
+ * Four rules live here and nowhere else.
+ *
+ * 1. **The amount is refused before the network is touched.** [SwapAmount] validates the typed
+ *    text against the balance this class read from the chain, so zero and over-balance never
+ *    become a request, and the conversion to base units goes through BigDecimal.
+ * 2. **The SOL check happens after the quote and before the wallet.** It is the quote's own
+ *    signatureFee, rentFee and prioritizationFee added up, never a rent constant, and a wallet
+ *    that cannot pay lands in [SwapState.Shortfall] without a single approval being asked for.
+ * 3. **Exactly one automatic requote.** A -1003, -2003 or -2004 from /execute means the signed
+ *    bytes are dead: a fresh /order is the only way on, and fresh bytes need a fresh approval, so
+ *    the requote reaches [SwapState.AwaitingWallet] with `requote = true` and the sheet says so.
+ *    A second one is terminal.
+ * 4. **A cancelled approval is not a failure.** It returns to [SwapState.Amount] with the typed
+ *    amount intact and a neutral note. Nothing was signed, nothing was sent, nothing is owed.
+ *
+ * [submitSwaps] is BuildConfig.SUBMIT_SWAPS, false in every debug build, so a debug build signs
+ * and stops at [SwapState.Signed]: no /execute, no money, and no receipt.
+ *
+ * The quote is fetched at the tap and never for a preview: GET /order shares a 0.5 rps bucket
+ * with Price v3 (docs/data-map.md), so [SwapState.Amount] shows a balance and no estimate, and
+ * the cost cells appear with the quote from [SwapState.Quoting] onward.
  */
 class SwapViewModel(
     private val swapApi: JupiterSwapApi,
     private val wallet: WalletSession,
+    private val rpc: RpcRepository,
+    private val receipts: ReceiptStore,
     private val clock: Clock,
     private val submitSwaps: Boolean = BuildConfig.SUBMIT_SWAPS,
+    private val debugLog: SwapDebugLog = SwapDebugLog.ANDROID,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(SwapUiState())
-    val state: StateFlow<SwapUiState> = _state.asStateFlow()
+    private val _state = MutableStateFlow<SwapState>(SwapState.Closed())
+    val state: StateFlow<SwapState> = _state.asStateFlow()
 
-    fun reset() {
-        _state.value = SwapUiState()
-    }
+    private var job: Job? = null
 
-    @Suppress("DEPRECATION")
-    fun start(outputMint: String, outputSymbol: String, usdcAmountRaw: Long) {
+    // ---- Closed -> Opening -> Amount ---------------------------------------------------------
+
+    /**
+     * Opens the sheet for USDC into [token]: authorize the wallet if it is not authorized yet,
+     * then read the lamports and the two balances the rest of the machine decides on.
+     */
+    fun open(token: SwapToken) {
         if (_state.value.isBusy) return
-        viewModelScope.launch {
-            _state.value = SwapUiState(
-                outputMint = outputMint,
-                outputSymbol = outputSymbol,
-                inputAmountRaw = usdcAmountRaw,
-            )
+        val leg = SwapLeg.into(token)
+        job?.cancel()
+        job = viewModelScope.launch {
+            _state.value = SwapState.Opening(leg, SwapTiming.started(clock.nowMillis()))
 
-            val taker = wallet.account.value?.address ?: run {
-                phase(SwapPhase.CONNECTING)
-                when (val outcome = wallet.connect()) {
-                    is WalletOutcome.Success -> outcome.value.address
-                    is WalletOutcome.NoWallet -> return@launch fail("No compatible wallet found")
-                    is WalletOutcome.Cancelled -> return@launch cancelled()
-                    is WalletOutcome.Error -> return@launch fail(outcome.message)
+            val owner = wallet.account.value?.address ?: when (val outcome = wallet.connect()) {
+                is WalletOutcome.Success -> outcome.value.address
+                is WalletOutcome.NoWallet -> return@launch failOpen(leg, SwapFailure.NO_WALLET)
+                is WalletOutcome.Cancelled -> {
+                    _state.value = SwapState.Closed(SwapNote.CANCELLED_IN_WALLET)
+                    return@launch
+                }
+                is WalletOutcome.Error -> {
+                    debugLog.raw("connect: ${outcome.message}")
+                    return@launch failOpen(leg, SwapFailure.WALLET_REFUSED)
                 }
             }
 
-            phase(SwapPhase.QUOTING)
-            val order = try {
-                swapApi.order(KnownMints.USDC, outputMint, usdcAmountRaw, taker)
+            val funds = readFunds(owner, leg.token) ?: return@launch failOpen(leg, SwapFailure.CHAIN_UNREAD)
+            _state.value = SwapState.Amount(leg, funds, AmountInput.EMPTY)
+        }
+    }
+
+    // ---- Amount -> Amount ---------------------------------------------------------------------
+
+    /** The user typed. Validation is immediate and local; nothing is requested. */
+    fun amountChanged(text: String) {
+        val amount = _state.value as? SwapState.Amount ?: return
+        _state.value = amount.copy(input = validate(amount, text), note = null)
+    }
+
+    /** Max: the whole balance of the side being spent, exactly, with no rounding on the way. */
+    fun useMax() {
+        val amount = _state.value as? SwapState.Amount ?: return
+        amountChanged(SwapAmount.maxText(amount.balanceRaw, amount.leg.input.decimals))
+    }
+
+    /**
+     * The direction flip: the same machine with the two mints exchanged. Offered only when the
+     * wallet actually has the token, because a direction that cannot be funded is not an option.
+     * The typed amount is cleared, since the units it was typed in are now the other side's.
+     */
+    fun flip() {
+        val amount = _state.value as? SwapState.Amount ?: return
+        if (!amount.canFlip) return
+        _state.value = SwapState.Amount(amount.leg.flipped(), amount.funds, AmountInput.EMPTY)
+    }
+
+    // ---- Amount -> the attempt ----------------------------------------------------------------
+
+    /** Quote, check the SOL, approve, land. Refuses to start on an amount that is not usable. */
+    fun submit() {
+        val amount = _state.value as? SwapState.Amount ?: return
+        if (!amount.canSubmit) return
+        job?.cancel()
+        job = viewModelScope.launch { attempt(amount) }
+    }
+
+    /** Back to the amount step from a shortfall or a failure, with the typed amount revalidated. */
+    fun edit() {
+        when (val current = _state.value) {
+            is SwapState.Shortfall -> _state.value = amountStep(current.leg, current.funds, current.input)
+            is SwapState.Failed -> {
+                val funds = current.funds ?: return close()
+                _state.value = amountStep(current.leg, funds, current.input)
+            }
+            else -> Unit
+        }
+    }
+
+    /** Dismisses the sheet from any state. */
+    fun close() {
+        job?.cancel()
+        job = null
+        _state.value = SwapState.Closed()
+    }
+
+    // ---- The attempt --------------------------------------------------------------------------
+
+    @Suppress("DEPRECATION")
+    private suspend fun attempt(start: SwapState.Amount) {
+        val leg = start.leg
+        val funds = start.funds
+        val input = start.input
+        var timing = SwapTiming.started(clock.nowMillis())
+        var requote = false
+
+        while (true) {
+            // ---- Quoting: GET /order, at the tap.
+            timing = timing.enterPhase(clock.nowMillis())
+            _state.value = SwapState.Quoting(leg, funds, input, requote, timing)
+            var order: SwapOrder? = null
+            var quoteFailure: SwapFailure? = null
+            try {
+                order = swapApi.order(leg.input.mint, leg.output.mint, input.raw, funds.owner)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SwapError) {
-                return@launch fail(e.message ?: "Quote refused")
+                debugLog.raw("order refused: code=${e.code} ${e.detail ?: e.message}")
+                quoteFailure = SwapFailure.QUOTE_REFUSED
             } catch (e: Exception) {
-                return@launch fail("Quote unavailable")
+                debugLog.raw("order threw ${e::class.simpleName}: ${e.message}")
+                quoteFailure = SwapFailure.QUOTE_UNAVAILABLE
             }
-            _state.update { it.copy(order = order) }
-            val unsigned = order.transaction?.takeIf { order.isSignable }
-                ?: return@launch fail("The quote carried no transaction to sign")
+            timing = timing.closeQuoting(clock.nowMillis())
+            if (order == null) {
+                return fail(leg, funds, input, quoteFailure ?: SwapFailure.QUOTE_UNAVAILABLE, null, requote, timing)
+            }
 
-            phase(SwapPhase.SIGNING)
-            val signed = when (val outcome = wallet.call { it.signTransactions(arrayOf(Base64.getDecoder().decode(unsigned))) }) {
+            val quote = SwapQuote.from(order)
+            val unsigned = quote.transaction
+            if (unsigned == null) {
+                debugLog.raw("order ${quote.requestId} carried no transaction")
+                return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
+            }
+
+            // ---- The SOL check. Here, on the quote's own three fields, before any approval.
+            if (!quote.solCost.isCoveredBy(funds.lamports)) {
+                _state.value = SwapState.Shortfall(leg, funds, input, quote, timing)
+                return
+            }
+
+            // ---- AwaitingWallet: the round-trip this product rests on.
+            timing = timing.enterPhase(clock.nowMillis())
+            _state.value = SwapState.AwaitingWallet(leg, funds, input, quote, requote, timing)
+            val outcome = wallet.call { it.signTransactions(arrayOf(Base64.getDecoder().decode(unsigned))) }
+            timing = timing.closeWallet(clock.nowMillis())
+            val signed = when (outcome) {
                 is WalletOutcome.Success -> outcome.value.signedPayloads.firstOrNull()
-                    ?: return@launch fail("The wallet returned no signed transaction")
-                is WalletOutcome.NoWallet -> return@launch fail("No compatible wallet found")
-                is WalletOutcome.Cancelled -> return@launch cancelled()
-                is WalletOutcome.Error -> return@launch fail(outcome.message)
+                is WalletOutcome.NoWallet -> return fail(leg, funds, input, SwapFailure.NO_WALLET, quote, requote, timing)
+                is WalletOutcome.Cancelled -> {
+                    // Nothing was signed and nothing was sent: back to the amount, with it intact.
+                    _state.value = SwapState.Amount(leg, funds, input, SwapNote.CANCELLED_IN_WALLET)
+                    return
+                }
+                is WalletOutcome.Error -> {
+                    debugLog.raw("wallet: ${outcome.message}")
+                    return fail(leg, funds, input, SwapFailure.WALLET_REFUSED, quote, requote, timing)
+                }
+            }
+            if (signed == null) {
+                return fail(leg, funds, input, SwapFailure.NOTHING_SIGNED, quote, requote, timing)
             }
 
             if (!submitSwaps) {
-                phase(SwapPhase.SIGNED_NOT_SUBMITTED, message = "Debug build: signed, not submitted")
-                return@launch
+                // Debug: signed, never submitted, no money moved, and no receipt to write.
+                _state.value = SwapState.Signed(leg, quote, requote, timing)
+                return
             }
 
-            phase(SwapPhase.EXECUTING)
-            val result = try {
-                swapApi.execute(Base64.getEncoder().encodeToString(signed), order.requestId)
+            // ---- Landing: POST /execute. This is the call that moves money.
+            timing = timing.enterPhase(clock.nowMillis())
+            _state.value = SwapState.Landing(leg, funds, input, quote, requote, timing)
+            var result: ExecuteResult? = null
+            var thrown: SwapError? = null
+            var unreachable = false
+            try {
+                result = swapApi.execute(Base64.getEncoder().encodeToString(signed), quote.requestId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SwapError) {
-                return@launch fail(e.message ?: "Execute refused", needsFreshOrder = e.needsFreshOrder)
+                thrown = e
             } catch (e: Exception) {
-                return@launch fail("Execute unavailable")
+                debugLog.raw("execute threw ${e::class.simpleName}: ${e.message}")
+                unreachable = true
             }
-            val error = result.errorOrNull()
-            if (error != null) {
-                fail(error.message ?: "Swap failed", needsFreshOrder = error.needsFreshOrder)
-            } else {
-                _state.update {
-                    it.copy(phase = SwapPhase.LANDED, signature = result.signature, phaseStartedAtMillis = clock.nowMillis())
+            timing = timing.closeLanding(clock.nowMillis())
+            if (unreachable) {
+                return fail(leg, funds, input, SwapFailure.SUBMIT_UNAVAILABLE, quote, requote, timing)
+            }
+
+            val refusal = thrown ?: result?.errorOrNull()
+            if (refusal != null) {
+                debugLog.raw("execute refused: code=${refusal.code} ${refusal.detail ?: refusal.message}")
+                if (refusal.requotable && !requote) {
+                    // The one automatic requote. Fresh order, fresh bytes, a second approval.
+                    requote = true
+                    continue
                 }
+                // A non-2xx with no structured body is not a refusal we can read: whether the
+                // transaction was forwarded is unknown, so the sentence must not claim either way.
+                val reason = when {
+                    refusal.requotable -> SwapFailure.QUOTE_GONE
+                    refusal is SwapError.Http -> SwapFailure.SUBMIT_UNAVAILABLE
+                    else -> SwapFailure.SWAP_REFUSED
+                }
+                return fail(leg, funds, input, reason, quote, requote, timing)
             }
+
+            val answer = result
+            val signature = answer?.signature?.takeIf { it.isNotBlank() }
+            if (answer == null || signature == null) {
+                debugLog.raw("execute answered ${answer?.status} with no signature")
+                return fail(leg, funds, input, SwapFailure.SWAP_REFUSED, quote, requote, timing)
+            }
+
+            // ---- Landed. The fill is the executed result, never the quote.
+            val fill = SwapFill(
+                signature = signature,
+                inAmountRaw = answer.inputAmountResult?.toLongOrNull() ?: quote.inAmountRaw,
+                outAmountRaw = answer.outputAmountResult?.toLongOrNull() ?: quote.outAmountRaw,
+                slot = answer.slot?.toLongOrNull(),
+            )
+            val landed = SwapState.Landed(leg, quote, fill, requote, timing)
+            receipts.record(receiptOf(leg, quote, fill, clock.nowMillis()))
+            _state.value = landed
+            return
         }
     }
 
-    private fun phase(phase: SwapPhase, message: String? = null) {
-        _state.update { it.copy(phase = phase, message = message, phaseStartedAtMillis = clock.nowMillis()) }
+    // ---- Helpers ------------------------------------------------------------------------------
+
+    private fun amountStep(leg: SwapLeg, funds: SwapFunds, input: AmountInput?): SwapState.Amount {
+        val text = input?.text.orEmpty()
+        return SwapState.Amount(
+            leg = leg,
+            funds = funds,
+            input = if (text.isEmpty()) AmountInput.EMPTY else SwapAmount.parse(text, leg.input.decimals, funds.balanceOf(leg.input)),
+        )
     }
 
-    private fun cancelled() {
-        _state.update { it.copy(phase = SwapPhase.CANCELLED, message = "Cancelled in wallet", phaseStartedAtMillis = clock.nowMillis()) }
-    }
+    private fun validate(amount: SwapState.Amount, text: String): AmountInput =
+        SwapAmount.parse(text, amount.leg.input.decimals, amount.balanceRaw)
 
-    private fun fail(message: String, needsFreshOrder: Boolean = false) {
-        _state.update {
-            it.copy(phase = SwapPhase.FAILED, message = message, needsFreshOrder = needsFreshOrder, phaseStartedAtMillis = clock.nowMillis())
+    /**
+     * Lamports and both balances in two reads. A wallet with no account for a mint has a balance
+     * of zero rather than an unknown one: the forwarder returns only non-empty accounts, and a
+     * mint with no account is a mint this wallet has none of.
+     */
+    private suspend fun readFunds(owner: String, token: SwapToken): SwapFunds? {
+        val lamports = runCatching { rpc.lamports(owner) }
+        val balances = runCatching { rpc.tokenBalances(owner) }
+        if (lamports.isFailure || balances.isFailure) {
+            debugLog.raw("balances: ${(lamports.exceptionOrNull() ?: balances.exceptionOrNull())?.message}")
+            return null
         }
+        val accounts = balances.getOrThrow()
+        return SwapFunds(
+            owner = owner,
+            lamports = lamports.getOrThrow(),
+            usdcRaw = accounts.filter { it.mint == KnownMints.USDC }.sumOf { it.amountRaw },
+            tokenRaw = accounts.filter { it.mint == token.mint }.sumOf { it.amountRaw },
+        )
+    }
+
+    private fun receiptOf(leg: SwapLeg, quote: SwapQuote, fill: SwapFill, nowMillis: Long): SwapReceipt =
+        SwapReceipt(
+            signature = fill.signature,
+            inputMint = leg.input.mint,
+            inputSymbol = leg.input.symbol,
+            inputAmountRaw = fill.inAmountRaw,
+            inputDecimals = leg.input.decimals,
+            outputMint = leg.output.mint,
+            outputSymbol = leg.output.symbol,
+            outputAmountRaw = fill.outAmountRaw,
+            outputDecimals = leg.output.decimals,
+            allInCostPct = fill.allInCostPaidPct(quote),
+            route = quote.route,
+            landedAtMillis = nowMillis,
+            slot = fill.slot,
+        )
+
+    private fun failOpen(leg: SwapLeg, reason: SwapFailure) {
+        _state.value = SwapState.Failed(leg, funds = null, input = null, reason = reason)
+    }
+
+    private fun fail(
+        leg: SwapLeg,
+        funds: SwapFunds,
+        input: AmountInput,
+        reason: SwapFailure,
+        quote: SwapQuote?,
+        requoted: Boolean,
+        timing: SwapTiming,
+    ) {
+        _state.value = SwapState.Failed(leg, funds, input, reason, quote, requoted, timing)
     }
 }

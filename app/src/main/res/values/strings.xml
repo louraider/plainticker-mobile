@@ -193,6 +193,29 @@
     <string name="swap_cancelled">Cancelled in Wallet</string>
     <string name="swap_debug_banner">Debug build · signed, not submitted</string>
 
+    <!-- Swap sheet: what the state machine says (T10) -->
+    <string name="swap_amount_not_a_number">Enter the amount in numbers</string>
+    <string name="swap_amount_too_precise">%1$s counts %2$s decimals</string>
+    <string name="swap_amount_not_above_zero">Enter an amount above zero</string>
+    <string name="swap_amount_above_balance">More than the %1$s in this wallet</string>
+    <string name="swap_worst_case">At least %1$s %2$s after slippage</string>
+    <string name="swap_sol_needed">Needs %1$s SOL in this wallet</string>
+    <string name="swap_sol_short">Short %1$s SOL, this wallet has %2$s</string>
+    <string name="swap_sol_breakdown">Signature %1$s, token account %2$s, priority %3$s</string>
+    <string name="swap_requote_approval">The quote went. Approving again lands a fresh one.</string>
+    <string name="swap_fill_vs_quote">quote %1$s, fill %2$s</string>
+    <string name="swap_elapsed_wallet">Wallet %1$s</string>
+    <string name="swap_failed_no_wallet">No wallet on this device answers the app</string>
+    <string name="swap_failed_chain_unread">This wallet could not be read, so nothing was quoted</string>
+    <string name="swap_failed_quote_unavailable">No quote came back. Nothing was sent.</string>
+    <string name="swap_failed_quote_refused">This pair cannot be quoted at this size right now</string>
+    <string name="swap_failed_no_transaction">The quote carried nothing to approve</string>
+    <string name="swap_failed_wallet_refused">The wallet did not return a signature</string>
+    <string name="swap_failed_nothing_signed">The wallet returned no signed transaction</string>
+    <string name="swap_failed_submit_unavailable">The result did not come back. Check Portfolio before trying again.</string>
+    <string name="swap_failed_quote_gone">The quote went twice over. Start again from the amount.</string>
+    <string name="swap_failed_swap_refused">The swap did not land. Nothing was swapped.</string>
+
     <!-- Receipt -->
     <string name="receipt_landed">Landed</string>
     <string name="receipt_confirmed_in">confirmed in %1$s</string>
