@@ -203,7 +203,11 @@ class SwapSheetTest {
         assertTrue("a node that is not focusable cannot take focus", ".focusable()" in focus)
         assertTrue("focus is never asked for", "opened.requestFocus()" in focus)
         assertTrue("a lost requester must not crash a screen with money on it", "runCatching" in focus)
-        assertEquals("the sheet leads with exactly one node", 1, count("val lead = leadFocus()"))
+        assertEquals("the sheet leads with exactly one node", 1, count("val lead = leadFocus(takeFocus)"))
+        assertTrue(
+            "the gallery draws the receipt inline and must not pull focus to it",
+            "takeFocus: Boolean = true" in scan.code,
+        )
     }
 
     @Test
