@@ -8,7 +8,10 @@ import com.myapp.data.plainticker.Axis
 import com.myapp.data.xstocks.MarketSource
 import com.myapp.data.xstocks.PriceLabel
 import com.myapp.data.xstocks.Reserves
+import com.myapp.ui.Copy
 import com.myapp.ui.Fmt
+import com.myapp.ui.raw
+import com.myapp.ui.words
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -29,26 +32,6 @@ import java.time.ZoneOffset
  *    permanent delegate and pausable transfers and nothing else (DESIGN.md section 2). A mint that
  *    could not be read is Unknown in Ink, never a warning and never a clean bill.
  */
-
-// ---- Copy ------------------------------------------------------------------------------------
-
-/**
- * One piece of text on the screen. Either copy this app wrote, which lives in strings.xml and is
- * named by its id, or text the app did not write: a numeral [Fmt] produced, or a sentence the
- * server sent. Keeping the two apart is what lets a test assert the wording without a device, and
- * what stops a translator's string from being spelled in Kotlin.
- */
-sealed interface Copy {
-    /** Copy from strings.xml, with its arguments already formatted by [Fmt]. */
-    data class Words(@StringRes val id: Int, val args: List<String> = emptyList()) : Copy
-
-    /** A numeral, a ticker or a sentence from the payload. Never translated, never invented. */
-    data class Raw(val text: String) : Copy
-}
-
-internal fun words(@StringRes id: Int, vararg args: String): Copy.Words = Copy.Words(id, args.toList())
-
-internal fun raw(text: String): Copy.Raw = Copy.Raw(text)
 
 // ---- The pieces the screen draws ---------------------------------------------------------------
 
