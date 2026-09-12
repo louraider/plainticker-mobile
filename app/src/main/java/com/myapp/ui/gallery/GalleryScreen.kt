@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.myapp.data.jupiter.TrackingQuality
 import com.myapp.ui.components.Banner
 import com.myapp.ui.components.DisabledButton
 import com.myapp.ui.components.FactGrid
@@ -128,8 +129,7 @@ fun GalleryScreen(
         }
         Gauge(
             referenceLabel = "Token vs NYSE close",
-            tokenPremiumPct = GallerySamples.PREMIUM_PCT,
-            premiumText = GallerySamples.PREMIUM_TEXT,
+            tracking = TrackingQuality.Tracked(GallerySamples.PREMIUM_PCT, poolUsd = GallerySamples.POOL_USD),
         )
         Spacer(Modifier.height(28.dp))
         LiveBar(label = "Live from the mint", meta = GallerySamples.LIVE_META, live = live)

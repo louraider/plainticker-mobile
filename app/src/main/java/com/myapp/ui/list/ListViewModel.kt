@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.myapp.data.jupiter.PriceEntry
 import com.myapp.data.jupiter.PriceFetch
+import com.myapp.data.jupiter.TrackingQuality
 import com.myapp.data.plainticker.SummaryRow
 import com.myapp.data.plainticker.Tone
 import com.myapp.data.snapshot.toSummaryRow
@@ -42,6 +43,8 @@ data class ListRow(
     val priceUsd: Double?,
     /** The underlying share's reference price from Price v3 `stockData`, when Jupiter has one. */
     val referencePriceUsd: Double?,
+    /** The pool behind the quote in USD, from Price v3 `liquidity`. Jupiter may omit it. */
+    val poolUsd: Double?,
     val analyzed: Boolean,
 ) {
     /** What the row shows left: the token symbol once the catalog is known, else the ticker. */
@@ -55,16 +58,18 @@ data class ListRow(
     val ageForMeta: Int? get() = ageDays?.takeIf { it >= 1 }
 
     /**
-     * The token's premium against the NYSE close, in percent. Null when either side is missing,
-     * so a row whose price never arrived loses the premium and keeps everything else.
+     * How far this row's quote can be trusted, from the one rule in [TrackingQuality]. Null while
+     * Jupiter has not priced the row at all: no quote, so no tracking question, and the banner
+     * already says the prices are missing.
      */
-    val premiumPct: Double?
-        get() {
-            val price = priceUsd ?: return null
-            val reference = referencePriceUsd ?: return null
-            if (!price.isFinite() || !reference.isFinite() || reference <= 0.0) return null
-            return (price / reference - 1.0) * 100.0
-        }
+    val tracking: TrackingQuality? get() = TrackingQuality.of(priceUsd, referencePriceUsd, poolUsd)
+
+    /**
+     * The premium against the NYSE close the row may draw, in percent. Null when either side is
+     * missing, so a row whose price never arrived keeps everything else, and null below the
+     * liquidity floor, where the number would be arithmetic off a dead pool rather than a price.
+     */
+    val premiumPct: Double? get() = tracking?.premiumPct
 }
 
 /**
@@ -381,7 +386,11 @@ class ListViewModel(
     }
 
     private fun ListRow.withPrice(entry: PriceEntry?): ListRow =
-        copy(priceUsd = entry?.usdPrice, referencePriceUsd = entry?.stockData?.price)
+        copy(
+            priceUsd = entry?.usdPrice,
+            referencePriceUsd = entry?.stockData?.price,
+            poolUsd = entry?.liquidity,
+        )
 
     // ---- Search -------------------------------------------------------------------------
 
@@ -410,6 +419,7 @@ class ListViewModel(
         ageDays = ageDays,
         priceUsd = null,
         referencePriceUsd = null,
+        poolUsd = null,
         analyzed = true,
     )
 
@@ -424,6 +434,7 @@ class ListViewModel(
         ageDays = null,
         priceUsd = null,
         referencePriceUsd = null,
+        poolUsd = null,
         analyzed = false,
     )
 
