@@ -25,6 +25,12 @@ The portal reads the Android package name from the APK and that name is the app'
 
 Order: rename the package, regenerate the release APK, read the certificate fingerprint, publish `assetlinks.json` on plainticker.com, verify it resolves, then create the app record in the portal.
 
+### Decisions taken 2026-09-12
+
+- **Package name: `com.plainticker.mobile`.** Reverse domain of plainticker.com plus the client, matching the repository name and leaving `com.plainticker.*` free for anything later. It is permanent once the App NFT exists.
+- **`assetlinks.json` ships with the rename**, not separately: rename, release APK, certificate fingerprint, the file on plainticker.com, then the App Links intent filter in the manifest.
+- **No portal actions until the app is finished locally on the Seeker.** KYC is cleared and that is where the portal work stops for now; the app record waits until the device walkthrough is done.
+
 ## Numbered checklist
 
 ### Week 1 (do now; replaces "mint the publisher NFT")
