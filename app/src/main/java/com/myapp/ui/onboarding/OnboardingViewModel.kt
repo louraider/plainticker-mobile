@@ -7,22 +7,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+/**
+ * The two things the screen needs: whether the self-certification box is checked, and whether the
+ * button is live. The copy itself lives in strings.xml (DT4), never here.
+ */
 data class OnboardingUiState(
+    /** The self-certification checkbox. */
     val accepted: Boolean = false,
     /** True once the flag is stored; the host navigates on. */
     val completed: Boolean = false,
-    val certificationText: String = PLACEHOLDER_CERTIFICATION,
 ) {
+    /** The button's enabled state: a PrimaryButton while true, a DisabledButton while false. */
     val canContinue: Boolean get() = accepted && !completed
-
-    companion object {
-        /** Placeholder. The final wording is a T7/DT11 deliverable. */
-        const val PLACEHOLDER_CERTIFICATION =
-            "Self-certification placeholder: the final wording lands with the design pass."
-    }
 }
 
-/** One screen, one checkbox: the flag is written only when the user confirms. */
+/** One screen, one checkbox: the flag is written when the user confirms, and written once. */
 class OnboardingViewModel(
     private val store: OnboardingStore,
 ) : ViewModel() {
@@ -34,8 +33,13 @@ class OnboardingViewModel(
         _state.update { it.copy(accepted = accepted) }
     }
 
+    /**
+     * Persists the onboarded flag and flips [OnboardingUiState.completed], which is what moves the
+     * host to home. A press while the box is unchecked, and a second press after the first one
+     * landed, both write nothing.
+     */
     fun confirm() {
-        if (!_state.value.accepted) return
+        if (!_state.value.canContinue) return
         store.setOnboarded(true)
         _state.update { it.copy(completed = true) }
     }

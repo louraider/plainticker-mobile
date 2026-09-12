@@ -1,21 +1,69 @@
 package com.myapp.ui.onboarding
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.myapp.R
+import com.myapp.ui.Fmt
+import com.myapp.ui.components.Heading
+import com.myapp.ui.components.InstrumentPreviews
+import com.myapp.ui.components.ListRow
+import com.myapp.ui.components.PreviewCanvas
+import com.myapp.ui.components.PrimaryButton
+import com.myapp.ui.components.SheetSurface
+import com.myapp.ui.components.TodayStrip
+import com.myapp.ui.components.TopBar
+import com.myapp.ui.components.TopTabs
+import com.myapp.ui.components.focusOutline
+import com.myapp.ui.theme.Accent
+import com.myapp.ui.theme.Canvas
+import com.myapp.ui.theme.Ink
+import com.myapp.ui.theme.Ink2
+import com.myapp.ui.theme.LineStrong
+import com.myapp.ui.theme.PlainTickerType
+import java.time.Instant
 
 /**
- * Placeholder: promise, self-certification checkbox, one action, laid out between the two system
- * bars. Final copy and the bottom-anchored panel (its button absorbing the navigation inset) are DT11.
+ * The one-time onboarding (DT11; plan section 13 Pass 3, design/canvas/instrument.py
+ * screen_onboarding). The first frame is the product, not a form: the List sits behind at 25
+ * percent and the panel over it carries the promise, the self-certification and the one action.
+ * "Read the list" renders disabled until the box is checked; checking writes nothing, the flag is
+ * persisted only when the button is pressed, and AppNavHost then starts at home for good.
+ *
+ * Insets (ui/components/Insets.kt): the backdrop's TopBar absorbs the status bar and the panel
+ * absorbs the navigation bar, so the screen pads nothing at its root and neither edge counts twice.
  */
 @Composable
 fun OnboardingScreen(
@@ -29,17 +77,245 @@ fun OnboardingScreen(
         if (state.completed) onDone()
     }
 
-    Column(modifier = modifier.fillMaxSize().systemBarsPadding()) {
-        Text("PlainTicker")
-        Text("Tokenized stocks, read before you swap.")
-        Text(state.certificationText)
-        Row {
-            Checkbox(checked = state.accepted, onCheckedChange = viewModel::setAccepted)
-            Text("I confirm the statement above")
-        }
-        Text(
-            if (state.canContinue) "Read the list" else "Read the list (confirm first)",
-            modifier = Modifier.clickable(enabled = state.canContinue) { viewModel.confirm() },
+    OnboardingContent(
+        checked = state.accepted,
+        enabled = state.canContinue,
+        onCheckedChange = viewModel::setAccepted,
+        onContinue = viewModel::confirm,
+        modifier = modifier,
+    )
+}
+
+/** The whole screen without a ViewModel, so the three preview frames can drive both states. */
+@Composable
+private fun OnboardingContent(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onContinue: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.fillMaxSize().background(Canvas)) {
+        ListBackdrop(
+            Modifier
+                .matchParentSize()
+                .alpha(BackdropAlpha)
+                // Decoration, not content: TalkBack reads the panel and nothing else.
+                .clearAndSetSemantics {},
         )
+        ConsentPanel(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+            onContinue = onContinue,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+/**
+ * The List screen as a picture of itself. Every piece is built without a click handler, so there
+ * is nothing to tap and nothing to focus even before the semantics are cleared: the tabs are
+ * decorative (TopTabs with no onSelect), the strip offers no refresh and the rows do not open.
+ */
+@Composable
+private fun ListBackdrop(modifier: Modifier = Modifier) {
+    Column(modifier) {
+        TopBar()
+        TopTabs(
+            items = listOf(
+                stringResource(R.string.tab_list),
+                stringResource(R.string.tab_portfolio),
+                stringResource(R.string.tab_watchlist),
+            ),
+            selected = 0,
+            onSelect = null,
+        )
+        TodayStrip(
+            text = stringResource(
+                R.string.list_today,
+                Fmt.count(BackdropWatched),
+                BackdropNextReport.ticker,
+                Fmt.monthDay(BackdropNextReport.reportsAt),
+            ),
+        )
+        Heading(text = stringResource(R.string.list_heading_analyzed), topPadding = 30.dp)
+        BackdropRows.forEachIndexed { index, row ->
+            ListRow(
+                ticker = row.ticker,
+                company = row.company,
+                meta = stringResource(
+                    R.string.list_row_meta,
+                    Fmt.percent(row.premiumPct),
+                    Fmt.daysOld(row.ageDays),
+                ),
+                valueRight = Fmt.decimal(row.composite),
+                valueSub = row.state,
+                divider = index < BackdropRows.lastIndex,
+            )
+        }
+    }
+}
+
+/**
+ * The gate: Elevated with the 1dp Line strong top edge (SheetSurface without its handle), the
+ * wordmark, the headline, the three paragraphs, the self-certification and the one button. It
+ * scrolls inside itself, so a large font scale lengthens the panel instead of pushing the button
+ * off the screen.
+ */
+@Composable
+private fun ConsentPanel(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onContinue: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SheetSurface(modifier = modifier, handle = false) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                // The navigation bar, or 40dp of canvas, whichever is deeper.
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets(bottom = PanelBottomPadding)))
+                .padding(start = PanelSidePadding, end = PanelSidePadding, top = PanelTopPadding),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Text(text = stringResource(R.string.app_name), style = PlainTickerType.wordmark, color = Ink)
+            Text(
+                text = stringResource(R.string.onboarding_headline),
+                style = PlainTickerType.onboardingTitle,
+                color = Ink,
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = stringResource(R.string.onboarding_body_chain),
+                    style = PlainTickerType.body,
+                    color = Ink2,
+                )
+                Text(
+                    text = stringResource(R.string.onboarding_body_fundamentals),
+                    style = PlainTickerType.body,
+                    color = Ink2,
+                )
+                // The disclaimer is the one paragraph in Ink: it is the sentence that must land.
+                Text(
+                    text = stringResource(R.string.onboarding_body_disclaimer),
+                    style = PlainTickerType.body,
+                    color = Ink,
+                )
+            }
+            ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange)
+            PrimaryButton(
+                label = stringResource(R.string.onboarding_continue),
+                onClick = onContinue,
+                enabled = enabled,
+            )
+        }
+    }
+}
+
+/**
+ * A 20dp square, 1dp Line strong empty and an Accent fill when checked, with no check glyph: the
+ * shape lock holds here too. The whole row is the target (at least 48dp, full width), so a screen
+ * reader hears one Checkbox whose label is the sentence and a switch user reaches it once.
+ */
+@Composable
+private fun ConsentCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .focusOutline(interactionSource)
+            .toggleable(
+                value = checked,
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                role = Role.Checkbox,
+                onValueChange = onCheckedChange,
+            )
+            .defaultMinSize(minHeight = 48.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            Modifier
+                .padding(top = 1.dp)
+                .size(CheckboxSize)
+                .then(if (checked) Modifier.background(Accent) else Modifier.border(1.dp, LineStrong)),
+        )
+        Text(
+            text = stringResource(R.string.onboarding_certify),
+            style = PlainTickerType.consent,
+            color = Ink2,
+        )
+    }
+}
+
+// ---- Measurements ------------------------------------------------------------------------------
+
+/** Behind the panel the product reads as a watermark, not as a screen someone should try to use. */
+private const val BackdropAlpha = 0.25f
+
+private val PanelTopPadding: Dp = 28.dp
+private val PanelSidePadding: Dp = 20.dp
+private val PanelBottomPadding: Dp = 40.dp
+private val CheckboxSize: Dp = 20.dp
+
+// ---- The backdrop snapshot ---------------------------------------------------------------------
+
+/** One analyzed row of the backdrop; the numbers go through Fmt like every other screen. */
+private data class BackdropRow(
+    val ticker: String,
+    val company: String,
+    val premiumPct: Double,
+    val ageDays: Int,
+    val composite: Double,
+    val state: String,
+)
+
+private data class BackdropReport(val ticker: String, val reportsAt: Instant)
+
+/**
+ * Illustrative sample data, the six analyzed rows of design/canvas/instrument.py, so the first
+ * frame is full before any network call returns. Nothing here is read from the chain or the API,
+ * and nothing here is a real holding.
+ */
+private val BackdropRows = listOf(
+    BackdropRow("TSLAx", "Tesla, Inc.", 0.09, 2, 0.71, "strong"),
+    BackdropRow("NVDAx", "NVIDIA Corp.", -0.04, 1, 0.68, "strong"),
+    BackdropRow("AAPLx", "Apple Inc.", 0.01, 2, 0.61, "fair"),
+    BackdropRow("MSFTx", "Microsoft Corp.", 0.03, 6, 0.58, "fair"),
+    BackdropRow("AMZNx", "Amazon.com, Inc.", -0.02, 2, 0.55, "fair"),
+    BackdropRow("COINx", "Coinbase Global", 0.08, 3, 0.47, "weak"),
+)
+
+private const val BackdropWatched = 3
+private val BackdropNextReport = BackdropReport("TSLAx", Instant.parse("2026-10-22T20:00:00Z"))
+
+// ---- Previews ----------------------------------------------------------------------------------
+
+/** The canvas frame is 412 by 915; the previews box the screen to that height at every width. */
+private val PreviewFrameHeight: Dp = 915.dp
+
+@InstrumentPreviews
+@Composable
+private fun OnboardingUncheckedPreview() {
+    PreviewCanvas {
+        Box(Modifier.height(PreviewFrameHeight)) {
+            OnboardingContent(checked = false, enabled = false, onCheckedChange = {}, onContinue = {})
+        }
+    }
+}
+
+@InstrumentPreviews
+@Composable
+private fun OnboardingCheckedPreview() {
+    PreviewCanvas {
+        Box(Modifier.height(PreviewFrameHeight)) {
+            OnboardingContent(checked = true, enabled = true, onCheckedChange = {}, onContinue = {})
+        }
     }
 }

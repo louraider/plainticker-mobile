@@ -110,6 +110,8 @@ object PlainTickerType {
     /** Field value when it is words (search). */
     val fieldText: TextStyle = ui(16.sp, FontWeight.Normal, 24.sp)
     val onboardingTitle: TextStyle = ui(26.sp, FontWeight.SemiBold, 32.sp, (-0.02).em)
+    /** The onboarding consent sentence beside the checkbox: 14 Outfit 400, line height 20. */
+    val consent: TextStyle = ui(14.sp, FontWeight.Normal, 20.sp)
     /** Gauge value, heading meta: 13 mono 500. */
     val monoSmall: TextStyle = mono(13.sp, FontWeight.Medium, 18.sp)
     /** "yes" or "no" beside a signal: 14 mono 500. */
