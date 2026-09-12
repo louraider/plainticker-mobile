@@ -187,12 +187,12 @@ private fun PriceOnlyRow(row: ListRow, last: Boolean, onOpenDetail: (String) -> 
 /**
  * The premium against the NYSE close and the age of the analysis, one middle dot between them.
  * Either half can be missing: an unpriced row keeps its age, an unanalyzed one keeps its premium,
- * and a row with neither has no meta line at all.
+ * an analysis from today prints no age at all, and a row with neither has no meta line.
  */
 @Composable
 private fun rowMeta(row: ListRow): String? {
     val premium = row.premiumPct?.let { Fmt.percent(it) }
-    val age = row.ageDays?.let { Fmt.daysOld(it) }
+    val age = row.ageForMeta?.let { Fmt.daysOld(it) }
     return when {
         premium != null && age != null -> stringResource(R.string.list_row_meta, premium, age)
         premium != null -> stringResource(R.string.list_row_meta_price_only, premium)

@@ -90,6 +90,31 @@ class JupiterPriceApiTest {
     }
 
     @Test
+    fun `a mint listed with no usdPrice does not take its chunk down with it`() = runTest {
+        // The shape production really serves: 39 of 50 xStocks came back like `noPrice` on
+        // 2026-09-12, with every field but the price. Decoding the map in one go made the
+        // whole chunk a decode failure and the screen showed no prices at all.
+        val noPrice = """{"createdAt":"2026-06-25T08:28:11Z","decimals":8,""" +
+            """"stockData":{"id":"xstocks","price":253.71,"updatedAt":"2026-09-12T14:51:27.489Z"}}"""
+        val quiet = "Quiet1111111111111111111111111111111111111"
+        val broken = "Broken111111111111111111111111111111111111"
+        val mock = MockApi {
+            respondJson(
+                """{"$quiet": $noPrice, "$broken": {"usdPrice": "not a number"}, """ +
+                    """"${KnownMints.TSLAX}": {"usdPrice": 363.4, "decimals": 8}}""",
+            )
+        }
+        val fetch = api(mock).prices(listOf(quiet, broken, KnownMints.TSLAX))
+
+        assertEquals(setOf(KnownMints.TSLAX), fetch.priced.keys)
+        assertEquals(363.4, fetch.priced.getValue(KnownMints.TSLAX).usdPrice, 1e-9)
+        // Jupiter answered about all three, so none of them is unfetched and nothing failed.
+        assertTrue(fetch.unfetched.isEmpty())
+        assertFalse(fetch.isPartial)
+        assertNull(fetch.failure)
+    }
+
+    @Test
     fun `more than 50 mints are fetched in chunks of 50`() = runTest {
         val mock = MockApi { request -> respondJson(priceAll(request.ids())) }
         val wanted = mints(120)
