@@ -139,16 +139,57 @@ class ListViewModelTest {
     fun `composite is the integer percentile, whichever scale the server sent`() = runTest {
         // The percentile the device saw raw (83.80406) and the 0 to 1 fraction the v1 fixture
         // uses, both drawn the way the row draws them: as an integer, never as the raw float.
-        assertEquals("84", Fmt.decimal(percentile(83.80406)!!, decimals = 0))
-        assertEquals("71", Fmt.decimal(percentile(0.71)!!, decimals = 0))
-        assertEquals("100", Fmt.decimal(percentile(100.0)!!, decimals = 0))
-        assertNull(percentile(null))
+        assertEquals("84", Fmt.decimal(percentile(83.80406, asFraction = false)!!, decimals = 0))
+        assertEquals("71", Fmt.decimal(percentile(0.71, asFraction = true)!!, decimals = 0))
+        assertEquals("100", Fmt.decimal(percentile(100.0, asFraction = false)!!, decimals = 0))
+        assertNull(percentile(null, asFraction = false))
 
         val vm = viewModel()
         vm.state.test {
             val state = awaitUntil { !it.isLoading }
             assertEquals(71.0, state.analyzed[0].composite!!, 1e-9)
             assertEquals(66.0, state.analyzed[1].composite!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the composite scale is read from the whole payload, not from one row`() = runTest {
+        // The fixture and the canvas carry the rank as a 0 to 1 fraction, production as 0 to 100.
+        assertTrue(percentilesAreFractions(listOf(0.71, 0.66, 0.02)))
+        assertFalse(percentilesAreFractions(listOf(83.8, 12.0)))
+        assertFalse("an empty payload has no scale to read", percentilesAreFractions(emptyList()))
+
+        // The bottom of a 179-row leaderboard is legitimately below 1. Judged on its own it
+        // would have been multiplied and drawn as "56"; judged with the payload it stays "1".
+        val production = summary().let {
+            it.copy(
+                rows = listOf(
+                    it.rows[0].copy(ticker = "AAPL", composite = 83.80406),
+                    it.rows[1].copy(ticker = "JPM", composite = 0.56),
+                ),
+            )
+        }
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(production)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals(listOf("84", "1"), state.analyzed.map { Fmt.decimal(it.composite!!, decimals = 0) })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a ticker served twice is one row, not a duplicate key the list would crash on`() = runTest {
+        val doubled = summary().let { it.copy(rows = it.rows + it.rows[0].copy(composite = 0.99)) }
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(doubled)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            val tickers = state.analyzed.map { it.ticker }
+            assertEquals(tickers.distinct(), tickers)
+            // The first row served wins, so the list keeps the server's own ordering.
+            assertEquals(71.0, state.analyzed.single { it.ticker == "AAPL" }.composite!!, 1e-9)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -211,11 +252,32 @@ class ListViewModelTest {
 
         vm.state.test {
             val state = awaitUntil { !it.isLoading }
-            assertNull(state.banner)
+            // The analysis is the product: a list that quietly turns into a price-only catalog
+            // has to say so, and offer the retry, rather than look like a catalog of nothing.
+            assertTrue(state.analysisUnavailable)
+            assertEquals(ListBanner.AnalysisUnavailable, state.banner)
             assertTrue(state.analyzed.isEmpty())
             assertEquals(listOf("AAPLx", "JPMx", "TSLAx"), state.withoutAnalysis.map { it.symbol })
             assertFalse(state.isEmpty)
             assertEquals(listOf(aaplMint, jpmMint, tslaMint).sorted(), prices.requested.last().sorted())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `both sources answer with nothing - one sentence, never a blank column`() = runTest {
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z"))),
+            catalog = FakeCatalogRepository(Result.success(emptyList())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertFalse("nothing failed, so this is not an outage", state.failed)
+            assertNull(state.banner)
+            assertTrue(state.isEmpty)
+            assertFalse("and it is not an empty search either", state.searchMiss)
+            assertTrue("the screen has a sentence to draw", state.emptyResult)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -432,7 +494,14 @@ class ListViewModelTest {
         assertEquals(ListBanner.Snapshot(LocalDate.of(2026, 9, 12)), snapshot.banner)
 
         assertEquals(ListBanner.Unavailable, snapshot.copy(failed = true).banner)
-        assertEquals(ListBanner.CatalogUnavailable, ListUiState(catalogUnavailable = true, pricesPartial = true).banner)
+        assertEquals(
+            ListBanner.CatalogUnavailable,
+            ListUiState(catalogUnavailable = true, analysisUnavailable = true, pricesPartial = true).banner,
+        )
+        assertEquals(
+            ListBanner.AnalysisUnavailable,
+            ListUiState(analysisUnavailable = true, pricesUnavailable = true).banner,
+        )
         assertEquals(ListBanner.PricesUnavailable, ListUiState(pricesUnavailable = true, pricesPartial = true).banner)
         assertEquals(ListBanner.PricesPartial, ListUiState(pricesPartial = true).banner)
         assertNull(ListUiState().banner)
