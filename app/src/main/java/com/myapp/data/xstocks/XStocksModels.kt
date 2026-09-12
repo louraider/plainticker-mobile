@@ -61,6 +61,18 @@ data class XStockAsset(
             ?: underlyingSymbol?.takeIf { it.isNotBlank() }
             ?: symbol.removeSuffix("x")
 
+    /**
+     * The same asset carrying only its Solana deployment. xStocks lists every asset on ten
+     * networks and this app reads exactly one of them, so nine tenths of a catalog page is a
+     * payload nothing renders: page 0 measured 548 KB live on 2026-09-13 and 146 KB once the
+     * other nine networks were dropped. It is what makes the catalog small enough to keep on
+     * disk and cheap enough for a phone to parse.
+     *
+     * Nothing outside this file reads a deployment directly; [solanaMint] and [solanaDeployment]
+     * are the only ways in, and both answer the same after the trim.
+     */
+    fun solanaOnly(): XStockAsset = copy(deployments = listOfNotNull(solanaDeployment))
+
     companion object {
         const val NETWORK_SOLANA = "Solana"
     }

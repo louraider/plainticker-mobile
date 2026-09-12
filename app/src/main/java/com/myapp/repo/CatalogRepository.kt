@@ -1,6 +1,7 @@
 package com.myapp.repo
 
 import com.myapp.core.Clock
+import com.myapp.data.xstocks.CatalogCache
 import com.myapp.data.xstocks.Multiplier
 import com.myapp.data.xstocks.ProofOfReserves
 import com.myapp.data.xstocks.XStockAsset
@@ -35,11 +36,20 @@ interface CatalogRepository {
 /**
  * The catalog is ~830 assets over nine pages, so it is fetched once per TTL and shared by
  * every screen. Multipliers change on corporate actions, so they get a shorter TTL.
+ *
+ * Two caches sit in front of the network, and the in-memory one stays in front of the file.
+ * Memory answers within a process and dies with it; [disk] is what makes the second launch
+ * free, because a process that has just started has no memory cache and used to pay the whole
+ * 4.31 MB again. Both keep the catalog trimmed to its Solana deployment
+ * ([XStockAsset.solanaOnly]), which is all this app has ever read of it.
  */
 class CachedCatalogRepository(
     private val api: XStocksApi,
     private val clock: Clock,
+    /** The catalog across process death. Null is "this build keeps no file", not an error. */
+    private val disk: CatalogCache? = null,
     private val catalogTtlMillis: Long = CATALOG_TTL_MS,
+    private val diskTtlMillis: Long = CatalogCache.TTL_MS,
     private val multiplierTtlMillis: Long = MULTIPLIER_TTL_MS,
     private val reservesTtlMillis: Long = RESERVES_TTL_MS,
 ) : CatalogRepository {
@@ -58,11 +68,20 @@ class CachedCatalogRepository(
 
     override suspend fun catalog(): List<XStockAsset> = mutex.withLock {
         val now = clock.nowMillis()
-        catalog?.takeIf { now - it.at < catalogTtlMillis }?.value ?: run {
-            val fresh = api.catalog().filter { it.solanaMint != null }
-            catalog = Cached(fresh, now)
-            fresh
+        catalog?.takeIf { now - it.at < catalogTtlMillis }?.let { return@withLock it.value }
+
+        // A catalog on disk that is still inside its window is the whole answer: the second
+        // launch of the day asks the network nothing at all.
+        val stored = disk?.read()
+        if (stored != null && now - stored.capturedAtMillis < diskTtlMillis) {
+            catalog = Cached(stored.assets, now)
+            return@withLock stored.assets
         }
+
+        val fresh = api.catalog().filter { it.solanaMint != null }.map { it.solanaOnly() }
+        catalog = Cached(fresh, now)
+        disk?.write(fresh, now)
+        fresh
     }
 
     override suspend fun multiplier(symbol: String): Double =

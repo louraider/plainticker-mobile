@@ -3,6 +3,8 @@ package com.myapp.repo
 import com.myapp.data.Fixtures
 import com.myapp.data.MockApi
 import com.myapp.data.respondJson
+import com.myapp.data.xstocks.CatalogCache
+import com.myapp.data.xstocks.FileCatalogCache
 import com.myapp.data.xstocks.XStocksApi
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
@@ -10,14 +12,34 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** The two per-symbol reads Detail added to the catalog repository: the multiplier record and the reserves. */
 class CachedCatalogRepositoryTest {
 
+    @get:Rule
+    val temp = TemporaryFolder()
+
     private var now = 0L
 
-    private fun repository(mock: MockApi) = CachedCatalogRepository(XStocksApi(mock.client), clock = { now })
+    private fun repository(mock: MockApi, disk: CatalogCache? = null) =
+        CachedCatalogRepository(XStocksApi(mock.client), clock = { now }, disk = disk)
+
+    /** The catalog file this process would find on disk, on the test dispatcher. */
+    private fun cache() = FileCatalogCache(File(temp.root, CatalogCache.FILE_NAME), io = EmptyCoroutineContext)
+
+    /** The two recorded catalog pages, and nothing else. */
+    private fun catalogApi() = MockApi { request: HttpRequestData ->
+        val page = request.url.parameters["page"]?.toIntOrNull() ?: 0
+        respondJson(Fixtures.read("xstocks/assets-page-$page.json"))
+    }
+
+    private fun catalogRequests(mock: MockApi) = mock.requests.count { it.url.encodedPath.endsWith("/assets") }
 
     /** Serves the recorded multiplier and proof-of-reserves answers, and counts the calls. */
     private fun api(porBody: String = Fixtures.read("xstocks/por-tslax.json")) = MockApi { request: HttpRequestData ->
@@ -63,4 +85,63 @@ class CachedCatalogRepositoryTest {
         assertNull(repo.proofOfReserves("TSLAx"))
         assertEquals("no reserves published is an answer", 1, mock.requests.size)
     }
+    // ---- The catalog on disk ---------------------------------------------------------------
+
+    @Test
+    fun `the catalog is written once and the next start reads it instead of the network`() = runTest {
+        val disk = cache()
+
+        // First launch: the pages are paid for, and what came back is written down.
+        val first = catalogApi()
+        val fetched = repository(first, disk).catalog()
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), fetched.map { it.symbol })
+        assertEquals("both pages, once", 2, catalogRequests(first))
+
+        // Same process, second ask: the memory cache answers and the file is not rewritten.
+        val writtenAt = disk.read()!!.capturedAtMillis
+        assertEquals(2, catalogRequests(first))
+
+        // A second launch is a new repository with an empty memory cache over the same file.
+        val second = catalogApi()
+        val fromDisk = repository(second, disk).catalog()
+        assertEquals("the second launch pays nothing for the catalog", 0, catalogRequests(second))
+        assertEquals(fetched.map { it.symbol }, fromDisk.map { it.symbol })
+        assertEquals(fetched.map { it.solanaMint }, fromDisk.map { it.solanaMint })
+        assertEquals("and it did not rewrite what it just read", writtenAt, disk.read()!!.capturedAtMillis)
+    }
+
+    @Test
+    fun `a catalog past its window is refetched and the file is brought forward`() = runTest {
+        val disk = cache()
+        repository(catalogApi(), disk).catalog()
+        val firstCapture = disk.read()!!.capturedAtMillis
+
+        now += CatalogCache.TTL_MS
+        val later = catalogApi()
+        repository(later, disk).catalog()
+
+        assertEquals("past the window, the network is asked", 2, catalogRequests(later))
+        assertTrue("and the file carries the newer capture", disk.read()!!.capturedAtMillis > firstCapture)
+    }
+
+    @Test
+    fun `the memory cache stays in front of the file`() = runTest {
+        val disk = cache()
+        val mock = catalogApi()
+        val repo = repository(mock, disk)
+
+        repo.catalog()
+        repo.catalog()
+        repo.catalog()
+        assertEquals("one fetch, then memory", 2, catalogRequests(mock))
+    }
+
+    @Test
+    fun `a build with no catalog file still works, it just pays every launch`() = runTest {
+        val mock = catalogApi()
+        assertEquals(3, repository(mock, disk = null).catalog().size)
+        assertEquals(2, catalogRequests(mock))
+    }
+
+
 }
