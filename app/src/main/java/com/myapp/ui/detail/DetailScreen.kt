@@ -61,8 +61,9 @@ import com.myapp.ui.components.SignalRow
 import com.myapp.ui.components.SkeletonBar
 import com.myapp.ui.components.TopBar
 import com.myapp.ui.components.Track
-import com.myapp.ui.swap.SwapPlaceholder
+import com.myapp.ui.swap.SwapActions
 import com.myapp.ui.text
+import com.myapp.ui.swap.SwapSheet
 import com.myapp.ui.swap.SwapState
 import com.myapp.ui.swap.SwapToken
 import com.myapp.ui.swap.SwapViewModel
@@ -92,6 +93,7 @@ import java.time.Instant
 fun DetailScreen(
     viewModel: DetailViewModel,
     swapViewModel: SwapViewModel,
+    onViewPortfolio: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -100,6 +102,19 @@ fun DetailScreen(
     DetailContent(
         state = state,
         swap = swap,
+        swapActions = SwapActions(
+            onAmountChanged = swapViewModel::amountChanged,
+            onMax = swapViewModel::useMax,
+            onFlip = swapViewModel::flip,
+            onSubmit = swapViewModel::submit,
+            onEdit = swapViewModel::edit,
+            onClose = swapViewModel::close,
+            // The receipt leaves the sheet behind: the holding it created is on the other screen.
+            onViewPortfolio = {
+                swapViewModel.close()
+                onViewPortfolio()
+            },
+        ),
         onToggleWatch = viewModel::toggleWatch,
         onSwap = {
             state.mint?.let { mint ->
@@ -112,7 +127,6 @@ fun DetailScreen(
                 )
             }
         },
-        onResetSwap = swapViewModel::close,
         modifier = modifier,
     )
 }
@@ -121,9 +135,9 @@ fun DetailScreen(
 internal fun DetailContent(
     state: DetailUiState,
     swap: SwapState,
+    swapActions: SwapActions,
     onToggleWatch: () -> Unit,
     onSwap: () -> Unit,
-    onResetSwap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -162,7 +176,7 @@ internal fun DetailContent(
         }
 
         FundamentalsBlock(state)
-        SwapBlock(state = state, swap = swap, onSwap = onSwap, onResetSwap = onResetSwap)
+        SwapBlock(state = state, swap = swap, onSwap = onSwap, swapActions = swapActions)
         Spacer(Modifier.height(TailGap))
     }
 }
@@ -415,16 +429,16 @@ private fun MethodBlock(method: MethodContent) {
 // ---- The swap ----------------------------------------------------------------------------------
 
 /**
- * One button and one mono line. The sheet is T10: the button keeps the placeholder's wiring, so
- * the quote, the signature and the landing still run, and the placeholder shows the phase while
- * the flow is not idle.
+ * One button and one mono line, and the sheet the button opens (T10, DT7). [SwapSheet] draws
+ * nothing until the machine leaves [SwapState.Closed], and it is a modal surface, so it sits in
+ * this block without being part of the scrolled column.
  */
 @Composable
 private fun SwapBlock(
     state: DetailUiState,
     swap: SwapState,
     onSwap: () -> Unit,
-    onResetSwap: () -> Unit,
+    swapActions: SwapActions,
 ) {
     val label = state.swapLabel ?: return
     val cost = state.costLine(swap.quoteOrNull?.allInCostPct)
@@ -438,9 +452,7 @@ private fun SwapBlock(
             enabled = state.mint != null && !swap.isBusy,
         )
         cost?.let { Text(text = it.text(), style = PlainTickerType.meta, color = Muted) }
-        if (swap !is SwapState.Closed) {
-            SwapPlaceholder(state = swap, enabled = false, onSwap = onSwap, onReset = onResetSwap)
-        }
+        SwapSheet(state = swap, actions = swapActions)
     }
 }
 
@@ -511,6 +523,17 @@ private val PreviewAsset = XStockAsset(
 
 private val PreviewNow = Instant.parse("2026-09-12T20:55:00Z").toEpochMilli()
 
+/** The sheet is closed on every Detail preview; its own states preview in SwapSheet.kt. */
+private val PreviewSwapActions = SwapActions(
+    onAmountChanged = {},
+    onMax = {},
+    onFlip = {},
+    onSubmit = {},
+    onEdit = {},
+    onClose = {},
+    onViewPortfolio = {},
+)
+
 /** TSLAx as it read live on 2026-09-12: a delegate, pausable transfers, no split, an empty hook. */
 private val PreviewFacts = MintFacts(
     decimals = 8,
@@ -566,7 +589,7 @@ private val PreviewState = DetailUiState(
 @Composable
 private fun DetailPreview() {
     PreviewCanvas {
-        DetailContent(PreviewState, SwapState.Closed(), onToggleWatch = {}, onSwap = {}, onResetSwap = {})
+        DetailContent(PreviewState, SwapState.Closed(), PreviewSwapActions, onToggleWatch = {}, onSwap = {})
     }
 }
 
@@ -577,9 +600,9 @@ private fun DetailLoadingPreview() {
         DetailContent(
             DetailUiState(ticker = "TSLA", nowMillis = PreviewNow),
             SwapState.Closed(),
+            PreviewSwapActions,
             onToggleWatch = {},
             onSwap = {},
-            onResetSwap = {},
         )
     }
 }
@@ -598,9 +621,9 @@ private fun DetailDegradedPreview() {
                 split = Piece.Failed,
             ),
             SwapState.Closed(),
+            PreviewSwapActions,
             onToggleWatch = {},
             onSwap = {},
-            onResetSwap = {},
         )
     }
 }

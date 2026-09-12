@@ -209,8 +209,6 @@
     <string name="swap_sol_short">Short %1$s SOL, this wallet has %2$s</string>
     <string name="swap_back_to_amount">Back to the amount</string>
     <string name="swap_requote_approval">The quote went. Approving again lands a fresh one.</string>
-    <string name="swap_fill_vs_quote">quote %1$s, fill %2$s</string>
-    <string name="swap_elapsed_wallet">Wallet %1$s</string>
     <string name="swap_failed_no_wallet">No wallet on this device answers the app</string>
     <string name="swap_failed_chain_unread">This wallet could not be read, so nothing was quoted</string>
     <string name="swap_failed_quote_unavailable">No quote came back. Nothing was sent.</string>
