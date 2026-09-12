@@ -1,6 +1,7 @@
 package com.myapp.repo
 
 import com.myapp.data.KnownPrograms
+import com.myapp.data.rpc.ContextValue
 import com.myapp.data.rpc.RpcAccount
 import com.myapp.data.rpc.RpcEncoding
 import com.myapp.data.rpc.SkrStake
@@ -19,6 +20,12 @@ interface RpcRepository {
 
     /** One account, or null when it does not exist. */
     suspend fun accountInfo(pubkey: String, encoding: RpcEncoding = RpcEncoding.BASE64): RpcAccount?
+
+    /**
+     * One account with the slot the node answered at, so a surface can say how fresh the read is
+     * ("slot N, 2 s ago"). [ContextValue.value] is null when the account does not exist.
+     */
+    suspend fun accountAt(pubkey: String, encoding: RpcEncoding = RpcEncoding.BASE64): ContextValue<RpcAccount>
 
     /** Several accounts in order; a missing one is null in its position. */
     suspend fun accounts(pubkeys: List<String>, encoding: RpcEncoding = RpcEncoding.BASE64): List<RpcAccount?>
@@ -39,7 +46,10 @@ class ForwarderRpcRepository(private val api: SolanaRpcApi) : RpcRepository {
     }
 
     override suspend fun accountInfo(pubkey: String, encoding: RpcEncoding): RpcAccount? =
-        api.getAccountInfo(pubkey, encoding).value
+        accountAt(pubkey, encoding).value
+
+    override suspend fun accountAt(pubkey: String, encoding: RpcEncoding): ContextValue<RpcAccount> =
+        api.getAccountInfo(pubkey, encoding)
 
     override suspend fun accounts(pubkeys: List<String>, encoding: RpcEncoding): List<RpcAccount?> {
         if (pubkeys.isEmpty()) return emptyList()
