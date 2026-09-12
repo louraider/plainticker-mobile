@@ -3,11 +3,20 @@
     <!-- Dark only. The window paints Canvas so no light frame flashes before Compose draws, and
          both system bars are transparent from the first frame; MainActivity.enableEdgeToEdge
          then lays the content out under them with light icons. -->
-    <style name="Theme.Myapp" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.PlainTicker" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/canvas</item>
         <item name="android:colorBackground">@color/canvas</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Splash, DESIGN.md section 9: Canvas behind the launcher glyph (the same foreground vector
+         the adaptive icon uses), no branding image. core-splashscreen draws it on every release the
+         app runs on; MainActivity.installSplashScreen then switches to Theme.PlainTicker. -->
+    <style name="Theme.PlainTicker.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/canvas</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.PlainTicker</item>
     </style>
 </resources>
