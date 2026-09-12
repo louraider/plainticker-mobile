@@ -99,14 +99,11 @@ internal fun ListContent(
                 }
             }
 
-            state.searchMiss -> item(key = "miss") {
-                Text(
-                    text = stringResource(R.string.list_search_empty, state.query),
-                    style = PlainTickerType.body,
-                    color = Ink2,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = HeadingTopGap),
-                )
-            }
+            state.searchMiss -> item(key = "miss") { EmptyLine(stringResource(R.string.list_search_empty, state.query)) }
+
+            // Both sources answered and neither had a row. Rare, but the screen was otherwise
+            // a wordmark, a search field and nothing else, with no banner to explain it.
+            state.emptyResult -> item(key = "empty") { EmptyLine(stringResource(R.string.list_empty)) }
 
             else -> {
                 if (state.analyzed.isNotEmpty()) {
@@ -139,6 +136,17 @@ internal fun ListContent(
             }
         }
     }
+}
+
+/** One sentence where the rows would be, so no state of this screen is a blank column. */
+@Composable
+private fun EmptyLine(text: String) {
+    Text(
+        text = text,
+        style = PlainTickerType.body,
+        color = Ink2,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = HeadingTopGap),
+    )
 }
 
 @Composable
@@ -222,6 +230,9 @@ private fun StateBanner(banner: ListBanner, onRetry: () -> Unit) {
 
         ListBanner.CatalogUnavailable ->
             Banner(text = stringResource(R.string.list_catalog_unavailable), action = retry, onAction = onRetry)
+
+        ListBanner.AnalysisUnavailable ->
+            Banner(text = stringResource(R.string.list_analysis_unavailable), action = retry, onAction = onRetry)
 
         ListBanner.PricesUnavailable ->
             Banner(text = stringResource(R.string.list_prices_unavailable), action = retry, onAction = onRetry)
