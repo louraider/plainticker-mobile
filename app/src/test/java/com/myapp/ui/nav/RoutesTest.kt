@@ -1,6 +1,7 @@
 package com.myapp.ui.nav
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -13,6 +14,16 @@ class RoutesTest {
     fun `the first launch starts at onboarding and every later one at home`() {
         assertEquals(Routes.ONBOARDING, Routes.start(onboarded = false))
         assertEquals(Routes.HOME, Routes.start(onboarded = true))
+    }
+
+    @Test
+    fun `home names a tab as an optional argument, so the start destination is unchanged`() {
+        assertEquals("home?tab={tab}", Routes.HOME_TAB)
+        assertEquals("home?tab=1", Routes.home(1))
+        // The receipt's "View in Portfolio" is the one caller; plain "home" still matches the
+        // same destination because the argument carries a default.
+        assertTrue(Routes.HOME_TAB.startsWith(Routes.HOME))
+        assertTrue(Routes.home(0).startsWith(Routes.HOME))
     }
 
     @Test
