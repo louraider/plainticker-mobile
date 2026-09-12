@@ -176,8 +176,14 @@ internal fun DetailContent(
         }
 
         FundamentalsBlock(state)
-        SwapBlock(state = state, swap = swap, onSwap = onSwap, swapActions = swapActions)
+        SwapBlock(state = state, swap = swap, onSwap = onSwap)
         Spacer(Modifier.height(TailGap))
+
+        // The sheet is a modal surface and draws in its own window, so where it sits in this
+        // column does not matter. What matters is that it is not inside SwapBlock: that block
+        // returns early when the catalog has not named a symbol, and a sheet that vanished
+        // mid-landing would take a landed swap's receipt with it.
+        SwapSheet(state = swap, actions = swapActions)
     }
 }
 
@@ -429,16 +435,14 @@ private fun MethodBlock(method: MethodContent) {
 // ---- The swap ----------------------------------------------------------------------------------
 
 /**
- * One button and one mono line, and the sheet the button opens (T10, DT7). [SwapSheet] draws
- * nothing until the machine leaves [SwapState.Closed], and it is a modal surface, so it sits in
- * this block without being part of the scrolled column.
+ * One button and one mono line. The sheet it opens is drawn by [DetailContent], not here: this
+ * block has nothing to draw until the catalog names a symbol, and the sheet must outlive that.
  */
 @Composable
 private fun SwapBlock(
     state: DetailUiState,
     swap: SwapState,
     onSwap: () -> Unit,
-    swapActions: SwapActions,
 ) {
     val label = state.swapLabel ?: return
     val cost = state.costLine(swap.quoteOrNull?.allInCostPct)
@@ -452,7 +456,6 @@ private fun SwapBlock(
             enabled = state.mint != null && !swap.isBusy,
         )
         cost?.let { Text(text = it.text(), style = PlainTickerType.meta, color = Muted) }
-        SwapSheet(state = swap, actions = swapActions)
     }
 }
 

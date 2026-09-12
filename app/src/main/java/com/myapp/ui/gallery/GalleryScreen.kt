@@ -277,7 +277,7 @@ fun GalleryScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
         )
         Heading(text = "Receipt, landed")
-        SheetSurface { SwapSheetBody(content = receiptContent(), actions = GalleryNoActions) }
+        SheetSurface { SwapSheetBody(content = receiptContent(), actions = GalleryNoActions, takeFocus = false) }
         Spacer(Modifier.height(48.dp))
     }
 
