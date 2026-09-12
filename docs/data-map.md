@@ -76,7 +76,63 @@ Walked the merged build on the real phone. The list is correct and the liquidity
 
 The catalog is the whole cost, and it is paid before a single row can draw because rows need the symbol and the mint. On a phone the parse of 4.3 MB adds to it. Nothing renders until it finishes.
 
-This matters more than its size suggests: the list is the first thing a judge opens, and the demo video opens on it. Three fixes, all client side and none needing an API key: paint the bundled snapshot immediately and let the network refresh over it, which T8 already built for the outage path and which turns the wait into nothing; render after page 0 and keep paging in the background, so rows appear at about a second; and cache the catalog on disk so the second launch pays nothing. A slim server-side catalog carrying only symbol, underlying, mint, name and the trading block would cut 4.31 MB to tens of kilobytes, but that is PlainTicker server work and the client fixes land sooner.
+This matters more than its size suggests: the list is the first thing a judge opens, and the demo video opens on it. Three fixes, all client side and none needing an API key: paint the bundled snapshot immediately and let the network refresh over it, which T8 already built for the outage path and which turns the wait into nothing; render after page 0 and keep paging in the background, so rows appear at about a second; and cache the catalog on disk so the second launch pays nothing. A slim server-side catalog carrying only symbol, underlying, mint, name and the trading block would cut 4.31 MB to tens of kilobytes, but that is PlainTicker server work and the client fixes land sooner. **All three client fixes are in; the section below is the measurement after them.**
+
+#### Two point seven seconds to first content, measured on the Seeker 2026-09-13
+
+The three client fixes above are in. Measured on the same phone, the same evening, same Wi-Fi.
+
+**Method.** Debug build installed over adb, `am force-stop`, `am start -n com.myapp/.MainActivity`,
+and the launch recorded with `adb shell screenrecord` at the display's own rate. The recording is
+anchored to the system's own launch measurement: `ActivityTaskManager: Displayed` gives the
+milliseconds from the launch request to the activity's first frame, and that frame is found in the
+recording, so every later frame can be stated relative to the launch. "First row" is the first
+frame in which row text is drawn in the list band. "Settled" is the first frame identical to the
+final one, which is the frame where the snapshot banner has gone and nothing further changes.
+Three runs each. The earlier `uiautomator dump` poll was run too, as the like-for-like check
+against the 2026-09-12 numbers, but one dump costs about 2.3 s on this phone, so it can only say
+"at or under" once the answer is small: it reported 13.3, 13.5 and 13.7 s before and 3.1, 3.7 and
+3.8 s after, with rows already present in the very first sample of every run after.
+
+| | skeletons | first row | settled |
+|---|---|---|---|
+| before | 2.31 s | **11.7 s** (10.8 to 12.5) | 11.8 s |
+| after, first ever launch, nothing cached | 2.35 s | **2.75 s** (2.70 to 2.76) | 12.4 s |
+| after, every later launch | 2.37 s | **2.78 s** (2.74 to 2.78) | **3.5 s** |
+
+**Read it as two numbers, not one.** Of the 2.75 s, 2.35 s is process start, the splash and the
+first composition, and that number is the same in both builds (2.31 against 2.35): the splash has
+no `setKeepOnScreenCondition`, so it leaves on the first Compose frame and no data is waiting
+behind it. The part this work owns is the gap between the first Compose frame and the first row,
+and that went from about 9.4 s to about 0.40 s. The 0.40 s is reading and parsing the two bundled
+assets and joining 179 rows against 832 assets. Getting under 2.35 s to first content is a startup
+question, not a data one, and it is not what was fixed here.
+
+The spread is the other half of the result. Before, first row ranged over 1.6 s across three runs
+because it was a 4.31 MB download; after, it ranges over 66 ms, because the first paint touches no
+network at all.
+
+**The second launch.** The catalog is written to `cacheDir/xstocks-catalog.json`, 1.12 MB, trimmed
+to each asset's Solana deployment from the 4.31 MB the API serves across ten networks. A launch
+inside the 24 h window reads it and asks the network nothing: the file's timestamp is unchanged
+after a launch, and the list settles at 3.5 s rather than 12.4 s, which is less time than the eight
+catalog pages take to arrive.
+
+**What it costs.** On the first ever launch the list now settles about 0.6 s later than it used to
+(12.4 s against 11.8 s): that launch does everything it used to and also parses the snapshot and
+writes 1.12 MB to disk. It buys a usable list 9 s sooner on that launch and a settled one 9 s
+sooner on every launch after it, so it is the right trade, but it is a real number and it is here.
+
+**What the reader sees.** At 2.75 s the rows carry their analysis and no premium, because the
+snapshot carries no price, and the one banner slot reads "List from a bundled snapshot of 12 Sep
+2026, refreshing now". Live prices arrive and fill the meta lines in place. The banner goes when
+nothing on screen comes from the snapshot any more, which is when `/summary` has answered and the
+catalog is whole. The frame before the rows shows skeletons and the next frame shows rows: the
+replacement is a data swap and nothing about it is animated, so no row ever moves under a thumb.
+
+The server-side slim catalog is still the real fix for the 4.31 MB and is still PlainTicker server
+work. It would take the first ever launch's settle from 12.4 s down with it; it is no longer on the
+path to first content.
 
 #### The liquidity floor, measured 2026-09-12
 
