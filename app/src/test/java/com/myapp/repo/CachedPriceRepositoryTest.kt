@@ -8,6 +8,8 @@ import com.myapp.data.net.RateLimitedException
 import com.myapp.data.respondJson
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -201,6 +203,34 @@ class CachedPriceRepositoryTest {
         assertEquals(setOf("MintA"), repo.prices(listOf("MintA")).keys)
         assertEquals(setOf("MintA", "MintB"), repo.prices(listOf("MintA", "MintB")).keys)
         assertEquals(listOf("MintA", "MintB"), idsOf(mock))
+    }
+
+    @Test
+    fun `a detail screen is not made to wait behind the list's paced refresh`() = runTest {
+        // The List's run is the slow one: paced chunks and one backoff are seconds of waiting.
+        // `reached` puts a chunk of it in flight and holds it there, the way a real run holds
+        // the network; the fetch used to happen inside the cache lock, so the Detail screen's
+        // one mint sat behind the whole thing and this call never came back.
+        val reached = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val mock = MockApi { request ->
+            val ids = request.ids()
+            if (ids.size > 1) {
+                reached.complete(Unit)
+                release.await()
+            }
+            respondJson(priceAll(ids))
+        }
+        val repo = repo(mock)
+
+        val list = launch { repo.pricesFirst(mints(60)) }
+        reached.await()
+
+        assertEquals(setOf("MintZ"), repo.prices(listOf("MintZ")).keys)
+
+        release.complete(Unit)
+        list.join()
+        assertEquals("both list chunks and the detail mint", 3, mock.requests.size)
     }
 
     @Test

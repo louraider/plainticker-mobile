@@ -59,6 +59,8 @@
     <string name="list_prices_unavailable">Prices unavailable</string>
     <string name="list_prices_partial">Some prices are unavailable</string>
     <string name="list_catalog_unavailable">xStocks catalog unavailable</string>
+    <string name="list_analysis_unavailable">Analysis unavailable, showing the xStocks catalog</string>
+    <string name="list_empty">The list came back empty</string>
     <string name="list_stale_banner">No fresh analysis, the newest is %1$s</string>
     <string name="list_snapshot_banner">List from a bundled snapshot, captured %1$s</string>
     <string name="list_snapshot_banner_undated">List from a bundled snapshot</string>

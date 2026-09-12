@@ -33,14 +33,22 @@ interface PriceRepository {
 
 /**
  * In-memory cache with a 30 s TTL per mint. Jupiter's keyless bucket is 0.5 requests per
- * second, so the list, the detail and the portfolio must share one fetch when they ask for
- * the same mints within a refresh window. Only expired or unseen mints are requested.
+ * second, so the list, the detail and the portfolio must share what has already been fetched
+ * rather than each ask again: only expired or unseen mints are requested.
  *
  * A mint Jupiter answered about is cached for the TTL, whether it came back with a price or
  * without one, so an unpriceable mint is not re-asked on every recomposition. A mint whose
  * request never landed (a 429, or any other transport failure) is deliberately NOT cached:
  * it carries no answer, and remembering it as a miss would leave the row blank for the whole
  * TTL and make the retry pointless.
+ *
+ * The mutex guards the cache and nothing else. A paced run over the List's 200 mints spends
+ * seconds inside [JupiterPriceApi.prices], and holding the lock across that made every other
+ * screen wait for the List: a Detail opened during a refresh sat without a price until the
+ * whole run finished. The fetch therefore happens outside the lock. The price of that is that
+ * two screens asking for the same expired mint at the same instant can each send one request,
+ * which the pacing and the backoff already tolerate; the price of the alternative was a frozen
+ * screen on the demo path.
  */
 class CachedPriceRepository(
     private val api: JupiterPriceApi,
@@ -66,36 +74,44 @@ class CachedPriceRepository(
         val wanted = mints.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         val window = if (limit >= 0) wanted.take(limit) else wanted
         if (window.isEmpty()) return PriceFetch.EMPTY
-        return mutex.withLock { fetchLocked(window) }
-    }
 
-    /** Caller must own [mutex]: one fetch per refresh window, shared by every screen. */
-    private suspend fun fetchLocked(window: List<String>): PriceFetch {
         val asked = clock.nowMillis()
-        val missing = window.filter { mint -> cache[mint]?.let { asked - it.at >= ttlMillis } ?: true }
+        val missing = mutex.withLock { window.filter { expiredAt(asked, it) } }
 
+        // Outside the lock: this is the paced, retried, multi-second part, and no other screen
+        // may be made to wait behind it.
         var fetched = PriceFetch.EMPTY
         if (missing.isNotEmpty()) {
             fetched = api.prices(missing)
             val at = clock.nowMillis()
-            for (mint in missing) {
-                if (mint in fetched.unfetched) continue
-                cache[mint] = Cached(fetched.priced[mint], at)
+            mutex.withLock {
+                for (mint in missing) {
+                    if (mint in fetched.unfetched) continue
+                    cache[mint] = Cached(fetched.priced[mint], at)
+                }
             }
         }
 
         val out = LinkedHashMap<String, PriceEntry>(window.size)
-        for (mint in window) {
-            val hit = cache[mint] ?: continue
-            // Freshness is judged at [asked], the same instant that chose [missing]: anything
-            // this call refreshed is newer than that, and anything still expired against it is
-            // a mint the fetch could not reach. Pacing 149 mints takes seconds, and judging at
-            // the end would drop prices that were perfectly fresh when the screen asked.
-            if (asked - hit.at >= ttlMillis) continue
-            hit.entry?.let { out[mint] = it }
+        mutex.withLock {
+            for (mint in window) {
+                val hit = cache[mint] ?: continue
+                // Freshness is judged at [asked], the same instant that chose [missing]: anything
+                // this call refreshed is newer than that, and anything still expired against it is
+                // a mint the fetch could not reach. Pacing 149 mints takes seconds, and judging at
+                // the end would drop prices that were perfectly fresh when the screen asked.
+                if (expiredAt(asked, mint)) continue
+                hit.entry?.let { out[mint] = it }
+            }
         }
-        return PriceFetch(out, fetched.unfetched, fetched.failure)
+        // A mint another screen priced while this fetch was out is priced, not unknown: no mint
+        // may be in both halves of the answer.
+        return PriceFetch(out, fetched.unfetched - out.keys, fetched.failure)
     }
+
+    /** Caller must own [mutex]. True when [mint] carries no answer newer than [asked]. */
+    private fun expiredAt(asked: Long, mint: String): Boolean =
+        cache[mint]?.let { asked - it.at >= ttlMillis } ?: true
 
     companion object {
         const val TTL_MS = 30_000L
