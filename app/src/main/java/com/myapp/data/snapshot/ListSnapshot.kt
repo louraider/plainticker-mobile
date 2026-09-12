@@ -10,9 +10,11 @@ import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
 /*
- * The outage fallback the List falls back to when both /api/v1/summary and the xStocks catalog
- * fail (plan T8, rule 5). Two assets under app/src/main/assets/snapshot/, captured by
- * scripts/capture-list-snapshot.mjs, each stamped with the day it was taken.
+ * What the List draws before the network answers, and what it keeps drawing when neither
+ * /api/v1/summary nor the xStocks catalog ever does (plan T8, rule 5). Two assets under
+ * app/src/main/assets/snapshot/, captured by scripts/capture-list-snapshot.mjs, each stamped
+ * with the day it was taken, which is the day the banner names for as long as they are on
+ * screen. They carry no price: a quote is live or it is absent.
  *
  * Only the fields the List draws are kept, so the assets stay small and the app never ships a
  * copy of a payload it does not render. `headline` is absent by construction: it is Ukrainian

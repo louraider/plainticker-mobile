@@ -38,9 +38,14 @@ interface CatalogRepository {
      *
      * The catalog is ~830 assets over eight pages and 7.5 s, and page zero alone is enough to
      * draw the top of a list, so this publishes after every page instead of after the last one.
-     * Emissions only ever grow and never reorder what came before: a page refines the set, it
-     * does not replace it. A catalog on disk is emitted first, whether or not it is still inside
-     * its window, so a stale cache paints immediately and the network refreshes behind it.
+     * While pages are landing the set only grows: a page refines it rather than replacing it. A
+     * catalog on disk is emitted first, whether or not it is still inside its window, so a stale
+     * cache paints immediately and the network refreshes behind it.
+     *
+     * The last emission is the live catalog alone, in its own page order, so a token xStocks has
+     * since dropped leaves the list with it. That is the one emission that may be smaller than
+     * the one before it, and callers must not assume the sequence is monotonic. Order is not a
+     * promise either: every caller sorts what it draws.
      */
     fun catalogUpdates(): Flow<CatalogUpdate>
 
@@ -100,12 +105,17 @@ class CachedCatalogRepository(
         // A catalog on disk that is still inside its window is the whole answer: the second
         // launch of the day asks the network nothing at all.
         val stored = disk?.read()
-        if (stored != null && now - stored.capturedAtMillis < diskTtlMillis) {
+        if (stored != null && insideTheWindow(now, stored.capturedAtMillis)) {
             catalog = Cached(stored.assets, now)
             return@withLock stored.assets
         }
 
         val fresh = api.catalog().solanaAssets()
+        // An empty answer is not a catalog. xStocks answering 200 with no Solana nodes is a
+        // server with nothing to say, and remembering it as the catalog would tell every screen
+        // for the next six hours that no ticker has a token. A stale file is a better answer
+        // than none, and neither is worth caching.
+        if (fresh.isEmpty()) return@withLock stored?.assets.orEmpty()
         val at = clock.nowMillis()
         catalog = Cached(fresh, at)
         disk?.write(fresh, at)
@@ -132,7 +142,7 @@ class CachedCatalogRepository(
         val stored = disk?.read()
         val cached = stored?.assets.orEmpty()
         if (cached.isNotEmpty()) emit(CatalogUpdate(cached, whole = true))
-        if (stored != null && asked - stored.capturedAtMillis < diskTtlMillis) {
+        if (stored != null && insideTheWindow(asked, stored.capturedAtMillis)) {
             mutex.withLock { catalog = Cached(cached, asked) }
             return@flow
         }
@@ -152,11 +162,29 @@ class CachedCatalogRepository(
             emit(CatalogUpdate(merged.values.toList(), whole = cached.isNotEmpty()))
         }
 
+        // The same rule as [catalog]: an empty answer never becomes the whole catalog. Emitting
+        // it with `whole = true` would blank a list that had the bundled snapshot on it, because
+        // a whole catalog is what the screen decides "this ticker has no xStock" from. Ending
+        // here instead keeps what is drawn and leaves the banner to say the catalog is missing.
+        if (fresh.isEmpty()) return@flow
+
         val at = clock.nowMillis()
         mutex.withLock { catalog = Cached(fresh, at) }
         disk?.write(fresh, at)
         emit(CatalogUpdate(fresh, whole = true))
     }
+
+    /**
+     * Whether a catalog captured at [capturedAtMillis] is still inside its window.
+     *
+     * The capture time is a wall clock, because the file outlives the process and nothing else
+     * survives a reboot to compare it against. The cost of that is a device whose clock moves:
+     * a file stamped in the future would read as fresh until the clock caught up, which on a
+     * file with a day-long window is unbounded. A negative age is therefore a moved clock and
+     * not a fresh file, and it counts as expired, which costs one refetch and nothing else.
+     */
+    private fun insideTheWindow(now: Long, capturedAtMillis: Long): Boolean =
+        now - capturedAtMillis in 0 until diskTtlMillis
 
     /** What this app keeps of a catalog page: Solana assets, trimmed to their Solana deployment. */
     private fun List<XStockAsset>.solanaAssets(): List<XStockAsset> =

@@ -492,9 +492,9 @@ class ListViewModel(
     /** The visible window first, then the rest; the repository serves the window from cache. */
     private suspend fun fetchPrices(mints: List<String>) {
         val window = prices.pricesFirst(mints, FIRST_SCREENFUL)
-        applyPrices(window)
+        applyPrices(window, asked = mints.take(FIRST_SCREENFUL))
         if (mints.size > FIRST_SCREENFUL) {
-            applyPrices(window.mergedWith(prices.pricesFirst(mints)))
+            applyPrices(window.mergedWith(prices.pricesFirst(mints)), asked = mints)
         }
     }
 
@@ -502,10 +502,17 @@ class ListViewModel(
      * A refused chunk costs its own rows their price and nothing else: what Jupiter answered is
      * drawn, and the banner says the rest is missing. A mint Jupiter answered about but cannot
      * price is not a failure at all, so it raises no banner.
+     *
+     * Only the mints in [asked] are rewritten. A run's first call covers the visible window and
+     * nothing else, so rewriting every row would blank the premiums further down that the run
+     * before it had already drawn: on a cold start the snapshot's mints are priced first, and
+     * the live set then starts a second run whose window would otherwise empty the rest of the
+     * list for the seconds Jupiter's pacing costs. A row nobody asked about keeps what it had.
      */
-    private fun applyPrices(fetch: PriceFetch) {
-        allAnalyzed = allAnalyzed.map { it.withPrice(fetch.priced[it.mint]) }
-        allWithoutAnalysis = allWithoutAnalysis.map { it.withPrice(fetch.priced[it.mint]) }
+    private fun applyPrices(fetch: PriceFetch, asked: Collection<String>) {
+        val covered = asked.toHashSet()
+        allAnalyzed = allAnalyzed.map { if (it.mint in covered) it.withPrice(fetch.priced[it.mint]) else it }
+        allWithoutAnalysis = allWithoutAnalysis.map { if (it.mint in covered) it.withPrice(fetch.priced[it.mint]) else it }
         val nothingPriced = fetch.priced.isEmpty()
         _state.update {
             it.copy(
