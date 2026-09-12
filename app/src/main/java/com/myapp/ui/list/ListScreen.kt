@@ -237,6 +237,14 @@ private fun StateBanner(banner: ListBanner, onRetry: () -> Unit) {
         ListBanner.Unavailable ->
             Banner(text = stringResource(R.string.list_error_unavailable), action = retry, onAction = onRetry)
 
+        // The refresh is already running, so this one carries no Retry: the only thing a tap
+        // could do is start again what is already in flight.
+        is ListBanner.SnapshotRefreshing -> Banner(
+            text = banner.capturedOn
+                ?.let { stringResource(R.string.list_snapshot_refreshing, Fmt.day(it)) }
+                ?: stringResource(R.string.list_snapshot_refreshing_undated),
+        )
+
         is ListBanner.Snapshot -> Banner(
             text = banner.capturedOn
                 ?.let { stringResource(R.string.list_snapshot_banner, Fmt.day(it)) }
