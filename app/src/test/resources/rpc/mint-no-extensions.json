@@ -1,0 +1,29 @@
+{
+  "_fixture_note": "Hand-built to the jsonParsed shape of getAccountInfo for a Token-2022 mint that carries no extension list at all: no permanent delegate, no pausable config, no scaled UI amount, no transfer hook and no default account state. Every trust fact reads as absent, which is a fact about the mint and not an unread chain. Mint, authorities and slot are synthetic.",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "context": { "slot": 446000001, "apiVersion": "4.3.0-alpha.2" },
+    "value": {
+      "lamports": 1461600,
+      "data": {
+        "program": "spl-token-2022",
+        "parsed": {
+          "info": {
+            "decimals": 8,
+            "freezeAuthority": null,
+            "isInitialized": true,
+            "mintAuthority": null,
+            "supply": "100000000000"
+          },
+          "type": "mint"
+        },
+        "space": 82
+      },
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "executable": false,
+      "rentEpoch": 18446744073709552000,
+      "space": 82
+    }
+  }
+}

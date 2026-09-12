@@ -1,0 +1,88 @@
+{
+  "_fixture_note": "Live POST getAccountInfo(XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB, jsonParsed) through the production forwarder https://www.plainticker.com/api/v1/rpc on 2026-09-12, captured verbatim. The TSLAx mint: Token-2022, 8 decimals, a permanent delegate, a pausable config that is not paused, a scaled UI amount of 1 with no change scheduled, a transfer hook whose programId is JSON null, and a default account state of initialized.",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "context": { "slot": 446503662, "apiVersion": "4.3.0-alpha.2" },
+    "value": {
+      "lamports": 1002410158,
+      "data": {
+        "program": "spl-token-2022",
+        "parsed": {
+          "info": {
+            "decimals": 8,
+            "extensions": [
+              {
+                "extension": "metadataPointer",
+                "state": {
+                  "authority": "5aMNNLQJwAEeoemTEMkv5NVjqKwvvefRYCQ5Z67HFvEq",
+                  "metadataAddress": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
+                }
+              },
+              {
+                "extension": "permanentDelegate",
+                "state": { "delegate": "5aMNNLQJwAEeoemTEMkv5NVjqKwvvefRYCQ5Z67HFvEq" }
+              },
+              {
+                "extension": "defaultAccountState",
+                "state": { "accountState": "initialized" }
+              },
+              {
+                "extension": "scaledUiAmountConfig",
+                "state": {
+                  "authority": "S7vYFFWH6BjJyEsdrPQpqpYTqLTrPRK6KW3VwsJuRaS",
+                  "multiplier": "1",
+                  "newMultiplier": "1",
+                  "newMultiplierEffectiveTimestamp": 0
+                }
+              },
+              {
+                "extension": "pausableConfig",
+                "state": {
+                  "authority": "JDq14BWvqCRFNu1krb12bcRpbGtJZ1FLEakMw6FdxJNs",
+                  "paused": false
+                }
+              },
+              {
+                "extension": "confidentialTransferMint",
+                "state": {
+                  "auditorElgamalPubkey": null,
+                  "authority": "5aMNNLQJwAEeoemTEMkv5NVjqKwvvefRYCQ5Z67HFvEq",
+                  "autoApproveNewAccounts": false
+                }
+              },
+              {
+                "extension": "transferHook",
+                "state": {
+                  "authority": "5aMNNLQJwAEeoemTEMkv5NVjqKwvvefRYCQ5Z67HFvEq",
+                  "programId": null
+                }
+              },
+              {
+                "extension": "tokenMetadata",
+                "state": {
+                  "additionalMetadata": [],
+                  "mint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+                  "name": "Tesla xStock",
+                  "symbol": "TSLAx",
+                  "updateAuthority": "5aMNNLQJwAEeoemTEMkv5NVjqKwvvefRYCQ5Z67HFvEq",
+                  "uri": "https://xstocks-metadata.backed.fi/tokens/Solana/TSLAx/metadata.json"
+                }
+              }
+            ],
+            "freezeAuthority": "JDq14BWvqCRFNu1krb12bcRpbGtJZ1FLEakMw6FdxJNs",
+            "isInitialized": true,
+            "mintAuthority": "7pt9tkctJPK7PPNQJ77GKg8ZffSF6QxoMiCFYHxrtaCj",
+            "supply": "22963733950050"
+          },
+          "type": "mint"
+        },
+        "space": 678
+      },
+      "owner": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "executable": false,
+      "rentEpoch": 18446744073709552000,
+      "space": 678
+    }
+  }
+}
