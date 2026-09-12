@@ -75,8 +75,8 @@ data class ChainRead(
  * issuer's reserves, which is the part of the product that has to work for a token nobody has
  * classified yet.
  *
- * The legacy flat fields below [asset] are what the placeholder `DetailScreen` reads; DT6 replaces
- * them with the pieces above.
+ * The flat fields below [asset] are the shorthands the screen and [DetailModel] read; each one is
+ * derived from a piece and none of them hides which piece answered.
  */
 data class DetailUiState(
     /** The underlying equity ticker, uppercased. The route key and the PlainTicker join key. */
@@ -138,18 +138,6 @@ data class DetailUiState(
 
     /** True for the 404 case: the trust layer renders alone and one row explains the rest. */
     val analysisNotServed: Boolean get() = analysisState is AnalysisState.NotServed
-
-    /**
-     * The placeholder screen's one line about the analysis. DT6 reads [analysisState] and takes its
-     * words from strings.xml; this stays only while `DetailScreen` is the pre-T9 placeholder.
-     */
-    val analysisUnavailable: String?
-        get() = when (analysisState) {
-            is AnalysisState.NotServed -> "Analysis not yet available"
-            is AnalysisState.Incomplete -> "Analysis incomplete for this filer"
-            is AnalysisState.Unavailable -> "Analysis unavailable"
-            else -> null
-        }
 
     companion object {
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L

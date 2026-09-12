@@ -2,6 +2,7 @@ package com.myapp.ui.detail
 
 import app.cash.turbine.test
 import com.myapp.MainDispatcherRule
+import com.myapp.R
 import com.myapp.awaitUntil
 import com.myapp.core.Clock
 import com.myapp.data.Fixtures
@@ -262,7 +263,7 @@ class DetailViewModelTest {
             assertEquals(AnalysisState.NotServed, state.analysisState)
             assertTrue(state.analysisNotServed)
             assertNull(state.analysis)
-            assertEquals("Analysis not yet available", state.analysisUnavailable)
+            assertEquals(R.string.detail_analysis_pending, (state.fundamentalsNotice!!.text as Copy.Words).id)
 
             assertNotNull("the mint was still read", state.chain.valueOrNull)
             assertTrue(state.reserves is Piece.Ready)
