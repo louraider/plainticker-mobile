@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.myapp.ui.Fmt
 import com.myapp.ui.swap.SwapPlaceholder
 import com.myapp.ui.swap.SwapViewModel
 import com.myapp.ui.watchlist.WatchlistViewModel
@@ -38,8 +39,8 @@ fun DetailScreen(
         if (state.isLoading) Text("Loading")
         if (state.catalogUnavailable) Text("xStocks catalog unavailable")
         state.mint?.let { Text("mint $it") }
-        state.multiplier?.let { Text("multiplier $it") }
-        state.price?.let { Text("price ${it.usdPrice}  reference ${it.stockData?.price ?: "unavailable"}") }
+        state.multiplier?.let { Text("multiplier ${Fmt.decimal(it)}") }
+        state.price?.let { Text("price ${Fmt.price(it.usdPrice)}  reference ${it.stockData?.price?.let(Fmt::price) ?: "unavailable"}") }
         if (state.pricesUnavailable) Text("Prices unavailable")
         state.asset?.trading?.let { Text("venue ${it.currentPeriod ?: "unknown"}  open now ${it.openNow}") }
 
