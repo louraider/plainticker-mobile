@@ -101,6 +101,22 @@ class FmtTest {
     }
 
     @Test
+    fun `compact money never rounds a pool up across the tracking floor`() {
+        // The floor is $10,000. Half-up would print "$10k" for anything from $9,950, so a row
+        // would read "Pool holds $10k, too thin to track" beside a token tracked at that size.
+        assertEquals("$10k", Fmt.compactMoney(9_960.0))
+        assertEquals("$9.9k", Fmt.compactMoney(9_960.0, roundDown = true))
+        assertEquals("$9.9k", Fmt.compactMoney(9_999.0, roundDown = true))
+        assertEquals("$10k", Fmt.compactMoney(10_000.0, roundDown = true))
+        // Truncation changes nothing that was already exact, and keeps small pools whole.
+        assertEquals("$34", Fmt.compactMoney(34.0, roundDown = true))
+        assertEquals("$948", Fmt.compactMoney(948.6, roundDown = true))
+        assertEquals("$12.5k", Fmt.compactMoney(12_500.0, roundDown = true))
+        assertEquals("$1.3M", Fmt.compactMoney(1_300_000.0, roundDown = true))
+        assertEquals("-$1.2k", Fmt.compactMoney(-1_290.0, roundDown = true))
+    }
+
+    @Test
     fun `compact money signs a negative amount before the dollar`() {
         assertEquals("-$1.2k", Fmt.compactMoney(-1_200.0))
         assertEquals("-$34", Fmt.compactMoney(-34.0))

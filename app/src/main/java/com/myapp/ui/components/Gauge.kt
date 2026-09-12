@@ -58,7 +58,7 @@ fun Gauge(
             tracking.premiumPct?.let { GaugeTrack(referenceLabel, it, scalePct, modifier) }
 
         is TrackingQuality.Thin ->
-            PoolLine(stringResource(R.string.detail_gauge_thin, Fmt.compactMoney(tracking.poolUsd)), modifier)
+            PoolLine(stringResource(R.string.detail_gauge_thin, Fmt.compactMoney(tracking.poolUsd, roundDown = true)), modifier)
 
         TrackingQuality.Untracked ->
             PoolLine(stringResource(R.string.detail_gauge_pool_unknown), modifier)
