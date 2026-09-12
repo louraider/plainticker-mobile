@@ -77,12 +77,21 @@ class FileCatalogCache(
         withContext(io) {
             runCatching {
                 file.parentFile?.mkdirs()
-                val temp = File(file.parentFile, file.name + ".tmp")
-                temp.writeText(json.encodeToString(StoredCatalog.serializer(), StoredCatalog(capturedAtMillis, assets)))
-                // File.renameTo does not replace an existing file on every platform.
-                if (!temp.renameTo(file)) {
-                    file.delete()
-                    if (!temp.renameTo(file)) temp.delete()
+                // A temp name per write, never one shared name: two writers are rare but
+                // possible (a screen asking for the catalog while a paging run is out), and
+                // sharing the name would let them interleave into one file and then rename
+                // that over a catalog that was fine. The temp is deleted either way, so a
+                // write that threw leaves nothing behind.
+                val temp = File.createTempFile(file.name, ".tmp", file.parentFile)
+                try {
+                    temp.writeText(json.encodeToString(StoredCatalog.serializer(), StoredCatalog(capturedAtMillis, assets)))
+                    // File.renameTo does not replace an existing file on every platform.
+                    if (!temp.renameTo(file)) {
+                        file.delete()
+                        temp.renameTo(file)
+                    }
+                } finally {
+                    temp.delete()
                 }
             }
         }

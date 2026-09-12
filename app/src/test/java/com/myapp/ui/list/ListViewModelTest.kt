@@ -11,6 +11,7 @@ import com.myapp.data.net.RateLimitedException
 import com.myapp.data.plainticker.SummaryResponse
 import com.myapp.data.plainticker.SummaryRow
 import com.myapp.data.plainticker.Tone
+import com.myapp.data.jupiter.PriceFetch
 import com.myapp.data.jupiter.TrackingQuality
 import com.myapp.data.snapshot.SnapshotAsset
 import com.myapp.data.snapshot.SnapshotRow
@@ -605,6 +606,60 @@ class ListViewModelTest {
         assertEquals("and the follow-up prices the whole catalog", mints, prices.asked.last())
         assertEquals("two runs for three pages, not three", 2, prices.calls)
         assertEquals(9, vm.state.value.withoutAnalysis.size)
+    }
+
+    /**
+     * Jupiter that answers the visible window and then refuses the rest of a run, which is the
+     * shape the rule below is about: what a run draws, the next run's window must not take away.
+     */
+    private class WindowOnlyPriceRepository(
+        private val inner: FakePriceRepository,
+    ) : PriceRepository by inner {
+        var refuseTheRest = false
+
+        override suspend fun pricesFirst(mints: List<String>, limit: Int): PriceFetch {
+            if (limit < 0 && refuseTheRest) throw IOException("Jupiter refused the rest")
+            return inner.pricesFirst(mints, limit)
+        }
+    }
+
+    @Test
+    fun `a second price run's first window does not blank the prices already drawn`() = runTest {
+        val mints = (1..20).map { "Mint$it".padEnd(44, 'z') }
+        val jupiter = WindowOnlyPriceRepository(
+            FakePriceRepository(Result.success(mints.associateWith { price(100.0, reference = 100.0) })),
+        )
+        val network = Gate()
+        val bundledAssets = mints.mapIndexed { index, mint ->
+            SnapshotAsset(symbol = "T${index}x", ticker = "T$index", name = "T$index xStock", mint = mint)
+        }
+        val live = mints.mapIndexed { index, mint -> xStock("T${index}x", "T$index", mint) } +
+            xStock("NEWx", "NEW", "MintNew".padEnd(44, 'z'))
+        val empty = SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z")
+
+        val vm = viewModel(
+            summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(empty))),
+            catalog = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(live))),
+            prices = jupiter,
+            snapshots = FakeSnapshotRepository(snapshot(assets = bundledAssets)),
+        )
+        advanceUntilIdle()
+
+        assertEquals("the snapshot's tokens are priced", 20, vm.state.value.withoutAnalysis.count { it.priceUsd != null })
+
+        // The live catalog lands with one more token, so a second run starts. Its first call
+        // covers the visible window only, and Jupiter then refuses the rest of that run.
+        jupiter.refuseTheRest = true
+        network.release()
+        advanceUntilIdle()
+
+        val rows = vm.state.value.withoutAnalysis
+        assertEquals(21, rows.size)
+        assertEquals(
+            "a row outside the second run's window keeps the quote it was drawn with",
+            20,
+            rows.count { it.priceUsd != null },
+        )
     }
 
     // ---- Prices ------------------------------------------------------------------------
