@@ -16,13 +16,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -113,11 +116,20 @@ fun SwapSheet(
     submitSwaps: Boolean = BuildConfig.SUBMIT_SWAPS,
 ) {
     val content = state.sheet(swapClock(state), submitSwaps) ?: return
+    // A modal sheet hides FIRST and asks afterwards, so refusing the request is not enough on its
+    // own: a swipe or a back press during POST /execute would leave the sheet hidden with the
+    // machine still running, and open() refuses to reopen a busy machine, so the receipt for a
+    // swap that did land would never be seen. The drag and the back press are refused instead.
+    val landing = rememberUpdatedState(state is SwapState.Landing)
+    val sheetState = rememberModalBottomSheetState(
+        confirmValueChange = remember { { target: SheetValue -> target != SheetValue.Hidden || !landing.value } },
+    )
     Sheet(
         // A submission in flight cannot be taken back, and close() would cancel the call that is
         // carrying it. While it is landing the sheet stays put; every other state dismisses.
         onDismissRequest = { if (state !is SwapState.Landing) actions.onClose() },
         modifier = modifier,
+        sheetState = sheetState,
     ) {
         SwapSheetBody(content = content, actions = actions)
     }
@@ -252,7 +264,7 @@ private fun Received(receipt: SheetReceipt) {
         Text(text = receipt.label.text(), style = PlainTickerType.label, color = Muted)
         Row(horizontalArrangement = Arrangement.spacedBy(ReceivedGap), verticalAlignment = Alignment.Bottom) {
             Text(
-                text = receipt.amount,
+                text = receipt.amount.text(),
                 style = PlainTickerType.bigValue,
                 color = Ink,
                 maxLines = 1,

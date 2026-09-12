@@ -250,6 +250,14 @@ class SwapSheetTest {
             "dismissing while landing would cancel the call carrying the transaction",
             "if (state !is SwapState.Landing) actions.onClose()" in host,
         )
+        // A modal sheet hides first and asks afterwards, so refusing the request alone would
+        // still leave the sheet gone with the machine running and the receipt out of reach.
+        assertTrue("the drag itself has to be refused", "confirmValueChange" in host)
+        assertTrue(
+            "and refused only while landing",
+            "target != SheetValue.Hidden || !landing.value" in host,
+        )
+        assertTrue("the lock reads the current state", "rememberUpdatedState(state is SwapState.Landing)" in host)
     }
 
     @Test

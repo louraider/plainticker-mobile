@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.myapp.R
 import com.myapp.data.KnownMints
 import com.myapp.data.jupiter.SwapOrder
+import java.math.BigInteger
 import java.util.Locale
 
 /**
@@ -163,11 +164,11 @@ sealed interface SwapState {
         val requoted: Boolean,
         override val timing: SwapTiming,
     ) : Terminal {
-        /** The fill against the estimate, signed: positive when the swap beat its quote. */
-        val fillDeltaPct: Double get() = fill.deltaPctAgainst(quote)
+        /** The fill against the estimate, signed: positive when the swap beat its quote. Null when the answer did not report the fill. */
+        val fillDeltaPct: Double? get() = fill.deltaPctAgainst(quote)
 
-        /** All-in cost actually paid, the quote's cost corrected by the fill. */
-        val allInCostPaidPct: Double get() = fill.allInCostPaidPct(quote)
+        /** All-in cost actually paid, the quote's cost corrected by the fill; null when either is unknown. */
+        val allInCostPaidPct: Double? get() = fill.allInCostPaidPct(quote)
     }
 
     /**
@@ -310,7 +311,13 @@ data class SwapQuote(
     val outAmountRaw: Long,
     /** otherAmountThreshold: the least the swap may deliver before it reverts. */
     val worstCaseOutRaw: Long,
-    val allInCostPct: Double,
+    /**
+     * All-in cost in percent, or null when the order priced neither side in dollars. It is read
+     * from inUsdValue against outUsdValue, and an order carrying neither leaves it unknown:
+     * zero would read as a swap that cost nothing, which is the one thing this figure must
+     * never say by accident.
+     */
+    val allInCostPct: Double?,
     val slippageBps: Int,
     /** The router that quoted it, as a name: "metis" reads "Metis". */
     val route: String,
@@ -332,8 +339,9 @@ data class SwapQuote(
             requestId = order.requestId,
             inAmountRaw = order.inAmountRaw,
             outAmountRaw = order.outAmountRaw,
-            worstCaseOutRaw = order.otherAmountThreshold?.toLongOrNull() ?: order.outAmountRaw,
-            allInCostPct = order.allInCostPct,
+            worstCaseOutRaw = order.otherAmountThreshold?.toLongOrNull()
+                ?: slippageFloor(order.outAmountRaw, order.slippageBps),
+            allInCostPct = order.allInCostPct.takeIf { order.inUsdValue > 0.0 && order.outUsdValue > 0.0 },
             slippageBps = order.slippageBps,
             route = routeName(order.router),
             swapType = order.swapType,
@@ -347,6 +355,21 @@ data class SwapQuote(
             expireAtEpochSec = order.expireAt?.takeIf { order.hasExpiry },
         )
 
+        /**
+         * The floor when an order names no otherAmountThreshold: the estimate less the slippage
+         * the order itself set, which is how an exact-in threshold is computed upstream.
+         *
+         * Never the estimate. Borrowing it would put "at least {the estimate}" on the screen,
+         * which is a promise about money that this quote made no promise about.
+         */
+        private fun slippageFloor(outAmountRaw: Long, slippageBps: Int): Long {
+            val bps = slippageBps.coerceIn(0, 10_000)
+            return BigInteger.valueOf(outAmountRaw)
+                .multiply(BigInteger.valueOf(10_000L - bps))
+                .divide(BigInteger.valueOf(10_000L))
+                .toLong()
+        }
+
         /** A router id is a name on the wire and a name on the screen: "metis" reads "Metis". */
         private fun routeName(router: String): String =
             router.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
@@ -357,7 +380,14 @@ data class SwapQuote(
 data class SwapFill(
     val signature: String,
     val inAmountRaw: Long,
-    val outAmountRaw: Long,
+    /**
+     * outputAmountResult: what actually arrived, or null when the answer did not report it.
+     *
+     * It is never the quote's outAmount. A landed swap on 2026-09-10 beat its quote by 0.037
+     * percent, so standing the estimate in for the fill would print a quantity nobody received
+     * and call it a receipt (docs/data-map.md, the receipts table: "never outAmount").
+     */
+    val outAmountRaw: Long?,
     val slot: Long?,
 ) {
     /**
@@ -365,9 +395,11 @@ data class SwapFill(
      * than was quoted. A landed swap on 2026-09-10 beat its quote by 0.037 percent, so the sheet
      * states this rather than repeating the estimate as though it were the result.
      */
-    fun deltaPctAgainst(quote: SwapQuote): Double =
-        if (quote.outAmountRaw <= 0L) 0.0
-        else (outAmountRaw - quote.outAmountRaw).toDouble() / quote.outAmountRaw.toDouble() * 100.0
+    fun deltaPctAgainst(quote: SwapQuote): Double? {
+        val out = outAmountRaw ?: return null
+        if (quote.outAmountRaw <= 0L) return null
+        return (out - quote.outAmountRaw).toDouble() / quote.outAmountRaw.toDouble() * 100.0
+    }
 
     /**
      * All-in cost actually paid. The quote priced both sides in dollars; this fill delivered a
@@ -375,12 +407,14 @@ data class SwapFill(
      * corrected by that ratio. Exact-in means the input is what was asked for, and the executed
      * input is used as well when it is reported.
      */
-    fun allInCostPaidPct(quote: SwapQuote): Double {
-        if (quote.outAmountRaw <= 0L || quote.inAmountRaw <= 0L || inAmountRaw <= 0L) return quote.allInCostPct
-        val outRatio = outAmountRaw.toDouble() / quote.outAmountRaw.toDouble()
+    fun allInCostPaidPct(quote: SwapQuote): Double? {
+        val quoted = quote.allInCostPct ?: return null
+        val out = outAmountRaw ?: return null
+        if (quote.outAmountRaw <= 0L || quote.inAmountRaw <= 0L || inAmountRaw <= 0L) return quoted
+        val outRatio = out.toDouble() / quote.outAmountRaw.toDouble()
         val inRatio = inAmountRaw.toDouble() / quote.inAmountRaw.toDouble()
-        if (outRatio <= 0.0 || inRatio <= 0.0) return quote.allInCostPct
-        return 100.0 - (100.0 - quote.allInCostPct) * (outRatio / inRatio)
+        if (outRatio <= 0.0 || inRatio <= 0.0) return quoted
+        return 100.0 - (100.0 - quoted) * (outRatio / inRatio)
     }
 }
 
