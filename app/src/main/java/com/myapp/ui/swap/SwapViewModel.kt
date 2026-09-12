@@ -192,7 +192,11 @@ class SwapViewModel(
                 throw e
             } catch (e: SwapError) {
                 debugLog.raw("order refused: code=${e.code} ${e.detail ?: e.message}")
-                quoteFailure = SwapFailure.QUOTE_REFUSED
+                // A non-2xx with no structured body is a transport answer, not a verdict on the
+                // pair: a gateway page or a rate limit knows nothing about whether this pair can
+                // be quoted, so it must not be reported as though the pair were the problem.
+                quoteFailure =
+                    if (e is SwapError.Http) SwapFailure.QUOTE_UNAVAILABLE else SwapFailure.QUOTE_REFUSED
             } catch (e: Exception) {
                 debugLog.raw("order threw ${e::class.simpleName}: ${e.message}")
                 quoteFailure = SwapFailure.QUOTE_UNAVAILABLE
@@ -203,9 +207,12 @@ class SwapViewModel(
             }
 
             val quote = SwapQuote.from(order)
-            val unsigned = quote.transaction
+            // Decoded here rather than inside the wallet round-trip: bytes this app cannot read
+            // are this app's problem, and failing in the middle of the call would spend an
+            // approval and then blame the wallet for a payload it was never handed.
+            val unsigned = quote.transaction?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
             if (unsigned == null) {
-                debugLog.raw("order ${quote.requestId} carried no transaction")
+                debugLog.raw("order ${quote.requestId} carried no transaction this app could read")
                 return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
             }
 
@@ -218,7 +225,7 @@ class SwapViewModel(
             // ---- AwaitingWallet: the round-trip this product rests on.
             timing = timing.enterPhase(clock.nowMillis())
             _state.value = SwapState.AwaitingWallet(leg, funds, input, quote, requote, timing)
-            val outcome = wallet.call { it.signTransactions(arrayOf(Base64.getDecoder().decode(unsigned))) }
+            val outcome = wallet.call { it.signTransactions(arrayOf(unsigned)) }
             timing = timing.closeWallet(clock.nowMillis())
             val signed = when (outcome) {
                 is WalletOutcome.Success -> outcome.value.signedPayloads.firstOrNull()
@@ -286,14 +293,20 @@ class SwapViewModel(
             val signature = answer?.signature?.takeIf { it.isNotBlank() }
             if (answer == null || signature == null) {
                 debugLog.raw("execute answered ${answer?.status} with no signature")
-                return fail(leg, funds, input, SwapFailure.SWAP_REFUSED, quote, requote, timing)
+                // A success with no signature is not a swap that did not happen: what went
+                // missing is the answer, not the swap, so the sentence is the one that claims
+                // neither. Only an answer that refused may say nothing was swapped.
+                val reason =
+                    if (answer?.isSuccess == true) SwapFailure.SUBMIT_UNAVAILABLE else SwapFailure.SWAP_REFUSED
+                return fail(leg, funds, input, reason, quote, requote, timing)
             }
 
             // ---- Landed. The fill is the executed result, never the quote.
             val fill = SwapFill(
                 signature = signature,
                 inAmountRaw = answer.inputAmountResult?.toLongOrNull() ?: quote.inAmountRaw,
-                outAmountRaw = answer.outputAmountResult?.toLongOrNull() ?: quote.outAmountRaw,
+                // Never the quote's outAmount: an unreported fill is unknown, not the estimate.
+                outAmountRaw = answer.outputAmountResult?.toLongOrNull(),
                 slot = answer.slot?.toLongOrNull(),
             )
             // The record is written before the state says it landed, so the receipt screen and

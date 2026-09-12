@@ -335,7 +335,7 @@ class SwapSheetModelTest {
         val content = landed().shown()
         assertTrue(content.isReceipt)
         assertEquals(R.string.receipt_received, id(content.receipt?.label))
-        assertEquals("the executed result, not outAmount", "0.013609", content.receipt?.amount)
+        assertEquals("the executed result, not outAmount", "0.013609", raw(content.receipt?.amount))
         assertEquals("TSLAx", content.receipt?.symbol)
         assertNull("nothing on a receipt can be typed into", content.field)
         assertNull("or submitted again", content.primary)
@@ -372,6 +372,29 @@ class SwapSheetModelTest {
 
         assertEquals("445,912,340", raw(cell(content, R.string.receipt_slot).value))
         assertNull("only the signature is a handle", cell(content, R.string.receipt_slot).copies)
+    }
+
+    @Test
+    fun `an answer that reported no fill draws the missing value, never the estimate`() {
+        val content = landed(fill.copy(outAmountRaw = null)).shown()
+        assertEquals(
+            "the estimate must not stand in for what arrived",
+            R.string.value_missing,
+            id(content.receipt?.amount),
+        )
+        val cost = cell(content, R.string.receipt_cost_paid)
+        assertEquals(R.string.value_missing, id(cost.value))
+        assertNull("there is no fill to compare the quote against", cost.sub)
+    }
+
+    @Test
+    fun `a quote that priced neither side in dollars leaves the cost unknown, not free`() {
+        val content = SwapState.AwaitingWallet(
+            leg, funds, amount(), quote.copy(allInCostPct = null), requote = false, timing = timing,
+        ).shown()
+        val cost = cell(content, R.string.swap_all_in_cost)
+        assertEquals("zero percent would read as a swap that cost nothing", R.string.value_missing, id(cost.value))
+        assertEquals("the route still names itself", R.string.swap_route, id(cost.sub))
     }
 
     @Test

@@ -222,8 +222,8 @@ Five decisions the composition fixes:
 |---|---|
 | Header | "USDC to {symbol}"; the direction text action beneath it only when the wallet's token balance is above zero |
 | Amount | user input, `Fmt.tokenAmount` for the balance line from the USDC token account |
-| You receive | `/order` `outAmount` / 10^decimals, `Fmt.tokenAmount`; sub line is `otherAmountThreshold` as the worst case |
-| All-in cost | `Order.allInCostPct` (fee bps + platform fee bps + price impact); sub line is the route |
+| You receive | `/order` `outAmount` / 10^decimals, `Fmt.tokenAmount`; sub line is `otherAmountThreshold` as the worst case, or the estimate less `slippageBps` when the order names no threshold |
+| All-in cost | `Order.allInCostPct` (fee bps + platform fee bps + price impact), or the missing value when the order priced neither side in dollars; sub line is the route |
 | Route | `Order.router` ("metis" -> "Metis") |
 | SOL needed | `signatureFeeLamports + rentFeeLamports + prioritizationFeeLamports`, nine decimals; sub names the rent when there is one |
 | Countdown | `Order.secondsLeft` when `hasExpiry` (RFQ only); nothing at all otherwise |
@@ -309,6 +309,43 @@ either. Every other state dismisses normally.
 beside it, over a band that says the same thing. There is no signature, no slot and no fill on that
 surface because there is nothing to put in them.
 
+#### What the review changed, 2026-09-13 (T10)
+
+A cross-model review of the branch found six places where the screen could have said something
+it did not know. All six are fixed and each has a test that names the transition.
+
+| What it said | What it says now |
+|---|---|
+| An order-stage 502 or 429 read "This pair cannot be quoted at this size right now" | A non-2xx with no structured body is `QUOTE_UNAVAILABLE`; only a structured refusal is a verdict on the pair |
+| `POST /execute` answered `Success` with no signature: "The swap did not land. Nothing was swapped." | `SUBMIT_UNAVAILABLE`, which claims neither. The answer went missing, not the swap |
+| No `outputAmountResult`: the receipt drew the quote's `outAmount` as the fill | The fill is null and the receipt draws the missing value. `SwapFill.outAmountRaw`, `SwapReceipt.outputAmountRaw` and the paid cost are nullable, because an estimate wearing a receipt's label is the one lie this screen cannot tell |
+| No `otherAmountThreshold`: the worst case borrowed the estimate, so the sheet promised "at least {the estimate}" | The floor is the estimate less the order's own `slippageBps`, which is how an exact-in threshold is computed |
+| No `inUsdValue`: the all-in cost cell read "0.00%", a free swap | `allInCostPct` is null and the cell draws the missing value |
+| The base64 transaction was decoded inside the wallet round-trip, so our own unreadable bytes came back as "The wallet did not return a signature" | Decoded before the wallet opens; an undecodable payload is `NO_TRANSACTION` and costs no approval |
+
+And one state-machine hole. A modal bottom sheet hides **first** and calls `onDismissRequest`
+afterwards, so refusing the request was not enough: a swipe or a back press during `POST /execute`
+left the sheet hidden with the machine still in `Landing`, and `open()` refuses to reopen a busy
+machine, so the receipt for a swap that did land could never be reached. The drag itself is now
+refused, through `confirmValueChange` on the sheet state, and only while landing.
+
+#### On hardware, 2026-09-13 (T10, DT7)
+
+The Seeker enumerated for the first time since the sheet was written, and the debug build was
+installed and walked. What was seen: Detail live from the chain, the Swap button with its mono
+pool line, the MWA `Connect` sheet in Seed Vault Wallet with the identity verified against
+`assetlinks.json`, and then the sheet itself, composed on the device at 1200x2670 / 480 dpi.
+It drew the debug band from the first frame, the mono title, the amount field with Max, the
+balance line, "No USDC in this wallet", "The cost is quoted when you tap Swap, not before", the
+disabled primary and the footnote. No direction action, correctly: that wallet holds no TSLAx.
+Typing an amount against a zero balance kept the button disabled and made no request. A
+swipe-down dismissed the sheet cleanly and Detail came back whole.
+
+**Still not exercised on hardware:** the signing leg. The connected wallet holds no USDC, so the
+machine cannot leave the amount step, and nothing was funded to make it. `Quoting`, the SOL
+check, `AwaitingWallet`, the wallet round-trip timing, the requote and the receipt remain covered
+by unit tests only. No transaction was signed and no money moved.
+
 #### Receipts, local (T10) -> read by Portfolio (T11)
 
 The chain carries no cost basis, so the app writes its own record when a swap lands: `data/receipts/`, a serialized JSON file behind `ReceiptStore` (not Room: append-only, read whole, a few hundred rows, and ksp is not worth a module's build budget). Newest first, capped at 200, the signature is the row identity so one landing is one row.
@@ -319,8 +356,8 @@ The chain carries no cost basis, so the app writes its own record when a swap la
 | `inputMint`, `inputSymbol`, `inputDecimals` | the leg being spent |
 | `inputAmountRaw` | `/execute` `inputAmountResult`, falling back to the quote's `inAmount` |
 | `outputMint`, `outputSymbol`, `outputDecimals` | the leg being received |
-| `outputAmountRaw` | `/execute` `outputAmountResult`, never `outAmount` |
-| `allInCostPct` | the cost actually paid, the quote's all-in corrected by the fill ratio |
+| `outputAmountRaw` | `/execute` `outputAmountResult`, never `outAmount`; null when the answer reported none |
+| `allInCostPct` | the cost actually paid, the quote's all-in corrected by the fill ratio; null when the fill or the order's dollar values are missing |
 | `route` | `Order.router`, as a name ("Metis") |
 | `landedAtMillis`, `slot` | wall clock at the landing; `/execute` `slot` |
 

@@ -26,11 +26,19 @@ data class SwapReceipt(
     val inputDecimals: Int,
     val outputMint: String,
     val outputSymbol: String,
-    /** What the wallet actually received, from the executed result and never from the quote. */
-    val outputAmountRaw: Long,
+    /**
+     * What the wallet actually received, from the executed result and never from the quote.
+     * Null when the answer did not report it: an unknown fill is recorded as unknown, because a
+     * cost basis built from an estimate is a wrong number that reads as a measured one.
+     */
+    val outputAmountRaw: Long? = null,
     val outputDecimals: Int,
-    /** All-in cost of this fill in percent, positive when the swap cost the taker value. */
-    val allInCostPct: Double,
+    /**
+     * All-in cost of this fill in percent, positive when the swap cost the taker value. Null
+     * when the fill was not reported, or when the order priced neither side in dollars, which
+     * is not the same fact as zero.
+     */
+    val allInCostPct: Double? = null,
     /** The router that filled it, as the quote named it: "Metis". */
     val route: String,
     /** Wall clock when the swap landed, epoch millis. */
