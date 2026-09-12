@@ -11,4 +11,10 @@ object Routes {
 
     /** The detail route for one underlying ticker, e.g. "detail/AAPL". */
     fun detail(ticker: String): String = "detail/${ticker.trim().uppercase()}" // lint-allow uppercase: route key
+
+    /**
+     * Where the app opens. Onboarding is shown once (DT11): once the flag is stored the graph
+     * starts at [HOME] and the onboarding screen is never composed again.
+     */
+    fun start(onboarded: Boolean): String = if (onboarded) HOME else ONBOARDING
 }
