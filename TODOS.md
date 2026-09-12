@@ -60,6 +60,8 @@
 
 **Context:** Docs index: developers.jup.ag/docs/llms.txt (Rate Limits, Firewall, API Keys pages). Trade-off recorded: any key in a public APK is extractable, and a key-level 429 takes every user down at once whereas keyless 429s are per-IP. Trigger = a measured 429 during the Sep 24 device QA, not a hunch.
 
+**The trigger fired early, on 2026-09-12**, during the first device pass: the list showed no prices at all. Measured with the app's own call pattern: about five rapid calls succeed, then every further call returns 429. But the first fix is ours, not Jupiter's. `JupiterPriceApi.prices` loops chunks of 50 with no pacing and throws on the first failure, discarding chunks that already succeeded, so one 429 costs every price on the screen. Pace the calls, keep partial results, and price the visible rows first; only if that still 429s does the free 1 RPS key (twice the budget, extractable from the APK) become worth its cost.
+
 **Effort:** S
 **Priority:** P3
 **Depends on:** the keyless decision failing in practice.

@@ -53,6 +53,16 @@ English text sources: `axes.*.label_en` (state words), `method.statement_en` (di
 | Stale row | `/summary.stale = true` | row stays, meta says "analysis {n} d old"; banner only if everything is stale |
 | Broken row | absent from `/summary` | hidden from Analyzed, may appear in Without analysis |
 
+#### Measured on the Seeker, 2026-09-12
+
+The placeholder list was run against production on the device. It loaded 179 analyzed rows, so the join works, and it exposed four things T8 has to fix and one data-layer bug.
+
+- **Prices came back empty and the row meta read "Prices unavailable".** Reproduced from a laptop with the app's own call pattern: the keyless Jupiter bucket serves about five rapid calls and then answers `429 {"code":429,"message":"[API Gateway] Too many requests"}`. `JupiterPriceApi.prices` loops chunks of 50 with `bodyOrThrow()` and no pacing, so the first 429 throws out of the whole function and discards the chunks that already succeeded, and `ListViewModel` turns that into no prices at all. Three fixes, none of which is an API key: keep the chunks that succeeded, pace the calls to the documented 0.5 per second with one backoff on 429, and price the visible rows first rather than all 149 mints at once.
+- **The Ukrainian headline is rendered.** Rows showed "Сигнали збігаються: дешева якість проти сектора". `headline` in `/summary` is Ukrainian and this document already says it is not rendered in the app; the placeholder renders it anyway.
+- **Composite is a raw float**, shown as `83.80406` instead of the integer percentile.
+- **Rows with no xStock are mixed into Analyzed** (BKNG appeared with no `x` suffix). They belong under "Without analysis" or nowhere.
+- The home tab row is still the template Material `TabRow`, so inactive tabs are blue instead of Muted, and the placeholder rows have no side padding. `TopTabs` exists and is used in the gallery.
+
 ### Detail (T9)
 
 | Cell | Field | Rule |
