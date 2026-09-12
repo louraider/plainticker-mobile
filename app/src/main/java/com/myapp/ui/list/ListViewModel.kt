@@ -265,10 +265,17 @@ class ListViewModel(
                 republish()
                 schedulePrices()
             }
+            // The catalog arrives page by page. Each one refines what is already drawn: the
+            // sort keys a row is placed by (its composite, or its symbol) do not change when a
+            // page lands, so nothing the reader is looking at moves.
             val assets = launch {
                 runCatching {
-                    liveAssets = catalog.catalog()
-                    catalogWhole = true
+                    catalog.catalogUpdates().collect { update ->
+                        liveAssets = update.assets
+                        catalogWhole = update.whole
+                        republish()
+                        schedulePrices()
+                    }
                 }
                 catalogSettled = true
                 republish()

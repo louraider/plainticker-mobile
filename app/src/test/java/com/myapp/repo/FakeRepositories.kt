@@ -29,6 +29,9 @@ import com.myapp.data.xstocks.Trading
 import com.myapp.data.xstocks.Underlying
 import com.myapp.data.xstocks.XStockAsset
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.yield
 import java.math.BigInteger
 import java.time.LocalDate
 
@@ -51,6 +54,11 @@ class FakeSummaryRepository(
 
 class FakeCatalogRepository(
     var assets: Result<List<XStockAsset>> = Result.success(emptyList()),
+    /**
+     * How many assets [catalogUpdates] publishes per emission. Zero, the default, publishes the
+     * whole catalog at once, which is what a test that is not about paging wants.
+     */
+    var pageSize: Int = 0,
     var multipliers: Map<String, Double> = emptyMap(),
     /** Full multiplier records by symbol; a symbol with none falls back to [multipliers]. */
     var multiplierRecords: Map<String, Result<Multiplier>> = emptyMap(),
@@ -67,6 +75,24 @@ class FakeCatalogRepository(
     override suspend fun catalog(): List<XStockAsset> {
         catalogCalls++
         return assets.getOrThrow()
+    }
+
+    /** Emissions in page order, each carrying everything published so far. */
+    override fun catalogUpdates(): Flow<CatalogUpdate> = flow {
+        catalogCalls++
+        val all = assets.getOrThrow()
+        if (pageSize <= 0 || all.size <= pageSize) {
+            emit(CatalogUpdate(all, whole = true))
+            return@flow
+        }
+        val published = ArrayList<XStockAsset>(all.size)
+        all.chunked(pageSize).forEachIndexed { index, page ->
+            // A real page is a network call, so it is not free: without this, every page would
+            // land inside one dispatch and nothing downstream could ever observe a partial one.
+            if (index > 0) yield()
+            published += page
+            emit(CatalogUpdate(published.toList(), whole = published.size == all.size))
+        }
     }
 
     override suspend fun multiplier(symbol: String): Double =
@@ -284,6 +310,11 @@ class HeldCatalogRepository(
         gate.await()
         return inner.catalog()
     }
+
+    override fun catalogUpdates(): Flow<CatalogUpdate> = flow {
+        gate.await()
+        inner.catalogUpdates().collect { emit(it) }
+    }
 }
 
 /**
@@ -295,15 +326,15 @@ class HeldPriceRepository(
     private val gate: Gate,
     private val inner: FakePriceRepository = FakePriceRepository(),
 ) : PriceRepository by inner {
-    val requested: List<List<String>> get() = inner.requested
-    var calls = 0
-        private set
+    /** What each call asked for, recorded before the gate, so a held call is visible too. */
+    val asked = mutableListOf<List<String>>()
+    val calls: Int get() = asked.size
     var maxInFlight = 0
         private set
     private var inFlight = 0
 
     override suspend fun pricesFirst(mints: List<String>, limit: Int): PriceFetch {
-        calls++
+        asked += if (limit >= 0) mints.take(limit) else mints
         inFlight++
         maxInFlight = maxOf(maxInFlight, inFlight)
         try {
