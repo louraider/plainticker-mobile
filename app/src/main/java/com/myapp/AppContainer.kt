@@ -7,6 +7,8 @@ import com.myapp.data.jupiter.JupiterPriceApi
 import com.myapp.data.jupiter.JupiterSwapApi
 import com.myapp.data.net.HttpClientFactory
 import com.myapp.data.plainticker.PlainTickerApi
+import com.myapp.data.receipts.FileReceiptStore
+import com.myapp.data.receipts.ReceiptStore
 import com.myapp.data.rpc.SolanaRpcApi
 import com.myapp.data.xstocks.XStocksApi
 import com.myapp.prefs.OnboardingStore
@@ -58,6 +60,9 @@ interface AppContainer {
 
     val onboardingStore: OnboardingStore
     val watchlistStore: WatchlistStore
+
+    /** The app's own record of the swaps it landed; Portfolio (T11) reads it. */
+    val receiptStore: ReceiptStore
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -89,6 +94,12 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val onboardingStore: OnboardingStore by lazy { SharedPrefsOnboardingStore(prefs) }
     override val watchlistStore: WatchlistStore by lazy { SharedPrefsWatchlistStore(prefs) }
+
+    // filesDir, not cache: a receipt is the only record of what a swap cost and must survive
+    // the system reclaiming space.
+    override val receiptStore: ReceiptStore by lazy {
+        FileReceiptStore(java.io.File(app.filesDir, FileReceiptStore.FILE_NAME))
+    }
 
     companion object {
         const val PREFS_NAME = "plainticker"
