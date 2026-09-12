@@ -15,6 +15,7 @@ import com.myapp.ui.appViewModelFactory
 import com.myapp.ui.detail.DetailScreen
 import com.myapp.ui.gallery.GalleryScreen
 import com.myapp.ui.home.HomeScreen
+import com.myapp.ui.home.HomeTab
 import com.myapp.ui.onboarding.OnboardingScreen
 import com.myapp.ui.spike.SpikeScreen
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
@@ -44,12 +45,18 @@ fun AppNavHost(
                 },
             )
         }
-        composable(Routes.HOME) {
+        composable(
+            route = Routes.HOME_TAB,
+            arguments = listOf(
+                navArgument(Routes.ARG_TAB) { type = NavType.IntType; defaultValue = HomeTab.LIST.ordinal },
+            ),
+        ) { entry ->
             HomeScreen(
                 factory = factory,
                 onOpenDetail = { ticker -> navController.navigate(Routes.detail(ticker)) },
                 onOpenSpike = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.SPIKE) }) else null,
                 onOpenGallery = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.GALLERY) }) else null,
+                initialTab = entry.arguments?.getInt(Routes.ARG_TAB) ?: HomeTab.LIST.ordinal,
             )
         }
         composable(
@@ -61,6 +68,14 @@ fun AppNavHost(
             DetailScreen(
                 viewModel = viewModel(factory = factory),
                 swapViewModel = viewModel(factory = factory),
+                // A landed swap sends the reader to the holding it made, and home is replaced
+                // rather than stacked so Portfolio reads the chain again with the swap in it.
+                onViewPortfolio = {
+                    navController.navigate(Routes.home(HomeTab.PORTFOLIO.ordinal)) {
+                        popUpTo(Routes.HOME_TAB) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
             )
         }
         if (BuildConfig.DEBUG) {
