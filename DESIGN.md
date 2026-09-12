@@ -8,6 +8,14 @@ A reading instrument, not a trading terminal and not a website. Cold near-black 
 
 The memorable things: the tracking gauge (a hairline with the NYSE close tick and the token tick), the breathing live bar beside "Live from the mint", the 64px monospace ticker, and the 1px blueprint grid that holds the token's facts.
 
+### 1.1 The liquidity floor
+
+A tracking figure is drawn only where the pool behind it can carry one. Measured live on 2026-09-12 (docs/data-map.md): of the 157 analyzed xStocks on the list Jupiter priced 55; the 13 pools at or above $100k all tracked the NYSE close within 0.8 percent; the 6 between $10k and $100k deviated plausibly (NFLXx -2.34 percent on $12.5k, XOMx -1.58 percent on $18.8k); below $10k the quoted premium was arithmetic off a dead pool (UBERx +152.13 percent on a pool of $80, APPx +89.34 percent on $34). The floor is **$10,000**, and it lives in exactly one place, `TrackingQuality` in the data layer, so the list row and the gauge can never disagree about it.
+
+Above the floor nothing changes: the row keeps the signed premium against the NYSE close, Detail draws the gauge. Below it neither is drawn and the surface states the pool instead, in one short sentence a person can act on: "Pool holds $34, too thin to track" on the row's single meta line, "Pool holds $34, too thin to track the NYSE close" where the gauge would be. When Jupiter prices a token without reporting any depth, the honest reading is unknown rather than deep, so the premium is withheld there too and the line reads "Pool depth not reported" (on the gauge, "Pool depth not reported, tracking cannot be checked"). Money in these sentences is `Fmt.compactMoney`: "$34", "$12.5k", "$1.3M".
+
+This is disclosure, not curation. Nothing is filtered out, no section is added and the sort is unchanged. The sentence is Muted on the row and Ink 2 under the price, never Caution: a shallow pool is a fact about the token, and section 2 keeps Caution for explicit issuer-control risk. The rule sits here rather than in section 7 because it decides whether the signature element of the product is drawn at all; section 7 governs how a sentence is worded, this governs whether a number exists on the screen.
+
 ## 2. Color palette and roles
 
 - **Canvas** `#0B0F14`: page background. Cool near-black, never pure black.
