@@ -26,7 +26,6 @@ object GallerySamples {
     const val PRICE = "\$366.17"
     const val REFERENCE = "\$365.84"
     const val PREMIUM_PCT = 0.09
-    const val PREMIUM_TEXT = "+0.09%"
 
     /** The pool behind the sample quote, the same $1.3M the cost line names. */
     const val POOL_USD = 1_300_000.0

@@ -89,7 +89,7 @@ sealed interface TrackingQuality {
          * missing. Deliberately not public as a shortcut around [of]: a premium that no one may
          * draw is still computed here, and only [of] decides whether it reaches a screen.
          */
-        internal fun premiumPct(priceUsd: Double?, referenceUsd: Double?): Double? {
+        private fun premiumPct(priceUsd: Double?, referenceUsd: Double?): Double? {
             val price = priceUsd ?: return null
             val reference = referenceUsd ?: return null
             if (!price.isFinite() || !reference.isFinite() || reference <= 0.0) return null
