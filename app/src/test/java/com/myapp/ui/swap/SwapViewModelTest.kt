@@ -376,15 +376,15 @@ class SwapViewModelTest {
             // The quote is the estimate; the fill is what the chain did, and they differ.
             assertEquals(1_360_437L, landed.quote.outAmountRaw)
             assertEquals(1_360_941L, landed.fill.outAmountRaw)
-            assertEquals(0.037, landed.fillDeltaPct, 0.001)
+            assertEquals(0.037, landed.fillDeltaPct!!, 0.001)
             assertEquals(SIGNATURE, landed.fill.signature)
             assertEquals(367_000_000L, landed.fill.slot)
             assertFalse(landed.requoted)
 
             // The cost is the quote's, corrected by the fill: it beat the quote, so it cost less.
-            assertEquals(0.586, landed.quote.allInCostPct, 0.001)
-            assertTrue(landed.allInCostPaidPct < landed.quote.allInCostPct)
-            assertEquals(0.549, landed.allInCostPaidPct, 0.001)
+            assertEquals(0.586, landed.quote.allInCostPct!!, 0.001)
+            assertTrue(landed.allInCostPaidPct!! < landed.quote.allInCostPct)
+            assertEquals(0.549, landed.allInCostPaidPct!!, 0.001)
 
             // The worst case is the quote's own threshold, stated beside the estimate.
             assertEquals(1_346_933L, landed.quote.worstCaseOutRaw)
@@ -409,7 +409,7 @@ class SwapViewModelTest {
             assertEquals(6, receipt.inputDecimals)
             assertEquals("the receipt records the fill, never the quote", 1_360_941L, receipt.outputAmountRaw)
             assertEquals(8, receipt.outputDecimals)
-            assertEquals(landed.allInCostPaidPct, receipt.allInCostPct, 1e-9)
+            assertEquals(landed.allInCostPaidPct!!, receipt.allInCostPct!!, 1e-9)
             assertEquals("Metis", receipt.route)
             assertTrue(receipt.landedAtMillis >= START)
 
@@ -547,6 +547,45 @@ class SwapViewModelTest {
     }
 
     @Test
+    fun `a gateway page at the order stage is unavailable, not a verdict on the pair`() = runTest {
+        // A 502 with no structured body knows nothing about this pair; saying it cannot be
+        // quoted at this size would be a claim the answer never made.
+        orderResponse = "<html><body>502 Bad Gateway</body></html>"
+        orderStatus = HttpStatusCode.BadGateway
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.QUOTE_UNAVAILABLE, failed.reason)
+            assertEquals(0, wallet.callCount)
+            assertTrue(mock.executes().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `bytes this app cannot decode fail before the wallet is ever opened`() = runTest {
+        orderResponse = orderResponse.replace(TRANSACTION_FIELD, """"transaction": "not base64 !!",""")
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.NO_TRANSACTION, failed.reason)
+            assertEquals("our own payload is not the wallet's fault", 0, wallet.callCount)
+            assertTrue(mock.executes().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `an order with no transaction to sign is a failure, not an approval`() = runTest {
         orderResponse = orderResponse.replace(""""transaction": "UkVEQUNURUQ=",""", """"transaction": null,""")
         val mock = jupiter()
@@ -662,6 +701,89 @@ class SwapViewModelTest {
         }
     }
 
+    @Test
+    fun `a success with no signature claims neither that it landed nor that it did not`() = runTest {
+        // The answer went missing, not the swap: it was submitted and may well have landed, so
+        // "Nothing was swapped" would be the one sentence this screen must never get wrong.
+        executePlan = listOf("""{"status":"Success"}""" to HttpStatusCode.OK)
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.SUBMIT_UNAVAILABLE, failed.reason)
+            assertTrue("nothing is recorded without a signature", receipts.writes.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an answer that reports no fill records the fill as unknown, never the estimate`() = runTest {
+        executePlan = listOf(LANDED_NO_AMOUNTS to HttpStatusCode.OK)
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+
+            assertNull("the estimate is not the fill", landed.fill.outAmountRaw)
+            assertNull(landed.fillDeltaPct)
+            assertNull(landed.allInCostPaidPct)
+            assertEquals("the quote still knows its own estimate", 1_360_437L, landed.quote.outAmountRaw)
+
+            val receipt = receipts.receipts.value.single()
+            assertNull("an unknown fill is recorded as unknown", receipt.outputAmountRaw)
+            assertNull(receipt.allInCostPct)
+            assertEquals(SIGNATURE, receipt.signature)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an order with no threshold states the floor its own slippage sets, not the estimate`() = runTest {
+        orderResponse = orderResponse.replace(THRESHOLD_FIELD, THRESHOLD_FIELD_IGNORED)
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            // 1,360,437 less the order's own 100 bps, floored. Never the estimate itself, which
+            // would promise a minimum this quote made no promise about.
+            assertEquals(1_346_832L, landed.quote.worstCaseOutRaw)
+            assertTrue(landed.quote.worstCaseOutRaw < landed.quote.outAmountRaw)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an order that priced neither side in dollars leaves the cost unknown, not zero`() = runTest {
+        orderResponse = orderResponse
+            .replace(""""inUsdValue": 5.0,""", """"inUsdValue": 0.0,""")
+            .replace(""""outUsdValue": 4.9707,""", """"outUsdValue": 0.0,""")
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertNull("zero would read as a swap that cost nothing", landed.quote.allInCostPct)
+            assertNull(landed.allInCostPaidPct)
+            assertNull(receipts.receipts.value.single().allInCostPct)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     // ---- The receipt ---------------------------------------------------------------------------
 
     @Test
@@ -714,6 +836,16 @@ class SwapViewModelTest {
 
         /** 88 characters of base58 padding, a placeholder and never a real signature. */
         val SIGNATURE = "1".repeat(88)
+
+        /** The 2026-09-12 fixture's own two fields, so a test can take one away by name. */
+        const val TRANSACTION_FIELD = """"transaction": "UkVEQUNURUQ=","""
+        const val THRESHOLD_FIELD = """"otherAmountThreshold": "1346933","""
+
+        /** The same line under a key the parser ignores, which is how a field is taken away. */
+        const val THRESHOLD_FIELD_IGNORED = """"_noOtherAmountThreshold": "1346933","""
+
+        /** A landing whose answer carried no amounts at all: the fill is unknown, not the quote. */
+        val LANDED_NO_AMOUNTS = """{"status":"Success","signature":"${"1".repeat(88)}","slot":"367000000"}"""
 
         /** The fill beat the 1,360,437 estimate by 0.037 percent, as a real landing did. */
         val LANDED = """{"status":"Success","signature":"${"1".repeat(88)}","slot":"367000000","inputAmountResult":"5000000","outputAmountResult":"1360941"}"""
