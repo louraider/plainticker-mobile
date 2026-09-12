@@ -182,6 +182,7 @@ class ListViewModelTest {
             val jpm = mixed.analyzed.single { it.ticker == "JPM" }
             assertTrue(jpm.stale)
             assertEquals(9, jpm.ageDays)
+            assertEquals("the meta line shows the age of a stale row", 9, jpm.ageForMeta)
             assertNull("one stale row out of two raises nothing", mixed.banner)
             cancelAndIgnoreRemainingEvents()
         }

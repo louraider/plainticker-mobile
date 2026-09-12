@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -104,7 +105,9 @@ class ListAgainstProductionTest {
                 assertFalse("$drawn is not an integer", drawn.contains('.'))
                 assertTrue("composite off scale: $drawn", drawn.toInt() in 0..100)
             }
-            row.ageDays?.let { assertTrue(Fmt.daysOld(it).endsWith(" d old")) }
+            row.ageForMeta?.let { assertTrue(Fmt.daysOld(it).endsWith(" d old")) }
+            // An analysis from today prints no age, the way Detail does not print one under 24 h.
+            if (row.ageDays == 0) assertNull(row.ageForMeta)
         }
     }
 
