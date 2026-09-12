@@ -22,7 +22,6 @@
     <string name="action_close">Close</string>
     <string name="action_back">Back</string>
     <string name="action_enable">Enable</string>
-    <string name="action_requote">Requote</string>
     <string name="action_connect_wallet">Connect wallet</string>
     <string name="action_read_the_list">Read the list</string>
     <string name="action_view_in_portfolio">View in Portfolio</string>
@@ -169,29 +168,34 @@
     <string name="banner_market_open_local">The NYSE is open by the local schedule, the venue did not answer</string>
     <string name="banner_market_halted">Trading in this asset is halted by the issuer</string>
 
-    <!-- Swap sheet -->
+    <!-- Swap sheet: the anatomy (DT7) -->
     <string name="swap_direction">%1$s to %2$s</string>
     <string name="swap_amount_label">Amount, %1$s</string>
+    <string name="swap_amount_symbol">%1$s %2$s</string>
     <string name="swap_balance">Balance %1$s %2$s</string>
     <string name="swap_you_receive">You receive</string>
-    <string name="swap_rate_sub">1 %1$s = %2$s, reference %3$s</string>
     <string name="swap_all_in_cost">All-in cost</string>
     <string name="swap_route">Route %1$s</string>
-    <string name="swap_liquidity">Liquidity</string>
-    <string name="swap_quote_refresh">Quote refreshes at tap</string>
     <string name="swap_button">Swap %1$s to %2$s</string>
     <string name="swap_signs_in">Signs in Seed Vault Wallet. Not investment advice.</string>
-    <string name="swap_getting_quote">Getting quote</string>
-    <string name="swap_confirm_in_wallet">Confirm in Wallet · %1$s</string>
-    <string name="swap_landing">Landing · %1$s</string>
-    <string name="swap_quote_valid">quote valid %1$s</string>
+    <string name="swap_cost_at_tap">The cost is quoted when you tap Swap, not before.</string>
     <string name="swap_enter_amount">Enter an amount</string>
-    <string name="swap_needs_sol">Needs %1$s SOL for fee and token account, you have %2$s</string>
     <string name="swap_no_usdc">No USDC in this wallet</string>
-    <string name="swap_order_failed">Order failed</string>
-    <string name="swap_quote_expired">Quote expired</string>
     <string name="swap_cancelled">Cancelled in Wallet</string>
     <string name="swap_debug_banner">Debug build · signed, not submitted</string>
+
+    <!-- Swap sheet: the phases, with the elapsed time the wallet round trip actually took -->
+    <string name="swap_opening">Reading the wallet · %1$s</string>
+    <string name="swap_getting_quote">Getting quote · %1$s</string>
+    <string name="swap_confirm_in_wallet">Confirm in Wallet · %1$s</string>
+    <string name="swap_landing">Landing · %1$s</string>
+    <string name="swap_signed">Signed, not submitted</string>
+    <string name="swap_signed_meta">signed in %1$s</string>
+    <string name="swap_quote_valid">quote valid %1$s</string>
+    <string name="swap_a11y_opening">Reading the wallet</string>
+    <string name="swap_a11y_quoting">Getting quote</string>
+    <string name="swap_a11y_wallet">Confirm in Wallet</string>
+    <string name="swap_a11y_landing">Landing</string>
 
     <!-- Swap sheet: what the state machine says (T10) -->
     <string name="swap_amount_not_a_number">Enter the amount in numbers</string>
@@ -199,9 +203,11 @@
     <string name="swap_amount_not_above_zero">Enter an amount above zero</string>
     <string name="swap_amount_above_balance">More than the %1$s in this wallet</string>
     <string name="swap_worst_case">At least %1$s %2$s after slippage</string>
-    <string name="swap_sol_needed">Needs %1$s SOL in this wallet</string>
+    <string name="swap_sol_label">SOL needed</string>
+    <string name="swap_sol_sub_rent">Fee, priority, and %1$s for the token account</string>
+    <string name="swap_sol_sub_no_rent">Fee and priority, the token account exists</string>
     <string name="swap_sol_short">Short %1$s SOL, this wallet has %2$s</string>
-    <string name="swap_sol_breakdown">Signature %1$s, token account %2$s, priority %3$s</string>
+    <string name="swap_back_to_amount">Back to the amount</string>
     <string name="swap_requote_approval">The quote went. Approving again lands a fresh one.</string>
     <string name="swap_fill_vs_quote">quote %1$s, fill %2$s</string>
     <string name="swap_elapsed_wallet">Wallet %1$s</string>
@@ -225,7 +231,7 @@
     <string name="receipt_cost_sub">quote %1$s, fill %2$s</string>
     <string name="receipt_signature">Signature</string>
     <string name="receipt_tap_to_copy">Tap to copy</string>
-    <string name="receipt_copied">Copied</string>
+    <string name="receipt_copy_signature">Copy the signature</string>
     <string name="receipt_slot">Slot</string>
     <string name="receipt_view_portfolio">View in Portfolio</string>
 

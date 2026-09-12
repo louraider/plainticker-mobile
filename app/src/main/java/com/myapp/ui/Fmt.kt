@@ -196,6 +196,23 @@ object Fmt {
         }
     }
 
+    // ---- Durations ------------------------------------------------------------------------
+
+    /**
+     * A duration in whole seconds, floored and never negative: "0 s", "9 s", "14 s". For a
+     * phase that is still running and for a countdown, both of which are redrawn once a second:
+     * a tenth there would claim a precision the refresh does not have.
+     */
+    fun seconds(millis: Long): String = count(millis.coerceAtLeast(0L) / 1_000L) + " s"
+
+    /**
+     * A finished duration to a tenth: "3.1 s", "14.4 s". For a phase that has been measured and
+     * will not change again, where the tenth is real. The wallet round trip measured 12.7 to
+     * 14.4 s on the Seeker, which is the number this product rests on stating honestly.
+     */
+    fun secondsExact(millis: Long): String =
+        plain(millis.coerceAtLeast(0L) / 1_000.0, maxDecimals = 1) + " s"
+
     // ---- Keys and signatures --------------------------------------------------------------
 
     /**
