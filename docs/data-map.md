@@ -127,6 +127,49 @@ The row's meta line keeps its shape: the sentence takes the premium's half, the 
 | Not served | detail 404 `unsupported_ticker` or `not_available` | trust layer still renders from chain + xStocks; fundamentals replaced by one row "Analysis not yet available" |
 | forward.* | all fields | not rendered in the hackathon build (design decision); may feed a later "Expectations" section |
 
+#### The mint, read live 2026-09-12 (T9 data half)
+
+`getAccountInfo(mint, jsonParsed)` through the production forwarder, captured verbatim into
+`app/src/test/resources/rpc/mint-tslax.json` (TSLAx, `XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB`,
+slot 446,503,662). Two hand-built siblings sit beside it: `mint-no-extensions.json`, a Token-2022
+mint with no extension list at all, and `mint-pending-split.json`, a scheduled 1 to 4 change with
+paused transfers, a live hook and a frozen default account state.
+
+| Fact | TSLAx, live | Read as |
+|---|---|---|
+| owner | `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` | Token-2022, never the classic program |
+| decimals | 8 | every xStock |
+| `permanentDelegate.delegate` | `5aMNNLQJ…HFvEq` | present, so the issuer can move tokens |
+| `pausableConfig.paused` | `false` | present and not paused right now |
+| `scaledUiAmountConfig` | multiplier `"1"`, newMultiplier `"1"`, effective `0` | quoted decimal strings, the timestamp a bare number in unix seconds |
+| `transferHook.programId` | JSON `null` | the extension is configured and no program runs |
+| `defaultAccountState.accountState` | `"initialized"` | a fresh account is not frozen |
+| supply | `"22963733950050"` | 229,637.3395005 tokens at 8 decimals |
+
+`MintFacts.from` (`data/rpc/MintFacts.kt`) is the only reader. Each extension fact is nullable and
+null means exactly one thing, that the extension is not on the mint; a present extension that is
+quiet carries a value instead. An account owned by the classic program, an account that is not a
+mint, a base64 read or a payload with no decimals or no supply all read as null, which every
+surface renders as unknown and never as no risk. The trust rows therefore have three renderings,
+not two: the fact, its absence, and a mint that could not be read.
+
+Three more decisions the T9 data half fixes:
+
+- **The split multiplier prefers the chain.** `SplitMultiplier` (`data/SplitMultiplier.kt`) reads
+  the mint's `scaledUiAmountConfig` first and falls back to `XStocksApi.multiplier` only when the
+  mint could not be read or carries no scaled amount, and the answer names its `source`, so an
+  issuer's description of a split is never drawn as an on-chain fact. The xStocks
+  `activationDateTime` is typed as a plain number upstream and normalized to unix seconds.
+- **Proof of reserves.** A JSON `null` answer is an absence, rendered as unavailable and never as a
+  coverage of zero; the `Cached` entry for it is kept as an answer so it is not re-asked per open.
+  `Reserves` carries `sharesHeld`, `tokensInCirculation` and the custodians named in `holdings`.
+- **Trading hours.** `MarketHours` (`data/xstocks/MarketHours.kt`) is one pure function over a
+  clock. The asset's own `trading` block decides whenever it is there, including against the
+  calendar; the fifteen-line Monday to Friday 09:30 to 16:00 America/New_York schedule is reached
+  only by an asset with no block, and the answer says which source spoke. The price row reads
+  `MarketStatus.priceLabel`: within a percentage during the exchange session, against the NYSE
+  close in every other period, which includes extended, overnight and a halt.
+
 ### Swap sheet (T10)
 
 | Cell | Field |
