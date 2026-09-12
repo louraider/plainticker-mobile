@@ -1,0 +1,53 @@
+{
+  "_fixture_note": "GOLDEN REGRESSION. Field set copied from the live GET /swap/v2/order for 5 USDC -> TSLAx on 2026-09-12 (Metis route, swapType aggregator, mode ultra, no expireAt), the quote that corrects task T10: rentFeeLamports is 1488440 here, not the 2039280 constant the plan names, because this taker has no Token-2022 account for the mint yet. Redacted: taker and fee payers replaced by the system program id 11111111111111111111111111111111, transaction replaced by base64('REDACTED'), requestId and blockheight normalised. Nothing here identifies a wallet or a transaction. The parser ignores this key.",
+  "swapType": "aggregator",
+  "router": "metis",
+  "mode": "ultra",
+  "guaranteedPrice": false,
+  "requestId": "01a08b00-0000-7000-8000-00000000f00d",
+  "inAmount": "5000000",
+  "outAmount": "1360437",
+  "otherAmountThreshold": "1346933",
+  "swapMode": "ExactIn",
+  "slippageBps": 100,
+  "priceImpactPct": "-0.00041",
+  "routePlan": [
+    {
+      "percent": 100,
+      "bps": 10000,
+      "usdValue": 5.0,
+      "swapInfo": {
+        "ammKey": "9p7abUFv31ycgu9kckvnoqMMvBy67dqTDM2m6HP9xokN",
+        "label": "Whirlpool",
+        "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+        "inAmount": "5000000",
+        "outAmount": "1361800"
+      }
+    }
+  ],
+  "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "feeBps": 10,
+  "platformFee": {
+    "feeBps": 10,
+    "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  "taker": "11111111111111111111111111111111",
+  "gasless": false,
+  "jitOptimized": false,
+  "signatureFeeLamports": 5000,
+  "signatureFeePayer": "11111111111111111111111111111111",
+  "prioritizationFeeLamports": 1450,
+  "prioritizationFeePayer": "11111111111111111111111111111111",
+  "rentFeeLamports": 1488440,
+  "rentFeePayer": "11111111111111111111111111111111",
+  "transaction": "UkVEQUNURUQ=",
+  "lastValidBlockHeight": "423986571",
+  "inUsdValue": 5.0,
+  "outUsdValue": 4.9707,
+  "swapUsdValue": 5.0,
+  "priceImpact": -0.041,
+  "totalTime": 310
+}
