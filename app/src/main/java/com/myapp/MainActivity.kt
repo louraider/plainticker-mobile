@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.myapp.ui.nav.AppNavHost
 import com.myapp.ui.theme.Canvas
 import com.myapp.ui.theme.PlainTickerTheme
@@ -21,12 +22,16 @@ import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
  * multi-window resize recreates it during the wallet round trip. Both system bars are transparent
  * with light icons whatever the system theme (the app is dark only), and the root pads nothing:
  * each screen absorbs its own insets, see ui/components/Insets.kt.
+ *
+ * The manifest starts it in Theme.PlainTicker.Starting (Canvas behind the launcher glyph, DESIGN.md
+ * section 9); installSplashScreen must run before super.onCreate so it can swap in the app theme.
  */
 class MainActivity : ComponentActivity() {
 
     private var walletSession: MwaWalletSession? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
