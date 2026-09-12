@@ -249,6 +249,47 @@ class CachedCatalogRepositoryTest {
     }
 
     @Test
+    fun `a catalog stamped in the future is expired, not fresh for as long as the clock is wrong`() = runTest {
+        val disk = cache()
+        // A device whose clock was ahead when the file was written, then corrected.
+        disk.write(listOf(xStock("OLDx", "OLD", "XsMintOld")), capturedAtMillis = CatalogCache.TTL_MS * 10)
+        now = 0L
+
+        val mock = catalogApi()
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), repository(mock, disk).catalog().map { it.symbol })
+        assertEquals("a moved clock costs one refetch, not the same file until it catches up", 2, catalogRequests(mock))
+    }
+
+    /** xStocks answering 200 with nothing in it: a server with nothing to say, not a catalog. */
+    private fun emptyCatalogApi() = MockApi { _: HttpRequestData ->
+        respondJson("""{"nodes":[],"page":{"currentPage":0,"hasNextPage":false}}""")
+    }
+
+    @Test
+    fun `an empty answer never replaces a catalog and is never remembered as one`() = runTest {
+        val disk = cache()
+        disk.write(listOf(xStock("OLDx", "OLD", "XsMintOld")), capturedAtMillis = 0L)
+        now = CatalogCache.TTL_MS + 1
+
+        val mock = emptyCatalogApi()
+        val repo = repository(mock, disk)
+        val updates = repo.catalogUpdates().toList()
+
+        // The stale file paints and nothing follows it. Publishing the empty answer as a whole
+        // catalog is what would blank a list that had the bundled snapshot on it, because a
+        // whole catalog is what the screen decides "this ticker has no xStock" from.
+        assertEquals("the empty answer is not an emission", 1, updates.size)
+        assertEquals(listOf("OLDx"), updates.single().assets.map { it.symbol })
+        assertEquals("nothing was written over the file", listOf("OLDx"), disk.read()!!.assets.map { it.symbol })
+
+        // And it was not remembered, so the next screen asks again rather than being told for
+        // the next six hours that no ticker has a token.
+        val asked = catalogRequests(mock)
+        assertEquals("a stale catalog beats no catalog", listOf("OLDx"), repo.catalog().map { it.symbol })
+        assertTrue("the empty answer was not cached", catalogRequests(mock) > asked)
+    }
+
+    @Test
     fun `the next launch reads the file once and writes nothing`() = runTest {
         repository(catalogApi(), cache()).catalogUpdates().toList()
 
