@@ -39,7 +39,7 @@ class DetailViewModel(
     private val prices: PriceRepository,
 ) : ViewModel() {
 
-    private val ticker = ticker.trim().uppercase()
+    private val ticker = ticker.trim().uppercase() // lint-allow uppercase: API ticker key
 
     private val _state = MutableStateFlow(DetailUiState(ticker = this.ticker))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
