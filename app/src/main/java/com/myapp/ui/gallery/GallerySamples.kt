@@ -3,6 +3,13 @@ package com.myapp.ui.gallery
 import androidx.compose.ui.unit.sp
 import com.myapp.ui.components.FactCell
 import com.myapp.ui.components.FactTone
+import com.myapp.ui.swap.SolCost
+import com.myapp.ui.swap.SwapFill
+import com.myapp.ui.swap.SwapFunds
+import com.myapp.ui.swap.SwapLeg
+import com.myapp.ui.swap.SwapQuote
+import com.myapp.ui.swap.SwapTiming
+import com.myapp.ui.swap.SwapToken
 
 /** One list row on the canvas. */
 data class RowSample(
@@ -35,6 +42,12 @@ object GallerySamples {
     const val COST_LINE = "est. all-in cost 0.09% · liquidity \$1.3M"
     const val WALLET = "3kF9…Qm2v"
     const val SIGNATURE = "4xQm…9tHe"
+
+    /** Invented base58, never a landed transaction: the sheet shortens it to a fragment itself. */
+    const val SIGNATURE_FULL = "4xQm7gZ1LdPqR8vWnJb3sT6yUeK2cHaX9fNmD5oVtHe"
+
+    /** The public TSLAx mint; the gallery needs a leg and this is the one the artboards draw. */
+    const val MINT = "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
     const val DIGEST_TIME = "Today 08:00"
     const val DIGEST = "3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days."
     const val METHOD = "Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice."
@@ -104,16 +117,49 @@ object GallerySamples {
         RowSample("AAPLx", "Apple Inc.", "0.8 AAPLx · +0.01% vs NYSE close", "\$185.63"),
     )
 
-    val swapQuote = listOf(
-        FactCell("You receive", "0.01364 TSLAx", "1 TSLAx = \$366.17, reference \$365.84", span = 2, subMono = true, valueSize = 28.sp),
-        FactCell("All-in cost", "0.09%", "Route Metis", valueSize = 22.sp),
-        FactCell("Liquidity", "\$1.3M", "Quote refreshes at tap", valueSize = 22.sp),
+    // The swap sheet and the receipt are not sampled here any more: the gallery composes the
+    // real SwapSheet over a real SwapState (T10, DT7), so a cell the product drops cannot go on
+    // living in a sample. What it composes them from is below.
+
+    /** USDC into TSLAx, the pair every artboard uses. */
+    val swapLeg = SwapLeg.into(SwapToken(MINT, TICKER, 8))
+
+    /** The demo wallet as measured on 2026-09-12: 20.2 USDC, 0.096 SOL, no account for the mint. */
+    val swapFunds = SwapFunds(owner = MINT, lamports = 96_000_000L, usdcRaw = 20_200_000L, tokenRaw = 0L)
+
+    /** The live order of 2026-09-12, field for field, including the rent for a first account. */
+    val swapQuote = SwapQuote(
+        requestId = "gallery",
+        inAmountRaw = 5_000_000L,
+        outAmountRaw = 1_360_437L,
+        worstCaseOutRaw = 1_346_933L,
+        allInCostPct = 0.586,
+        slippageBps = 100,
+        route = "Metis",
+        swapType = "aggregator",
+        gasless = false,
+        solCost = SolCost(
+            signatureFeeLamports = 5_000L,
+            rentFeeLamports = 1_488_440L,
+            prioritizationFeeLamports = 1_450L,
+        ),
+        transaction = "tx",
+        expireAtEpochSec = null,
     )
 
-    val receipt = listOf(
-        FactCell("Paid", "5.00 USDC", valueSize = 22.sp),
-        FactCell("All-in cost paid", "0.09%", "quote 0.09%, fill +0.00%", subMono = true, valueSize = 22.sp),
-        FactCell("Signature", SIGNATURE, "Tap to copy", span = 2, valueSize = 18.sp),
-        FactCell("Slot", "445,912,340", span = 2, valueSize = 18.sp),
+    /** A fill that beat its quote, as one did on 2026-09-10. Not a real signature. */
+    val swapFill = SwapFill(
+        signature = SIGNATURE_FULL,
+        inAmountRaw = 5_000_000L,
+        outAmountRaw = 1_360_940L,
+        slot = 445_912_340L,
+    )
+
+    val swapTiming = SwapTiming(
+        startedAtMillis = 0L,
+        phaseStartedAtMillis = 0L,
+        quotingMillis = 310L,
+        walletMillis = 12_700L,
+        landingMillis = 3_100L,
     )
 }
