@@ -61,22 +61,29 @@ object Fmt {
      *
      * [price] stays the form for a price a person compares (four decimals under a dollar, cents
      * above); this is the form for a magnitude a person only needs the size of.
+     *
+     * [roundDown] truncates instead of rounding to nearest, and exists for one reason: a pool of
+     * $9,960 rounds to "$10k", which is the exact value of the tracking floor, so a row would read
+     * "Pool holds $10k, too thin to track" beside another token tracked at the same stated size.
+     * Naming a pool smaller than it is can only understate the depth; rounding it up across the
+     * floor contradicts the sentence it sits in.
      */
-    fun compactMoney(usd: Double): String {
+    fun compactMoney(usd: Double, roundDown: Boolean = false): String {
         if (!usd.isFinite()) return MISSING
+        val mode = if (roundDown) RoundingMode.DOWN else RoundingMode.HALF_UP
         val exact = BigDecimal.valueOf(usd)
-        val whole = exact.setScale(0, RoundingMode.HALF_UP)
+        val whole = exact.setScale(0, mode)
         if (whole.signum() == 0) {
             if (exact.signum() == 0) return "$0"
-            return sign(exact) + "$" + grouped(exact.setScale(2, RoundingMode.HALF_UP))
+            return sign(exact) + "$" + grouped(exact.setScale(2, mode))
         }
         var unit = MONEY_UNITS.indexOfFirst { whole.abs() >= BigDecimal.valueOf(it.first) }
         if (unit < 0) return sign(whole) + "$" + grouped(whole)
-        var scaled = whole.divide(BigDecimal.valueOf(MONEY_UNITS[unit].first), 1, RoundingMode.HALF_UP)
+        var scaled = whole.divide(BigDecimal.valueOf(MONEY_UNITS[unit].first), 1, mode)
         // Rounding up can fill the next unit: 999,960 is "$1M", never "$1000k".
         if (scaled.abs() >= THOUSAND && unit > 0) {
             unit -= 1
-            scaled = whole.divide(BigDecimal.valueOf(MONEY_UNITS[unit].first), 1, RoundingMode.HALF_UP)
+            scaled = whole.divide(BigDecimal.valueOf(MONEY_UNITS[unit].first), 1, mode)
         }
         return sign(scaled) + "$" + grouped(scaled.stripTrailingZeros()) + MONEY_UNITS[unit].second
     }
