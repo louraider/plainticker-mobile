@@ -133,6 +133,8 @@ class SwapViewModelTest {
         clock = clock,
         submitSwaps = submitSwaps,
         debugLog = { line -> logged += line },
+        // The receipt write stays on the test scheduler, so virtual time still orders it.
+        ioDispatcher = mainDispatcher.dispatcher,
     )
 
     private val logged = mutableListOf<String>()
