@@ -6,6 +6,8 @@ import com.myapp.data.xstocks.Multiplier
 import com.myapp.data.xstocks.ProofOfReserves
 import com.myapp.data.xstocks.XStockAsset
 import com.myapp.data.xstocks.XStocksApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -13,9 +15,34 @@ import kotlinx.coroutines.sync.withLock
  * The xStocks catalog (symbols, mints, trading state), the per-symbol scaledUiAmount multiplier and
  * the per-symbol proof of reserves.
  */
+/**
+ * Everything known about the catalog at one moment, and whether that is all of it.
+ *
+ * [whole] is the only thing a caller has to think about: a whole catalog may be used to decide
+ * that a ticker has no xStock, the first pages of one may not. It is true for a catalog that came
+ * off disk, true for the last emission of a paging run, and true while live pages are landing on
+ * top of a cached catalog, because what is on screen is still a whole catalog being refined.
+ */
+data class CatalogUpdate(
+    /** Every Solana asset known so far. */
+    val assets: List<XStockAsset>,
+    val whole: Boolean,
+)
+
 interface CatalogRepository {
     /** Every asset with a Solana deployment. */
     suspend fun catalog(): List<XStockAsset>
+
+    /**
+     * The catalog as it arrives, rather than only once all of it has.
+     *
+     * The catalog is ~830 assets over eight pages and 7.5 s, and page zero alone is enough to
+     * draw the top of a list, so this publishes after every page instead of after the last one.
+     * Emissions only ever grow and never reorder what came before: a page refines the set, it
+     * does not replace it. A catalog on disk is emitted first, whether or not it is still inside
+     * its window, so a stale cache paints immediately and the network refreshes behind it.
+     */
+    fun catalogUpdates(): Flow<CatalogUpdate>
 
     /** Current scaledUiAmount multiplier for one token symbol, e.g. "TSLAx". 1.0 until a split lands. */
     suspend fun multiplier(symbol: String): Double
@@ -78,11 +105,62 @@ class CachedCatalogRepository(
             return@withLock stored.assets
         }
 
-        val fresh = api.catalog().filter { it.solanaMint != null }.map { it.solanaOnly() }
-        catalog = Cached(fresh, now)
-        disk?.write(fresh, now)
+        val fresh = api.catalog().solanaAssets()
+        val at = clock.nowMillis()
+        catalog = Cached(fresh, at)
+        disk?.write(fresh, at)
         fresh
     }
+
+    /**
+     * Nothing here is under [mutex]. The lock exists so two screens do not fetch the same catalog
+     * twice, and a paging run would own it for seven seconds, which is exactly the wait this
+     * whole change is about. The List calls this once per refresh; a [catalog] call that arrives
+     * while a run is in flight can still pay for its own fetch, and the cost of that is one extra
+     * download on the first launch of a build, not a wrong answer.
+     */
+    override fun catalogUpdates(): Flow<CatalogUpdate> = flow {
+        val asked = clock.nowMillis()
+        val remembered = mutex.withLock { catalog?.takeIf { asked - it.at < catalogTtlMillis }?.value }
+        if (remembered != null) {
+            emit(CatalogUpdate(remembered, whole = true))
+            return@flow
+        }
+
+        // Whatever is on disk paints first, fresh or not: being past the window is a reason to
+        // refresh behind it, never a reason to make the reader wait for the network.
+        val stored = disk?.read()
+        val cached = stored?.assets.orEmpty()
+        if (cached.isNotEmpty()) emit(CatalogUpdate(cached, whole = true))
+        if (stored != null && asked - stored.capturedAtMillis < diskTtlMillis) {
+            mutex.withLock { catalog = Cached(cached, asked) }
+            return@flow
+        }
+
+        // Page zero is enough to draw the top of the list, so nothing waits for page seven.
+        val merged = LinkedHashMap<String, XStockAsset>()
+        cached.forEach { merged[it.symbol] = it }
+        val fresh = ArrayList<XStockAsset>(cached.size)
+        api.catalogPages().collect { page ->
+            val solana = page.nodes.solanaAssets()
+            if (solana.isEmpty()) return@collect
+            fresh += solana
+            // Keyed by token symbol, so a live page refines the row a cached one put there
+            // rather than adding a second copy of it.
+            solana.forEach { merged[it.symbol] = it }
+            // Still a whole catalog while a cached one is underneath: the pages are refining it.
+            emit(CatalogUpdate(merged.values.toList(), whole = cached.isNotEmpty()))
+        }
+
+        val at = clock.nowMillis()
+        mutex.withLock { catalog = Cached(fresh, at) }
+        disk?.write(fresh, at)
+        emit(CatalogUpdate(fresh, whole = true))
+    }
+
+    /** What this app keeps of a catalog page: Solana assets, trimmed to their Solana deployment. */
+    private fun List<XStockAsset>.solanaAssets(): List<XStockAsset> =
+        filter { it.symbol.isNotBlank() && it.solanaMint != null }.map { it.solanaOnly() }
 
     override suspend fun multiplier(symbol: String): Double =
         multiplierRecord(symbol).currentMultiplier.takeIf { it > 0.0 } ?: 1.0

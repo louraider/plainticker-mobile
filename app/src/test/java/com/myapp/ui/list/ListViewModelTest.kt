@@ -32,6 +32,10 @@ import com.myapp.repo.price
 import com.myapp.repo.snapshot
 import com.myapp.repo.xStock
 import com.myapp.ui.Fmt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -512,7 +516,95 @@ class ListViewModelTest {
         advanceUntilIdle()
         assertEquals("one run at a time, start to finish", 1, prices.maxInFlight)
         // The queued follow-up prices the live mint set the held run never saw.
-        assertEquals(listOf(aaplMint, jpmMint, tslaMint), prices.requested.last())
+        assertEquals(listOf(aaplMint, jpmMint, tslaMint), prices.asked.last())
+    }
+
+    // ---- The catalog arrives page by page --------------------------------------------------
+
+    /** Every distinct list the screen drew, in order, so a test can look at the whole sequence. */
+    private fun CoroutineScope.record(vm: ListViewModel, of: (ListUiState) -> List<String>): Pair<MutableList<List<String>>, Job> {
+        val drawn = mutableListOf<List<String>>()
+        val watcher = launch(UnconfinedTestDispatcher(coroutineContext[kotlinx.coroutines.test.TestCoroutineScheduler]!!)) {
+            vm.state.collect { state ->
+                val row = of(state)
+                if (row.isNotEmpty() && drawn.lastOrNull() != row) drawn += row
+            }
+        }
+        return drawn to watcher
+    }
+
+    @Test
+    fun `the catalog publishes page by page, and no page reorders what is already drawn`() = runTest {
+        // Nine xStocks arriving in three pages, in an order that is not the order they are drawn
+        // in, so a page that simply appended would show up as a reordering.
+        val arrival = listOf("D", "A", "G", "C", "I", "B", "F", "H", "E")
+        val assets = arrival.map { xStock("${it}x", it, "Mint$it".padEnd(44, 'z')) }
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z"))),
+            catalog = FakeCatalogRepository(Result.success(assets), pageSize = 3),
+        )
+
+        val (drawn, watcher) = record(vm) { state -> state.withoutAnalysis.mapNotNull { it.symbol } }
+        advanceUntilIdle()
+        watcher.cancel()
+
+        assertEquals("one publish per page, not one at the end", 3, drawn.size)
+        assertEquals(listOf(3, 6, 9), drawn.map { it.size })
+        assertEquals(arrival.sorted().map { "${it}x" }, drawn.last())
+        assertEquals(9, vm.state.value.withoutAnalysis.size)
+
+        // Nothing already on screen moves: every publish keeps the previous one in its order.
+        drawn.zipWithNext { earlier, later ->
+            assertEquals("a page reordered rows the reader was already looking at", earlier, later.filter { it in earlier })
+        }
+    }
+
+    @Test
+    fun `pages landing over a painted snapshot refine it and never empty the list`() = runTest {
+        val assets = (1..9).map { xStock("T${it}x", "T$it", "Mint$it".padEnd(44, 'z')) }
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z"))),
+            catalog = FakeCatalogRepository(Result.success(assets), pageSize = 3),
+            snapshots = FakeSnapshotRepository(bundled()),
+        )
+
+        val (drawn, watcher) = record(vm) { state ->
+            (state.analyzed + state.withoutAnalysis).mapNotNull { it.symbol }
+        }
+        advanceUntilIdle()
+        watcher.cancel()
+
+        // The snapshot's two tokens are the first thing drawn, and the list only ever grows
+        // from there: a page refines what is on screen, it does not replace it.
+        assertEquals(listOf("AAPLx", "TSLAx"), drawn.first().sorted())
+        assertTrue("the list never shrinks mid-paging", drawn.zipWithNext().all { (a, b) -> b.size >= a.size })
+        assertEquals("the whole live catalog, once it is whole", 9, vm.state.value.withoutAnalysis.size)
+        assertNull("nothing on screen is a snapshot any more", vm.state.value.banner)
+    }
+
+    @Test
+    fun `pages landing during a price run never start a second one`() = runTest {
+        val jupiter = Gate()
+        val prices = HeldPriceRepository(jupiter, FakePriceRepository(Result.success(emptyMap())))
+        val mints = (1..9).map { "Mint$it".padEnd(44, 'z') }
+        val assets = mints.mapIndexed { index, mint -> xStock("T${index}x", "T$index", mint) }
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z"))),
+            catalog = FakeCatalogRepository(Result.success(assets), pageSize = 3),
+            prices = prices,
+        )
+        advanceUntilIdle()
+
+        assertEquals("the first page's mints are out with Jupiter", 1, prices.calls)
+        assertEquals(mints.take(3), prices.asked.single())
+
+        jupiter.release()
+        advanceUntilIdle()
+
+        assertEquals("one run at a time, however many pages landed during it", 1, prices.maxInFlight)
+        assertEquals("and the follow-up prices the whole catalog", mints, prices.asked.last())
+        assertEquals("two runs for three pages, not three", 2, prices.calls)
+        assertEquals(9, vm.state.value.withoutAnalysis.size)
     }
 
     // ---- Prices ------------------------------------------------------------------------
