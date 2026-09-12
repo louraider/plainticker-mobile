@@ -90,7 +90,8 @@ import kotlinx.coroutines.launch
  *
  * **The sheet takes focus when it opens** and the phase is a polite live region, so a screen
  * reader lands on the sheet rather than on the screen behind it and then hears each phase once
- * (plan section 13 Pass 6). Every target here is a component that is already 48dp.
+ * (plan section 13 Pass 6). Every target here is a component that is already 48dp. Only the
+ * component gallery, which draws the receipt inline beside everything else, asks for no focus.
  */
 
 /** What the sheet can ask the machine to do. Every one of them is a [SwapViewModel] method. */
@@ -128,9 +129,13 @@ fun SwapSheet(
  * layout that would drift the first time a cell changes.
  */
 @Composable
-internal fun ColumnScope.SwapSheetBody(content: SheetContent, actions: SwapActions) {
+internal fun ColumnScope.SwapSheetBody(
+    content: SheetContent,
+    actions: SwapActions,
+    takeFocus: Boolean = true,
+) {
     ConfirmOnLanded(content.receipt?.signature)
-    val lead = leadFocus()
+    val lead = leadFocus(takeFocus)
 
     content.debug?.let { DebugBand(it) }
 
@@ -329,9 +334,9 @@ private fun ConfirmOnLanded(signature: String?) {
  * a screen that may have money on it, so a failed request is dropped.
  */
 @Composable
-private fun leadFocus(): Modifier {
+private fun leadFocus(takeFocus: Boolean): Modifier {
     val opened = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { opened.requestFocus() } }
+    LaunchedEffect(takeFocus) { if (takeFocus) runCatching { opened.requestFocus() } }
     return Modifier.focusRequester(opened).focusable()
 }
 
