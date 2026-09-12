@@ -1,36 +1,44 @@
 package com.myapp.ui.home
 
-import androidx.compose.foundation.clickable
+import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.myapp.R
+import com.myapp.ui.components.TextAction
 import com.myapp.ui.components.TopBar
+import com.myapp.ui.components.TopTabs
 import com.myapp.ui.list.ListScreen
 import com.myapp.ui.portfolio.PortfolioScreen
 import com.myapp.ui.watchlist.WatchlistScreen
 
-enum class HomeTab(val label: String) {
-    LIST("List"),
-    PORTFOLIO("Portfolio"),
-    WATCHLIST("Watchlist"),
+enum class HomeTab(@StringRes val label: Int) {
+    LIST(R.string.tab_list),
+    PORTFOLIO(R.string.tab_portfolio),
+    WATCHLIST(R.string.tab_watchlist),
 }
 
 /**
- * Placeholder home: the real TopBar (it absorbs the status inset, DT5) over a plain TabRow and the
- * three tab screens, the column ending above the navigation bar. The ViewModels are scoped to the
- * home back-stack entry, so switching tabs keeps their state. TopTabs and the TodayStrip land
- * with DT8.
+ * The three tab screens under one wordmark: the real TopBar and TopTabs (Muted inactive labels
+ * and a 2dp Accent indicator, not the Material TabRow the placeholder carried), handed to the
+ * selected screen as a header it draws at the top of its own scroll. That is what makes the
+ * header scroll away instead of sitting sticky over the content (DESIGN.md sections 4 and 5).
+ *
+ * The ViewModels are scoped to the home back-stack entry, so switching tabs keeps their state.
  */
 @Composable
 fun HomeScreen(
@@ -42,28 +50,52 @@ fun HomeScreen(
 ) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
     val tabs = HomeTab.entries
+    val labels = tabs.map { stringResource(it.label) }
 
-    Column(modifier = modifier.fillMaxSize().navigationBarsPadding()) {
-        TopBar(onTitleLongPress = onOpenGallery)
-        TabRow(selectedTabIndex = selected) {
-            tabs.forEachIndexed { index, tab ->
-                Tab(
-                    selected = selected == index,
-                    onClick = { selected = index },
-                    text = { Text(tab.label) },
-                )
-            }
+    val header: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth()) {
+            TopBar(onTitleLongPress = onOpenGallery)
+            TopTabs(items = labels, selected = selected, onSelect = { selected = it })
+            DebugActions(onOpenSpike = onOpenSpike, onOpenGallery = onOpenGallery)
         }
+    }
+
+    Box(modifier.fillMaxSize()) {
+        when (tabs[selected]) {
+            HomeTab.LIST -> ListScreen(
+                viewModel = viewModel(factory = factory),
+                onOpenDetail = onOpenDetail,
+                header = header,
+            )
+
+            HomeTab.PORTFOLIO -> PortfolioScreen(
+                viewModel = viewModel(factory = factory),
+                onOpenDetail = onOpenDetail,
+                header = header,
+            )
+
+            HomeTab.WATCHLIST -> WatchlistScreen(
+                viewModel = viewModel(factory = factory),
+                onOpenDetail = onOpenDetail,
+                header = header,
+            )
+        }
+    }
+}
+
+/** Debug builds only: the wallet spike and the component gallery, as text actions. */
+@Composable
+private fun DebugActions(onOpenSpike: (() -> Unit)?, onOpenGallery: (() -> Unit)?) {
+    if (onOpenSpike == null && onOpenGallery == null) return
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         if (onOpenSpike != null) {
-            Text("Open wallet spike (debug build only)", modifier = Modifier.clickable(onClick = onOpenSpike))
+            TextAction(label = stringResource(R.string.debug_open_wallet_spike), onClick = onOpenSpike)
         }
         if (onOpenGallery != null) {
-            Text("Open component gallery (debug build only)", modifier = Modifier.clickable(onClick = onOpenGallery))
-        }
-        when (tabs[selected]) {
-            HomeTab.LIST -> ListScreen(viewModel = viewModel(factory = factory), onOpenDetail = onOpenDetail)
-            HomeTab.PORTFOLIO -> PortfolioScreen(viewModel = viewModel(factory = factory), onOpenDetail = onOpenDetail)
-            HomeTab.WATCHLIST -> WatchlistScreen(viewModel = viewModel(factory = factory), onOpenDetail = onOpenDetail)
+            TextAction(label = stringResource(R.string.debug_open_gallery), onClick = onOpenGallery)
         }
     }
 }
