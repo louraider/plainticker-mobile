@@ -8,7 +8,10 @@
 import io, json, os
 
 OUT = os.path.dirname(os.path.abspath(__file__))
-W, H = 412, 915
+# Frame is the real Seeker viewport, measured on the device 2026-09-12:
+# 1200x2670 physical at 480dpi -> sw400dp w400dp h890dp. It was 412x915 (the generic
+# medium-phone frame) until then, which drew every screen 12dp wider than the phone.
+W, H = 400, 890
 
 # ----- tokens -----
 BG, ELEV, INK, INK2, MUTED = "#0B0F14", "#121820", "#E8ECF1", "#B4BCC8", "#7F8A99"
