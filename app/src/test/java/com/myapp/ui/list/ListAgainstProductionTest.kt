@@ -134,14 +134,17 @@ class ListAgainstProductionTest {
         advanceUntilIdle()
 
         val priced = vm.state.value.analyzed.take(5).mapNotNull { it.mint }
-        val second = FakePriceRepository(
-            result = Result.success(priced.associateWith { price(100.0, reference = 99.5) }),
-            unfetched = vm.state.value.analyzed.drop(5).mapNotNull { it.mint }.toSet(),
-        )
-        val vm2 = viewModel(second)
-        advanceUntilIdle()
+        // The same ViewModel is refreshed, so this is the state transition and not a second
+        // cold start wearing its name.
+        prices.result = Result.success(priced.associateWith { price(100.0, reference = 99.5) })
+        prices.unfetched = vm.state.value.analyzed.drop(5).mapNotNull { it.mint }.toSet()
+        val callsBefore = prices.requested.size
 
-        val state = vm2.state.value
+        vm.refresh()
+        advanceUntilIdle()
+        assertTrue("the refresh asked for prices again", prices.requested.size > callsBefore)
+
+        val state = vm.state.value
         assertTrue("some prices are missing", state.pricesPartial)
         assertFalse("but not all of them", state.pricesUnavailable)
         // The offline tier outranks the device tier: these rows came from the snapshot, so that

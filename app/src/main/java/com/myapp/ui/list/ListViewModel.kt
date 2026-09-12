@@ -14,6 +14,7 @@ import com.myapp.repo.CatalogRepository
 import com.myapp.repo.PriceRepository
 import com.myapp.repo.SnapshotRepository
 import com.myapp.repo.SummaryRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,6 +87,9 @@ sealed interface ListBanner {
     /** Device tier: the xStocks catalog did not answer, so no row carries a token or a price. */
     data object CatalogUnavailable : ListBanner
 
+    /** Device tier: `/summary` did not answer, so the catalog is on screen with no analysis. */
+    data object AnalysisUnavailable : ListBanner
+
     /** Device tier: Jupiter refused every chunk. */
     data object PricesUnavailable : ListBanner
 
@@ -109,6 +113,8 @@ data class ListUiState(
     val failed: Boolean = false,
     val fromSnapshot: Boolean = false,
     val catalogUnavailable: Boolean = false,
+    /** `/summary` did not answer while the catalog did, so no row on screen has an analysis. */
+    val analysisUnavailable: Boolean = false,
     val pricesUnavailable: Boolean = false,
     val pricesPartial: Boolean = false,
     /** The youngest analysis on screen, set only when every analyzed row is stale. */
@@ -119,12 +125,16 @@ data class ListUiState(
     /** An empty result the reader asked for: one sentence on screen, not an error. */
     val searchMiss: Boolean get() = isEmpty && query.isNotBlank()
 
+    /** Both sources answered and neither had anything. One sentence, so the screen is never blank. */
+    val emptyResult: Boolean get() = isEmpty && query.isBlank()
+
     val banner: ListBanner?
         get() = when {
             failed -> ListBanner.Unavailable
             fromSnapshot -> ListBanner.Snapshot(snapshotCapturedOn)
             allStaleDays != null -> ListBanner.Stale(allStaleDays)
             catalogUnavailable -> ListBanner.CatalogUnavailable
+            analysisUnavailable -> ListBanner.AnalysisUnavailable
             pricesUnavailable -> ListBanner.PricesUnavailable
             pricesPartial -> ListBanner.PricesPartial
             else -> null
@@ -185,6 +195,7 @@ class ListViewModel(
                     rows = snapshot.rows.map { it.toSummaryRow() },
                     assets = snapshot.assets.map { it.toXStockAsset() },
                     catalogKnown = snapshot.assets.isNotEmpty(),
+                    analysisKnown = snapshot.rows.isNotEmpty(),
                     generatedAt = null,
                     snapshotCapturedOn = snapshot.capturedOn,
                     fromSnapshot = true,
@@ -194,13 +205,25 @@ class ListViewModel(
                     rows = summary.getOrNull()?.rows.orEmpty(),
                     assets = assets.getOrNull().orEmpty(),
                     catalogKnown = assets.isSuccess,
+                    // A failed /summary used to pass silently: the catalog drew 672 price-only
+                    // rows and nothing on screen said the analysis, which is the product, was
+                    // missing rather than absent for those tickers.
+                    analysisKnown = summary.isSuccess,
                     generatedAt = summary.getOrNull()?.generatedAt,
                     snapshotCapturedOn = null,
                     fromSnapshot = false,
                 )
             }
 
-            fetchPrices()
+            // The repository contract is that pricing never throws, but a broken contract must
+            // cost the prices, not the screen: this runs after the rows are already published.
+            try {
+                fetchPrices()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failed: Exception) {
+                _state.update { it.copy(pricesUnavailable = true, pricesPartial = false) }
+            }
         }
     }
 
@@ -222,6 +245,7 @@ class ListViewModel(
         rows: List<SummaryRow>,
         assets: List<XStockAsset>,
         catalogKnown: Boolean,
+        analysisKnown: Boolean,
         generatedAt: String?,
         snapshotCapturedOn: LocalDate?,
         fromSnapshot: Boolean,
@@ -230,19 +254,29 @@ class ListViewModel(
             .filter { it.solanaMint != null }
             .associateBy { it.underlyingTicker.uppercase() } // lint-allow uppercase: map key
 
+        // One row per ticker. A duplicated ticker is a server bug, but it used to be this
+        // screen's crash: a LazyColumn keyed by ticker throws on the second one.
+        val unique = rows.distinctBy { it.ticker.uppercase() } // lint-allow uppercase: map key
+
+        // Production serves the composite as a percentile 0 to 100; the v1 fixture and the design
+        // canvas carry the same rank as a 0 to 1 fraction. The scale is a property of the payload,
+        // not of a row, so it is read once from the whole list: the bottom of a 179-row leaderboard
+        // can legitimately be 0.56, and judging that row on its own would draw it as "56".
+        val asFraction = percentilesAreFractions(unique.mapNotNull { it.composite })
+
         // A summary row whose underlying has no xStock is not an xStock, so it is not a row on
         // this screen: docs/data-map.md defines "Without analysis" as catalog xStocks missing
         // from /summary, which such a row can never be, and the device pass caught BKNG sitting
         // inside Analyzed with no token behind it. While the catalog is unavailable nothing is
         // known about any token, so the rows are kept rather than silently dropped.
-        val analyzed = rows
+        val analyzed = unique
             .mapNotNull { row ->
                 val asset = byTicker[row.ticker.uppercase()] // lint-allow uppercase: map key
-                if (asset == null && catalogKnown) null else row.toListRow(asset)
+                if (asset == null && catalogKnown) null else row.toListRow(asset, asFraction)
             }
             .sortedWith(compareBy<ListRow, Double?>(nullsLast(reverseOrder())) { it.composite }.thenBy { it.ticker })
 
-        val classified = rows.map { it.ticker.uppercase() }.toSet() // lint-allow uppercase: map key
+        val classified = unique.map { it.ticker.uppercase() }.toSet() // lint-allow uppercase: map key
         val withoutAnalysis = byTicker.values
             .filter { it.underlyingTicker.uppercase() !in classified } // lint-allow uppercase: map key
             .map { it.toPriceOnlyRow() }
@@ -260,6 +294,7 @@ class ListViewModel(
                 analyzed = analyzed.matching(it.query),
                 withoutAnalysis = withoutAnalysis.matching(it.query),
                 catalogUnavailable = !catalogKnown,
+                analysisUnavailable = !analysisKnown,
                 pricesUnavailable = false,
                 pricesPartial = false,
                 allStaleDays = staleDays(analyzed),
@@ -280,6 +315,7 @@ class ListViewModel(
                 analyzed = emptyList(),
                 withoutAnalysis = emptyList(),
                 catalogUnavailable = true,
+                analysisUnavailable = true,
                 pricesUnavailable = false,
                 pricesPartial = false,
                 allStaleDays = null,
@@ -363,12 +399,12 @@ class ListViewModel(
 
     // `headline` is deliberately never read: it is Ukrainian, and docs/data-map.md says it is
     // not rendered in the app. Nothing on a row can carry it because no row field holds it.
-    private fun SummaryRow.toListRow(asset: XStockAsset?) = ListRow(
+    private fun SummaryRow.toListRow(asset: XStockAsset?, asFraction: Boolean) = ListRow(
         ticker = ticker,
         symbol = asset?.symbol,
         mint = asset?.solanaMint,
         company = company ?: asset?.name,
-        composite = percentile(composite),
+        composite = percentile(composite, asFraction),
         state = tone.toRowState(),
         stale = stale,
         ageDays = ageDays,
@@ -406,15 +442,22 @@ class ListViewModel(
 }
 
 /**
- * `/summary.composite` as the percentile a row draws. Production serves 0 to 100 (the device
- * pass saw 83.80406, which the placeholder printed raw); the v1 fixture and the design canvas
- * carry the same rank as a 0 to 1 fraction, so a value inside that range is read as the
- * fraction it is. Either shape ends up as "84" on the row.
+ * True when a whole payload's composites are the 0 to 1 fraction the v1 fixture and the design
+ * canvas carry, rather than the 0 to 100 percentile production serves (the device pass saw
+ * 83.80406, which the placeholder printed raw). The scale belongs to the payload, so it is read
+ * from every value at once: one production row at 0.56 is the bottom of the leaderboard, not a
+ * fraction, and reading it on its own would draw it as "56".
  */
-internal fun percentile(composite: Double?): Double? {
+internal fun percentilesAreFractions(composites: List<Double>): Boolean {
+    val usable = composites.filter { it.isFinite() }
+    return usable.isNotEmpty() && usable.all { it >= -1.0 && it <= 1.0 }
+}
+
+/** `/summary.composite` as the percentile a row draws. Either shape ends up as "84" on the row. */
+internal fun percentile(composite: Double?, asFraction: Boolean): Double? {
     val value = composite ?: return null
     if (!value.isFinite()) return null
-    return if (value >= -1.0 && value <= 1.0) value * 100.0 else value
+    return if (asFraction) value * 100.0 else value
 }
 
 /** docs/data-map.md: positive is strong, caution is fair, danger is weak, nothing is no word. */
