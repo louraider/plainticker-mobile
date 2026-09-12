@@ -34,12 +34,15 @@ import com.myapp.ui.theme.PlainTickerType
 /**
  * List, Portfolio, Watchlist as text tabs: 14sp Outfit, the selected one in Ink with a 2dp Accent
  * underline, the rest Muted, a hairline below. No icons, no bottom bar.
+ *
+ * @param onSelect null draws the row as a picture of itself: no target, no focus, no ripple. The
+ * onboarding backdrop (DT11) shows the List tab that way.
  */
 @Composable
 fun TopTabs(
     items: List<String>,
     selected: Int,
-    onSelect: (Int) -> Unit,
+    onSelect: ((Int) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth()) {
@@ -51,8 +54,10 @@ fun TopTabs(
             items.forEachIndexed { index, item ->
                 val on = index == selected
                 val interactionSource = remember { MutableInteractionSource() }
-                Column(
-                    modifier = Modifier
+                val target = if (onSelect == null) {
+                    Modifier
+                } else {
+                    Modifier
                         .focusOutline(interactionSource)
                         .selectable(
                             selected = on,
@@ -61,6 +66,10 @@ fun TopTabs(
                             role = Role.Tab,
                             onClick = { onSelect(index) },
                         )
+                }
+                Column(
+                    modifier = Modifier
+                        .then(target)
                         .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                         .width(IntrinsicSize.Max)
                         .padding(horizontal = 12.dp),
@@ -90,6 +99,9 @@ fun TopTabs(
 private fun TopTabsPreview() {
     PreviewCanvas {
         var selected by remember { mutableIntStateOf(0) }
-        TopTabs(items = listOf("List", "Portfolio", "Watchlist"), selected = selected, onSelect = { selected = it })
+        Column {
+            TopTabs(items = listOf("List", "Portfolio", "Watchlist"), selected = selected, onSelect = { selected = it })
+            TopTabs(items = listOf("List", "Portfolio", "Watchlist"), selected = 0, onSelect = null)
+        }
     }
 }
