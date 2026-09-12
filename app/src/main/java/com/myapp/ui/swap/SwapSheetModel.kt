@@ -97,13 +97,14 @@ data class SheetPhase(
  * The landed receipt's headline, and the signature its copy action needs in full.
  *
  * [amount] and [symbol] are apart because the headline is the one 40sp numeral on the surface and
- * a ticker set at 40sp pushes it off a 360dp screen at a 1.3x font scale. Neither is copy: one is
- * a numeral [Fmt] produced, the other is what the chain calls the token.
+ * a ticker set at 40sp pushes it off a 360dp screen at a 1.3x font scale. [symbol] is what the
+ * chain calls the token; [amount] is a numeral [Fmt] produced, or the missing-value placeholder
+ * when the executed answer reported no fill, which is never filled in from the estimate.
  */
 data class SheetReceipt(
     val label: Copy,
     /** The fill, from the executed result and never from the quote. */
-    val amount: String,
+    val amount: Copy,
     val symbol: String,
     val signature: String,
 )
@@ -280,7 +281,11 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             cells = receiptCells(),
             receipt = SheetReceipt(
                 label = words(R.string.receipt_received),
-                amount = Fmt.tokenAmount(fill.outAmountRaw, leg.output.decimals),
+                // An answer that reported no fill leaves this unknown. The estimate standing in
+                // for it would put a quantity nobody received under the word "You received".
+                amount = fill.outAmountRaw
+                    ?.let { raw(Fmt.tokenAmount(it, leg.output.decimals)) }
+                    ?: words(R.string.value_missing),
                 symbol = leg.output.symbol,
                 signature = fill.signature,
             ),
@@ -369,7 +374,10 @@ private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
     ),
     SheetCell(
         label = words(R.string.swap_all_in_cost),
-        value = raw(Fmt.percent(quote.allInCostPct, signed = false)),
+        // An order that priced neither side in dollars leaves this unknown, and unknown is drawn
+        // as the missing value. Zero here would read as a swap that cost nothing.
+        value = quote.allInCostPct?.let { raw(Fmt.percent(it, signed = false)) }
+            ?: words(R.string.value_missing),
         sub = words(R.string.swap_route, quote.route),
     ),
     SheetCell(
@@ -395,6 +403,12 @@ private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
  * The fill is the executed result throughout. A landed swap on 2026-09-10 beat its quote by
  * 0.037 percent, so repeating the estimate here would print a number nobody was charged.
  */
+private fun SwapState.Landed.quotedAgainstFill(): Copy? {
+    val quoted = quote.allInCostPct ?: return null
+    val delta = fillDeltaPct ?: return null
+    return words(R.string.receipt_cost_sub, Fmt.percent(quoted, signed = false), Fmt.percent(delta))
+}
+
 private fun SwapState.Landed.receiptCells(): List<SheetCell> = listOf(
     SheetCell(
         label = words(R.string.receipt_paid),
@@ -406,12 +420,10 @@ private fun SwapState.Landed.receiptCells(): List<SheetCell> = listOf(
     ),
     SheetCell(
         label = words(R.string.receipt_cost_paid),
-        value = raw(Fmt.percent(allInCostPaidPct, signed = false)),
-        sub = words(
-            R.string.receipt_cost_sub,
-            Fmt.percent(quote.allInCostPct, signed = false),
-            Fmt.percent(fillDeltaPct),
-        ),
+        value = allInCostPaidPct?.let { raw(Fmt.percent(it, signed = false)) }
+            ?: words(R.string.value_missing),
+        // The sub line compares the quote against the fill, so it exists only when both do.
+        sub = quotedAgainstFill(),
         subMono = true,
     ),
     SheetCell(

@@ -55,7 +55,7 @@ class FileReceiptStoreTest {
         assertEquals(6, row.inputDecimals)
         assertEquals(1_366_141L, row.outputAmountRaw)
         assertEquals(8, row.outputDecimals)
-        assertEquals(0.586, row.allInCostPct, 1e-9)
+        assertEquals(0.586, row.allInCostPct!!, 1e-9)
         assertEquals("Metis", row.route)
         assertEquals(367_000_000L, row.slot)
     }
