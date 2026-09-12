@@ -6,6 +6,25 @@ Researched 2026-09-11 against docs.solanamobile.com, legal.solanamobile.com, the
 
 The publishing flow described in older guides (a local `dapp-store init` / `create publisher` / `create app` / `create release` / `publish submit` sequence that minted a Publisher NFT from your own keypair) is retired. The current README of solana-mobile/dapp-publishing states: "The legacy config-driven `init`, `create`, `validate`, and direct `publish submit|update|remove|support` flows are no longer part of the active CLI surface." Publishing now goes through the Solana dApp Publisher Portal at https://publish.solanamobile.com: you sign up, "Fill out your publisher profile and submit your KYC/KYB verification", connect a browser-extension wallet holding "sufficient SOL (~0.2 SOL) to cover transaction fees and ArDrive upload costs", create the app record (this mints the App NFT), and submit a release (this uploads assets to Arweave via ArDrive and mints the Release NFT). The `@solana-mobile/dapp-store-cli` package still exists but is now a portal-backed tool for pushing new versions with an API key. There is no separate publisher-NFT mint step for you to run; the publisher identity is the portal account plus the connected wallet, and the docs warn: "Your publisher wallet is required for all future submissions of this app. Do not lose access to it or you will not be able to make new submissions of this app." Review takes "3-5 business days", and the hackathon Terms require the app to be "published, listed, and publicly available on the Solana dApp Store no later than thirty (30) calendar days after the date on which the winners are first publicly announced", with the explicit statement that "Merely submitting an application for store review does not constitute publication." The correct Week 1 action is therefore: create the portal account, clear KYC/KYB, fund and back up the publisher wallet, and create the app record, so that only the release submission and the review wait remain after winners are announced.
 
+## Progress (updated 2026-09-12)
+
+| Step | State |
+|---|---|
+| 3. Portal account and KYC/KYB | **Done 2026-09-12**, six days ahead of the Sep 18 internal deadline. The unknown that worried this document most (provider and turnaround) is closed. |
+| 1, 2. Publisher wallet chosen, funded ~0.2 SOL, backed up | Open. The wallet funded on 2026-09-12 is the **demo** wallet for the video and fixtures, not the publisher wallet (founder's decision the same day). |
+| 4. Storage provider and ArDrive balance | Open, needs the APK size. |
+| 5. App record and App NFT | **BLOCKED, see below.** Do not create it yet. |
+| 6. Release signing key | Done in T6: env-driven signing, keystore off-machine, `docs/release-signing.md`. |
+
+### Why step 5 is blocked
+
+The portal reads the Android package name from the APK and that name is the app's permanent identity: changing it later means a new app record, a new App NFT and a lost listing. Two things must land before the record is created.
+
+1. **The package is still `com.myapp`**, the Android Studio template default. `applicationId` and `namespace` in `app/build.gradle.kts` and 75 tracked files carry it. Plan section 6 Week 1 lists "package rename" under App hygiene and it was never done. Renaming is mechanical but broad, so it goes in its own commit on a quiet branch, never in parallel with other app work.
+2. **`assetlinks.json` does not exist.** Plan task T3 is ticked and names it, but there is no `.well-known/assetlinks.json` in the server repo and `https://www.plainticker.com/.well-known/assetlinks.json` returns 404 (checked 2026-09-12). It also has no Android App Links intent filter to pair with in `AndroidManifest.xml`. The file must carry the final package name plus the SHA-256 of the release signing certificate, so it is downstream of the rename and of the keystore from T6.
+
+Order: rename the package, regenerate the release APK, read the certificate fingerprint, publish `assetlinks.json` on plainticker.com, verify it resolves, then create the app record in the portal.
+
 ## Numbered checklist
 
 ### Week 1 (do now; replaces "mint the publisher NFT")
