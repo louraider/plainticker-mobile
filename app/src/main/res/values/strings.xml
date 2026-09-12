@@ -77,7 +77,7 @@
     <string name="detail_token_price">Token price</string>
     <string name="detail_nyse_close">NYSE close</string>
     <string name="detail_nyse_price">NYSE price</string>
-    <string name="detail_gauge_caption">Token vs NYSE close, scale %1$s</string>
+    <string name="detail_gauge_caption">%1$s, scale %2$s</string>
     <string name="detail_gauge_reference_close">Token vs NYSE close</string>
     <string name="detail_gauge_reference_live">Token vs NYSE price</string>
     <string name="detail_gauge_thin">Pool holds %1$s, too thin to track the NYSE close</string>
@@ -86,7 +86,7 @@
     <string name="detail_live_meta">slot %1$s · %2$s</string>
     <string name="detail_live_a11y">Live from the mint, updated %1$s</string>
     <string name="detail_live_unread_label">Mint not read</string>
-    <string name="detail_live_unread_meta">The forwarder did not answer, so nothing below is from the chain</string>
+    <string name="detail_live_unread_meta">Nothing below this line is read from the chain</string>
     <string name="detail_price_absent">Jupiter does not price this token</string>
     <string name="detail_heading_backing">Backing and controls</string>
     <string name="detail_fact_por">Proof of reserves</string>
@@ -108,7 +108,7 @@
     <string name="detail_fact_split_changes_xstocks_sub">xStocks says it changes to %1$s on %2$s</string>
     <string name="detail_fact_split_failed_sub">Neither the mint nor xStocks answered</string>
     <string name="detail_fact_split_from_mint">read from the mint</string>
-    <string name="detail_fact_split_from_xstocks">from xStocks, the mint was not read</string>
+    <string name="detail_fact_split_from_xstocks">from xStocks, not from the mint</string>
     <string name="detail_fact_hook">Transfer hook</string>
     <string name="detail_fact_hook_sub">No transfer hook program</string>
     <string name="detail_fact_hook_runs_sub">A program runs on every transfer</string>
@@ -166,6 +166,7 @@
     <string name="detail_analysis_age">Analysis from %1$s</string>
     <string name="banner_market_closed">The NYSE is closed, the reference is the last close</string>
     <string name="banner_market_closed_local">The NYSE is closed by the local schedule, the venue did not answer</string>
+    <string name="banner_market_open_local">The NYSE is open by the local schedule, the venue did not answer</string>
     <string name="banner_market_halted">Trading in this asset is halted by the issuer</string>
 
     <!-- Swap sheet -->

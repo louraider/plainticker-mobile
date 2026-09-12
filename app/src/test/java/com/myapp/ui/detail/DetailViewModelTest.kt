@@ -504,4 +504,38 @@ class DetailViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // ---- The clock ---------------------------------------------------------------------------
+
+    /**
+     * Every age on the screen is measured against the state's own clock, so the state's clock has
+     * to move while the screen is open. Taken once at the refresh it is older than the reads it is
+     * compared against, and the live bar would breathe for ever over a meta line stuck at "0 s ago".
+     */
+    @Test
+    fun `the clock keeps moving while the screen is watched, so the live bar goes static`() = runTest {
+        var moment = now
+        val vm = DetailViewModel(
+            "AAPL",
+            served(),
+            catalog(),
+            FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
+            readableMint(),
+            InMemoryWatchlistStore(),
+            { moment },
+        )
+
+        vm.state.test {
+            val landed = awaitUntil { !it.isLoading }
+            assertEquals(now, landed.nowMillis)
+            assertTrue("the read is two seconds old", landed.liveLine!!.live)
+
+            moment = now + LIVE_WINDOW_MILLIS + DetailViewModel.TICK_MILLIS
+            val later = awaitUntil { it.nowMillis > landed.nowMillis }
+
+            assertEquals(moment, later.nowMillis)
+            assertFalse("past the forwarder's cache window the bar stops breathing", later.liveLine!!.live)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
