@@ -39,7 +39,13 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         )
     }
     initializer {
-        SwapViewModel(container.jupiterSwapApi, container.walletSession, container.clock)
+        SwapViewModel(
+            container.jupiterSwapApi,
+            container.walletSession,
+            container.rpcRepository,
+            container.receiptStore,
+            container.clock,
+        )
     }
     initializer {
         PortfolioViewModel(
