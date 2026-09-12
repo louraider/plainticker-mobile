@@ -159,9 +159,13 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
 
 /**
  * The gate: Elevated with the 1dp Line strong top edge (SheetSurface without its handle), the
- * wordmark, the headline, the three paragraphs, the self-certification and the one button. It
- * scrolls inside itself, so a large font scale lengthens the panel instead of pushing the button
- * off the screen.
+ * wordmark, the headline, the three paragraphs, the self-certification and the one button.
+ *
+ * The promise scrolls, the button does not. The panel grows to at most the window height, and
+ * when the copy no longer fits (a 360dp frame at font scale 1.3 needs more than a short phone
+ * has) the block above scrolls inside the panel while "Read the list" stays on screen. The
+ * bottom inset is padded outside that scroll, so the button clears the navigation bar the way
+ * every other screen-ending button does (ui/components/Insets.kt).
  */
 @Composable
 private fun ConsentPanel(
@@ -174,37 +178,43 @@ private fun ConsentPanel(
     SheetSurface(modifier = modifier, handle = false) {
         Column(
             modifier = Modifier
-                .verticalScroll(rememberScrollState())
                 // The navigation bar, or 40dp of canvas, whichever is deeper.
                 .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets(bottom = PanelBottomPadding)))
                 .padding(start = PanelSidePadding, end = PanelSidePadding, top = PanelTopPadding),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(PanelGap),
         ) {
-            Text(text = stringResource(R.string.app_name), style = PlainTickerType.wordmark, color = Ink)
-            Text(
-                text = stringResource(R.string.onboarding_headline),
-                style = PlainTickerType.onboardingTitle,
-                color = Ink,
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                // fill = false: the block keeps its own height while it fits and is capped at
+                // what is left over the button once it does not.
+                modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(PanelGap),
+            ) {
+                Text(text = stringResource(R.string.app_name), style = PlainTickerType.wordmark, color = Ink)
                 Text(
-                    text = stringResource(R.string.onboarding_body_chain),
-                    style = PlainTickerType.body,
-                    color = Ink2,
-                )
-                Text(
-                    text = stringResource(R.string.onboarding_body_fundamentals),
-                    style = PlainTickerType.body,
-                    color = Ink2,
-                )
-                // The disclaimer is the one paragraph in Ink: it is the sentence that must land.
-                Text(
-                    text = stringResource(R.string.onboarding_body_disclaimer),
-                    style = PlainTickerType.body,
+                    text = stringResource(R.string.onboarding_headline),
+                    style = PlainTickerType.onboardingTitle,
                     color = Ink,
                 )
+                Column(verticalArrangement = Arrangement.spacedBy(BodyGap)) {
+                    Text(
+                        text = stringResource(R.string.onboarding_body_chain),
+                        style = PlainTickerType.body,
+                        color = Ink2,
+                    )
+                    Text(
+                        text = stringResource(R.string.onboarding_body_fundamentals),
+                        style = PlainTickerType.body,
+                        color = Ink2,
+                    )
+                    // The disclaimer is the one paragraph in Ink: it is the sentence that must land.
+                    Text(
+                        text = stringResource(R.string.onboarding_body_disclaimer),
+                        style = PlainTickerType.body,
+                        color = Ink,
+                    )
+                }
+                ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange)
             }
-            ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange)
             PrimaryButton(
                 label = stringResource(R.string.onboarding_continue),
                 onClick = onContinue,
@@ -262,6 +272,10 @@ private const val BackdropAlpha = 0.25f
 private val PanelTopPadding: Dp = 28.dp
 private val PanelSidePadding: Dp = 20.dp
 private val PanelBottomPadding: Dp = 40.dp
+
+/** The canvas' 20dp between panel blocks and 10dp between the three paragraphs. */
+private val PanelGap: Dp = 20.dp
+private val BodyGap: Dp = 10.dp
 private val CheckboxSize: Dp = 20.dp
 
 // ---- The backdrop snapshot ---------------------------------------------------------------------
