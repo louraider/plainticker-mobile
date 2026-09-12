@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.InputStream
 import java.time.LocalDate
+import kotlin.coroutines.CoroutineContext
 
 /** Opens one bundled asset by its path under `app/src/main/assets`, or null when it is missing. */
 fun interface AssetSource {
@@ -32,13 +33,15 @@ interface SnapshotRepository {
 class BundledSnapshotRepository(
     private val assets: AssetSource,
     private val json: Json = HttpClientFactory.json,
+    /** Where the asset is read and parsed; a test passes its own so the read is deterministic. */
+    private val readContext: CoroutineContext = Dispatchers.IO,
 ) : SnapshotRepository {
 
     private var loaded: ListSnapshot? = null
 
     override suspend fun listSnapshot(): ListSnapshot? {
         loaded?.let { return it }
-        val snapshot = withContext(Dispatchers.IO) { read() } ?: return null
+        val snapshot = withContext(readContext) { read() } ?: return null
         loaded = snapshot
         return snapshot
     }
