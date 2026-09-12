@@ -61,6 +61,58 @@ class FmtTest {
         assertEquals("-", Fmt.price(Double.NEGATIVE_INFINITY))
     }
 
+    // ---- compact money ----------------------------------------------------------------------
+
+    @Test
+    fun `compact money is whole dollars under a thousand`() {
+        // The pools the liquidity floor has to name, as measured on 2026-09-12.
+        assertEquals("$34", Fmt.compactMoney(34.0))
+        assertEquals("$48", Fmt.compactMoney(48.0))
+        assertEquals("$61", Fmt.compactMoney(61.0))
+        assertEquals("$80", Fmt.compactMoney(80.0))
+        assertEquals("$949", Fmt.compactMoney(948.6))
+        assertEquals("$999", Fmt.compactMoney(999.4))
+    }
+
+    @Test
+    fun `compact money keeps cents only under a dollar`() {
+        assertEquals("$0", Fmt.compactMoney(0.0))
+        assertEquals("$0.40", Fmt.compactMoney(0.4))
+        assertEquals("$0.01", Fmt.compactMoney(0.005))
+        assertEquals("$1", Fmt.compactMoney(0.996))
+    }
+
+    @Test
+    fun `compact money takes a unit from a thousand up`() {
+        assertEquals("$1k", Fmt.compactMoney(999.6))
+        assertEquals("$10k", Fmt.compactMoney(10_000.0))
+        assertEquals("$12.3k", Fmt.compactMoney(12_300.0))
+        assertEquals("$12.5k", Fmt.compactMoney(12_500.0))
+        assertEquals("$18.8k", Fmt.compactMoney(18_800.0))
+        assertEquals("$1.3M", Fmt.compactMoney(1_300_000.0))
+        assertEquals("$2.4B", Fmt.compactMoney(2_400_000_000.0))
+    }
+
+    @Test
+    fun `compact money fills the next unit rather than printing a thousand of the last`() {
+        assertEquals("$1M", Fmt.compactMoney(999_960.0))
+        assertEquals("$999.9k", Fmt.compactMoney(999_940.0))
+        assertEquals("$1B", Fmt.compactMoney(999_999_000.0))
+    }
+
+    @Test
+    fun `compact money signs a negative amount before the dollar`() {
+        assertEquals("-$1.2k", Fmt.compactMoney(-1_200.0))
+        assertEquals("-$34", Fmt.compactMoney(-34.0))
+        assertEquals("-$0.40", Fmt.compactMoney(-0.4))
+    }
+
+    @Test
+    fun `compact money renders a non-finite amount as the neutral placeholder`() {
+        assertEquals("-", Fmt.compactMoney(Double.NaN))
+        assertEquals("-", Fmt.compactMoney(Double.POSITIVE_INFINITY))
+    }
+
     // ---- percent --------------------------------------------------------------------------
 
     @Test

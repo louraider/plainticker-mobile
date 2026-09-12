@@ -27,6 +27,16 @@ object Fmt {
 
     private val MONTHS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
+    /** Compact money units, largest first; [compactMoney] takes the first that the amount fills. */
+    private val MONEY_UNITS = listOf(
+        1_000_000_000_000L to "T",
+        1_000_000_000L to "B",
+        1_000_000L to "M",
+        1_000L to "k",
+    )
+
+    private val THOUSAND = BigDecimal.valueOf(1_000L)
+
     // ---- Money ----------------------------------------------------------------------------
 
     /**
@@ -40,6 +50,35 @@ object Fmt {
         val fine = exact.setScale(4, RoundingMode.HALF_UP)
         val scaled = if (fine.signum() != 0 && fine.abs() < BigDecimal.ONE) fine else exact.setScale(2, RoundingMode.HALF_UP)
         return sign(scaled) + "$" + grouped(scaled)
+    }
+
+    /**
+     * A USD amount at the width a meta line can spare, so a pool size fits beside the rest of a
+     * row: whole dollars under a thousand ("$34", "$949"), then one decimal and a unit above it
+     * ("$12.5k", "$18k", "$1.3M", "$2.4B") with a trailing ".0" trimmed. Under a dollar it keeps
+     * two decimals ("$0.40") instead of rounding a real pool away to "$0"; exactly zero is "$0".
+     * Negative amounts carry the sign first ("-$1.2k").
+     *
+     * [price] stays the form for a price a person compares (four decimals under a dollar, cents
+     * above); this is the form for a magnitude a person only needs the size of.
+     */
+    fun compactMoney(usd: Double): String {
+        if (!usd.isFinite()) return MISSING
+        val exact = BigDecimal.valueOf(usd)
+        val whole = exact.setScale(0, RoundingMode.HALF_UP)
+        if (whole.signum() == 0) {
+            if (exact.signum() == 0) return "$0"
+            return sign(exact) + "$" + grouped(exact.setScale(2, RoundingMode.HALF_UP))
+        }
+        var unit = MONEY_UNITS.indexOfFirst { whole.abs() >= BigDecimal.valueOf(it.first) }
+        if (unit < 0) return sign(whole) + "$" + grouped(whole)
+        var scaled = whole.divide(BigDecimal.valueOf(MONEY_UNITS[unit].first), 1, RoundingMode.HALF_UP)
+        // Rounding up can fill the next unit: 999,960 is "$1M", never "$1000k".
+        if (scaled.abs() >= THOUSAND && unit > 0) {
+            unit -= 1
+            scaled = whole.divide(BigDecimal.valueOf(MONEY_UNITS[unit].first), 1, RoundingMode.HALF_UP)
+        }
+        return sign(scaled) + "$" + grouped(scaled.stripTrailingZeros()) + MONEY_UNITS[unit].second
     }
 
     // ---- Percentages ----------------------------------------------------------------------
