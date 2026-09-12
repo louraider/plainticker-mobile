@@ -56,11 +56,11 @@ fun AppNavHost(
             route = Routes.DETAIL,
             arguments = listOf(navArgument(Routes.ARG_TICKER) { type = NavType.StringType }),
         ) {
+            // No back control on the screen: the TopBar carries the Watch action and nothing
+            // else (DESIGN.md section 4), and the system gesture pops this entry.
             DetailScreen(
                 viewModel = viewModel(factory = factory),
                 swapViewModel = viewModel(factory = factory),
-                watchlistViewModel = viewModel(factory = factory),
-                onBack = { navController.popBackStack() },
             )
         }
         if (BuildConfig.DEBUG) {
