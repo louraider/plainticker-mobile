@@ -1,5 +1,10 @@
 package com.myapp
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import com.myapp.ui.theme.Accent
+import com.myapp.ui.theme.Canvas
+import com.myapp.ui.theme.Ink
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.hypot
@@ -16,7 +21,8 @@ import org.w3c.dom.Element
  * adaptive launcher icon is Canvas behind the JetBrains Mono P in Ink with the Accent gauge tick,
  * carries a monochrome layer with the same shapes, keeps every coordinate inside the 66dp safe
  * zone, and no template bitmap is left in a mipmap folder. The splash theme paints Canvas behind
- * the same vector and hands over to the app theme; the notification icon is the glyph in white.
+ * the same vector with light system bar icons and hands over to the app theme; the notification
+ * icon is the glyph in white. Colors are compared with the Kotlin tokens, not with copied literals.
  */
 class BrandAssetsTest {
 
@@ -35,6 +41,9 @@ class BrandAssetsTest {
         getElementsByTagName(tag).let { list -> (0 until list.length).map { list.item(it) as Element } }
 
     private fun Element.android(attribute: String): String = getAttributeNS(androidNs, attribute)
+
+    /** The token as the upper-case `#RRGGBB` literal a resource file carries. */
+    private fun hex(color: Color): String = "#%06X".format(color.toArgb() and 0xFFFFFF)
 
     // ---- Adaptive icon ------------------------------------------------------------------------
 
@@ -60,8 +69,8 @@ class BrandAssetsTest {
 
     @Test
     fun `launcher background resolves to canvas`() {
-        assertEquals("#0B0F14", color("ic_launcher_background"))
-        assertEquals("#0B0F14", color("canvas"))
+        assertEquals(hex(Canvas), color("ic_launcher_background"))
+        assertEquals(hex(Canvas), color("canvas"))
     }
 
     /** A color resource with `@color/` aliases followed. */
@@ -102,20 +111,26 @@ class BrandAssetsTest {
      */
     private fun points(pathData: String): List<Pair<Double, Double>> {
         assertFalse("relative path commands are not walked: $pathData", pathData.any { it.isLowerCase() })
-        val tokens = Regex("""[MLHVQCZ]|-?\d+(?:\.\d+)?""").findAll(pathData).map { it.value }.toList()
+        val tokens = Regex("""[MLHVQCZ]|-?(?:\d*\.\d+|\d+)""").findAll(pathData).map { it.value }.toList()
+        assertEquals("unparsed characters in $pathData", pathData.replace(Regex("""[\s,]"""), ""), tokens.joinToString(""))
         val out = mutableListOf<Pair<Double, Double>>()
         var x = 0.0
         var y = 0.0
+        var startX = 0.0
+        var startY = 0.0
         var command = ""
         var i = 0
         fun next(): Double = tokens[i++].toDouble()
         while (i < tokens.size) {
             if (tokens[i][0].isLetter()) {
                 command = tokens[i++]
+                // Z closes the subpath and moves the current point back to its start.
+                if (command == "Z") { x = startX; y = startY }
                 continue
             }
             when (command) {
-                "M", "L" -> { x = next(); y = next(); out += x to y }
+                "M" -> { x = next(); y = next(); startX = x; startY = y; out += x to y }
+                "L" -> { x = next(); y = next(); out += x to y }
                 "H" -> { x = next(); out += x to y }
                 "V" -> { y = next(); out += x to y }
                 "Q" -> { out += next() to next(); x = next(); y = next(); out += x to y }
@@ -131,7 +146,7 @@ class BrandAssetsTest {
     fun `foreground is the ink glyph and the accent tick inside the safe zone`() {
         val fg = vector("ic_launcher_foreground.xml")
         assertEquals(108, fg.size)
-        assertEquals(listOf("#E8ECF1", "#5AA9E6"), fg.fills)
+        assertEquals(listOf(hex(Ink), hex(Accent)), fg.fills)
 
         val glyph = points(fg.data[0])
         val tick = points(fg.data[1])
@@ -161,13 +176,14 @@ class BrandAssetsTest {
     }
 
     @Test
-    fun `notification small icon is the glyph in white with a margin`() {
+    fun `notification small icon is the glyph in white inside the 20dp live area`() {
         val stat = vector("ic_stat_plainticker.xml")
         assertEquals(24, stat.size)
         assertEquals(2, stat.paths.size)
         assertEquals(setOf("#FFFFFF"), stat.fills.toSet())
+        // A 24dp status bar icon keeps 2dp of padding on every side (the 20dp live area).
         stat.data.flatMap(::points).forEach { (x, y) ->
-            assertTrue("($x, $y) is closer than 1dp to the edge", x >= 1.0 && x <= 23.0 && y >= 1.0 && y <= 23.0)
+            assertTrue("($x, $y) is outside the 20dp live area", x >= 2.0 && x <= 22.0 && y >= 2.0 && y <= 22.0)
         }
         assertTrue(stat.data[0].contains('Q'))
     }
@@ -189,6 +205,15 @@ class BrandAssetsTest {
         assertEquals("@drawable/ic_launcher_foreground", starting.item("windowSplashScreenAnimatedIcon"))
         assertEquals("@style/Theme.PlainTicker", starting.item("postSplashScreenTheme"))
         assertEquals("@color/canvas", style("Theme.PlainTicker").item("android:windowBackground"))
+    }
+
+    @Test
+    fun `starting theme keeps light system bar icons over canvas whatever the system theme`() {
+        // Theme.SplashScreen is DayNight: without these, a light system theme gets dark icons on Canvas.
+        val starting = style("Theme.PlainTicker.Starting")
+        assertEquals("false", starting.item("android:windowLightStatusBar"))
+        assertEquals("false", starting.item("android:windowLightNavigationBar"))
+        assertEquals("false", style("Theme.PlainTicker").item("android:windowLightStatusBar"))
     }
 
     @Test
