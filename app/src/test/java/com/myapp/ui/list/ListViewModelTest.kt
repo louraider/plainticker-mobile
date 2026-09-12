@@ -11,6 +11,7 @@ import com.myapp.data.net.RateLimitedException
 import com.myapp.data.plainticker.SummaryResponse
 import com.myapp.data.plainticker.SummaryRow
 import com.myapp.data.plainticker.Tone
+import com.myapp.data.jupiter.TrackingQuality
 import com.myapp.data.snapshot.SnapshotAsset
 import com.myapp.data.snapshot.SnapshotRow
 import com.myapp.prefs.InMemoryWatchlistStore
@@ -444,6 +445,91 @@ class ListViewModelTest {
         assertEquals(2, prices.requested.size)
         assertEquals(ListViewModel.PRICE_BUDGET, prices.requested[1].size)
         assertEquals(400, vm.state.value.analyzed.size + vm.state.value.withoutAnalysis.size)
+    }
+
+    // ---- The liquidity floor -------------------------------------------------------------
+
+    @Test
+    fun `a pool under the floor publishes no premium and carries the pool instead`() = runTest {
+        val prices = FakePriceRepository(
+            Result.success(
+                mapOf(
+                    // APPx read +89.34 percent off a pool of $34 live on 2026-09-12.
+                    aaplMint to price(189.34, reference = 100.0, liquidity = 34.0),
+                    jpmMint to price(301.0, reference = 300.0),
+                ),
+            ),
+        )
+        val vm = viewModel(prices = prices)
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading && it.analyzed.all { row -> row.priceUsd != null } }
+            val aapl = state.analyzed.first { it.ticker == "AAPL" }
+
+            assertNull("a premium off a dead pool never reaches the row", aapl.premiumPct)
+            assertEquals(TrackingQuality.Thin(34.0), aapl.tracking)
+            assertEquals("the row states what the pool is worth", 34.0, aapl.tracking!!.poolUsd!!, 0.0)
+
+            // Everything else about the row is untouched: the floor withholds one number.
+            assertEquals(189.34, aapl.priceUsd!!, 0.0)
+            assertEquals(100.0, aapl.referencePriceUsd!!, 0.0)
+            assertEquals(71.0, aapl.composite!!, 1e-9)
+            assertEquals(RowState.FAIR, aapl.state)
+
+            // Disclosure, not curation: same sections, same order, no banner, nothing filtered.
+            assertEquals(listOf("AAPL", "JPM"), state.analyzed.map { it.ticker })
+            assertEquals(listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
+            assertNull(state.banner)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a deep pool is untouched and the floor itself is deep enough`() = runTest {
+        val prices = FakePriceRepository(
+            Result.success(
+                mapOf(
+                    aaplMint to price(232.5, reference = 232.4, liquidity = 250_000.0),
+                    jpmMint to price(301.0, reference = 300.0, liquidity = TrackingQuality.MIN_POOL_USD),
+                ),
+            ),
+        )
+        val vm = viewModel(prices = prices)
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading && it.analyzed.all { row -> row.priceUsd != null } }
+
+            val aapl = state.analyzed.first { it.ticker == "AAPL" }
+            assertTrue(aapl.tracking is TrackingQuality.Tracked)
+            assertEquals(0.0430, aapl.premiumPct!!, 1e-3)
+            assertEquals(250_000.0, aapl.tracking!!.poolUsd!!, 0.0)
+
+            val jpm = state.analyzed.first { it.ticker == "JPM" }
+            assertTrue("a pool exactly at the floor keeps its premium", jpm.tracking is TrackingQuality.Tracked)
+            assertEquals(0.3333, jpm.premiumPct!!, 1e-3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a quote with no depth reported publishes no premium and no pool`() = runTest {
+        val prices = FakePriceRepository(
+            Result.success(mapOf(aaplMint to price(232.5, reference = 232.4, liquidity = null))),
+        )
+        val vm = viewModel(prices = prices)
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading && it.analyzed.any { row -> row.priceUsd != null } }
+            val aapl = state.analyzed.first { it.ticker == "AAPL" }
+
+            assertEquals(TrackingQuality.Untracked, aapl.tracking)
+            assertNull("unknown depth is not deep", aapl.premiumPct)
+            assertNull("and there is no pool to state", aapl.tracking!!.poolUsd)
+            assertEquals(232.5, aapl.priceUsd!!, 0.0)
+            assertEquals("the row keeps its place in Analyzed", listOf("AAPL", "JPM"), state.analyzed.map { it.ticker })
+            assertNull("a missing depth is not an error state", state.banner)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // ---- Search ------------------------------------------------------------------------

@@ -331,6 +331,12 @@ class CopyLintTest {
         assertEquals("%1\$s to %2\$s", byName["swap_direction"])
         assertEquals("View in Portfolio", byName["receipt_view_portfolio"])
         assertEquals("Cost basis is not read from the chain.", byName["portfolio_cost_basis"])
+        // The liquidity floor (DESIGN.md section 1, docs/data-map.md): the row and the gauge say
+        // what the pool is worth in place of a premium nothing backs, in plain words and no flag.
+        assertEquals("Pool holds %1\$s, too thin to track", byName["list_row_meta_thin"])
+        assertEquals("Pool depth not reported", byName["list_row_meta_pool_unknown"])
+        assertEquals("Pool holds %1\$s, too thin to track the NYSE close", byName["detail_gauge_thin"])
+        assertEquals("Pool depth not reported, tracking cannot be checked", byName["detail_gauge_pool_unknown"])
     }
 
     // ---- Tests: the lint itself -----------------------------------------------------------

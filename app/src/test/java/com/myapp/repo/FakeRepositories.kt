@@ -2,6 +2,7 @@ package com.myapp.repo
 
 import com.myapp.data.jupiter.PriceEntry
 import com.myapp.data.jupiter.PriceFetch
+import com.myapp.data.jupiter.TrackingQuality
 import com.myapp.data.net.ApiException
 import com.myapp.data.plainticker.AnalysisPayload
 import com.myapp.data.plainticker.SummaryResponse
@@ -122,8 +123,14 @@ fun snapshot(
     assets: List<SnapshotAsset> = emptyList(),
 ): ListSnapshot = ListSnapshot(capturedOn = capturedOn, rows = rows, assets = assets)
 
-fun price(usd: Double, reference: Double? = null): PriceEntry = PriceEntry(
+/**
+ * A Price v3 entry. [liquidity] defaults to a pool well above [TrackingQuality.MIN_POOL_USD], so
+ * a test that says nothing about depth gets the deep pool it means; pass it explicitly to build a
+ * thin one, and pass null for a token Jupiter priced without reporting any depth.
+ */
+fun price(usd: Double, reference: Double? = null, liquidity: Double? = 250_000.0): PriceEntry = PriceEntry(
     usdPrice = usd,
     decimals = 8,
+    liquidity = liquidity,
     stockData = reference?.let { com.myapp.data.jupiter.StockData(id = "xstocks", price = it) },
 )
