@@ -47,6 +47,8 @@ import com.myapp.ui.components.TodayStrip
 import com.myapp.ui.components.TopBar
 import com.myapp.ui.components.TopTabs
 import com.myapp.ui.components.focusOutline
+import com.myapp.ui.list.RowState
+import com.myapp.ui.list.label
 import com.myapp.ui.theme.Accent
 import com.myapp.ui.theme.Canvas
 import com.myapp.ui.theme.Ink
@@ -149,8 +151,8 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
                     Fmt.percent(row.premiumPct),
                     Fmt.daysOld(row.ageDays),
                 ),
-                valueRight = Fmt.decimal(row.composite),
-                valueSub = row.state,
+                valueRight = Fmt.decimal(row.composite, decimals = 0),
+                valueSub = stringResource(row.state.label),
                 divider = index < BackdropRows.lastIndex,
             )
         }
@@ -287,7 +289,7 @@ private data class BackdropRow(
     val premiumPct: Double,
     val ageDays: Int,
     val composite: Double,
-    val state: String,
+    val state: RowState,
 )
 
 private data class BackdropReport(val ticker: String, val reportsAt: Instant)
@@ -295,15 +297,16 @@ private data class BackdropReport(val ticker: String, val reportsAt: Instant)
 /**
  * Illustrative sample data, the six analyzed rows of design/canvas/instrument.py, so the first
  * frame is full before any network call returns. Nothing here is read from the chain or the API,
- * and nothing here is a real holding.
+ * and nothing here is a real holding. The composites are the integer percentile the real List
+ * draws (docs/data-map.md, T8), not the 0 to 1 fraction the canvas sample still shows.
  */
 private val BackdropRows = listOf(
-    BackdropRow("TSLAx", "Tesla, Inc.", 0.09, 2, 0.71, "strong"),
-    BackdropRow("NVDAx", "NVIDIA Corp.", -0.04, 1, 0.68, "strong"),
-    BackdropRow("AAPLx", "Apple Inc.", 0.01, 2, 0.61, "fair"),
-    BackdropRow("MSFTx", "Microsoft Corp.", 0.03, 6, 0.58, "fair"),
-    BackdropRow("AMZNx", "Amazon.com, Inc.", -0.02, 2, 0.55, "fair"),
-    BackdropRow("COINx", "Coinbase Global", 0.08, 3, 0.47, "weak"),
+    BackdropRow("TSLAx", "Tesla, Inc.", 0.09, 2, 71.0, RowState.STRONG),
+    BackdropRow("NVDAx", "NVIDIA Corp.", -0.04, 1, 68.0, RowState.STRONG),
+    BackdropRow("AAPLx", "Apple Inc.", 0.01, 2, 61.0, RowState.FAIR),
+    BackdropRow("MSFTx", "Microsoft Corp.", 0.03, 6, 58.0, RowState.FAIR),
+    BackdropRow("AMZNx", "Amazon.com, Inc.", -0.02, 2, 55.0, RowState.FAIR),
+    BackdropRow("COINx", "Coinbase Global", 0.08, 3, 47.0, RowState.WEAK),
 )
 
 private const val BackdropWatched = 3

@@ -5,6 +5,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.math.BigDecimal
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * One test per Fmt rule (DESIGN.md section 7), with the boundaries the design review asked
@@ -165,6 +166,13 @@ class FmtTest {
         assertEquals("10 Sep 2026 14:55 UTC", Fmt.utc(now))
         assertEquals("1 Jan 2026 00:05 UTC", Fmt.utc(Instant.parse("2026-01-01T00:05:00Z")))
         assertEquals("31 Dec 2025 23:59 UTC", Fmt.utc(1_767_225_599_000L))
+    }
+
+    @Test
+    fun `a calendar day prints without a time`() {
+        assertEquals("12 Sep 2026", Fmt.day(LocalDate.of(2026, 9, 12)))
+        assertEquals("1 Jan 2026", Fmt.day(LocalDate.of(2026, 1, 1)))
+        assertEquals("31 Dec 2025", Fmt.day(LocalDate.of(2025, 12, 31)))
     }
 
     @Test

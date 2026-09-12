@@ -7,12 +7,22 @@ import com.myapp.data.Fixtures
 import com.myapp.data.KnownMints
 import com.myapp.data.net.ApiException
 import com.myapp.data.net.HttpClientFactory
+import com.myapp.data.net.RateLimitedException
 import com.myapp.data.plainticker.SummaryResponse
+import com.myapp.data.plainticker.SummaryRow
+import com.myapp.data.plainticker.Tone
+import com.myapp.data.snapshot.SnapshotAsset
+import com.myapp.data.snapshot.SnapshotRow
+import com.myapp.prefs.InMemoryWatchlistStore
 import com.myapp.repo.FakeCatalogRepository
 import com.myapp.repo.FakePriceRepository
+import com.myapp.repo.FakeSnapshotRepository
 import com.myapp.repo.FakeSummaryRepository
 import com.myapp.repo.price
+import com.myapp.repo.snapshot
 import com.myapp.repo.xStock
+import com.myapp.ui.Fmt
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,6 +31,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.IOException
+import java.time.LocalDate
 
 class ListViewModelTest {
 
@@ -32,9 +43,17 @@ class ListViewModelTest {
     private val jpmMint = "JPMxMint".padEnd(44, '1')
     private val tslaMint = KnownMints.TSLAX
 
-    /** plainticker/summary.json: AAPL 0.71, JPM 0.66 (stale, 9 d), XYZ with every optional field null. */
+    private val summaryJson: String = Fixtures.read("plainticker/summary.json")
+
+    /** The Ukrainian headline the fixture carries, read from the fixture so no test hardcodes it. */
+    private val ukrainianHeadline: String =
+        Regex("\"headline\":\\s*\"([^\"]+)\"").find(summaryJson)!!.groupValues[1]
+
+    private val cyrillic = Regex("[\\u0400-\\u04FF]")
+
+    /** plainticker/summary.json: AAPL 0.71, JPM 0.66 (stale, 9 d), XYZ with every field null. */
     private fun summary(): SummaryResponse =
-        HttpClientFactory.json.decodeFromString(SummaryResponse.serializer(), Fixtures.read("plainticker/summary.json"))
+        HttpClientFactory.json.decodeFromString(SummaryResponse.serializer(), summaryJson)
 
     private fun catalog() = listOf(
         xStock("TSLAx", "TSLA", tslaMint, "Tesla xStock"),
@@ -46,7 +65,11 @@ class ListViewModelTest {
         summaries: FakeSummaryRepository = FakeSummaryRepository(Result.success(summary())),
         catalog: FakeCatalogRepository = FakeCatalogRepository(Result.success(catalog())),
         prices: FakePriceRepository = FakePriceRepository(),
-    ) = ListViewModel(summaries, catalog, prices)
+        snapshots: FakeSnapshotRepository = FakeSnapshotRepository(),
+        watchlist: InMemoryWatchlistStore = InMemoryWatchlistStore(),
+    ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist)
+
+    // ---- The join ----------------------------------------------------------------------
 
     @Test
     fun `loading, then analyzed rows joined to mints and prices, then rows without analysis`() = runTest {
@@ -57,51 +80,128 @@ class ListViewModelTest {
 
         vm.state.test {
             assertTrue(awaitItem().isLoading)
-            val state = awaitUntil { !it.isLoading }
+            val state = awaitUntil { !it.isLoading && it.analyzed.all { row -> row.priceUsd != null } }
 
-            assertNull(state.error)
+            assertNull(state.banner)
             assertFalse(state.catalogUnavailable)
-            assertFalse(state.pricesUnavailable)
+            assertFalse(state.fromSnapshot)
             assertEquals("2026-09-10T18:00:00.000Z", state.generatedAt)
 
-            // Composite descending, the row without a composite last.
-            assertEquals(listOf("AAPL", "JPM", "XYZ"), state.analyzed.map { it.ticker })
+            // Composite descending; XYZ has no xStock and is on no list at all.
+            assertEquals(listOf("AAPL", "JPM"), state.analyzed.map { it.ticker })
 
             val aapl = state.analyzed[0]
             assertEquals("AAPLx", aapl.symbol)
+            assertEquals("AAPLx", aapl.display)
             assertEquals(aaplMint, aapl.mint)
             assertEquals("Apple Inc.", aapl.company)
+            assertEquals(RowState.FAIR, aapl.state)
             assertEquals(232.5, aapl.priceUsd!!, 0.0)
             assertEquals(232.4, aapl.referencePriceUsd!!, 0.0)
+            assertEquals(0.0430, aapl.premiumPct!!, 1e-3)
             assertFalse(aapl.stale)
-            assertTrue(aapl.hasAnalysis)
+            assertTrue(aapl.analyzed)
 
             val jpm = state.analyzed[1]
+            assertEquals(RowState.STRONG, jpm.state)
             assertTrue(jpm.stale)
             assertEquals(9, jpm.ageDays)
             assertEquals(301.0, jpm.priceUsd!!, 0.0)
             assertNull(jpm.referencePriceUsd)
+            // No reference price, so no premium: the row keeps its age and loses the percent.
+            assertNull(jpm.premiumPct)
 
-            val xyz = state.analyzed[2]
-            assertNull(xyz.symbol)
-            assertNull(xyz.mint)
-            assertNull(xyz.priceUsd)
-            assertNull(xyz.composite)
-
-            // Catalog assets PlainTicker has not classified, keyed by the underlying ticker.
+            // Catalog xStocks PlainTicker has not classified, keyed by the underlying ticker.
             assertEquals(listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
             assertEquals("TSLA", state.withoutAnalysis[0].ticker)
-            assertFalse(state.withoutAnalysis[0].hasAnalysis)
+            assertFalse(state.withoutAnalysis[0].analyzed)
 
-            // One price call, analyzed mints only: not XYZ (no mint), not the unanalyzed catalog.
-            assertEquals(listOf(listOf(aaplMint, jpmMint)), prices.requested)
+            // Analyzed mints first, then the unanalyzed one; XYZ has no mint to ask about.
+            assertEquals(listOf(aaplMint, jpmMint, tslaMint), prices.requested.last())
 
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `summary down, catalog up - rows without analysis still render and no price is asked`() = runTest {
+    fun `a classified company with no xStock is in neither section`() = runTest {
+        val vm = viewModel()
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertTrue("XYZ has no xStock", state.analyzed.none { it.ticker == "XYZ" })
+            assertTrue("and it is not a price-only row either", state.withoutAnalysis.none { it.ticker == "XYZ" })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `composite is the integer percentile, whichever scale the server sent`() = runTest {
+        // The percentile the device saw raw (83.80406) and the 0 to 1 fraction the v1 fixture
+        // uses, both drawn the way the row draws them: as an integer, never as the raw float.
+        assertEquals("84", Fmt.decimal(percentile(83.80406)!!, decimals = 0))
+        assertEquals("71", Fmt.decimal(percentile(0.71)!!, decimals = 0))
+        assertEquals("100", Fmt.decimal(percentile(100.0)!!, decimals = 0))
+        assertNull(percentile(null))
+
+        val vm = viewModel()
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals(71.0, state.analyzed[0].composite!!, 1e-9)
+            assertEquals(66.0, state.analyzed[1].composite!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `no rendered string comes from the Ukrainian headline`() = runTest {
+        assertTrue("the fixture carries a Cyrillic headline", cyrillic.containsMatchIn(ukrainianHeadline))
+        val vm = viewModel()
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            val rows = state.analyzed + state.withoutAnalysis
+            assertTrue(rows.isNotEmpty())
+            rows.forEach { row ->
+                // A data class prints every property it has, so this fails the moment a field
+                // carries the headline again, whatever that field is called.
+                val printed = row.toString()
+                assertFalse(row.ticker, printed.contains(ukrainianHeadline))
+                assertFalse("$row has Cyrillic in it", cyrillic.containsMatchIn(printed))
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a stale row stays visible with its age and only a wholly stale list raises the banner`() = runTest {
+        val vm = viewModel()
+
+        vm.state.test {
+            val mixed = awaitUntil { !it.isLoading }
+            val jpm = mixed.analyzed.single { it.ticker == "JPM" }
+            assertTrue(jpm.stale)
+            assertEquals(9, jpm.ageDays)
+            assertNull("one stale row out of two raises nothing", mixed.banner)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val allStale = summary().let { it.copy(rows = it.rows.map { row -> row.copy(stale = true) }) }
+        val stale = viewModel(summaries = FakeSummaryRepository(Result.success(allStale)))
+
+        stale.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals(2, state.analyzed.size)
+            assertTrue(state.analyzed.all { it.stale })
+            assertEquals(ListBanner.Stale(2), state.banner)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ---- Sources down ------------------------------------------------------------------
+
+    @Test
+    fun `summary down, catalog up - rows without analysis still render`() = runTest {
         val prices = FakePriceRepository()
         val vm = viewModel(
             summaries = FakeSummaryRepository(Result.failure(ApiException(502, "www.plainticker.com/api/v1/summary", null, null))),
@@ -110,67 +210,189 @@ class ListViewModelTest {
 
         vm.state.test {
             val state = awaitUntil { !it.isLoading }
-            assertNull(state.error)
+            assertNull(state.banner)
             assertTrue(state.analyzed.isEmpty())
             assertEquals(listOf("AAPLx", "JPMx", "TSLAx"), state.withoutAnalysis.map { it.symbol })
-            assertTrue(prices.requested.isEmpty())
             assertFalse(state.isEmpty)
+            assertEquals(listOf(aaplMint, jpmMint, tslaMint).sorted(), prices.requested.last().sorted())
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `catalog down, summary up - analyzed rows render without mints`() = runTest {
-        val vm = viewModel(catalog = FakeCatalogRepository(Result.failure(IOException("offline"))))
+    fun `catalog down, summary up - analyzed rows render without mints and the banner names it`() = runTest {
+        val prices = FakePriceRepository()
+        val vm = viewModel(catalog = FakeCatalogRepository(Result.failure(IOException("offline"))), prices = prices)
 
         vm.state.test {
             val state = awaitUntil { !it.isLoading }
-            assertNull(state.error)
             assertTrue(state.catalogUnavailable)
+            assertEquals(ListBanner.CatalogUnavailable, state.banner)
+            // Nothing is known about tokens, so every classified row is kept rather than dropped.
             assertEquals(3, state.analyzed.size)
             assertTrue(state.analyzed.all { it.mint == null && it.priceUsd == null })
+            assertEquals("AAPL", state.analyzed[0].display)
             assertTrue(state.withoutAnalysis.isEmpty())
+            assertTrue("no mint, so nothing to price", prices.requested.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `both sources down - one error, nothing to draw`() = runTest {
+    fun `both sources down - the bundled snapshot draws the list and names its date`() = runTest {
+        val snapshots = FakeSnapshotRepository(
+            snapshot(
+                capturedOn = LocalDate.of(2026, 9, 12),
+                rows = listOf(
+                    SnapshotRow(ticker = "AAPL", company = "Apple Inc.", composite = 83.80406, tone = Tone.POSITIVE, ageDays = 2),
+                    SnapshotRow(ticker = "BKNG", company = "Booking Holdings Inc.", composite = 80.28, tone = Tone.CAUTION),
+                ),
+                assets = listOf(
+                    SnapshotAsset(symbol = "AAPLx", ticker = "AAPL", name = "Apple xStock", mint = aaplMint),
+                    SnapshotAsset(symbol = "TSLAx", ticker = "TSLA", name = "Tesla xStock", mint = tslaMint),
+                ),
+            ),
+        )
         val vm = viewModel(
             summaries = FakeSummaryRepository(Result.failure(IOException("offline"))),
+            catalog = FakeCatalogRepository(Result.failure(IOException("offline"))),
+            prices = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
+            snapshots = snapshots,
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading && it.analyzed.any { row -> row.priceUsd != null } }
+            assertEquals(1, snapshots.calls)
+            assertTrue(state.fromSnapshot)
+            assertFalse(state.failed)
+            assertEquals(ListBanner.Snapshot(LocalDate.of(2026, 9, 12)), state.banner)
+
+            // The snapshot obeys the same rules as the live join: BKNG has no xStock, so it is
+            // not a row, and the composite is carried as the percentile.
+            assertEquals(listOf("AAPLx"), state.analyzed.map { it.symbol })
+            assertEquals(83.80406, state.analyzed[0].composite!!, 1e-9)
+            assertEquals(232.5, state.analyzed[0].priceUsd!!, 0.0)
+            assertEquals(listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `both sources down with no snapshot - one line and one retry`() = runTest {
+        val summaries = FakeSummaryRepository(Result.failure(IOException("offline")))
+        val vm = viewModel(
+            summaries = summaries,
             catalog = FakeCatalogRepository(Result.failure(IOException("offline"))),
         )
 
         vm.state.test {
             val state = awaitUntil { !it.isLoading }
-            assertEquals("Analysis list unavailable", state.error)
+            assertTrue(state.failed)
+            assertEquals(ListBanner.Unavailable, state.banner)
             assertTrue(state.analyzed.isEmpty())
             assertTrue(state.withoutAnalysis.isEmpty())
-            assertFalse(state.isEmpty)
+            assertFalse("an outage is not an empty search", state.searchMiss)
+
+            vm.refresh()
+            awaitUntil { it.isLoading }
+            awaitUntil { !it.isLoading }
+            assertEquals("Retry asks the sources again", 2, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
+    // ---- Prices ------------------------------------------------------------------------
+
     @Test
-    fun `prices down - rows keep rendering with a partial flag`() = runTest {
-        val vm = viewModel(prices = FakePriceRepository(Result.failure(IOException("429"))))
+    fun `the first screenful is priced before the rest`() = runTest {
+        val mints = (1..40).map { "Mint$it".padEnd(44, 'z') }
+        val prices = FakePriceRepository(Result.success(mints.associateWith { price(10.0, reference = 10.0) }))
+        val vm = wide(mints, prices)
+        advanceUntilIdle()
+
+        assertEquals("two calls, the window then the rest", 2, prices.requested.size)
+        assertEquals(mints.take(ListViewModel.FIRST_SCREENFUL), prices.requested[0])
+        assertEquals(mints, prices.requested[1])
+        assertTrue(vm.state.value.analyzed.all { it.priceUsd != null })
+    }
+
+    @Test
+    fun `a refused chunk costs only its own rows their price`() = runTest {
+        val mints = (1..40).map { "Mint$it".padEnd(44, 'z') }
+        val refused = mints.takeLast(20).toSet()
+        val prices = FakePriceRepository(
+            result = Result.success((mints - refused).associateWith { price(10.0, reference = 10.0) }),
+            unfetched = refused,
+        )
+        val vm = wide(mints, prices)
 
         vm.state.test {
-            val state = awaitUntil { !it.isLoading }
-            assertNull(state.error)
-            assertTrue(state.pricesUnavailable)
-            assertEquals(3, state.analyzed.size)
-            assertTrue(state.analyzed.all { it.priceUsd == null })
+            val state = awaitUntil { !it.isLoading && it.pricesPartial }
+            assertEquals(ListBanner.PricesPartial, state.banner)
+            val rows = state.analyzed + state.withoutAnalysis
+            assertEquals(20, rows.count { it.priceUsd != null })
+            assertEquals(20, rows.count { it.priceUsd == null })
+            assertTrue("what was priced keeps its premium", rows.filter { it.priceUsd != null }.all { it.premiumPct != null })
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `search filters by ticker, symbol or company, and clears`() = runTest {
-        val vm = viewModel()
+    fun `nothing priced at all raises the prices banner and the rows stay`() = runTest {
+        val mints = (1..40).map { "Mint$it".padEnd(44, 'z') }
+        val prices = FakePriceRepository(
+            result = Result.failure(RateLimitedException("lite-api.jup.ag/price/v3", "429", null, null)),
+            unfetched = mints.toSet(),
+        )
+        val vm = wide(mints, prices)
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading && it.pricesUnavailable }
+            assertEquals(ListBanner.PricesUnavailable, state.banner)
+            assertFalse(state.pricesPartial)
+            assertEquals(40, (state.analyzed + state.withoutAnalysis).size)
+            assertTrue((state.analyzed + state.withoutAnalysis).all { it.priceUsd == null })
+            assertTrue("the analysis is still on screen", state.analyzed.all { it.composite != null })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a mint Jupiter has no price for is not a failure`() = runTest {
+        val prices = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5))))
+        val vm = viewModel(prices = prices)
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading && it.analyzed.any { row -> row.priceUsd != null } }
+            assertNull("an answered but unpriced mint raises no banner", state.banner)
+            assertFalse(state.pricesPartial)
+            assertFalse(state.pricesUnavailable)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the price run is capped so one refresh cannot spend a minute on paced calls`() = runTest {
+        val mints = (1..400).map { "Mint$it".padEnd(44, 'z') }
+        val prices = FakePriceRepository(Result.success(emptyMap()))
+        val vm = wide(mints, prices)
+        advanceUntilIdle()
+
+        assertEquals(2, prices.requested.size)
+        assertEquals(ListViewModel.PRICE_BUDGET, prices.requested[1].size)
+        assertEquals(400, vm.state.value.analyzed.size + vm.state.value.withoutAnalysis.size)
+    }
+
+    // ---- Search ------------------------------------------------------------------------
+
+    @Test
+    fun `search filters by ticker, symbol or company, says so when it misses, and clears`() = runTest {
+        val prices = FakePriceRepository()
+        val vm = viewModel(prices = prices)
 
         vm.state.test {
             awaitUntil { !it.isLoading }
+            val calls = prices.requested.size
 
             vm.search("jp")
             val jp = awaitUntil { it.query == "jp" }
@@ -185,12 +407,49 @@ class ListViewModelTest {
             vm.search("zzz")
             val miss = awaitUntil { it.query == "zzz" }
             assertTrue(miss.isEmpty)
+            assertTrue(miss.searchMiss)
 
-            vm.search("")
+            vm.clearSearch()
             val all = awaitUntil { it.query == "" }
-            assertEquals(3, all.analyzed.size)
+            assertEquals(2, all.analyzed.size)
             assertEquals(1, all.withoutAnalysis.size)
+            assertFalse(all.searchMiss)
 
+            assertEquals("searching never asks for a price", calls, prices.requested.size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ---- The banner slot ---------------------------------------------------------------
+
+    @Test
+    fun `one slot, in the order offline then stale then device`() {
+        val stale = ListUiState(allStaleDays = 3, pricesPartial = true, catalogUnavailable = true)
+        assertEquals(ListBanner.Stale(3), stale.banner)
+
+        val snapshot = stale.copy(fromSnapshot = true, snapshotCapturedOn = LocalDate.of(2026, 9, 12))
+        assertEquals(ListBanner.Snapshot(LocalDate.of(2026, 9, 12)), snapshot.banner)
+
+        assertEquals(ListBanner.Unavailable, snapshot.copy(failed = true).banner)
+        assertEquals(ListBanner.CatalogUnavailable, ListUiState(catalogUnavailable = true, pricesPartial = true).banner)
+        assertEquals(ListBanner.PricesUnavailable, ListUiState(pricesUnavailable = true, pricesPartial = true).banner)
+        assertEquals(ListBanner.PricesPartial, ListUiState(pricesPartial = true).banner)
+        assertNull(ListUiState().banner)
+    }
+
+    // ---- The Today strip ---------------------------------------------------------------
+
+    @Test
+    fun `the today strip counts what is watched and follows the store`() = runTest {
+        val watchlist = InMemoryWatchlistStore(setOf("AAPL", "TSLA"))
+        val vm = viewModel(watchlist = watchlist)
+
+        vm.state.test {
+            assertEquals(2, awaitUntil { !it.isLoading }.watched)
+            watchlist.add("NVDA")
+            assertEquals(3, awaitUntil { it.watched == 3 }.watched)
+            watchlist.remove("AAPL")
+            assertEquals(2, awaitUntil { it.watched == 2 }.watched)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -209,5 +468,27 @@ class ListViewModelTest {
             assertEquals(2, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ---- Support -----------------------------------------------------------------------
+
+    /** A list wide enough to have a window and a rest: half analyzed, half catalog only. */
+    private fun wide(mints: List<String>, prices: FakePriceRepository): ListViewModel {
+        val analyzed = mints.take(mints.size / 2)
+        val assets = mints.mapIndexed { index, mint -> xStock("T${index}x", "T$index", mint) }
+        val rows = analyzed.mapIndexed { index, _ ->
+            SummaryRow(
+                ticker = "T$index",
+                company = "Company $index",
+                tone = Tone.POSITIVE,
+                composite = 90.0 - index,
+                ageDays = 1,
+            )
+        }
+        return viewModel(
+            summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z", rows))),
+            catalog = FakeCatalogRepository(Result.success(assets)),
+            prices = prices,
+        )
     }
 }
