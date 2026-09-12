@@ -215,6 +215,22 @@ Five decisions the composition fixes:
 | Countdown | `Order.secondsLeft` when `hasExpiry` (RFQ only) |
 | Receipt | `/execute` signature, slot, `outAmount` actual; "quote {x}% · fill {y}%" from quoted vs actual |
 
+#### The order, verified live 2026-09-12 (T10)
+
+One `GET /swap/v2/order` for 5 USDC into TSLAx with the demo wallet as taker, 200 in 310 ms. Every cost is its own field with its own payer, so the sheet infers nothing:
+
+| field | this quote | payer |
+|---|---|---|
+| `signatureFeeLamports` | 5,000 | taker |
+| `rentFeeLamports` | 1,488,440 | taker |
+| `prioritizationFeeLamports` | 1,450 | taker |
+
+**This corrects task T10.** The plan says the SOL shortfall check adds ATA rent as the constant 2,039,280 lamports. That is the rent-exempt minimum of a 165-byte classic token account and it is not what this quote charges. Read `rentFeeLamports` from the order: it is per quote, it already knows whether the destination account exists, and it names its payer. The constant overstates the requirement by about 0.00055 SOL and drifts the moment account sizes or rent change. The shortfall is the three fields summed, against the wallet's lamports.
+
+The demo wallet holds no Token-2022 account today, so its first buy does pay this rent.
+
+Also on the quote: `router: "metis"`, `swapType: "aggregator"`, `mode: "ultra"`, `gasless: false`, so the taker pays and "no SOL required" is never the pitch. **No `expireAt` field at all**: bounded by `lastValidBlockHeight` and slippage, so the countdown belongs only to quotes that carry `expireAt` and its absence means no expiry, never expired. `slippageBps: 100` with `otherAmountThreshold` 1,346,933 against `outAmount` 1,360,437, so the worst case can be stated honestly beside the estimate. `feeBps: 10` plus a 10 bps platform fee on the input mint. All-in from the dollar values, `1 - outUsdValue / inUsdValue`, was 0.586 percent on the deepest xStock; the same pair measured 0.08 percent and then 1.44 percent fifteen minutes apart on 2026-09-10, so all-in cost belongs on the screen per quote, never in a fixed disclaimer. `requestId` is what `POST /swap/v2/execute` needs beside the signed transaction.
+
 ### Portfolio (T11)
 
 | Cell | Field |
