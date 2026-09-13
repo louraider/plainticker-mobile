@@ -5,9 +5,14 @@ the repo root on a clean checkout of `main`. Nothing here is optional.
 
 ## 1. Denylist is complete
 
-`scripts/redaction-denylist.sha256` already has the founder wallet hashed. Fill in the two
-commented placeholders (transaction signature of the Sep 10 spike swap, founder SKR stake
-account) with their SHA-256 hashes, never the identifiers themselves:
+**Done 2026-09-13.** Both placeholders are filled. Neither identifier was ever typed or stored:
+the spike signature came back from `getSignaturesForAddress` on the founder wallet, matched on
+slot 445,899,686 and verified against plan section 3 (one transaction, -5.00000000 USDC and
++0.01366647 TSLAx, no error); the stake account was re-read through the SKR staking program with
+the memcmp at offset 41, still 31,209.870777 SKR of principal. `scripts/redaction-denylist.sha256`
+holds three digests and no identifiers.
+
+If a fourth is ever added, hash it the same way and never paste the value into a file:
 
 ```bash
 printf %s '<identifier>' | sha256sum | cut -d' ' -f1
@@ -20,9 +25,27 @@ scripts/redaction-guard.sh
 scripts/redaction-guard.sh --history
 ```
 
-Both must print `redaction-guard: OK`. The second scans every commit on every ref; if it
-fails, the identifier is in history and step 3 applies. Also grep for anything that is not
-base58 shaped and was ever secret: RPC URLs with keys, key prefixes, `.env` names.
+**State on 2026-09-13: the tree is clean and history is not.**
+
+| run | result |
+|---|---|
+| working tree | OK, 241,715 distinct base58 candidates, no hit |
+| `--history` | FAILED, 403,493 candidates, one hit |
+
+The hit is the Sep 10 spike signature at `aeac9bb:docs/plan-2026-09-10.md:32`, the first plan
+commit. Exactly one commit carries it, and the line has since been rewritten in the working tree.
+That signature resolves on any block explorer to the founder's own wallet, which is the Seed Vault
+wallet of the phone and holds the SKR stake and the Genesis token, so this is not a cosmetic leak
+and step 3 applies before the flip.
+
+**CI on `main` is red because of this, on purpose.** `.github/workflows/ci.yml` runs the
+`--history` guard as its own job, and it began failing the moment the digest went into the
+denylist. That is the guard doing its job: it goes green again when the rewrite lands, and
+silencing it would be silencing the only thing standing between this repository and a doxxed
+wallet.
+
+Also grep for anything that is not base58 shaped and was ever secret: RPC URLs with keys, key
+prefixes, `.env` names.
 
 ```bash
 git log --all -p | grep -nE 'api-key=|apiKey|helius|sk_live|sk_test' | head
@@ -30,20 +53,38 @@ git log --all -p | grep -nE 'api-key=|apiKey|helius|sk_live|sk_test' | head
 
 ## 3. History ever contained a secret: rewrite it before the flip
 
-`git filter-repo` (not `filter-branch`), on a fresh mirror clone, then re-push:
+**This step is live.** `git filter-repo` (not `filter-branch`), on a fresh mirror clone, then
+re-push. The replacements file is built from the offending commit itself, so the signature is
+never displayed, pasted or held in the shell history:
 
 ```bash
 git clone --mirror git@github.com:<org>/<repo>.git repo-rewrite && cd repo-rewrite
-printf '%s==>[redacted]\n' '<secret>' > /tmp/replacements.txt   # one secret per line; delete the file afterwards
-git filter-repo --replace-text /tmp/replacements.txt
+
+git show aeac9bb:docs/plan-2026-09-10.md \
+  | grep -oE '[1-9A-HJ-NP-Za-km-z]{80,90}' | sort -u \
+  | sed 's/$/==>[redacted]/' > replacements.txt
+
+# Confirm it caught the right thing and nothing else: one line, and its digest is the
+# denylisted one. Do not proceed if this prints anything but a single matching digest.
+cut -d'=' -f1 replacements.txt | while read -r s; do printf %s "$s" | sha256sum; done
+# expect: 44ccc5ca952d8ba1b8ea09760dd5be61ac2cd219c40f5942ddf0812a349f55f5
+
+git filter-repo --replace-text replacements.txt
+rm -f replacements.txt
+bash ../scripts/redaction-guard.sh --history     # must print OK before anything is pushed
 git push --force --mirror
 ```
 
-The repo is still private at this point, so the cheapest way to drop the unreachable objects
-GitHub keeps is to delete the GitHub repo and recreate it from the rewritten mirror (or ask
-GitHub support to run gc). Every worktree and clone must be re-cloned; tags are rewritten
-too. Re-run step 2 on the rewritten history. Then **rotate that secret** (Helius key: new key
-in the server environment; keystore: `docs/release-signing.md` section 7).
+Verified 2026-09-13 that the extraction returns exactly one 87-character string and that its
+digest matches the denylist entry.
+
+**What the rewrite costs, so it is chosen rather than discovered.** `aeac9bb` is the root of every
+branch and of the `v0.2.0` tag, so every commit hash in the repository changes. Commit messages,
+authors, dates and order survive, which is what the judges read (plan section 0: technical depth
+is scored from commits). The `v0.2.0` tag moves to a new hash; the signed APK CI already built
+from it is a finished artifact and is not affected, but a later `docs/release-signing.md` run
+should re-tag. Every clone and worktree on this machine must be deleted and re-cloned, or they
+will fight the new history forever.
 
 ## 4. Rotate nothing that was never committed
 
