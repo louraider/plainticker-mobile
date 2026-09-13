@@ -314,6 +314,63 @@ The row's meta line keeps its shape: the sentence takes the premium's half, the 
 | Not served | detail 404 `unsupported_ticker` or `not_available` | trust layer still renders from chain + xStocks; fundamentals replaced by one row "Analysis not yet available" |
 | forward.* | all fields | not rendered in the hackathon build (design decision); may feed a later "Expectations" section |
 
+#### The floor re-measured against independent sources, 2026-09-13
+
+The founder asked how liquidity is checked, on the reasonable ground that the whole world trades
+these names and "no liquidity" sounds wrong. Checked `liquidity` from Price v3 against DexScreener
+(sum of every indexed pair) and GeckoTerminal (`total_reserve_in_usd`), then against the only
+measure that settles it, a real order.
+
+**Jupiter's `liquidity` is not the pool.** It runs 2x to 5x under the sum of indexed pairs, and the
+ratio is not constant, so it cannot be scaled into one:
+
+| | Price v3 `liquidity` | DexScreener, all pairs | ratio |
+|---|---|---|---|
+| SPYx | $4,275,435 | $7,954,274 | 0.54 |
+| TSLAx | $1,343,499 | $2,908,641 | 0.46 |
+| COINx | $350,489 | $1,283,821 | 0.27 |
+| KOx | $99,672 | $274,189 | 0.36 |
+| INTCx | $26,846 | $88,450 | 0.30 |
+| ORCLx | $4,450 | $21,494 | 0.21 |
+
+So `detail_gauge_thin` and `list_row_meta_thin`, which say "Pool holds $34", state something the
+field does not mean. The number is a routable depth of some kind, not the pool, and the copy claims
+the pool.
+
+**The thin tail is real anyway, and worse than the figure suggested.** The 24 analyzed tokens Price
+v3 puts under $1k have zero indexed pairs on DexScreener and zero 24-hour volume, and GeckoTerminal
+agrees ($0 for CRWDx, $711 for APPx). Their premiums are noise off nothing, which is what the floor
+was built to withhold. A $100 order proves it outright: UBERx quotes at **-64.2% price impact**,
+APPx at **-49.96%**. Metis will not route either at all (`NO_ROUTES_FOUND`, `TOKEN_NOT_TRADABLE`);
+only Manifest answers, at those prices.
+
+**Three tokens are misclassified by the current rule.** ORCLx, NFLXx and PEPx are `Thin` on the
+Price v3 figure and above the floor on every other source. All three quote on Raydium CLMM at $100
+with small impact (NFLXx -0.141%, PEPx -0.471%, ORCLx -1.555%), which is a working market the app
+currently declines to describe.
+
+**The measure that survives all three checks is price impact, not depth.** It is what the person
+actually pays, it comes back on the order the swap sheet already fetches, and it separates the
+cases the depth figure blurs: AMDx sits at $13,399 by Price v3 and moves **2.35% on a $1,000 order**,
+while TSLAx moves 0.08% on the same size. One number, second person, no jargon.
+
+#### Swap v2 refuses tradable tokens, found 2026-09-13
+
+`GET /swap/v2/order` with no router argument returns **400 `"Quote not available from market maker"`**
+for NFLXx, ORCLx, PEPx, UBERx and APPx at every size down to $100. The endpoint asks the RFQ router
+and fails hard rather than falling back to the aggregator. Adding `excludeRouters=jupiterz` to the
+same request returns a route immediately, on Raydium CLMM, at the impacts above.
+
+This is a shipped defect, not an API quirk: the swap sheet reads `/swap/v2/order`, so the app tells
+the holder no quote exists for a token that trades fine. It hits every xStock no market maker
+covers, which on this sample is at least five of the twelve that quote at all.
+
+The fix is a fallback, not a flag. RFQ is worth asking first (TSLAx at $1,000 routes through
+JupiterZ at a price improvement, -0.091% all-in), so the order call keeps its default, and on
+`"Quote not available from market maker"` retries once with `excludeRouters=jupiterz`. A token that
+fails both is genuinely unbuyable and the sheet says so.
+
+
 #### The mint, read live 2026-09-12 (T9 data half)
 
 `getAccountInfo(mint, jsonParsed)` through the production forwarder, captured verbatim into
