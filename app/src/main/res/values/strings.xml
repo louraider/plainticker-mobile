@@ -4,7 +4,7 @@
   design/canvas/instrument.py (labels, headings, onboarding sentences) and docs/plan-2026-09-10.md
   section 13 Pass 2 (empty, error and stale states). Guarded by CopyLintTest: no verdict words,
   no em or en dash, no exclamation mark, no emoji, no marketing words, at most one middle dot per
-  string. Every number arrives as an argument already formatted by com.myapp.ui.Fmt.
+  string. Every number arrives as an argument already formatted by com.plainticker.mobile.ui.Fmt.
 -->
 <resources>
     <string name="app_name">PlainTicker</string>
@@ -274,7 +274,7 @@
     <string name="watchlist_checked">Checked %1$s.</string>
     <string name="watchlist_empty">Nothing watched yet. Watch a stock from its page to see its next report date here, and get one digest a day.</string>
 
-    <!-- The daily digest: one sentence per clause, assembled by com.myapp.watchlist.digest -->
+    <!-- The daily digest: one sentence per clause, assembled by com.plainticker.mobile.watchlist.digest -->
     <string name="digest_watched">%1$s watched.</string>
     <string name="digest_moved">%1$s moved from %2$s to %3$s against the NYSE close.</string>
     <string name="digest_reports_today">%1$s reports today.</string>
