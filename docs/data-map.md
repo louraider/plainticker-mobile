@@ -518,6 +518,10 @@ machine cannot leave the amount step, and nothing was funded to make it. `Quotin
 check, `AwaitingWallet`, the wallet round-trip timing, the requote and the receipt remain covered
 by unit tests only. No transaction was signed and no money moved.
 
+*Superseded later the same day:* the signing leg was exercised for real against the release build,
+and it found two things. See "What the first real swap taught us, 2026-09-13" at the end of this
+file.
+
 #### Receipts, local (T10) -> read by Portfolio (T11)
 
 The chain carries no cost basis, so the app writes its own record when a swap lands: `data/receipts/`, a serialized JSON file behind `ReceiptStore` (not Room: append-only, read whole, a few hundred rows, and ksp is not worth a module's build budget). Newest first, capped at 200, the signature is the row identity so one landing is one row.
@@ -622,9 +626,13 @@ covered by `PortfolioModelTest`, `PortfolioViewModelTest` and the four previews 
 | Targets | Refresh [682,1166][879,1310] and Disconnect [879,1166][1140,1310], both 144 px tall, which is 48 dp |
 
 The two receipt rows were a **synthetic fixture** written into `files/swap-receipts.json` with
-`run-as` and deleted afterwards: no swap has ever landed on this device, the signing leg is still
+`run-as` and deleted afterwards: no swap had landed on this device yet, the signing leg was still
 unexercised, and the only honest way to see the section on hardware was to seed the record the app
 would have written. The signatures in it were obviously fake and nothing was sent anywhere.
+
+*Superseded later the same day:* a real swap landed and wrote a real row, and the total above it
+read `1 xStocks, priced by Jupiter`. See "What the first real swap taught us, 2026-09-13" at the
+end of this file.
 
 The walk found one real defect: the received amount and its ticker were drawn in Outfit, because
 the row's second cell is the company slot and the canvas helper draws it in the UI face. DESIGN.md
@@ -811,3 +819,81 @@ written, each proved on this phone:
 The walk was also proved to fail a third way, independently of the two seeded during development:
 with `animator_duration_scale` already 0 before the run, the live bar physically cannot breathe and
 pass 1 exits 1 in 49 s on "the live bar to breathe: at least 100 frames in 2s / found: 4 frames".
+
+## What the first real swap taught us, 2026-09-13
+
+The first swap this product has ever made with real money: **5 USDC into TSLAx** from the public
+demo wallet on SM02E4072810430, signature
+`5pyP9e1wHCGmatBKM8wtzTW33AjtBR7hMv5Xf4RF2fYhYGyioQov76L29ToZaXtTVF1WbsnqJM2zvRu7awAXHK3F`,
+**slot 446,653,478**, confirmed in 0.8 s, against the signed release build v0.2.0. Everything
+above this heading was measured against a debug build that stops after signing; this is the first
+entry written from a leg that actually landed. It left the wallet holding 0.01362917 TSLAx and
+15.216083 USDC, and it exposed two copy defects, one on each side of the swap.
+
+**1. The plural. Portfolio, under the total.**
+
+| | |
+|---|---|
+| Seen | `1 xStocks, priced by Jupiter`, under `$4.99`, read off the device with `uiautomator dump` |
+| Why | the sentence was a `<string>` with the plural spelled once, so a count of one printed a plural noun |
+| Now | `1 xStock, priced by Jupiter`, and `4 xStocks, priced by Jupiter` |
+
+It was not one string. Every sentence in the app that said a whole number out loud had the same
+shape, so all nine are `<plurals>` now and the platform picks the form:
+
+| Resource | one | other |
+|---|---|---|
+| `portfolio_priced_by` | `1 xStock, priced by Jupiter` | `4 xStocks, priced by Jupiter` |
+| `portfolio_priced_partial` | `1 of 1 xStock priced by Jupiter, the total covers it` | `1 of 3 xStocks priced by Jupiter, the total covers those` |
+| `portfolio_priced_none` | `1 xStock, not priced by Jupiter` | `3 xStocks, none of them priced by Jupiter` |
+| `list_today_watched` | `Today: 1 stock watched` | `Today: 12 stocks watched` |
+| `list_today` | `Today: 1 stock watched, next report TSLAx on Oct 22` | `Today: 12 stocks watched, next report TSLAx on Oct 22` |
+| `digest_watched` | `1 stock watched.` | `4 stocks watched.` |
+| `digest_reports_in_days` | `TSLAx reports in 1 day.` | `TSLAx reports in 4 days.` |
+| `detail_fscore_of` | `of 1 signal` | `of 9 signals` |
+| `detail_fscore_a11y` | `F-Score 1 of 1 signal` | `F-Score 8 of 9 signals` |
+| `swap_amount_too_precise` | `CENTx counts 1 decimal` | `USDC counts 6 decimals` |
+
+Two of those had never been reachable at one (`digest_reports_in_days` has its own sentences for
+today and tomorrow; the F-Score scale is nine), which is exactly why the class needed a guard
+rather than nine judgements. `CountCopyTest` renders each of them out of the shipped strings.xml at
+one and at many, asks every model that counts twice, and lints `src/main` for a `Fmt.count(...)`
+handed to `stringResource`, `words` or `getString`. That last rule is the bug's own shape: it
+printed the six real call sites the moment it was written.
+
+**2. The wrong truth. Swap sheet, after the wallet closes.**
+
+| | |
+|---|---|
+| Seen | `The swap did not land. Nothing was swapped.` with a Close button, after the wallet sheet was closed without approving |
+| Why | every way the approval round trip could end without a signature landed in the terminal failure branch |
+| Now | `No signature came back, so nothing was sent. The amount is still here.` on the amount step, with what was typed still in the field |
+
+True on chain and the wrong sentence: nothing failed, nobody approved. What the app can actually
+know is in the device log, which is the reason the new sentence is worded the way it is. The
+attempt that was not approved:
+
+```
+11:01:04.248  Encrypted session established
+11:01:42.627  mobile-wallet-adapter session closed
+```
+
+and the one that landed at slot 446,653,478:
+
+```
+11:08:09.943  Encrypted session established
+11:08:19.761  mobile-wallet-adapter session closed
+```
+
+The session closes either way. **Mobile Wallet Adapter does not tell the app why it ended**, only
+whether a signature came back with it, so a sentence naming a decline would be a guess and a
+sentence naming a failure is worse than a guess. What is certain is the same in all three cases
+(declined, the sheet went away, the session dropped): nothing was signed, `/execute` was never
+called, no money moved. So the machine treats all three as a cancellation, which is a state it
+already had, and the sheet returns to the amount step with the amount intact instead of a dead end.
+
+Two failure reasons went with it. `NOTHING_SIGNED` ("The wallet returned no signed transaction") is
+unreachable now and is gone. `WALLET_REFUSED` ("The wallet did not return a signature") only ever
+described a failed *connect* once the approval path stopped using it, so it is `CONNECT_REFUSED`
+and says `The wallet did not answer, so nothing was connected`. `The swap did not land. Nothing was
+swapped.` stays, and now belongs to exactly one thing: an `/execute` that refused.
