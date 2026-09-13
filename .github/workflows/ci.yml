@@ -45,6 +45,34 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  shell-scripts:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # No runner has a phone, so nothing here walks the app. This job proves only that the
+      # scripts parse and pass shellcheck, and that device-smoke's own entry point works on a
+      # machine with no adb. The walk itself is run by a person on the Seeker before the release
+      # APK is cut and before the video is recorded, and the result is written into
+      # docs/qa-checklist.md.
+      - name: Parse
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+
+      - name: shellcheck
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq shellcheck
+          fi
+          shellcheck --version
+          shellcheck scripts/*.sh
+
+      - name: device-smoke usage
+        run: bash scripts/device-smoke.sh --help
+
   redaction-guard:
     name: Redaction guard
     runs-on: ubuntu-latest
