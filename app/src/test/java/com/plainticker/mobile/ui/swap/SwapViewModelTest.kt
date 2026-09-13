@@ -125,6 +125,7 @@ class SwapViewModelTest {
         wallet: FakeWalletSession,
         rpc: FakeRpcRepository = chain(),
         submitSwaps: Boolean = true,
+        receipts: FakeReceiptStore = this.receipts,
     ) = SwapViewModel(
         swapApi = JupiterSwapApi(mock.client),
         wallet = wallet,
@@ -451,54 +452,60 @@ class SwapViewModelTest {
 
     // ---- The wallet ----------------------------------------------------------------------------
 
+    /**
+     * The approval round trip, in the three shapes it can come back in without a signature.
+     *
+     * On the Seeker on 2026-09-13 the attempt that was not approved and the one that was looked
+     * identical in the log up to the last line: "Encrypted session established" at 11:01:04 and
+     * "mobile-wallet-adapter session closed" at 11:01:42, against 11:08:09 and 11:08:19 for the
+     * swap that landed at slot 446,653,478. The only difference the app can see is whether a
+     * signature came back, never why the session ended, so all three are the same answer: nothing
+     * was signed, nothing was sent, back to the amount with it intact.
+     */
     @Test
-    fun `a cancelled approval returns to the amount step with nothing lost and nothing sent`() = runTest {
-        val mock = jupiter()
-        val wallet = FakeWalletSession().apply {
+    fun `an approval that comes back without a signature is a cancellation, whatever ended it`() = runTest {
+        val declined = FakeWalletSession().apply {
             connectedAs(seeker)
             enqueue(WalletOutcome.Cancelled)
         }
-        val vm = viewModel(mock, wallet)
-
-        vm.state.test {
-            awaitItem()
-            submitFive(vm, this)
-            val back = awaitUntil { it is SwapState.Amount && it.note != null } as SwapState.Amount
-
-            assertEquals(SwapNote.CANCELLED_IN_WALLET, back.note)
-            assertEquals("the typed amount survived", "5", back.input.text)
-            assertEquals(5_000_000L, back.input.raw)
-            assertTrue("and it can be sent again", back.canSubmit)
-            assertEquals("a cancel is not a failure", 20_200_000L, back.balanceRaw)
-            assertEquals(1, mock.orders().size)
-            assertTrue(mock.executes().isEmpty())
-            assertTrue(receipts.writes.isEmpty())
-            cancelAndIgnoreRemainingEvents()
+        val sessionClosed = FakeWalletSession().apply {
+            connectedAs(seeker)
+            enqueue(WalletOutcome.Error("mobile-wallet-adapter session closed"))
         }
-    }
-
-    @Test
-    fun `a wallet that returns no signed transaction fails without submitting`() = runTest {
-        val mock = jupiter()
-        val wallet = FakeWalletSession().apply {
+        val nothingSigned = FakeWalletSession().apply {
             connectedAs(seeker)
             operations = FakeAdapterOperations(signedPayloads = emptyList())
         }
-        val vm = viewModel(mock, wallet)
 
-        vm.state.test {
-            awaitItem()
-            submitFive(vm, this)
-            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
-            assertEquals(SwapFailure.NOTHING_SIGNED, failed.reason)
-            assertTrue(mock.executes().isEmpty())
-            assertTrue(receipts.writes.isEmpty())
-            cancelAndIgnoreRemainingEvents()
+        listOf(
+            "declined in the wallet" to declined,
+            "the session closed" to sessionClosed,
+            "the wallet signed nothing" to nothingSigned,
+        ).forEach { (what, wallet) ->
+            val mock = jupiter()
+            val store = FakeReceiptStore()
+            val vm = viewModel(mock, wallet, receipts = store)
+
+            vm.state.test {
+                awaitItem()
+                submitFive(vm, this)
+                val back = awaitUntil { it is SwapState.Amount && it.note != null } as SwapState.Amount
+
+                assertEquals(what, SwapNote.NOT_APPROVED, back.note)
+                assertEquals("$what: the typed amount survived", "5", back.input.text)
+                assertEquals(what, 5_000_000L, back.input.raw)
+                assertTrue("$what: and it can be sent again", back.canSubmit)
+                assertEquals("$what: nothing was spent", 20_200_000L, back.balanceRaw)
+                assertEquals(what, 1, mock.orders().size)
+                assertTrue("$what: nothing was sent", mock.executes().isEmpty())
+                assertTrue("$what: nothing landed, so nothing was recorded", store.writes.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
     }
 
     @Test
-    fun `a wallet error is a failure and its text stays in the debug log`() = runTest {
+    fun `a wallet error on the approval keeps its own words in the debug log`() = runTest {
         val mock = jupiter()
         val wallet = FakeWalletSession().apply {
             connectedAs(seeker)
@@ -509,9 +516,9 @@ class SwapViewModelTest {
         vm.state.test {
             awaitItem()
             submitFive(vm, this)
-            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
-            assertEquals(SwapFailure.WALLET_REFUSED, failed.reason)
-            assertTrue(logged.any { "SocketTimeoutException" in it })
+            val back = awaitUntil { it is SwapState.Amount && it.note != null } as SwapState.Amount
+            assertEquals(SwapNote.NOT_APPROVED, back.note)
+            assertTrue("the upstream words are logged, never drawn", logged.any { "SocketTimeoutException" in it })
             cancelAndIgnoreRemainingEvents()
         }
     }

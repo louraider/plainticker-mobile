@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.swap
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.ShippedCopy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -172,14 +173,29 @@ class SwapSheetModelTest {
         assertEquals(R.string.swap_cost_at_tap, CostNotice.AtTap.text)
     }
 
-    // ---- Cancelled ----------------------------------------------------------------------------
+    // ---- Not approved -------------------------------------------------------------------------
 
+    /**
+     * The sentence a session that ended with no signature gets, and the state it gets it in.
+     *
+     * The Seeker drew "The swap did not land. Nothing was swapped." on 2026-09-13 when the wallet
+     * sheet was closed without an approval: true on chain and the wrong sentence, because nothing
+     * failed. Mobile Wallet Adapter cannot tell a decline from a sheet that went away, so this one
+     * names no fault, and the state is the amount step with the amount intact rather than a
+     * terminal screen with a Close button.
+     */
     @Test
-    fun `a cancelled approval is a neutral note over the amount that was typed`() {
-        val content = SwapState.Amount(leg, funds, amount(), SwapNote.CANCELLED_IN_WALLET).shown()
-        assertEquals(R.string.swap_cancelled, id(content.notice))
+    fun `an approval that came back with no signature is a neutral note over the typed amount`() {
+        val content = SwapState.Amount(leg, funds, amount(), SwapNote.NOT_APPROVED).shown()
+        assertEquals(R.string.swap_not_approved, id(content.notice))
+        assertEquals(
+            "No signature came back, so nothing was sent. The amount is still here.",
+            ShippedCopy.render(requireNotNull(content.notice)),
+        )
         assertEquals("nothing was lost, so the amount is still there", "5", content.field?.value)
+        assertEquals(SheetActionKind.Submit, content.primary?.kind)
         assertTrue("and it can be submitted again", content.primary!!.enabled)
+        assertFalse("it is not a dead end", content.isReceipt)
     }
 
     // ---- Quoting and requoting -------------------------------------------------------------------
