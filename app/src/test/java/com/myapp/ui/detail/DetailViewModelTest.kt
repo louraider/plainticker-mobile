@@ -22,6 +22,7 @@ import com.myapp.data.xstocks.Multiplier
 import com.myapp.data.xstocks.PriceLabel
 import com.myapp.data.xstocks.Trading
 import com.myapp.data.xstocks.TradingPeriod
+import com.myapp.prefs.InMemoryNotificationPromptStore
 import com.myapp.prefs.InMemoryWatchlistStore
 import com.myapp.repo.FakeCatalogRepository
 import com.myapp.repo.FakeMintRepository
@@ -124,7 +125,8 @@ class DetailViewModelTest {
         prices: FakePriceRepository = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
         mints: FakeMintRepository = readableMint(),
         watchlist: InMemoryWatchlistStore = InMemoryWatchlistStore(),
-    ) = DetailViewModel(ticker, summaries, catalog, prices, mints, watchlist, clock)
+        prompts: InMemoryNotificationPromptStore = InMemoryNotificationPromptStore(),
+    ) = DetailViewModel(ticker, summaries, catalog, prices, mints, watchlist, prompts, clock)
 
     // ---- Everything present ------------------------------------------------------------------
 
@@ -496,6 +498,51 @@ class DetailViewModelTest {
         }
     }
 
+    /**
+     * Plan section 13 Pass 2 and Pass 7: the notification permission is requested at the moment
+     * the first ticker is watched, never at launch, and a refusal is an answer rather than a state
+     * to work around. The ViewModel decides the moment; the screen owns the request itself.
+     */
+    @Test
+    fun `the permission is asked for on the first ticker ever watched and never again`() = runTest {
+        val watchlist = InMemoryWatchlistStore()
+        val prompts = InMemoryNotificationPromptStore()
+        val first = viewModel(ticker = "AAPL", watchlist = watchlist, prompts = prompts)
+
+        assertTrue("the first ticker on an empty watchlist asks", first.toggleWatch())
+        assertTrue(prompts.hasAsked())
+
+        val second = viewModel(ticker = "TSLA", watchlist = watchlist, prompts = prompts)
+        assertFalse("the second ticker does not ask again", second.toggleWatch())
+
+        // Unwatching everything and starting over is still not a reason to ask a second time.
+        first.toggleWatch()
+        second.toggleWatch()
+        assertTrue(watchlist.tickers.value.isEmpty())
+        assertFalse(first.toggleWatch())
+        assertEquals("the flag is written once", 1, prompts.writes)
+    }
+
+    @Test
+    fun `unwatching never asks for the permission`() = runTest {
+        val watchlist = InMemoryWatchlistStore(setOf("AAPL"))
+        val prompts = InMemoryNotificationPromptStore()
+        val vm = viewModel(watchlist = watchlist, prompts = prompts)
+
+        assertFalse(vm.toggleWatch())
+        assertTrue(watchlist.tickers.value.isEmpty())
+        assertFalse("and it was never asked", prompts.hasAsked())
+    }
+
+    @Test
+    fun `a device that has already answered is not asked when it watches its first ticker`() = runTest {
+        val prompts = InMemoryNotificationPromptStore(asked = true)
+        val vm = viewModel(watchlist = InMemoryWatchlistStore(), prompts = prompts)
+
+        assertFalse(vm.toggleWatch())
+        assertEquals(0, prompts.writes)
+    }
+
     @Test
     fun `a ticker already watched is watched from the first emission`() = runTest {
         val vm = viewModel(watchlist = InMemoryWatchlistStore(setOf("AAPL")))
@@ -523,6 +570,7 @@ class DetailViewModelTest {
             FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
             readableMint(),
             InMemoryWatchlistStore(),
+            InMemoryNotificationPromptStore(),
             { moment },
         )
 

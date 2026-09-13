@@ -63,6 +63,7 @@ fun WatchlistScreen(
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
     onBrowseList: (() -> Unit)? = null,
+    onRunCheck: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -81,6 +82,7 @@ fun WatchlistScreen(
         onRetry = viewModel::refresh,
         onOpenDetail = onOpenDetail,
         onBrowseList = onBrowseList,
+        onRunCheck = onRunCheck,
         // One way to turn notifications back on, where the line that says they are off is. It
         // opens the system settings and nothing else: the app asks for the permission once, at
         // the first watch, and never asks again (see DetailScreen).
@@ -103,6 +105,7 @@ internal fun WatchlistContent(
     onOpenDetail: (String) -> Unit,
     onBrowseList: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onRunCheck: (() -> Unit)? = null,
     onEnableNotifications: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
@@ -162,6 +165,23 @@ internal fun WatchlistContent(
                 onEnableNotifications = onEnableNotifications,
             )
         }
+        // Debug builds only, behind the same gate as the component gallery and the wallet spike.
+        onRunCheck?.let { run -> item(key = "debug-run") { DebugRunCheck(run) } }
+    }
+}
+
+/**
+ * The fire-now entry point: the daily check, by hand, so the digest and the notification are
+ * testable without waiting until tomorrow. It goes through WorkManager, so what it exercises is
+ * the whole path the daily run takes and not a shortcut around it.
+ */
+@Composable
+private fun DebugRunCheck(onRunCheck: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        TextAction(label = stringResource(R.string.debug_run_watchlist_check), onClick = onRunCheck)
     }
 }
 
@@ -346,6 +366,7 @@ private fun WatchlistNotificationsOffPreview() {
             onRetry = {},
             onOpenDetail = {},
             onBrowseList = {},
+            onRunCheck = {},
             onEnableNotifications = {},
         )
     }
