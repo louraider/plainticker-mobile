@@ -68,8 +68,14 @@ MOTION_WINDOW_S=2
 MOTION_MIN_FRAMES=100
 STILL_MAX_FRAMES=20
 
-# The screen is 1200x2670 at 480dpi and the content gutter is 20dp (DESIGN.md section 5).
-GUTTER_PX=60
+# The content gutter is 20dp (DESIGN.md section 5). What that is in pixels follows the phone's
+# density, which is read off the phone rather than assumed: 60px on this Seeker at 480dpi, and
+# something else on the second Android phone step 5.10 of the checklist reaches for.
+GUTTER_DP=20
+
+# A screen that drew nodes but no readable string is not a screen that passed the copy rules, it is
+# a screen with nothing on it. The thinnest real screen the walk meets is onboarding at 7 strings.
+MIN_STRINGS_PER_SCREEN=5
 
 # The second pass runs at font scale 1.3 (plan section 13, Pass 6: every screen is tested at 1.3x).
 # A numeral that kept to one line grows to about the scale; one that took a second line grows to
@@ -110,8 +116,12 @@ while [ $# -gt 0 ]; do
       DO_INSTALL=1
       case "${2:-}" in -*|"") ;; *) APK="$2"; shift ;; esac
       ;;
-    --deep) DEEP_TICKER="${2:-}"; shift ;;
-    --thin) THIN_TICKER="${2:-}"; shift ;;
+    --deep)
+      [ $# -ge 2 ] || { echo "device-smoke: --deep needs a ticker" >&2; usage >&2; exit 2; }
+      DEEP_TICKER="$2"; shift ;;
+    --thin)
+      [ $# -ge 2 ] || { echo "device-smoke: --thin needs a ticker" >&2; usage >&2; exit 2; }
+      THIN_TICKER="$2"; shift ;;
     --keep) KEEP=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "device-smoke: unknown argument '$1'" >&2; usage >&2; exit 2 ;;
@@ -177,6 +187,10 @@ sh_ pm path "$PKG" | grep -q . || {
 SCREEN_W="$(sh_ wm size | awk -F'[ x]' '/Physical size/ { print $(NF-1) }')"
 SCREEN_H="$(sh_ wm size | awk -F'[ x]' '/Physical size/ { print $NF }' | tr -d '\r')"
 case "$SCREEN_W$SCREEN_H" in *[!0-9]*|"") echo "device-smoke: could not read the screen size." >&2; exit 2 ;; esac
+
+DENSITY="$(sh_ wm density | awk -F': *' '/Physical density/ { print $2 + 0; exit }' | tr -d '\r')"
+case "$DENSITY" in ''|*[!0-9]*|0) echo "device-smoke: could not read the screen density." >&2; exit 2 ;; esac
+GUTTER_PX=$((GUTTER_DP * DENSITY / 160))
 CONTENT_RIGHT=$((SCREEN_W - GUTTER_PX))
 
 WORK="$(mktemp -d 2>/dev/null || mktemp -d -t devicesmoke)"
@@ -376,6 +390,15 @@ ISO_STAMP='[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}'
 
 assert_lint() {
   _n="$1"
+  # Every copy rule below is an absence, and an absence is free on a screen that drew nothing. This
+  # is the one place the walk checks that there was something to read in the first place, and every
+  # assert_labels and assert_geometry call in the walk is preceded by an assert_lint on that dump.
+  _strings="$(screen_text "$_n" | grep -c . || true)"
+  [ "$_strings" -ge "$MIN_STRINGS_PER_SCREEN" ] || fail \
+    "a screen with something on it: at least $MIN_STRINGS_PER_SCREEN readable strings, so that the \
+copy rules below are absences on a drawn screen rather than on an empty one" \
+    "$_strings string(s); this dump has nodes of $PKG but next to nothing a reader could see"
+
   _hit="$(screen_text "$_n" | grep -Eiw "$VERDICT_WORDS" | head -3 || true)"
   [ -z "$_hit" ] || fail "no verdict word (${VERDICT_WORDS//|/, }) anywhere on the screen" \
                          "$(printf '%s' "$_hit" | tr '\n' '/')"
@@ -398,7 +421,7 @@ prices and percents and 6dp trimmed for token amounts" "$(printf '%s' "$_hit" | 
   _hit="$(awk -F'\t' '$11 ~ /^-?[0-9]+\.[0-9]+$/ { print $11; c++ } c == 3 { exit }' "$WORK/$_n.tsv")"
   [ -z "$_hit" ] || fail "no bare decimal drawn as a value: the composite is an integer percentile" \
                          "$(printf '%s' "$_hit" | tr '\n' '/')"
-  pass "copy rules hold (no verdict word, no Cyrillic, no em dash, no ISO stamp, no raw float)"
+  pass "copy rules hold over $_strings strings (no verdict word, no Cyrillic, no em dash, no ISO stamp, no raw float)"
 }
 
 # Pass 6 of the plan: every clickable speaks. A clickable with neither its own label nor a labelled
@@ -658,6 +681,10 @@ wait_quiet() { # max-seconds
     sleep 1
     _f="$(sh_ dumpsys gfxinfo "$PKG" | awk -F': *' '/Total frames rendered/ { print $2 + 0; exit }')"
     case "$_f" in ''|*[!0-9]*) _f=999 ;; esac
+    # "No frames" means settled only once the app owns the screen. Between `am start` and the first
+    # frame, gfxinfo answers a literal 0 for a few tenths of a second, and reading that as quiet is
+    # exactly how a walk ends up taking coordinates off a screen that is still moving.
+    [ "$(focused_pkg)" = "$PKG" ] || continue
     if [ "$_f" -le 2 ]; then return 0; fi
   done
   return 0   # a screen that never settles is the screen's business; the walk carries on
@@ -737,13 +764,16 @@ screen_has onboarding '^Tokenized stocks, read before you swap\.$' \
   || fail "the onboarding headline" "$(screen_text onboarding | head -3 | tr '\n' ';')"
 screen_has onboarding '^I am not a US person,' \
   || fail "the self-certification sentence" "$(screen_text onboarding | tr '\n' ';')"
+# The same ancestor walk tap_center uses: a depth stack, so what is read is the control that holds
+# "Read the list" and not whichever earlier node happened to be both shallower and clickable.
 _gate="$(awk -F'\t' '
-  { d[NR] = $1; clk[NR] = $6; en[NR] = $7; tx[NR] = $11; n = NR }
-  END {
-    for (i = 1; i <= n; i++) {
-      if (tx[i] != "Read the list") continue
-      for (k = i - 1; k >= 1; k--) if (d[k] < d[i] && clk[k] == "true") { print en[k]; exit }
+  { stack[$1] = $0 }
+  $11 == "Read the list" {
+    for (i = $1; i >= 0; i--) {
+      split(stack[i], n, "\t")
+      if (n[6] == "true") { print n[7]; exit }
     }
+    exit
   }' "$WORK/onboarding.tsv")"
 [ "$_gate" = false ] || fail "\"Read the list\" disabled until the certification is checked" \
                              "its control reports enabled=$_gate"
@@ -936,8 +966,10 @@ step "font scale $((FONT_SCALE_PCT / 100)).$((FONT_SCALE_PCT % 100))"
 sh_ settings put system font_scale "$(awk -v p="$FONT_SCALE_PCT" 'BEGIN { printf "%.2f", p / 100 }')" >/dev/null
 sleep 2
 sh_ am force-stop "$PKG" >/dev/null || true
-sh_ am start -n "$PKG/$ACTIVITY" >/dev/null
-sleep 3
+# -W, not a bare start and a fixed sleep: it returns on the first frame, so what follows is never
+# measuring a process that has not drawn yet.
+sh_ am start -W -n "$PKG/$ACTIVITY" >/dev/null
+sleep 2
 wait_quiet 20
 dump_until big-list '^Analyzed$' || lost "the list never came back at font scale ${FONT_SCALE_PCT}%"
 assert_lint big-list
@@ -976,15 +1008,14 @@ step "animator scale 0"
 # the app has to be started again for the setting to reach the live bar.
 sh_ settings put global animator_duration_scale 0 >/dev/null
 sh_ am force-stop "$PKG" >/dev/null || true
-sh_ am start -n "$PKG/$ACTIVITY" >/dev/null
-sleep 3
+sh_ am start -W -n "$PKG/$ACTIVITY" >/dev/null
+sleep 2
 wait_quiet 20
 dump_until still-list '^Analyzed$' || lost "the list never came back at animator scale 0"
 open_detail still-list "$DEEP_X" still
 assert_lint still-top
 assert_geometry still-top
-screen_has still-top '^Live from the mint$'   || fail "the live bar on the screen, or 'static' means nothing"           "$(screen_text still-top | head -6 | tr '
-' ';')"
+screen_has still-top '^Live from the mint$'   || fail "the live bar on the screen, or 'static' means nothing"           "$(screen_text still-top | head -6 | tr '\n' ';')"
 assert_motion static
 restore_setting global animator_duration_scale "$SAVED_ANIMATOR"
 
