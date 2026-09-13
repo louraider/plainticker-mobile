@@ -788,3 +788,26 @@ before the first watch, 1 while a ticker is watched, 0 again after unwatching.
 Caution, so it asserts that "Issuer can move tokens" and "issuer can pause" appear on the two
 issuer-control cells whose value is Yes and on no other cell on the screen. The colour itself stays
 pinned by `DetailModelTest` without a device.
+
+**What the cross-model review changed, 2026-09-13.** Three corrections after the walk was first
+written, each proved on this phone:
+
+1. `wait_quiet` read "no frames" as "settled". Between `am start` and the first frame `dumpsys
+   gfxinfo` answers a literal `0` for a few tenths of a second (sampled at 0.2 s intervals after a
+   bare `am start`: none, 0, 5, 9, 13, ...), so a walk that starts the app and polls immediately
+   can call a screen settled before it has drawn anything, which is the snapshot-banner trap in
+   point 1 above wearing a different hat. The scale and animator passes now start the app with
+   `am start -W`, which returns on the first frame in about 1.2 s, and `wait_quiet` only accepts a
+   quiet reading once `dumpsys window` says the app owns the focus.
+2. Every copy rule is an absence, and an absence is free on a screen that drew nothing. A dump with
+   nodes but no text used to pass `assert_lint`, `assert_labels` and `assert_geometry` in silence.
+   `assert_lint` now fails below five readable strings; the thinnest real screen in the walk is
+   onboarding at 7, and each pass line prints the count it checked, so the transcript carries its
+   own evidence against vacuity.
+3. The 20 dp gutter was 60 px hard-coded. It is now `wm density` divided into 20 dp, so the walk
+   means the same thing on the second Android phone step 5.10 of the checklist reaches for
+   (52 px at 420 dpi, 70 px at 560 dpi).
+
+The walk was also proved to fail a third way, independently of the two seeded during development:
+with `animator_duration_scale` already 0 before the run, the live bar physically cannot breathe and
+pass 1 exits 1 in 49 s on "the live bar to breathe: at least 100 frames in 2s / found: 4 frames".
