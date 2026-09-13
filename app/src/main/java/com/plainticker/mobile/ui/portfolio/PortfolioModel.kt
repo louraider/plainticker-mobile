@@ -5,6 +5,7 @@ import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.receipts.SwapReceipt
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.raw
 import com.plainticker.mobile.ui.words
 
@@ -72,10 +73,12 @@ fun totalBlock(state: PortfolioUiState): TotalBlock {
     val valued = state.valuedCount
     return TotalBlock(
         value = state.totalUsd?.let(Fmt::price),
+        // The noun is the one the count governs, which is how many positions are on screen: the
+        // partial sentence names the valued ones first and still agrees with the total it covers.
         sub = when {
-            valued == held -> words(R.string.portfolio_priced_by, Fmt.count(held))
-            valued == 0 -> words(R.string.portfolio_priced_none, Fmt.count(held))
-            else -> words(R.string.portfolio_priced_partial, Fmt.count(valued), Fmt.count(held))
+            valued == held -> counted(R.plurals.portfolio_priced_by, held, Fmt.count(held))
+            valued == 0 -> counted(R.plurals.portfolio_priced_none, held, Fmt.count(held))
+            else -> counted(R.plurals.portfolio_priced_partial, held, Fmt.count(valued), Fmt.count(held))
         },
     )
 }

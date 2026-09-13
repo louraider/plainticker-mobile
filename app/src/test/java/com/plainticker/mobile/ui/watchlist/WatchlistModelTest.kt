@@ -88,7 +88,7 @@ class WatchlistModelTest {
 
     @Test
     fun `the Panel draws the stored digest as it was sent`() {
-        val text = "3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days."
+        val text = "3 stocks watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days."
         val panel = digestPanel(
             DigestRecord(text = text, producedAtMillis = Instant.parse("2026-09-13T08:00:00Z").toEpochMilli()),
         )

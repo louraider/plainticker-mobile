@@ -33,7 +33,7 @@ class DigestTest {
 
         assertEquals(first, second)
         assertEquals(
-            "3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.",
+            "3 stocks watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.",
             first,
         )
     }
@@ -94,17 +94,17 @@ class DigestTest {
         )
         val result = digest(DigestInput(today, rows))
         assertEquals(WatchedReport("AAPL", "AAPLx", LocalDate.of(2026, 9, 16)), result.nextReport)
-        assertEquals("3 watched. AAPLx reports in 3 days.", result.text(RealStrings.strings))
+        assertEquals("3 stocks watched. AAPLx reports in 3 days.", result.text(RealStrings.strings))
     }
 
     @Test
     fun `today and tomorrow are said in words, never as a count of days`() {
         assertEquals(
-            "1 watched. AAPLx reports today.",
+            "1 stock watched. AAPLx reports today.",
             text(DigestInput(today, listOf(watched("AAPL", nextReport = today)))),
         )
         assertEquals(
-            "1 watched. AAPLx reports tomorrow.",
+            "1 stock watched. AAPLx reports tomorrow.",
             text(DigestInput(today, listOf(watched("AAPL", nextReport = today.plusDays(1))))),
         )
     }
@@ -130,7 +130,7 @@ class DigestTest {
     fun `a first run has no baseline, so it names no move`() {
         val rows = listOf(watchedAt("NVDA", premiumPct = -0.61, nextReport = LocalDate.of(2026, 11, 19)))
         val result = digest(DigestInput(today, rows))
-        assertEquals("1 watched. NVDAx reports in 67 days.", result.text(RealStrings.strings))
+        assertEquals("1 stock watched. NVDAx reports in 67 days.", result.text(RealStrings.strings))
         assertEquals(setOf("NVDA"), result.premiums.keys)
     }
 
@@ -149,7 +149,7 @@ class DigestTest {
     @Test
     fun `a ticker with no token reads as its ticker, not as a blank`() {
         val rows = listOf(watched("AAPL", symbol = null, nextReport = today.plusDays(2)))
-        assertEquals("1 watched. AAPL reports in 2 days.", text(DigestInput(today, rows)))
+        assertEquals("1 stock watched. AAPL reports in 2 days.", text(DigestInput(today, rows)))
     }
 
     @Test

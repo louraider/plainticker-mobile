@@ -136,7 +136,6 @@ class SwapSheetModelTest {
         val cases = mapOf(
             "abc" to R.string.swap_amount_not_a_number,
             "0" to R.string.swap_amount_not_above_zero,
-            "1.0000001" to R.string.swap_amount_too_precise,
             "25" to R.string.swap_amount_above_balance,
         )
         cases.forEach { (typed, expected) ->
@@ -144,6 +143,14 @@ class SwapSheetModelTest {
             assertEquals(typed, expected, id(content.notice))
             assertFalse(typed, content.primary!!.enabled)
         }
+        // An amount finer than the token counts says how many decimals it counts, which is a
+        // number spoken out loud, so the notice is counted copy and carries the count itself.
+        val tooPrecise = SwapState.Amount(leg, funds, amount("1.0000001")).shown()
+        assertEquals(
+            Copy.Counted(R.plurals.swap_amount_too_precise, 6, listOf("USDC", "6")),
+            tooPrecise.notice,
+        )
+        assertFalse("1.0000001", tooPrecise.primary!!.enabled)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.plainticker.mobile.watchlist
 
-import java.io.File
+import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.ShippedCopy
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,51 +18,16 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object RealStrings {
 
-    private val module: File = listOf(".", "app").map(::File)
-        .first { File(it, "src/main/AndroidManifest.xml").isFile }
-        .canonicalFile
+    val strings: DigestStrings = object : DigestStrings {
+        override fun get(id: Int, args: List<String>): String =
+            ShippedCopy.render(Copy.Words(id, args))
 
-    private val formats: Map<Int, String> by lazy {
-        val byName = parse(File(module, "src/main/res/values/strings.xml").readText())
-        val r = Class.forName("com.plainticker.mobile.R\$string")
-        r.fields.mapNotNull { field ->
-            byName[field.name]?.let { field.getInt(null) to it }
-        }.toMap()
-    }
-
-    val strings: DigestStrings = DigestStrings { id, args ->
-        val format = requireNotNull(formats[id]) { "no string resource for id $id" }
-        String.format(format, *args.toTypedArray())
+        override fun quantity(id: Int, quantity: Int, args: List<String>): String =
+            ShippedCopy.render(Copy.Counted(id, quantity, args))
     }
 
     /** What the shipped copy says for one resource, so a test can name it rather than repeat it. */
-    fun of(name: String): String = requireNotNull(parse(File(module, "src/main/res/values/strings.xml").readText())[name]) {
-        "strings.xml has no $name"
-    }
-
-    private val element = Regex("""<string\b([^>]*)>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL)
-    private val nameAttribute = Regex("""\bname="([^"]*)"""")
-
-    private fun parse(xml: String): Map<String, String> = element.findAll(xml).mapNotNull { match ->
-        val name = nameAttribute.find(match.groupValues[1])?.groupValues?.get(1) ?: return@mapNotNull null
-        name to decode(match.groupValues[2])
-    }.toMap()
-
-    /** XML entities and the Android escapes strings.xml carries, decoded the way aapt would. */
-    private fun decode(raw: String): String {
-        var text = raw
-        text = Regex("&#x([0-9A-Fa-f]+);").replace(text) { String(Character.toChars(it.groupValues[1].toInt(16))) }
-        text = Regex("&#([0-9]+);").replace(text) { String(Character.toChars(it.groupValues[1].toInt())) }
-        text = text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
-            .replace("&apos;", "'").replace("&amp;", "&")
-        return Regex("""\\(.)""").replace(text) {
-            when (it.groupValues[1]) {
-                "n" -> "\n"
-                "t" -> "\t"
-                else -> it.groupValues[1]
-            }
-        }
-    }
+    fun of(name: String): String = requireNotNull(ShippedCopy.strings[name]) { "strings.xml has no $name" }
 }
 
 class InMemoryDigestStore(initial: DigestRecord = DigestRecord.NONE) : DigestStore {

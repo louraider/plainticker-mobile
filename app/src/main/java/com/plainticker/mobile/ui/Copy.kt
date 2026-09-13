@@ -1,7 +1,9 @@
 package com.plainticker.mobile.ui
 
+import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 
 /**
@@ -17,11 +19,29 @@ sealed interface Copy {
     /** Copy from strings.xml, with its arguments already formatted by [Fmt]. */
     data class Words(@StringRes val id: Int, val args: List<String> = emptyList()) : Copy
 
+    /**
+     * Copy that says a whole number out loud, so the sentence has to agree with it.
+     *
+     * [quantity] is the number itself, not a formatted one: it is what selects the form, and
+     * English needs a one and an other. [args] still carries the numeral the sentence prints,
+     * formatted by [Fmt] like every other argument, because a plurals resource substitutes
+     * nothing of its own. The Portfolio drew "1 xStocks, priced by Jupiter" on the Seeker on
+     * 2026-09-13 for want of this type (docs/data-map.md).
+     */
+    data class Counted(
+        @PluralsRes val id: Int,
+        val quantity: Int,
+        val args: List<String> = emptyList(),
+    ) : Copy
+
     /** A numeral, a ticker or a sentence from the payload. Never translated, never invented. */
     data class Raw(val text: String) : Copy
 }
 
 internal fun words(@StringRes id: Int, vararg args: String): Copy.Words = Copy.Words(id, args.toList())
+
+internal fun counted(@PluralsRes id: Int, quantity: Int, vararg args: String): Copy.Counted =
+    Copy.Counted(id, quantity, args.toList())
 
 internal fun raw(text: String): Copy.Raw = Copy.Raw(text)
 
@@ -29,5 +49,6 @@ internal fun raw(text: String): Copy.Raw = Copy.Raw(text)
 @Composable
 internal fun Copy.text(): String = when (this) {
     is Copy.Words -> stringResource(id, *args.toTypedArray())
+    is Copy.Counted -> pluralStringResource(id, quantity, *args.toTypedArray())
     is Copy.Raw -> text
 }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -134,8 +135,9 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
             onSelect = null,
         )
         TodayStrip(
-            text = stringResource(
-                R.string.list_today,
+            text = pluralStringResource(
+                R.plurals.list_today,
+                BackdropWatched,
                 Fmt.count(BackdropWatched),
                 BackdropNextReport.ticker,
                 Fmt.monthDay(BackdropNextReport.reportsAt),
