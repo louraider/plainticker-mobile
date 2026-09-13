@@ -80,6 +80,9 @@ fun HomeScreen(
             HomeTab.WATCHLIST -> WatchlistScreen(
                 viewModel = viewModel(factory = factory),
                 onOpenDetail = onOpenDetail,
+                // Nothing watched yet is the common first state, and the one place to fix it is
+                // the list. The tab is the host's to select, so the screen asks for it.
+                onBrowseList = { selected = HomeTab.LIST.ordinal },
                 header = header,
             )
         }

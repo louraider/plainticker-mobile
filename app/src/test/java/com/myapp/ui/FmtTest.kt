@@ -247,6 +247,8 @@ class FmtTest {
     fun `month day drops the year`() {
         assertEquals("Oct 22", Fmt.monthDay(Instant.parse("2026-10-22T20:00:00Z")))
         assertEquals("Jan 1", Fmt.monthDay(Instant.parse("2026-01-01T00:00:00Z")))
+        assertEquals("Oct 22", Fmt.monthDay(LocalDate.of(2026, 10, 22)))
+        assertEquals("Jan 1", Fmt.monthDay(LocalDate.of(2026, 1, 1)))
     }
 
     // ---- relative time --------------------------------------------------------------------

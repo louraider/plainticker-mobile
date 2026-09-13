@@ -29,6 +29,8 @@ import com.myapp.repo.PriceRepository
 import com.myapp.repo.SnapshotRepository
 import com.myapp.repo.SummaryRepository
 import com.myapp.prefs.WatchlistStore
+import com.myapp.watchlist.DigestStore
+import com.myapp.watchlist.InMemoryDigestStore
 import com.myapp.repo.price
 import com.myapp.repo.snapshot
 import com.myapp.repo.xStock
@@ -88,7 +90,8 @@ class ListViewModelTest {
         prices: PriceRepository = FakePriceRepository(),
         snapshots: SnapshotRepository = FakeSnapshotRepository(),
         watchlist: WatchlistStore = InMemoryWatchlistStore(),
-    ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist)
+        digests: DigestStore = InMemoryDigestStore(),
+    ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist, digests)
 
     /** The bundled snapshot as the assets carry it: a whole list, dated, and with no price. */
     private fun bundled() = snapshot(

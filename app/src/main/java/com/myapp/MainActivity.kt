@@ -1,5 +1,6 @@
 package com.myapp
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.myapp.ui.nav.AppNavHost
@@ -15,6 +18,7 @@ import com.myapp.ui.theme.Canvas
 import com.myapp.ui.theme.PlainTickerTheme
 import com.myapp.wallet.MwaWalletSession
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * The one Activity. Portrait and edge to edge (plan section 13 Pass 6): the manifest locks the
@@ -30,6 +34,14 @@ class MainActivity : ComponentActivity() {
 
     private var walletSession: MwaWalletSession? = null
 
+    /**
+     * The tab an intent asked for, or null. The digest notification names the Watchlist, and a
+     * notification that opens something other than what it named is worse than no notification;
+     * this is a flow rather than a start argument because the Activity is single top and the
+     * second tap arrives at [onNewIntent], long after the graph was composed.
+     */
+    private val openTab = MutableStateFlow<Int?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -38,23 +50,43 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
 
+        openTab.value = tabFrom(intent)
         val container = appContainer
         // Must be created before the Activity starts: it registers for an activity result.
         val sender = ActivityResultSender(this)
         walletSession = container.walletSession.bind(sender)
 
         setContent {
+            val tab by openTab.collectAsState()
             PlainTickerTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Canvas) {
-                    AppNavHost(container = container, sender = sender)
+                    AppNavHost(
+                        container = container,
+                        sender = sender,
+                        openTab = tab,
+                        onTabOpened = { openTab.value = null },
+                    )
                 }
             }
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openTab.value = tabFrom(intent)
+    }
+
+    private fun tabFrom(intent: Intent?): Int? = intent?.getIntExtra(EXTRA_TAB, -1)?.takeIf { it >= 0 }
+
     override fun onDestroy() {
         walletSession?.let { appContainer.walletSession.unbind(it) }
         walletSession = null
         super.onDestroy()
+    }
+
+    companion object {
+        /** Which home tab to open on, as an ordinal of [com.myapp.ui.home.HomeTab]. */
+        const val EXTRA_TAB = "com.myapp.extra.TAB"
     }
 }

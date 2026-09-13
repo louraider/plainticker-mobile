@@ -1,6 +1,7 @@
 package com.myapp.ui.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -29,10 +30,31 @@ fun AppNavHost(
     container: AppContainer,
     sender: ActivityResultSender,
     modifier: Modifier = Modifier,
+    openTab: Int? = null,
+    onTabOpened: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val factory = remember(container) { appViewModelFactory(container) }
-    val startDestination = remember(container) { Routes.start(container.onboardingStore.isOnboarded()) }
+    val onboarded = remember(container) { container.onboardingStore.isOnboarded() }
+    val startDestination = remember(container) {
+        // A notification names a tab, and the graph opens on it rather than opening the List and
+        // moving: a deep link exists so that no frame of the wrong screen is drawn. Onboarding
+        // still wins, though nothing can be watched before it has been passed.
+        if (onboarded && openTab != null) Routes.home(openTab) else Routes.start(onboarded)
+    }
+
+    // A second tap while the app is already open arrives here rather than at the start
+    // destination, so the tab is switched by navigating home again in place.
+    LaunchedEffect(openTab) {
+        val tab = openTab ?: return@LaunchedEffect
+        onTabOpened()
+        if (!onboarded) return@LaunchedEffect
+        if (navController.currentDestination?.route == startDestination) return@LaunchedEffect
+        navController.navigate(Routes.home(tab)) {
+            popUpTo(Routes.HOME_TAB) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
 
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
         composable(Routes.ONBOARDING) {

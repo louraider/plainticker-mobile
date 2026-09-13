@@ -31,6 +31,11 @@ import com.myapp.repo.RpcRepository
 import com.myapp.repo.SnapshotRepository
 import com.myapp.repo.SummaryRepository
 import com.myapp.wallet.MwaWalletSession
+import com.myapp.watchlist.DigestNotifier
+import com.myapp.watchlist.DigestStore
+import com.myapp.watchlist.SharedPrefsDigestStore
+import com.myapp.watchlist.WatchlistFacts
+import com.myapp.watchlist.WatchlistNotifications
 import com.myapp.wallet.WalletSessionHolder
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import io.ktor.client.HttpClient
@@ -65,6 +70,15 @@ interface AppContainer {
 
     /** The app's own record of the swaps it landed; Portfolio (T11) reads it. */
     val receiptStore: ReceiptStore
+
+    /** The last digest the daily check produced: the Watchlist draws it, the check writes it. */
+    val digestStore: DigestStore
+
+    /** The join the Watchlist screen and the daily check both read the watched tickers through. */
+    val watchlistFacts: WatchlistFacts
+
+    /** Where a produced digest goes besides the screen. */
+    val digestNotifier: DigestNotifier
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -110,6 +124,16 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val receiptStore: ReceiptStore by lazy {
         FileReceiptStore(java.io.File(app.filesDir, FileReceiptStore.FILE_NAME))
     }
+
+    // The digest is a handful of fields written once a day, so it rides the same preferences
+    // file as the watchlist it describes rather than paying for one of its own.
+    override val digestStore: DigestStore by lazy { SharedPrefsDigestStore(prefs) }
+
+    override val watchlistFacts: WatchlistFacts by lazy {
+        WatchlistFacts(summaryRepository, catalogRepository, priceRepository)
+    }
+
+    override val digestNotifier: DigestNotifier by lazy { WatchlistNotifications(app) }
 
     companion object {
         const val PREFS_NAME = "plainticker"
