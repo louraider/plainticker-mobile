@@ -12,11 +12,13 @@ import com.myapp.data.snapshot.toXStockAsset
 import com.myapp.data.xstocks.XStockAsset
 import com.myapp.prefs.WatchlistStore
 import com.myapp.repo.CatalogRepository
+import com.myapp.repo.CatalogUpdate
 import com.myapp.repo.PriceRepository
 import com.myapp.repo.SnapshotRepository
 import com.myapp.repo.SummaryRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -139,6 +141,18 @@ data class ListUiState(
     val pricesPartial: Boolean = false,
     /** The youngest analysis on screen, set only when every analyzed row is stale. */
     val allStaleDays: Int? = null,
+    /**
+     * Whether the refresh has been out long enough for the snapshot line to be worth its space.
+     *
+     * The line itself is honest and stays: what it says about the rows is true for as long as
+     * [fromSnapshot] is. What it is not worth is a warm launch, where the Seeker measured it up
+     * at 3.53 s and gone at 4.20 s, 0.70 s in which the whole list moved down by the height of a
+     * banner and back (docs/data-map.md). So it waits out [ListViewModel.SNAPSHOT_BANNER_GRACE_MS]
+     * before it may be drawn, and a refresh that finishes inside that never draws it at all. The
+     * slot stays empty during the grace rather than falling through to a lower tier, because a
+     * lower tier would be a different sentence arriving and leaving in the same second.
+     */
+    val snapshotBannerDue: Boolean = false,
 ) {
     val isEmpty: Boolean get() = !isLoading && !failed && analyzed.isEmpty() && withoutAnalysis.isEmpty()
 
@@ -151,7 +165,9 @@ data class ListUiState(
     val banner: ListBanner?
         get() = when {
             failed -> ListBanner.Unavailable
-            fromSnapshot && refreshing -> ListBanner.SnapshotRefreshing(snapshotCapturedOn)
+            fromSnapshot && refreshing ->
+                ListBanner.SnapshotRefreshing(snapshotCapturedOn).takeIf { snapshotBannerDue }
+
             fromSnapshot -> ListBanner.Snapshot(snapshotCapturedOn)
             allStaleDays != null -> ListBanner.Stale(allStaleDays)
             catalogUnavailable -> ListBanner.CatalogUnavailable
@@ -226,6 +242,8 @@ class ListViewModel(
     private var allWithoutAnalysis: List<ListRow> = emptyList()
     private var refreshJob: Job? = null
     private var priceJob: Job? = null
+    private var bannerJob: Job? = null
+    private var bannerGracePassed = false
     private var pricesQueued = false
     private var pricedMints: List<String>? = null
 
@@ -233,14 +251,42 @@ class ListViewModel(
         viewModelScope.launch {
             watchlist.tickers.collect { watched -> _state.update { it.copy(watched = watched.size) } }
         }
-        refresh()
+        load(userAsked = false)
     }
 
-    fun refresh() {
+    /**
+     * The Retry the reader taps, wherever the screen offers it. It is the one path that may step
+     * over the caches: the catalog is kept on disk for a day, and without this a token listed
+     * this morning could not be seen at all until tomorrow, whatever the reader did.
+     */
+    fun refresh() = load(userAsked = true)
+
+    /**
+     * Asks every source again and draws whatever comes back.
+     *
+     * Nothing already drawn is taken away first. A retry used to forget the live sources and
+     * republish the bundled snapshot, so the list a reader was looking at went back to the
+     * capture of an older day, lost any token listed since it, and then grew back as the pages
+     * landed. What is on screen now stays on screen until something better arrives: a source
+     * that fails leaves the last good answer alone, and a catalog that is still paging lands on
+     * top of the whole one rather than replacing it with page zero.
+     */
+    private fun load(userAsked: Boolean) {
         refreshJob?.cancel()
         priceJob?.cancel()
-        forgetSources()
-        _state.update { it.copy(isLoading = true, failed = false, refreshing = true) }
+        forgetWhatTheSourcesSaid()
+
+        // Skeletons are for a screen with nothing on it. A retry over a drawn list keeps the list.
+        val nothingDrawn = allAnalyzed.isEmpty() && allWithoutAnalysis.isEmpty()
+        _state.update { it.copy(isLoading = nothingDrawn, failed = false, refreshing = true) }
+
+        bannerJob?.cancel()
+        bannerGracePassed = false
+        bannerJob = viewModelScope.launch {
+            delay(SNAPSHOT_BANNER_GRACE_MS)
+            bannerGracePassed = true
+            republish()
+        }
 
         refreshJob = viewModelScope.launch {
             // The bundled snapshot, before a single network call. It is a whole list that is
@@ -259,8 +305,12 @@ class ListViewModel(
             // analysis behind the seven-second catalog for no reason at all.
             val summary = launch {
                 val answer = runCatching { summaries.summary() }
-                liveRows = answer.getOrNull()?.rows
-                generatedAt = answer.getOrNull()?.generatedAt
+                // A refresh that failed takes nothing away: the rows it could not replace are
+                // still the best answer this screen has.
+                answer.getOrNull()?.let {
+                    liveRows = it.rows
+                    generatedAt = it.generatedAt
+                }
                 summarySettled = true
                 republish()
                 schedulePrices()
@@ -269,14 +319,7 @@ class ListViewModel(
             // sort keys a row is placed by (its composite, or its symbol) do not change when a
             // page lands, so nothing the reader is looking at moves.
             val assets = launch {
-                runCatching {
-                    catalog.catalogUpdates().collect { update ->
-                        liveAssets = update.assets
-                        catalogWhole = update.whole
-                        republish()
-                        schedulePrices()
-                    }
-                }
+                runCatching { catalog.catalogUpdates(userAsked).collect(::onCatalog) }
                 catalogSettled = true
                 republish()
                 schedulePrices()
@@ -300,19 +343,37 @@ class ListViewModel(
 
     // ---- Join ---------------------------------------------------------------------------
 
-    private fun forgetSources() {
-        snapshotRows = emptyList()
-        snapshotAssets = emptyList()
-        snapshotCapturedOn = null
-        haveSnapshot = false
-        liveRows = null
+    /**
+     * What a new run has to forget, which is only what it is about to ask again: whether each
+     * source has settled, and which mints have been priced. Everything a source actually said is
+     * kept, because a run that has not answered yet is not a reason to draw less than before.
+     */
+    private fun forgetWhatTheSourcesSaid() {
         summarySettled = false
-        generatedAt = null
-        liveAssets = emptyList()
-        catalogWhole = false
         catalogSettled = false
         pricesQueued = false
         pricedMints = null
+    }
+
+    /**
+     * One catalog emission. A whole catalog replaces what was there; the first pages of one land
+     * on top of it, keyed by token symbol, so a refresh that is still paging never takes a row off
+     * a list that already had it. Whole is sticky for the same reason: a screen that has been
+     * shown a whole catalog is not walked back to a partial one by the next refresh.
+     */
+    private fun onCatalog(update: CatalogUpdate) {
+        liveAssets = when {
+            update.whole || liveAssets.isEmpty() -> update.assets
+            else -> {
+                val merged = LinkedHashMap<String, XStockAsset>(liveAssets.size + update.assets.size)
+                liveAssets.forEach { merged[it.symbol] = it }
+                update.assets.forEach { merged[it.symbol] = it }
+                merged.values.toList()
+            }
+        }
+        catalogWhole = catalogWhole || update.whole
+        republish()
+        schedulePrices()
     }
 
     /**
@@ -375,6 +436,7 @@ class ListViewModel(
                     pricesPartial = false,
                     allStaleDays = null,
                     generatedAt = null,
+                    snapshotBannerDue = bannerGracePassed,
                 )
             }
             return
@@ -431,6 +493,7 @@ class ListViewModel(
                 analysisUnavailable = !analysisKnown,
                 allStaleDays = staleDays(allAnalyzed),
                 generatedAt = generatedAt,
+                snapshotBannerDue = bannerGracePassed,
             )
         }
     }
@@ -609,6 +672,20 @@ class ListViewModel(
          * for rows nobody has scrolled to.
          */
         const val PRICE_BUDGET = 200
+
+        /**
+         * How long a refresh may run before the snapshot line is allowed on screen.
+         *
+         * The line is true the moment the snapshot paints, but on a warm launch it is true for
+         * less than a second: docs/data-map.md measured the Seeker settling at 3.5 s with the
+         * first row at 2.78 s, and the review measured the line itself up at 3.53 s and gone at
+         * 4.20 s. 0.70 s of banner is not a warning, it is the list jumping down by 40dp and back
+         * while the reader is reading it. This is twice the 0.72 s that whole warm window takes,
+         * so no refresh that behaves like a warm launch can reach it, and it costs the honest
+         * case almost nothing: the first ever launch settles at 12.4 s, so the line still stands
+         * for about eleven of them.
+         */
+        const val SNAPSHOT_BANNER_GRACE_MS = 1_500L
     }
 }
 

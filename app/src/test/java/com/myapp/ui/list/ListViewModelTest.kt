@@ -33,10 +33,16 @@ import com.myapp.repo.price
 import com.myapp.repo.snapshot
 import com.myapp.repo.xStock
 import com.myapp.ui.Fmt
+import com.myapp.repo.CatalogUpdate
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -419,7 +425,7 @@ class ListViewModelTest {
             assertFalse("a drawn list is not loading", painted.isLoading)
             assertTrue(painted.fromSnapshot)
             assertTrue(painted.refreshing)
-            assertEquals(ListBanner.SnapshotRefreshing(LocalDate.of(2026, 9, 12)), painted.banner)
+            assertNull("a line that would go again in half a second is a jump, not a warning", painted.banner)
 
             // The snapshot obeys the same join rules as the live sources: BKNG has no xStock, so
             // it is not a row, and the composite is the percentile.
@@ -433,6 +439,12 @@ class ListViewModelTest {
             assertTrue(rows.all { it.priceUsd == null })
             assertTrue(rows.all { it.premiumPct == null })
             assertTrue(rows.all { it.tracking == null })
+
+            // The refresh is still out once the grace has passed, so the reader is told what the
+            // list is: a capture of a named day, being replaced in place.
+            val named = awaitUntil { it.banner != null }
+            assertEquals(ListBanner.SnapshotRefreshing(LocalDate.of(2026, 9, 12)), named.banner)
+            assertEquals("and still no source has answered", 0, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -916,11 +928,187 @@ class ListViewModelTest {
             awaitUntil { !it.refreshing }
             assertEquals(1, summaries.summaryCalls)
             vm.refresh()
-            awaitUntil { it.isLoading }
+            awaitUntil { it.refreshing }
             awaitUntil { !it.refreshing }
             assertEquals(2, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ---- A retry never walks the screen backwards -------------------------------------------
+
+    /** The catalog, answering at once until a test sets [wait]: the retry is what it wants to see. */
+    private class HoldableCatalog(private val inner: FakeCatalogRepository) : CatalogRepository by inner {
+        var wait: CompletableDeferred<Unit>? = null
+        val userAsked: List<Boolean> get() = inner.userAsked
+
+        /** Every ask after this one fails, which is the retry that lands on nothing. */
+        fun goesOffline() {
+            inner.assets = Result.failure(IOException("offline"))
+        }
+
+        override fun catalogUpdates(userAsked: Boolean): Flow<CatalogUpdate> = flow {
+            wait?.await()
+            inner.catalogUpdates(userAsked).collect { emit(it) }
+        }
+    }
+
+    /** The analysis, answering at once until a test sets [wait]. */
+    private class HoldableSummary(private val inner: FakeSummaryRepository) : SummaryRepository by inner {
+        var wait: CompletableDeferred<Unit>? = null
+
+        fun goesOffline() {
+            inner.summaryResult = Result.failure(IOException("offline"))
+        }
+
+        override suspend fun summary(): SummaryResponse {
+            wait?.await()
+            return inner.summary()
+        }
+    }
+
+    @Test
+    fun `a retry keeps the live list on screen instead of putting the snapshot back`() = runTest {
+        // A token listed after the snapshot was captured: it is on the live catalog and not on the
+        // bundled one, so it is exactly the row a retry that walked backwards would take away.
+        val live = catalog() + xStock("NEWx", "NEW", "MintNew".padEnd(44, 'z'))
+        val assets = HoldableCatalog(FakeCatalogRepository(Result.success(live)))
+        val summaries = HoldableSummary(FakeSummaryRepository(Result.success(summary())))
+        val vm = viewModel(summaries = summaries, catalog = assets, snapshots = FakeSnapshotRepository(bundled()))
+        advanceUntilIdle()
+
+        val settled = vm.state.value
+        assertFalse("the live sources are what is drawn", settled.fromSnapshot)
+        assertEquals(listOf("AAPL", "JPM"), settled.analyzed.map { it.ticker })
+        assertEquals(listOf("NEWx", "TSLAx"), settled.withoutAnalysis.map { it.symbol })
+
+        // Retry, with both sources still out. Nothing better has arrived, so nothing may change.
+        assets.wait = CompletableDeferred()
+        summaries.wait = CompletableDeferred()
+        val (drawn, watcher) = record(vm) { state -> (state.analyzed + state.withoutAnalysis).mapNotNull { it.symbol } }
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertEquals("a retry drew the bundled snapshot over a live list", 1, drawn.size)
+        val retrying = vm.state.value
+        assertTrue("the refresh is running", retrying.refreshing)
+        assertFalse("the snapshot never comes back over a live list", retrying.fromSnapshot)
+        assertFalse("and a drawn list never goes back to skeletons", retrying.isLoading)
+        assertEquals(listOf("NEWx", "TSLAx"), retrying.withoutAnalysis.map { it.symbol })
+
+        assets.wait!!.complete(Unit)
+        summaries.wait!!.complete(Unit)
+        advanceUntilIdle()
+        watcher.cancel()
+
+        assertEquals(1, drawn.size)
+        assertEquals(listOf("NEWx", "TSLAx"), vm.state.value.withoutAnalysis.map { it.symbol })
+        assertFalse(vm.state.value.refreshing)
+    }
+
+    @Test
+    fun `a retry whose sources fail keeps what was on screen rather than the snapshot`() = runTest {
+        val assets = HoldableCatalog(FakeCatalogRepository(Result.success(catalog())))
+        val summaries = HoldableSummary(FakeSummaryRepository(Result.success(summary())))
+        val vm = viewModel(summaries = summaries, catalog = assets, snapshots = FakeSnapshotRepository(bundled()))
+        advanceUntilIdle()
+        assertEquals(listOf("AAPL", "JPM"), vm.state.value.analyzed.map { it.ticker })
+
+        summaries.goesOffline()
+        assets.goesOffline()
+        vm.refresh()
+        advanceUntilIdle()
+
+        val after = vm.state.value
+        assertFalse("a failed retry is not a reason to draw the snapshot", after.fromSnapshot)
+        assertFalse(after.failed)
+        assertEquals("what was on screen is still on screen", listOf("AAPL", "JPM"), after.analyzed.map { it.ticker })
+        assertEquals(listOf("TSLAx"), after.withoutAnalysis.map { it.symbol })
+    }
+
+    // ---- A reader who asks the app to look again ---------------------------------------------
+
+    @Test
+    fun `a screen opening may use the caches and a retry asks the network`() = runTest {
+        val assets = FakeCatalogRepository(Result.success(catalog()))
+        val vm = viewModel(catalog = assets)
+        advanceUntilIdle()
+        assertEquals("the first load is a screen opening", listOf(false), assets.userAsked)
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals("and a retry the reader tapped asks the network", listOf(false, true), assets.userAsked)
+    }
+
+    // ---- The snapshot banner does not flash --------------------------------------------------
+
+    /** Sources that answer after a stretch of the test clock, so a test can time the banner. */
+    private class SlowCatalog(
+        private val inner: FakeCatalogRepository,
+        private val afterMillis: Long,
+    ) : CatalogRepository by inner {
+        override fun catalogUpdates(userAsked: Boolean): Flow<CatalogUpdate> = flow {
+            delay(afterMillis)
+            inner.catalogUpdates(userAsked).collect { emit(it) }
+        }
+    }
+
+    private class SlowSummary(
+        private val inner: FakeSummaryRepository,
+        private val afterMillis: Long,
+    ) : SummaryRepository by inner {
+        override suspend fun summary(): SummaryResponse {
+            delay(afterMillis)
+            return inner.summary()
+        }
+    }
+
+    private fun slowly(afterMillis: Long) = viewModel(
+        summaries = SlowSummary(FakeSummaryRepository(Result.success(summary())), afterMillis),
+        catalog = SlowCatalog(FakeCatalogRepository(Result.success(catalog())), afterMillis),
+        snapshots = FakeSnapshotRepository(bundled()),
+    )
+
+    /** Every distinct banner the screen drew, in order, nulls included. */
+    private fun CoroutineScope.recordBanners(vm: ListViewModel): Pair<MutableList<ListBanner?>, Job> {
+        val seen = mutableListOf<ListBanner?>()
+        val watcher = launch(UnconfinedTestDispatcher(coroutineContext[kotlinx.coroutines.test.TestCoroutineScheduler]!!)) {
+            vm.state.collect { if (seen.isEmpty() || seen.last() != it.banner) seen += it.banner }
+        }
+        return seen to watcher
+    }
+
+    @Test
+    fun `a refresh that settles quickly never flashes the snapshot banner`() = runTest {
+        // 0.70 s is what the warm launch on the Seeker measured: the line came up at 3.53 s and
+        // went at 4.20 s, moving the whole list down by its height and back (docs/data-map.md).
+        val vm = slowly(afterMillis = 700)
+        val (seen, watcher) = recordBanners(vm)
+        advanceUntilIdle()
+        watcher.cancel()
+
+        assertEquals("the live list is what settled", listOf("AAPL", "JPM"), vm.state.value.analyzed.map { it.ticker })
+        assertEquals("the banner appeared and went, moving the list under the reader", listOf<ListBanner?>(null), seen)
+    }
+
+    @Test
+    fun `a refresh the reader is left waiting on still says the list is a snapshot`() = runTest {
+        val vm = slowly(afterMillis = 5_000)
+
+        advanceTimeBy(800)
+        assertTrue("the snapshot is what is drawn", vm.state.value.fromSnapshot)
+        assertNull("and nothing flashed in the first second", vm.state.value.banner)
+
+        advanceTimeBy(3_000)
+        assertEquals(
+            "a refresh this long is worth a line",
+            ListBanner.SnapshotRefreshing(LocalDate.of(2026, 9, 12)),
+            vm.state.value.banner,
+        )
+
+        advanceUntilIdle()
+        assertNull("and it goes when the live list lands", vm.state.value.banner)
+        assertFalse(vm.state.value.fromSnapshot)
     }
 
     // ---- Support -----------------------------------------------------------------------
