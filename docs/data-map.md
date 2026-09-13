@@ -134,6 +134,122 @@ The server-side slim catalog is still the real fix for the 4.31 MB and is still 
 work. It would take the first ever launch's settle from 12.4 s down with it; it is no longer on the
 path to first content.
 
+#### What a refresh does, and what it may not do (2026-09-13)
+
+The three caches that make the first paint fast each had a cost the review named, and each is paid
+here rather than by the reader.
+
+**The catalog fetch no longer runs inside the shared lock.** `CachedCatalogRepository` took its
+mutex for the whole of `catalog()`, and `multiplierRecord` and `proofOfReserves` take the same
+lock, so a Detail screen opened while the catalog was being fetched waited behind seven seconds of
+paging for two small requests that were not related to it. The lock is now taken for the cache
+reads and the cache writes only, which is the shape `CachedPriceRepository` settled on first. What
+the lock also used to prevent was two screens fetching the same 4.31 MB; a ticket does that
+instead, and unlike the lock it spans both entry points, so a Detail screen opening during the
+List's paging run joins that run rather than starting a second one. The ticket is handed back
+under `NonCancellable`, so a caller that walked away never strands the screens waiting on it. The
+per-symbol reads carry no ticket: two screens asking for the same multiplier at the same instant
+cost two small requests, which is the trade the price layer already made.
+
+**A refresh keeps what is on screen until something better arrives.** `refresh()` used to forget
+every source and republish the bundled snapshot, so a retry walked a live list back to the capture
+of an older day, took away any token listed since it, and grew back as the pages landed. A run now
+forgets only what it is about to ask again (whether each source has settled, and which mints have
+been priced). A source that fails leaves the last good answer alone; a catalog that is still paging
+lands on top of the whole one keyed by token symbol, and whole is sticky, so page zero never
+replaces a catalog the reader has already been shown; and a retry over a drawn list does not set
+`isLoading`, because skeletons over a correct list is the same walk backwards in another shape.
+
+**The snapshot line waits 1.5 s before it may be drawn.** On a warm launch the review measured it
+up at 3.53 s and gone at 4.20 s: 0.70 s in which the whole list moved down by the height of a
+banner and back. The line is not a lie and it is not removed. It is now held back by
+`ListViewModel.SNAPSHOT_BANNER_GRACE_MS`, and a refresh that settles inside that grace never draws
+it at all. 1.5 s is twice the 0.72 s the whole warm window takes (first row 2.78 s, settled 3.5 s),
+so nothing that behaves like a warm launch can reach it; the first ever launch settles at 12.4 s,
+so the honest case still carries the line for about eleven seconds. During the grace the slot stays
+empty rather than falling through to a lower tier, which would only be a different sentence
+arriving and leaving inside the same second.
+
+**An explicit action reaches the network.** Both catalog paths answered from the file for its whole
+24 h window, `refresh()` among them, so a token listed this morning could not be seen until
+tomorrow whatever the reader did. `catalogUpdates(userAsked = true)` steps over both caches and
+pages the network; the file still paints first, so the list never goes back to skeletons for it.
+`ListViewModel.refresh()` is the only caller that passes it, and the `init` load is not, so the
+second launch of the day still pays nothing. The Retry on every banner reaches it, and so does one
+new text action: a search that misses now carries "Check for new tokens" beside its sentence, which
+is the only affordance a settled live list has, and the reader who searched for a ticker and found
+nothing is exactly the reader who wants it.
+
+#### Rows moving under the reader: what was fixed and what was left (2026-09-13)
+
+The review flagged two ways a row can move while the catalog is arriving. One was real and is
+fixed; the other is handled by the list itself, and is written down here so the next reader of this
+file does not go looking for it again.
+
+**Fixed: a ticker drawn, taken away, then re-added.** The one path that did this was the retry
+above, and it is gone with it. On the first load the flicker does not happen and could not: only a
+whole catalog may be used to decide that a ticker has no xStock, the bundled snapshot is one, so a
+ticker listed after the capture is *withheld* until its page lands rather than drawn and dropped.
+That is a row appearing once, which is the behaviour this design chose deliberately over drawing
+every classified company and then removing the ones with no token (the BKNG bug of 2026-09-12).
+`ListViewModelTest` carries both: the retry case, which failed before the fix, and a guard over the
+first load that asserts no symbol ever leaves the list once it is on it.
+
+**Left alone: alphabetical insertion into "Without analysis".** The section is sorted by symbol, so
+a page that lands with a symbol earlier in the alphabet does insert above rows already drawn. It
+does not move them under the reader, because `LazyColumn` is keyed (`"a:" + ticker` and
+`"p:" + ticker`, `ListScreen.kt`) and Compose re-anchors the first visible item by its key on every
+measure: `LazyListScrollPosition.updateScrollPositionIfTheFirstItemWasMoved`, called from
+`LazyList.kt`'s measure policy in foundation 1.12.0, which this build uses, keeps the item first
+"even given that its index has been changed". Rows inserted above the viewport therefore change
+indices and not pixels. It is also the smaller case than it looks: the snapshot and the file both
+carry very nearly the live catalog (832 assets against 832), so the only symbols a page inserts are
+the ones listed since the capture. The fix that would remove it altogether is to publish the
+section only from a whole catalog, and that would cost the first paint of a build whose snapshot is
+missing the whole 7.5 s of paging, which is a worse trade than the thing it buys.
+
+#### Walked on the Seeker after the four fixes, 2026-09-13
+
+Same phone, same evening, same Wi-Fi as the measurements above. Debug build over adb, `am
+force-stop` between runs, the catalog file removed with `run-as` for the cold ones.
+
+**The banner does not flash any more, and it still appears when it should.** The line occupies a
+band the rest of the screen sits under: with it, the "Analyzed" heading is at y 1031; without it,
+y 905. That 126 px, 42dp, is the jump. Two runs:
+
+| run | how it was read | the snapshot line |
+|---|---|---|
+| warm, catalog on disk | 14.4 s of `screenrecord` resampled to 5 fps, 73 frames, counting lit pixels in the band the line occupies (x 400 to 1140, y 600 to 665) | **never drawn, 0 in every frame** |
+| cold, catalog file removed | 14 `screencap` samples from `am start`, the same band | dark at 2378 ms, lit from 2776 ms |
+
+`Displayed` for those launches was +1s159ms and +1s173ms, so the first Compose frame, which is
+where the load starts, is about 1.17 s after the request. The cold run therefore put the line up
+between +1.21 s and +1.61 s after the load started, which brackets the 1.5 s grace, and it stayed
+up until the catalog was whole. The warm run settles inside the grace and draws nothing.
+
+**A reader who asks reaches the network inside the 24 h window.** Searching "zzzz" draws
+`No xStock matches 'zzzz'` at [60,977][684,1046] with `Check for new tokens` at [732,982][1140,1042],
+one line, inside the 20dp gutters. Tapping it rewrote `cacheDir/xstocks-catalog.json` (03:25:05 to
+03:25:28) with the file still hours inside its window, which is the whole point: before this, a
+token listed today was unreachable until tomorrow.
+
+**The retry does not walk the list back.** With that refresh out, at +5 s, the list is the same
+list: same first rows (NEMx, Newmont Corp., "Analysis 6 d old", 84, strong, NVDAx), and no snapshot
+banner anywhere in the dump. Before the fix the same tap republished the bundled snapshot.
+
+**The catalog is fetched once for two screens.** Received bytes for the app's uid, read from
+`dumpsys netstats` with a forced poll on either side of each run:
+
+| cold run | on the wire |
+|---|---|
+| List alone | 0.34 MB |
+| List, plus a Detail opened at +3 s while the catalog was still paging | 0.346 MB |
+
+The 6 KB difference is the Detail's own calls (mint, multiplier, reserves, quote). The Detail did
+open and did load (NEMx, live bar ticking on a fresh slot). Worth writing down while the numbers
+are here: the catalog is 4.31 MB of JSON but about **0.34 MB on the wire**, because it is gzipped
+and it repeats itself. The size that hurts on a phone is the parse, not the transfer.
+
 #### The liquidity floor, measured 2026-09-12
 
 Joined live: `/api/v1/summary` (179 tickers) against the xStocks Solana catalog, then every matched mint priced through Jupiter Price v3 in paced chunks.

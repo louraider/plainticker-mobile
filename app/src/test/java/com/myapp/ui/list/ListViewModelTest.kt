@@ -1026,6 +1026,34 @@ class ListViewModelTest {
         assertEquals(listOf("TSLAx"), after.withoutAnalysis.map { it.symbol })
     }
 
+    /**
+     * The other half of the same rule, on the first load rather than on a retry. A ticker listed
+     * after the bundled snapshot was captured is withheld until its page lands, because only a
+     * whole catalog may say a ticker has no xStock, and it is then inserted. What it must never
+     * do is appear, go, and come back: the review read the flicker it saw as that, and the one
+     * path that produced it was the retry above. This is the guard that says so.
+     */
+    @Test
+    fun `a token listed after the capture is never drawn and then taken away`() = runTest {
+        val live = catalog() + xStock("NEWx", "NEW", "MintNew".padEnd(44, 'z'))
+        val classified = summary().let { it.copy(rows = it.rows + it.rows[0].copy(ticker = "NEW", composite = 0.9)) }
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(classified)),
+            catalog = FakeCatalogRepository(Result.success(live), pageSize = 2),
+            snapshots = FakeSnapshotRepository(bundled()),
+        )
+
+        val (drawn, watcher) = record(vm) { state -> (state.analyzed + state.withoutAnalysis).mapNotNull { it.symbol } }
+        advanceUntilIdle()
+        watcher.cancel()
+
+        assertTrue("the snapshot painted first", drawn.size > 1)
+        drawn.zipWithNext { earlier, later ->
+            assertTrue("a row was drawn and then taken away: ${earlier - later.toSet()}", later.containsAll(earlier))
+        }
+        assertTrue("the token listed today is on the list", vm.state.value.analyzed.any { it.symbol == "NEWx" })
+    }
+
     // ---- A reader who asks the app to look again ---------------------------------------------
 
     @Test
