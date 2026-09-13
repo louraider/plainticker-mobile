@@ -354,6 +354,52 @@ actually pays, it comes back on the order the swap sheet already fetches, and it
 cases the depth figure blurs: AMDx sits at $13,399 by Price v3 and moves **2.35% on a $1,000 order**,
 while TSLAx moves 0.08% on the same size. One number, second person, no jargon.
 
+**What Jupiter says the field is.** The Price v3 OpenAPI spec
+(`developers.jup.ag/docs/openapi-spec/price/v3/price.yaml`, read 2026-09-13) documents it in one
+line, and it is a required field:
+
+```yaml
+liquidity:
+  type: number
+  description: Total liquidity in USD across all pools
+```
+
+So the app's "Pool holds $34" is faithful to Jupiter's own wording. The wording is what does not
+survive the measurement: a figure that claims every pool cannot land at 0.21 to 0.54 of what two
+independent aggregators count. The likeliest reading is that Jupiter counts one side of each pool
+it trusts while DexScreener values both sides of every pair it indexes, which would put the cluster
+near 0.5 (NFLXx 0.47, AMDx 0.53, TSLAx 0.46, SPYx 0.54) and leave the low outliers as pairs Jupiter
+excludes. Not confirmed, and Jupiter does not say. **Whichever is right, the app cannot keep
+asserting the pool in its own voice; it can only report what Jupiter reports.**
+
+**Jupiter's own routability test is price impact, not depth.** From the Metis market listing page
+(`developers.jup.ag/docs/swap/routing/amm/market-listing.md`, read 2026-09-13): a market stays
+routable if it shows "less than 30% price difference on a $500 round-trip, or less than 20% price
+impact when comparing a $1000 buy against a $500 buy", re-checked every 30 minutes. That is the
+same choice this measurement points at, made by the people who own the router, and it explains the
+`NO_ROUTES_FOUND` on UBERx and APPx exactly: Metis had already dropped those markets.
+
+**Open for the founder: where the floor sits now.** $10,000 was calibrated against a figure that
+runs at roughly half of what the aggregators report, so it has been acting as a $20k to $50k floor.
+The evidence for moving it, all measured 2026-09-13:
+
+| Price v3 figure | ticker | premium | what a real order does |
+|---|---|---|---|
+| $13,399 | AMDx | -0.90% | 2.35% impact on $1,000 |
+| $9,350 | NFLXx | -1.96% | -0.141% impact on $100 |
+| $5,351 | PEPx | +0.11% | -0.471% impact on $100 |
+| $4,450 | ORCLx | -0.76% | -1.555% impact on $100 |
+| $3,966 | LLYx | +1.53% | one pair, $181 of 24-hour volume |
+| $2,529 | Vx | +6.99% | eight pairs, premium already noise |
+| $839 | BACx | -1.37% | no indexed pair anywhere |
+
+The break is between roughly $4,000 and $2,500 on this figure, not at $10,000: everything at
+$3,966 and above reads sanely and trades, and Vx at $2,529 is already printing +6.99%. Dropping the
+floor to $4,000 would return the premium to ORCLx, NFLXx, PEPx and LLYx and keep every dead token
+out. Holding at $10,000 stays defensible and costs four rows. This is the founder's call, the same
+one made on 2026-09-12 when disclosure was chosen over curation, so it is recorded rather than
+taken.
+
 #### Swap v2 refuses tradable tokens, found 2026-09-13
 
 `GET /swap/v2/order` with no router argument returns **400 `"Quote not available from market maker"`**
