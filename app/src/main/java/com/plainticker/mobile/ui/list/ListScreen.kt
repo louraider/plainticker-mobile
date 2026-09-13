@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.list
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,9 @@ import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TodayStrip
 import com.plainticker.mobile.ui.theme.Ink2
 import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.vote.VoteActions
+import com.plainticker.mobile.ui.vote.VoteSheet
+import com.plainticker.mobile.ui.vote.VoteViewModel
 import java.time.LocalDate
 
 /**
@@ -51,20 +55,35 @@ import java.time.LocalDate
 @Composable
 fun ListScreen(
     viewModel: ListViewModel,
+    voteViewModel: VoteViewModel,
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    ListContent(
-        state = state,
-        onQueryChange = viewModel::search,
-        onClearSearch = viewModel::clearSearch,
-        onRetry = viewModel::refresh,
-        onOpenDetail = onOpenDetail,
-        modifier = modifier,
-        header = header,
-    )
+    val vote by voteViewModel.state.collectAsStateWithLifecycle()
+    // The sheet is a modal surface and draws in its own window, so it costs this Box no layout
+    // and takes none from the list. It is a sibling of the LazyColumn rather than an item in it:
+    // an item is disposed when it scrolls out, and a vote that was mid-flight would go with it.
+    Box(modifier.fillMaxSize()) {
+        ListContent(
+            state = state,
+            onQueryChange = viewModel::search,
+            onClearSearch = viewModel::clearSearch,
+            onRetry = viewModel::refresh,
+            onOpenDetail = onOpenDetail,
+            onVote = { row -> voteViewModel.vote(row.ticker, row.display) },
+            header = header,
+        )
+        VoteSheet(
+            state = vote,
+            actions = VoteActions(
+                onConfirm = voteViewModel::confirm,
+                onRetry = voteViewModel::retry,
+                onClose = voteViewModel::close,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -75,6 +94,11 @@ internal fun ListContent(
     onRetry: () -> Unit,
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The vote a row under "Without analysis" offers. Null in the previews and the gallery, where
+     * there is no wallet to take it anywhere; the rows then draw exactly as they did before.
+     */
+    onVote: ((ListRow) -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val cold = state.isLoading && state.analyzed.isEmpty() && state.withoutAnalysis.isEmpty()
@@ -144,6 +168,7 @@ internal fun ListContent(
                             row = row,
                             last = index == state.withoutAnalysis.lastIndex,
                             onOpenDetail = onOpenDetail,
+                            onVote = onVote,
                         )
                     }
                 }
@@ -220,14 +245,30 @@ private fun AnalyzedRow(row: ListRow, last: Boolean, onOpenDetail: (String) -> U
     )
 }
 
-/** An xStock PlainTicker has not classified: everything Muted, the price as the value. */
+/**
+ * An xStock PlainTicker has not classified: everything Muted, the price as the value.
+ *
+ * This is the section the curation loop acts on. 672 of the 832 tokenized stocks have no analysis
+ * at all (docs/skr-curation-spec-2026-09-13.md), and until now a row here offered a price and
+ * nothing else. The trailing action votes with the weight of the reader's staked SKR for this one
+ * to be covered next: the same [TextAction] the watchlist row already uses, one word wide because
+ * the 64dp row still has to carry a ticker, a company and a price beside it. The sentence the word
+ * is short for is on the sheet it opens, which leads with "Vote to cover NFLXx".
+ */
 @Composable
-private fun PriceOnlyRow(row: ListRow, last: Boolean, onOpenDetail: (String) -> Unit) {
+private fun PriceOnlyRow(
+    row: ListRow,
+    last: Boolean,
+    onOpenDetail: (String) -> Unit,
+    onVote: ((ListRow) -> Unit)?,
+) {
     InstrumentRow(
         ticker = row.display,
         company = row.company,
         meta = rowMeta(row),
         valueRight = row.priceUsd?.let { Fmt.price(it) },
+        trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
+        onTrailingAction = if (onVote == null) null else ({ onVote(row) }),
         muted = true,
         divider = !last,
         onClick = { onOpenDetail(row.ticker) },

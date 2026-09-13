@@ -17,10 +17,19 @@ import com.solana.mobilewalletadapter.common.signin.SignInWithSolana
 class FakeAdapterOperations(
     /** What the "wallet" returns for each transaction it is asked to sign, in order. Empty = no payloads. */
     var signedPayloads: List<ByteArray> = emptyList(),
+    /**
+     * What the "wallet" returns for [signAndSendTransactions], in order. Empty stands for the
+     * answer that carried no signature at all, which the vote machine treats as a failure rather
+     * than as a vote that landed.
+     */
+    var signatures: List<ByteArray> = emptyList(),
 ) : AdapterOperations {
 
     /** Every batch of unsigned transactions the ViewModel asked to sign. */
     val signRequests = mutableListOf<List<ByteArray>>()
+
+    /** Every batch the ViewModel asked the wallet to sign and submit in one call. */
+    val sendRequests = mutableListOf<List<ByteArray>>()
 
     override suspend fun signTransactions(transactions: Array<ByteArray>): MobileWalletAdapterClient.SignPayloadsResult {
         signRequests += transactions.toList()
@@ -69,7 +78,10 @@ class FakeAdapterOperations(
     override suspend fun signAndSendTransactions(
         transactions: Array<ByteArray>,
         params: TransactionParams,
-    ): MobileWalletAdapterClient.SignAndSendTransactionsResult = notScripted("signAndSendTransactions")
+    ): MobileWalletAdapterClient.SignAndSendTransactionsResult {
+        sendRequests += transactions.toList()
+        return MobileWalletAdapterClient.SignAndSendTransactionsResult(signatures.toTypedArray())
+    }
 
     private fun notScripted(verb: String): Nothing =
         throw UnsupportedOperationException("FakeAdapterOperations: $verb is not part of any flow under test")
