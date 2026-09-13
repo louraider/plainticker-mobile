@@ -83,6 +83,27 @@ class SplitMultiplierTest {
     }
 
     @Test
+    fun `the multiplier in force switches by itself at the moment the mint scheduled`() {
+        // Token-2022 answers `newMultiplier` from its timestamp onwards and leaves the stored
+        // `multiplier` alone until the authority writes again, so a share count worked out from
+        // the stored value after a split has landed is last week's number.
+        val split = SplitMultiplier.ofMint(chain(1.0, newMultiplier = 10.0, effectiveAt = 1_789_948_800L))
+
+        assertEquals(1.0, split.current, 0.0)
+        assertEquals(1.0, split.effectiveAt(1_789_948_799_000L), 0.0)
+        assertEquals("the moment itself counts", 10.0, split.effectiveAt(1_789_948_800_000L), 0.0)
+        assertEquals(10.0, split.effectiveAt(1_790_000_000_000L), 0.0)
+    }
+
+    @Test
+    fun `a mint with nothing scheduled is its stored multiplier at every moment`() {
+        val split = SplitMultiplier.ofMint(chain(4.0))
+
+        assertEquals(4.0, split.effectiveAt(0L), 0.0)
+        assertEquals(4.0, split.effectiveAt(Long.MAX_VALUE), 0.0)
+    }
+
+    @Test
     fun `a multiplier that is missing, zero or not a number is no rescaling at all`() {
         assertEquals(SplitMultiplier.NONE, SplitMultiplier.ofMint(chain(0.0)).current, 0.0)
         assertEquals(SplitMultiplier.NONE, SplitMultiplier.ofMint(chain(Double.NaN)).current, 0.0)

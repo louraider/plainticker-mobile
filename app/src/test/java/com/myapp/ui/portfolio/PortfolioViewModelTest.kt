@@ -47,8 +47,14 @@ class PortfolioViewModelTest {
     private val appMint = "APPxMint".padEnd(44, '1')
     private val unknownMint = "SomeOtherMint".padEnd(44, '1')
 
-    private fun balance(mint: String, raw: Long, decimals: Int, program: String = KnownPrograms.TOKEN_2022) = TokenBalance(
-        tokenAccount = "TokenAccount".padEnd(44, '1'),
+    private fun balance(
+        mint: String,
+        raw: Long,
+        decimals: Int,
+        program: String = KnownPrograms.TOKEN_2022,
+        account: String = "TokenAccount".padEnd(44, '1'),
+    ) = TokenBalance(
+        tokenAccount = account,
         mint = mint,
         owner = seeker.address,
         amountRaw = raw,
@@ -221,6 +227,107 @@ class PortfolioViewModelTest {
             val loaded = awaitUntil { it.connected && it.settled && !it.isLoading }
             val tsla = loaded.positions.single()
             assertEquals(8, tsla.decimals)
+            assertEquals("1.37", Fmt.tokenAmount(tsla.quantity!!))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `two token accounts of the same mint are one holding, not two rows`() = runTest {
+        // `getTokenAccountsByOwner` answers per account, and an owner may keep the associated one
+        // and an auxiliary one for the same mint. Two rows would split the quantity and the rows
+        // are keyed by mint, so the second would throw rather than merely read oddly.
+        val rpc = FakeRpcRepository(
+            balances = Result.success(
+                listOf(
+                    balance(tslaMint, 100_000_000L, 8, account = "Ata".padEnd(44, '1')),
+                    balance(tslaMint, 37_000_000L, 8, account = "Auxiliary".padEnd(44, '2')),
+                ),
+            ),
+        )
+        val mints = readableMints()
+        val prices = FakePriceRepository(Result.success(mapOf(tslaMint to price(363.4))))
+        val vm = viewModel(rpc = rpc, prices = prices, mints = mints)
+
+        vm.state.test {
+            val loaded = awaitUntil { it.connected && it.settled && !it.isLoading }
+
+            val tsla = loaded.positions.single()
+            assertEquals("one row per mint, or the keyed list throws", 1, loaded.positions.size)
+            assertEquals(137_000_000L, tsla.amountRaw)
+            assertEquals("1.37", Fmt.tokenAmount(tsla.quantity!!))
+            assertEquals(1.37 * 363.4, loaded.totalUsd!!, 1e-6)
+            // One mint is one read and one quote, however many accounts carry it.
+            assertEquals(listOf(tslaMint), mints.asked)
+            assertEquals(listOf(listOf(tslaMint)), prices.requested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a scheduled multiplier whose moment has passed is the one the shares are counted with`() = runTest {
+        // Token-2022 switches to `newMultiplier` at its timestamp by itself and leaves the stored
+        // `multiplier` alone until the authority writes again, so between the two the stored value
+        // is last week's number. A ten-for-one split activated an hour before this read.
+        val readAt = 1_789_045_020_000L
+        val activated = (readAt / 1_000L) - 3_600L
+        val mints = FakeMintRepository(
+            readings = mapOf(
+                tslaMint to Result.success(
+                    mintReading(
+                        mintFacts(
+                            decimals = 8,
+                            scaledUiAmount = scaled(
+                                multiplier = 1.0,
+                                newMultiplier = 10.0,
+                                effectiveAtEpochSeconds = activated,
+                            ),
+                        ),
+                        readAtMillis = readAt,
+                    ),
+                ),
+            ),
+        )
+        val rpc = FakeRpcRepository(balances = Result.success(listOf(balance(tslaMint, 137_000_000L, 8))))
+        val vm = viewModel(rpc = rpc, prices = FakePriceRepository(Result.success(mapOf(tslaMint to price(36.34)))), mints = mints)
+
+        vm.state.test {
+            val loaded = awaitUntil { it.connected && it.settled && !it.isLoading }
+            val tsla = loaded.positions.single()
+            assertEquals(10.0, tsla.multiplier!!, 0.0)
+            assertEquals("13.7", Fmt.tokenAmount(tsla.quantity!!))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a change still in the future leaves the stored multiplier in force`() = runTest {
+        val readAt = 1_789_045_020_000L
+        val laterToday = (readAt / 1_000L) + 3_600L
+        val mints = FakeMintRepository(
+            readings = mapOf(
+                tslaMint to Result.success(
+                    mintReading(
+                        mintFacts(
+                            decimals = 8,
+                            scaledUiAmount = scaled(
+                                multiplier = 1.0,
+                                newMultiplier = 10.0,
+                                effectiveAtEpochSeconds = laterToday,
+                            ),
+                        ),
+                        readAtMillis = readAt,
+                    ),
+                ),
+            ),
+        )
+        val rpc = FakeRpcRepository(balances = Result.success(listOf(balance(tslaMint, 137_000_000L, 8))))
+        val vm = viewModel(rpc = rpc, prices = FakePriceRepository(Result.success(mapOf(tslaMint to price(363.4)))), mints = mints)
+
+        vm.state.test {
+            val loaded = awaitUntil { it.connected && it.settled && !it.isLoading }
+            val tsla = loaded.positions.single()
+            assertEquals(1.0, tsla.multiplier!!, 0.0)
             assertEquals("1.37", Fmt.tokenAmount(tsla.quantity!!))
             cancelAndIgnoreRemainingEvents()
         }
@@ -480,6 +587,28 @@ class PortfolioViewModelTest {
             val after = awaitUntil { it.settled && !it.isLoading && !it.chainUnavailable }
             assertEquals(1, after.positions.size)
             assertNull(after.banner)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the banner names the source that is out now, not the one that was out last time`() = runTest {
+        // The chain goes, then comes back while the catalog goes. A stale flag would leave the
+        // screen saying the chain is unavailable when the chain is exactly what answered.
+        val rpc = FakeRpcRepository(balances = Result.failure(IOException("502")))
+        val catalog = catalog()
+        val vm = viewModel(rpc = rpc, catalog = catalog)
+
+        vm.state.test {
+            awaitUntil { it.banner == PortfolioBanner.ChainUnavailable }
+
+            rpc.balances = Result.success(listOf(balance(tslaMint, 137_000_000L, 8)))
+            catalog.assets = Result.failure(IOException("503"))
+            vm.refresh()
+
+            val after = awaitUntil { it.catalogUnavailable }
+            assertFalse("the chain answered, so nothing may still say it did not", after.chainUnavailable)
+            assertEquals(PortfolioBanner.CatalogUnavailable, after.banner)
             cancelAndIgnoreRemainingEvents()
         }
     }

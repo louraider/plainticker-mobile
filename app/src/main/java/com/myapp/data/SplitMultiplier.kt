@@ -38,6 +38,20 @@ data class SplitMultiplier(
     /** The change still scheduled, or null when the mint has none. */
     val pending: PendingMultiplier?,
 ) {
+    /**
+     * The multiplier actually in force at [nowMillis], which is what a balance is scaled by.
+     *
+     * Token-2022 keeps the scheduled value beside the old one and switches at the timestamp by
+     * itself: `ScaledUiAmountConfig::total_multiplier` answers `new_multiplier` from
+     * `new_multiplier_effective_timestamp` onwards, and the stored `multiplier` field is only
+     * rewritten the next time the authority updates the extension. So between a split taking
+     * effect and the issuer's next write, [current] is last week's number and the chain is
+     * already applying the other one. Anything that multiplies a raw balance to a share count
+     * asks this; [current] is only what the mint has stored.
+     */
+    fun effectiveAt(nowMillis: Long): Double =
+        pending?.takeIf { it.activated(nowMillis) }?.multiplier ?: current
+
     companion object {
         /** A multiplier that is missing or not a positive number means no rescaling, which is 1. */
         const val NONE = 1.0
