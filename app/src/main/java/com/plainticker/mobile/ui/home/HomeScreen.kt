@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -21,6 +22,7 @@ import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
+import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.components.TopTabs
 import com.plainticker.mobile.ui.list.ListScreen
 import com.plainticker.mobile.ui.portfolio.PortfolioScreen
@@ -93,6 +95,11 @@ fun HomeScreen(
                 )
             }
         }
+
+        // The one thing on these three screens that does not scroll, and it is not content: the
+        // band the system clock sits in, so the hero and the tabs dissolve under it instead of
+        // colliding with it (Insets.kt). Last in the Box, so it draws over whichever tab is up.
+        TopScrim(Modifier.align(Alignment.TopCenter))
     }
 }
 

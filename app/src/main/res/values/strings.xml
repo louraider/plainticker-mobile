@@ -91,9 +91,14 @@
 
     <!-- Detail -->
     <string name="detail_token_price">Token price</string>
+    <!-- What the token's own figure is called below the liquidity floor, where the quote is a
+         reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->
+    <string name="detail_pool_quote">Pool quote</string>
     <string name="detail_nyse_close">NYSE close</string>
     <string name="detail_nyse_price">NYSE price</string>
     <string name="detail_gauge_caption">%1$s, scale %2$s</string>
+    <!-- The premium runs past the end of the stated scale, so the tick is a cap and not a value. -->
+    <string name="detail_gauge_caption_off">%1$s, past the %2$s scale</string>
     <string name="detail_gauge_reference_close">Token vs NYSE close</string>
     <string name="detail_gauge_reference_live">Token vs NYSE price</string>
     <string name="detail_gauge_thin">Jupiter reports %1$s behind this price. That is too little for the token to follow the NYSE close, so the premium is left out.</string>
@@ -285,6 +290,8 @@
     <string name="portfolio_swap_row_meta">%1$s · %2$s</string>
     <string name="portfolio_receipts_note">The record this app kept of the swaps it made from this device.</string>
     <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
+    <string name="portfolio_recorded_lede">What this app recorded when its own swaps landed. The wallet itself has not been read.</string>
+    <string name="portfolio_recorded_meta">Swapped %1$s</string>
     <string name="portfolio_connecting">Waiting for the wallet to answer</string>
     <string name="portfolio_wallet_cancelled">Cancelled in the wallet, nothing was connected</string>
     <string name="portfolio_wallet_refused">The wallet did not answer, so nothing was connected</string>

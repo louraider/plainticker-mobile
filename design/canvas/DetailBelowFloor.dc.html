@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <style>
+    body { margin: 0; background: #0B0F14; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    a { color: #5AA9E6; } a:hover { color: #E8ECF1; }
+    @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+</helmet>
+<div style="width: 400px; height: 890px; overflow: hidden; background: #0B0F14; position: relative; display: flex; flex-direction: column; box-sizing: border-box;">
+<div style="height: 36px; flex: none;"></div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 600; color: #E8ECF1; letter-spacing: -0.01em;">PlainTicker</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #5AA9E6;  padding: 14px 0 14px 16px;">Watch</div>
+</div>
+<div style="padding: 12px 20px; border-bottom: 1px solid rgba(232,236,241,0.10); font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #B4BCC8; line-height: 18px; flex: none;">The NYSE is closed, the reference is the last close</div>
+<div style="display: flex; flex-direction: column; padding: 12px 20px 0 20px; flex: none;">
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 64px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 64px; letter-spacing: -0.035em;">APPx</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 16px; font-weight: 400; color: #B4BCC8; line-height: 22px; margin-top: 6px;">AppLovin Corporation</div>
+</div>
+<div style="padding: 28px 20px 0 20px; flex: none; font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #E8ECF1; line-height: 23px;">Pool holds $34, too thin to track the NYSE close</div>
+<div style="display: flex; flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 14px 20px 0 20px; flex: none;">
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Pool quote</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 20px; font-weight: 400; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 24px;">$611.56</div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">NYSE close</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 20px; font-weight: 400; color: #B4BCC8; font-variant-numeric: tabular-nums; line-height: 24px;">$323.00</div>
+  </div>
+</div>
+<div style="height: 28px; flex: none;"></div>
+<div style="display: flex; flex-direction: row; align-items: stretch; gap: 14px; padding: 0 20px; flex: none;">
+  <div style="width: 2px; background: #5AA9E6; animation: breathe 2.4s ease-in-out infinite; flex: none;"></div>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #5AA9E6; line-height: 20px;">Live from the mint</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 400; color: #7F8A99; font-variant-numeric: tabular-nums; line-height: 18px;">slot 446,664,185 · 3 s ago</div>
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; padding: 28px 20px 14px 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em;">Backing and controls</div>
+  
+</div>
+<div style="padding: 0 20px; flex: none;">
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: rgba(232,236,241,0.10); border: 1px solid rgba(232,236,241,0.10);">
+    <div style="grid-column: span 2; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Proof of reserves</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 32px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">102.9%</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 400; color: #B4BCC8; font-variant-numeric: tabular-nums; line-height: 18px;">2,134 shares held by Alpaca for 2,074.5 tokens</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Permanent delegate</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 24px; font-weight: 500; color: #D9A441; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">Yes</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Issuer can move tokens</div>
+</div><div style="grid-column: span 1; background: #0B0F14; padding: 16px 16px 18px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 96px; box-sizing: border-box;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Transfers pausable</div>
+  <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 24px; font-weight: 500; color: #D9A441; font-variant-numeric: tabular-nums; line-height: 1.1; letter-spacing: -0.01em;">Yes</div>
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Not paused now, issuer can pause</div>
+</div>
+  </div>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 52px; background: linear-gradient(to bottom, #0B0F14 0%, #0B0F14 69.2%, rgba(11,15,20,0) 100%); pointer-events: none;"></div><div style="position: absolute; left: 0; right: 0; top: 0; height: 36px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none;"><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #FFFFFF; line-height: 18px;">11:40</div><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #FFFFFF; line-height: 18px;">100%</div></div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -68,6 +68,25 @@ sealed interface TrackingQuality {
         const val MIN_POOL_USD = 10_000.0
 
         /**
+         * The widest deviation from the NYSE close a pool above [MIN_POOL_USD] produced when the
+         * catalogue was measured, in percent, and therefore the narrowest scale a gauge over the
+         * tracked set may be drawn on.
+         *
+         * Same measurement as the floor (docs/data-map.md, 2026-09-12): the 13 pools at or above
+         * $100k tracked within 0.8 percent, and the 6 between $10k and $100k ran out to NFLXx
+         * -2.34 percent, UNHx -2.12 percent, XOMx -1.58 percent. NVDAx, the deepest pool in the
+         * catalogue, read -1.01 percent on 2026-09-13 and -0.95 percent the day after, so the
+         * 0.8 percent band is a measurement and not a bound. **2.5** covers every premium the
+         * tracked set has produced, and it is here rather than in the UI because it is a fact
+         * about the market, read from the same rows the floor was read from.
+         *
+         * It is a scale, not a limit: a premium past it is still drawn, as an off-scale cap
+         * rather than as a position on the track, because no fixed scale can be guaranteed and a
+         * gauge that silently saturates reports a number it does not have.
+         */
+        const val TRACKED_SPREAD_PCT = 2.5
+
+        /**
          * The rule. Null when Jupiter did not price the token at all: with no quote there is no
          * tracking question to answer, and the screen says the prices are missing on its own.
          */

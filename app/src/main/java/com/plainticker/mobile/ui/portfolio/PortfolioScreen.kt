@@ -112,6 +112,29 @@ internal fun PortfolioContent(
             state.phase == WalletPhase.CONNECTING ->
                 item(key = "connecting") { EmptyLine(stringResource(R.string.portfolio_connecting)) }
 
+            // The app's own record, standing where the chain's answer would be (design review
+            // 2026-09-13, finding 9 and its related note). The order is DESIGN.md section 1.1's,
+            // learned on Detail below the liquidity floor: the sentence that says what a number
+            // is stands above the number, never under it, so a reader cannot take the quantity
+            // for a balance and be corrected afterwards.
+            state.showsRecorded -> {
+                item(key = "recorded-lede") { Lede(stringResource(R.string.portfolio_recorded_lede)) }
+                item(key = "recorded-actions") {
+                    if (state.connected) {
+                        WalletActions(onRefresh = onRefresh, onDisconnect = onDisconnect)
+                    } else {
+                        ConnectAction(onConnect = onConnect)
+                    }
+                }
+                itemsIndexed(state.recorded, key = { _, holding -> "rec:" + holding.mint }) { index, holding ->
+                    Recorded(
+                        holding = holding,
+                        last = index == state.recorded.lastIndex,
+                        onOpenDetail = onOpenDetail,
+                    )
+                }
+            }
+
             !state.connected -> item(key = "connect") {
                 EmptyLine(
                     text = stringResource(R.string.portfolio_not_connected),
@@ -230,6 +253,29 @@ private fun Holding(position: PortfolioPosition, last: Boolean, onOpenDetail: (S
     )
 }
 
+/**
+ * One recorded holding: the token left, the quantity right, and when the swap behind it landed.
+ *
+ * No value and no premium, because neither was read: what this row claims is exactly what the
+ * app wrote down. The row opens Detail only once the catalog has named the underlying ticker;
+ * without a name there is no route, and a dead tap is worse than a row that does not offer one.
+ */
+@Composable
+private fun Recorded(holding: RecordedHolding, last: Boolean, onOpenDetail: (String) -> Unit) {
+    val row = recordedRow(holding)
+    val meta = row.meta.text()
+    InstrumentRow(
+        ticker = row.symbol,
+        company = row.company,
+        meta = meta,
+        valueRight = row.quantity,
+        divider = !last,
+        onClick = row.ticker?.let { ticker -> { onOpenDetail(ticker) } },
+        onClickLabel = stringResource(R.string.action_open_ticker, row.symbol),
+        description = sentence(row.symbol, row.company, row.quantity, meta),
+    )
+}
+
 /** One landed swap: what was paid, what came back, the cost actually paid and when. */
 @Composable
 private fun Swap(receipt: SwapReceipt, last: Boolean) {
@@ -259,6 +305,36 @@ private fun WalletActions(onRefresh: () -> Unit, onDisconnect: () -> Unit) {
         TextAction(label = stringResource(R.string.action_refresh), onClick = onRefresh)
         TextAction(label = stringResource(R.string.action_disconnect), onClick = onDisconnect)
     }
+}
+
+/** The way into the wallet, on its own line under the sentence that explains why it is offered. */
+@Composable
+private fun ConnectAction(onConnect: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        TextAction(label = stringResource(R.string.action_connect_wallet), onClick = onConnect)
+    }
+}
+
+/**
+ * The sentence that qualifies the figures below it: full width, body 15 in Ink, above them.
+ *
+ * Not a [Footnote] and not an [EmptyLine]. A footnote is Muted and arrives after the number, and
+ * the whole finding this screen was changed for is that a caveat printed under a figure is read
+ * after the reader has already believed the figure (DESIGN.md section 1.1).
+ */
+@Composable
+private fun Lede(text: String) {
+    Text(
+        text = text,
+        style = PlainTickerType.body,
+        color = Ink,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = Side, end = Side, top = 4.dp, bottom = 14.dp),
+    )
 }
 
 /** One sentence where the rows would be, so no state of this screen is a blank column. */
@@ -404,7 +480,20 @@ private fun PortfolioPreview() {
 private fun PortfolioDisconnectedPreview() {
     PreviewCanvas {
         PortfolioContent(
-            state = PortfolioUiState(receipts = PreviewState.receipts),
+            state = PortfolioUiState(
+                receipts = PreviewState.receipts,
+                recorded = listOf(
+                    RecordedHolding(
+                        mint = "TSLAx",
+                        symbol = "TSLAx",
+                        ticker = "TSLA",
+                        company = "Tesla, Inc.",
+                        amountRaw = 1_364_000L,
+                        decimals = 8,
+                        landedAtMillis = 1_789_045_020_000L,
+                    ),
+                ),
+            ),
             onConnect = {},
             onDisconnect = {},
             onRefresh = {},

@@ -16,7 +16,7 @@
   </style>
 </helmet>
 <div style="width: 400px; height: 890px; overflow: hidden; background: #0B0F14; position: relative; display: flex; flex-direction: column; box-sizing: border-box;">
-<div style="height: 24px; flex: none;"></div>
+<div style="height: 36px; flex: none;"></div>
 <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; flex: none;">
   <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 600; color: #E8ECF1; letter-spacing: -0.01em;">PlainTicker</div>
   <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #5AA9E6;  padding: 14px 0 14px 16px;">Watch</div>
@@ -37,12 +37,14 @@
 </div>
 <div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
   <div style="position: relative; height: 14px;">
-    <div style="position: absolute; left: 0; right: 0; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
-    <div style="position: absolute; left: 50%; top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
-    <div style="position: absolute; left: 59%; top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
+    <div style="position: absolute; left: calc(8px + (100% - 18px) * 0.5180); top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
   </div>
   <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
-    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Token vs NYSE close, scale 0.5%</div>
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Token vs NYSE close, scale 2.5%</div>
     <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: #5AA9E6; font-variant-numeric: tabular-nums; line-height: 18px;">+0.09%</div>
   </div>
 </div>
@@ -114,6 +116,7 @@
   </div>
 </div>
 
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 52px; background: linear-gradient(to bottom, #0B0F14 0%, #0B0F14 69.2%, rgba(11,15,20,0) 100%); pointer-events: none;"></div><div style="position: absolute; left: 0; right: 0; top: 0; height: 36px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none;"><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #FFFFFF; line-height: 18px;">11:40</div><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #FFFFFF; line-height: 18px;">100%</div></div>
 </div>
 </x-dc>
 </body>

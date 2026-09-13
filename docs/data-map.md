@@ -282,9 +282,50 @@ The copy, all of it in `strings.xml` and gated by `CopyLintTest`, with money thr
 | Where | `Thin` | `Untracked` |
 |---|---|---|
 | List row meta | `Pool holds $34, too thin to track` | `Pool depth not reported` |
-| In place of the gauge | `Pool holds $34, too thin to track the NYSE close` | `Pool depth not reported, tracking cannot be checked` |
+| Above Detail's price pair | `Pool holds $34, too thin to track the NYSE close` | `Pool depth not reported, tracking cannot be checked` |
 
 The row's meta line keeps its shape: the sentence takes the premium's half, the analysis age keeps the half after the middle dot, and the row stays one line and 64dp. The sentence is Muted on the row and Ink 2 under the price, never Caution: a shallow pool is a fact about the token, not an issuer-control risk (DESIGN.md section 2). Sorting and sections are untouched and nothing is filtered out: the choice was disclosure, not curation. Written up as DESIGN.md section 1.1.
+
+#### What the floor missed, read on the device 2026-09-13
+
+The floor was reviewed as a rule, then on the row, then on the gauge, and never as a finished Detail
+screen. On the signed v0.2.0, APPx withheld the premium correctly and then printed **$611.56** at
+40sp Ink over **$323.00** at 20sp Ink 2 with the withholding sentence at 13sp between them. The two
+figures are +89.34 percent apart: the screen refused to do the arithmetic and handed over both
+operands at the two largest sizes on it, with the caveat set smaller than either.
+
+Changed on `fix/design-blockers`, in the price block rather than in the floor:
+
+| | Above the floor | Below it |
+|---|---|---|
+| The sentence | none | first in the block, body 15 Ink, above both figures |
+| Token figure | `detail_token_price`, hero price 40 mono Ink | `detail_pool_quote`, reference price 20 mono Ink |
+| Reference figure | reference price 20 mono Ink 2, lifted 6dp onto the hero baseline | reference price 20 mono Ink 2, no lift |
+| Gauge slot | the track | nothing at all |
+
+`PriceRow.lead` carries the sentence and `PriceRow.comparable` is the one flag the type is set from,
+so the two figures cannot be styled apart by two separate edits. `DetailFinishedScreenTest` asserts
+it on APPx's own numbers.
+
+#### The gauge scale, and what happens past it
+
+`Gauge.kt` fixed `scalePct` at 0.5 and clamped the tick to the track with no off-scale mark. NVDAx,
+the deepest pool in the catalogue, read **-1.01 percent** when the review ran and **-0.95 percent**
+a few hours later, so the tick sat hard against the left end while the caption still said
+"scale 0.5%". The $10k to $100k band runs to -2.34 percent (NFLXx), so most of the tracked set
+pinned. `design/canvas/instrument.py` only ever drew +0.09 percent, which is why nobody had seen it.
+
+Two changes, because either alone leaves a hole:
+
+- **The scale is the measured spread.** `TrackingQuality.TRACKED_SPREAD_PCT` is **2.5**, read from
+  the same rows the floor was read from, and `GAUGE_SCALE_PCT` is that constant. Every premium the
+  tracked set has produced now lands inside the track: NVDAx -0.95 at 0.31, NFLXx -2.34 at 0.032,
+  TSLAx +0.09 at 0.518. The 13 deepest cluster near the reference tick, which is the true story.
+- **The ends are drawn, and past them the tick is a cap.** The track carries a 1dp Line strong end
+  stop at each end and stops 8dp short of the padding. A premium past the scale puts its tick in
+  that gutter, 6dp clear of the track, and the caption becomes `detail_gauge_caption_off`,
+  "Token vs NYSE close, past the 2.5% scale". No fixed scale can be promised, so a saturated tick
+  had to be made unmistakable rather than made impossible.
 
 ### Detail (T9)
 
@@ -292,9 +333,9 @@ The row's meta line keeps its shape: the sentence takes the premium's half, the 
 |---|---|---|
 | Hero ticker | catalog `symbol` | 64 mono |
 | Company | `company` | 16 Ink 2 |
-| Token price | Price v3 `usdPrice` | `Fmt.price` |
+| Token price | Price v3 `usdPrice` | `Fmt.price`; 40 mono Ink above the liquidity floor, 20 mono Ink and labelled "Pool quote" below it |
 | NYSE close | Price v3 `stockData.price` | `Fmt.price`; the label is "NYSE close" while the exchange is shut and "NYSE price" during its session (`MarketStatus.priceLabel`); null -> "Reference price unavailable" in the gauge's own slot, in Ink 2 and never Caution, gauge hidden |
-| Gauge | `TrackingQuality.of(entry)`, never arithmetic in a composable | scale 0.5 percent; caption "Token vs NYSE close, scale 0.5%", or "Token vs NYSE price" during the exchange session; value `Fmt.percent`; below the liquidity floor the pool sentence takes the whole slot |
+| Gauge | `TrackingQuality.of(entry)`, never arithmetic in a composable | scale `GAUGE_SCALE_PCT`, 2.5 percent each side; caption "Token vs NYSE close, scale 2.5%", or "Token vs NYSE price" during the exchange session; past the scale "Token vs NYSE close, past the 2.5% scale" and the tick stands off the track; value `Fmt.percent`; below the liquidity floor the gauge draws nothing and the pool sentence leads the price block above it |
 | Live bar meta | `getAccountInfo` context `slot` and fetch time | "slot {Fmt.slot} · {Fmt.relativeAgo}"; hollow (not live) when the RPC call failed |
 | Proof of reserves | xStocks PoR `sharesHeld`, `tokensInCirculation` | ratio `Fmt.percent(unsigned)` value; sub "{shares} shares held for {tokens} tokens" mono |
 | Permanent delegate | mint extension `permanentDelegate.delegate` | present -> "Yes" Caution + "Issuer can move tokens"; absent -> "None" |
@@ -827,6 +868,74 @@ schedule would leave a daily job running against an empty watchlist forever. `Wa
 cannot leak a sub-floor premium, because `TrackingQuality.Thin.premiumPct` is null by construction.
 `Fmt.MONTHS` is the app's date format rather than copy, is unchanged by this task, and the copy lint
 passes over it.
+
+## Two pipelines, one fact: the composite and the analysis age (server lane)
+
+**The symptom.** On the Seeker on 2026-09-13 the List drew NVDAx as "79" with "Analysis 7 d old".
+One tap later Detail drew "composite 77" and "Analysis from 2 d ago". Two numbers for one fact,
+one tap apart, in the product whose case is that claims carry their evidence
+(docs/design-review-2026-09-13.md, finding 4).
+
+**Which pipeline each screen reads.** Neither screen is wrong and neither reads the other's field.
+
+| Screen | Cell | Field | Timestamp behind the age |
+|---|---|---|---|
+| List | row value right | `/api/v1/summary` -> `rows[].composite` | `rows[].computed_at`, served pre-counted as `rows[].age_days` |
+| Detail | "composite {n}" in the heading | `/api/v1/{TICKER}` -> `composite_percentile` | `as_of`, counted on the device by `Fmt.relativeAgo` |
+
+**The measurement, taken live on 2026-09-13 at 09:37 UTC.** Seven tickers, both endpoints, within
+the same minute. `Fmt.decimal(composite, 0)` is what the List prints and `composite_percentile` is
+what Detail prints.
+
+| Ticker | `summary.composite` | `summary.computed_at` | `composite_percentile` | `as_of` | Agree |
+|---|---|---|---|---|---|
+| USB | 61.094208 | 2026-09-13T03:05:50Z | 61 | 2026-09-13T03:04:43Z | yes |
+| CHTR | 59.916653 | 2026-09-13T03:04:42Z | 60 | 2026-09-13T03:03:57Z | yes |
+| AMT | 57.81229 | 2026-09-13T03:06:45Z | 58 | 2026-09-13T03:05:51Z | yes |
+| VZ | 51.838345 | 2026-09-13T03:00:36Z | 52 | 2026-09-13T03:00:16Z | yes |
+| BKNG | 80.2809 | 2026-09-06T03:01:45Z | 80 | 2026-09-11T11:13:25Z | yes |
+| NEM | 83.80406 | 2026-09-06T03:01:11Z | 82 | 2026-09-06T20:24:52Z | **no** |
+| NVDA | 79.072655 | 2026-09-06T03:01:30Z | 77 | 2026-09-11T03:13:41Z | **no** |
+
+**What that settles.** `composite` and `composite_percentile` are the same quantity, not a raw
+score and a rank: every pair written by one extraction run agrees exactly once the float is
+rounded the way the List rounds it, and `fscore` and `setup_score` agree on every row including
+the two that disagree here (NVDA reads 3 and 3 in both). Both mismatches have the same shape: the
+per-ticker payload carries a LATER timestamp than the summary row. `/summary` is a materialized
+snapshot written at extraction time and **it is not rewritten when a single ticker is
+re-extracted**, so a row's `composite`, its `computed_at` and therefore its `age_days` lag that
+ticker's own payload until the next full run rewrites the table.
+
+**The scale of it.** The same response had `generated_at` 2026-09-13T09:37Z, and of its 179 rows
+**140 carried `computed_at` 2026-09-06**, with 13 on 09-09, 4 on 09-11, 10 on 09-12 and 12 on
+09-13. Every one of those 140 is a candidate for the same disagreement the moment its ticker is
+re-extracted on its own. The `stale` flag does not catch it either: NVDA's row reads
+`stale: false` while carrying a seven-day-old composite.
+
+**The fix is server-side and additive.** Re-materialize the summary row for a ticker whenever that
+ticker is re-extracted, so `composite`, `computed_at` and `age_days` are written by the same run
+that writes the payload. A cheaper half-measure, if the materializer cannot be made incremental,
+is for `/summary` to carry the per-ticker `as_of` alongside `computed_at` so the client can see
+which rows are behind; but that only lets the client describe the disagreement, and the client has
+nothing useful to say about it.
+
+**What the client must not do, and why each was rejected.**
+
+- **Rescale or re-rank one field into the other.** They are the same quantity. The four same-run
+  pairs above are the proof, and `TwoPipelinesTest` keeps it in the test suite precisely so this
+  repair cannot be attempted by someone who reads "composite" and "composite_percentile" as two
+  different measures.
+- **Fetch the per-ticker payload for the rows the List draws.** That is 157 round trips in front
+  of the first row, against a list that currently paints from a bundled snapshot in 243 ms.
+- **Name the pipeline on each screen.** "composite (daily list)" against "composite (full
+  analysis)" is jargon a reader cannot act on, and it advertises an inconsistency instead of
+  fixing one. Both screens keep the plain label.
+- **Have Detail print the summary composite.** It would agree, and it would be the older of the
+  two numbers on the screen that has the newer one in its hand.
+
+So: nothing changes in the app, the disagreement stays visible, and it is written up here with the
+reproduction above. A wrong repair here would be worse than the documented gap, because every
+repair available to the client hides an upstream staleness rather than removing it.
 
 ## Known gaps to decide before T9
 

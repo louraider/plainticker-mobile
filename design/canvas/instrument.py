@@ -35,7 +35,35 @@ def t(size, weight=400, color=INK, extra=""):
 def m(size, weight=400, color=INK, extra=""):
     return f"font-family: {MONO}; font-size: {size}px; font-weight: {weight}; color: {color}; font-variant-numeric: tabular-nums; {extra}"
 
-def frame(body, height=H, clip=True):
+# The Seeker's status bar, measured from a uiautomator dump on 2026-09-13: the inset is 36dp of
+# the 890dp frame and the clock is drawn from 12.7dp to 23.3dp inside it. Every artboard was an
+# 890dp content frame with no bars in it until now, which is why nobody saw the 64sp hero and the
+# white clock land in the same pixels (design review 2026-09-13, finding 7).
+STATUS_INSET = 36
+SCRIM_FADE = 16
+
+
+def system_bars(scrim=True):
+    """The status band over the content: the app's scrim, then the system's own clock on top."""
+    stop = round(100.0 * STATUS_INSET / (STATUS_INSET + SCRIM_FADE), 1)
+    band = ""
+    if scrim:
+        band = (
+            f'<div style="position: absolute; left: 0; right: 0; top: 0; height: {STATUS_INSET + SCRIM_FADE}px; '
+            f'background: linear-gradient(to bottom, {BG} 0%, {BG} {stop}%, rgba(11,15,20,0) 100%); '
+            f'pointer-events: none;"></div>'
+        )
+    clock = (
+        f'<div style="position: absolute; left: 0; right: 0; top: 0; height: {STATUS_INSET}px; display: flex; '
+        f'flex-direction: row; align-items: center; justify-content: space-between; padding: 0 20px; '
+        f'box-sizing: border-box; pointer-events: none;">'
+        f'<div style="{t(13, 500, "#FFFFFF", "line-height: 18px;")}">11:40</div>'
+        f'<div style="{t(13, 500, "#FFFFFF", "line-height: 18px;")}">100%</div></div>'
+    )
+    return band + clock
+
+
+def frame(body, height=H, clip=True, bars=True):
     hstyle = f"height: {height}px; overflow: hidden;" if clip else f"min-height: {height}px;"
     return f"""<!doctype html>
 <html>
@@ -56,6 +84,7 @@ def frame(body, height=H, clip=True):
 </helmet>
 <div style="width: {W}px; {hstyle} background: {BG}; position: relative; display: flex; flex-direction: column; box-sizing: border-box;">
 {body}
+{system_bars() if bars else ""}
 </div>
 </x-dc>
 </body>
@@ -65,7 +94,7 @@ def frame(body, height=H, clip=True):
 # ----- components -----
 def header(right=""):
     r = right or "<span></span>"
-    return f"""<div style="height: 24px; flex: none;"></div>
+    return f"""<div style="height: {STATUS_INSET}px; flex: none;"></div>
 <div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; flex: none;">
   <div style="{t(15, 600, INK, 'letter-spacing: -0.01em;')}">PlainTicker</div>
   {r}
@@ -162,11 +191,18 @@ def field(label, value, unit="", action="", placeholder=False, value_style=None)
   </div>
 </div>"""
 
-def list_row(ticker, company, right_main="", right_sub="", sub="", muted=False, trailing="", last=False):
+def list_row(ticker, company, right_main="", right_sub="", sub="", muted=False, trailing="", last=False,
+             reserve_sub=False):
     tc = MUTED if muted else INK
     cc = MUTED if muted else INK2
     rm = f'<div style="{m(18 if not muted else 15, 500 if not muted else 400, tc, "line-height: 22px; white-space: nowrap;")}">{right_main}</div>' if right_main else ""
-    rs = f'<div style="{t(13, 400, MUTED, "line-height: 18px;")}">{right_sub}</div>' if right_sub else ""
+    # The state word sits at the start of a column of its own (DESIGN.md section 4), so its width
+    # stops deciding where the number begins. 40px holds the widest of the three, "strong", which
+    # the Seeker drew at 37.3dp. Right-aligned as one group it moved the number by up to 16dp.
+    rs = (
+        f'<div style="{t(13, 400, MUTED, "line-height: 18px;")} width: 40px; flex: none;">{right_sub}</div>'
+        if (right_sub or reserve_sub) else ""
+    )
     s = f'<div style="{m(12, 400, MUTED, "line-height: 18px;")}">{sub}</div>' if sub else ""
     tr = f'<div style="{t(14, 600, ACCENT)} padding: 10px 0 10px 16px; flex: none;">{trailing}</div>' if trailing else ""
     border = "" if last else f"border-bottom: 1px solid {LINE};"
@@ -187,16 +223,34 @@ def list_row(ticker, company, right_main="", right_sub="", sub="", muted=False, 
   </div>
 </div>"""
 
+def banner(text):
+    """The one slot under the tabs. Elevated, 13/500, no icon, no action unless one is offered."""
+    return (f'<div style="background: {ELEV}; padding: 12px 20px; {t(13, 500, INK2, "line-height: 18px;")} '
+            f'flex: none;">{text}</div>')
+
+
 def strip(text):
     return f'<div style="padding: 12px 20px; border-bottom: 1px solid {LINE}; {t(13, 500, INK2, "line-height: 18px;")} flex: none;">{text}</div>'
 
-def gauge(left_text, premium_value, pos_pct):
-    # reference tick fixed at 50%; token tick placed on a +-0.5% scale (0.09% -> 59%)
+def gauge(left_text, premium_value, pos_pct, off_scale=None):
+    # The scale is +-2.5%, the spread the tracked set actually produced (DESIGN.md 1.1), so
+    # 0.09% is 51.8% along and -0.95% is 31%. The track stops 8px short at each end, which is a
+    # 6px gap plus the tick's own 2px, and carries an end stop at each end: a premium past the
+    # scale (off_scale="left" or "right") stands its tick in that gutter, clear of the track,
+    # instead of resting on the end where it would read as the end of the scale.
+    if off_scale == "left":
+        tick = f'<div style="position: absolute; left: 0; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>'
+    elif off_scale == "right":
+        tick = f'<div style="position: absolute; right: 0; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>'
+    else:
+        tick = f'<div style="position: absolute; left: calc(8px + (100% - 18px) * {pos_pct / 100:.4f}); top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>'
     return f"""<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
   <div style="position: relative; height: 14px;">
-    <div style="position: absolute; left: 0; right: 0; top: 6px; height: 1px; background: {LINE_STRONG};"></div>
-    <div style="position: absolute; left: 50%; top: 2px; width: 1px; height: 10px; background: {MUTED};"></div>
-    <div style="position: absolute; left: {pos_pct}%; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: {LINE_STRONG};"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: {LINE_STRONG};"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: {LINE_STRONG};"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: {MUTED};"></div>
+    {tick}
   </div>
   <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
     <div style="{t(13, 400, INK2, 'line-height: 18px;')}">{left_text}</div>
@@ -221,7 +275,7 @@ def detail_top():
     <div style="{m(20, 400, INK2, 'line-height: 24px;')}">{D['ref']}</div>
   </div>
 </div>
-{gauge('Token vs NYSE close, scale 0.5%', D['premium'], 59)}
+{gauge('Token vs NYSE close, scale 2.5%', D['premium'], 51.8)}
 <div style="height: 28px; flex: none;"></div>
 {live('Live from the mint', f"slot {D['slot']} · {D['ago']}")}
 {heading('Backing and controls', top=28)}
@@ -232,6 +286,61 @@ def detail_top():
     cell('Split multiplier', '1.00', 'No pending split'),
     cell('Transfer hook', 'None', 'No transfer hook program'),
 ])}
+"""
+
+# Detail below the liquidity floor. APPx exactly as the signed v0.2.0 read it on the Seeker on
+# 2026-09-13: pool $34, token $611.56, NYSE close $323.00, which are +89.34% apart. The canvas
+# never drew this state, which is why the screen shipped handing a reader both operands at 40sp
+# and 20sp with the caveat at 13sp between them. Here the sentence is read first, both figures
+# are set at 20 mono, and the token's is called what it is.
+def detail_below_floor():
+    return f"""{header(text_action('Watch'))}
+{strip('The NYSE is closed, the reference is the last close')}
+<div style="display: flex; flex-direction: column; padding: 12px 20px 0 20px; flex: none;">
+  <div style="{m(64, 500, INK, 'line-height: 64px; letter-spacing: -0.035em;')}">APPx</div>
+  <div style="{t(16, 400, INK2, 'line-height: 22px; margin-top: 6px;')}">AppLovin Corporation</div>
+</div>
+<div style="padding: 28px 20px 0 20px; flex: none; {t(15, 400, INK, 'line-height: 23px;')}">Pool holds $34, too thin to track the NYSE close</div>
+<div style="display: flex; flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 14px 20px 0 20px; flex: none;">
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="{t(13, 500, MUTED, 'line-height: 18px;')}">Pool quote</div>
+    <div style="{m(20, 400, INK, 'line-height: 24px;')}">$611.56</div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+    <div style="{t(13, 500, MUTED, 'line-height: 18px;')}">NYSE close</div>
+    <div style="{m(20, 400, INK2, 'line-height: 24px;')}">$323.00</div>
+  </div>
+</div>
+<div style="height: 28px; flex: none;"></div>
+{live('Live from the mint', f"slot 446,664,185 · 3 s ago")}
+{heading('Backing and controls', top=28)}
+{grid([
+    cell('Proof of reserves', '102.9%', '2,134 shares held by Alpaca for 2,074.5 tokens', span=2, value_size=32, sub_mono=True),
+    cell('Permanent delegate', 'Yes', 'Issuer can move tokens', tone=CAUTION),
+    cell('Transfers pausable', 'Yes', 'Not paused now, issuer can pause', tone=CAUTION),
+])}
+"""
+
+# Every gauge state the live catalogue can produce, on one artboard. The canvas drew +0.09% and
+# nothing else, so a tick pinned against the end of the track was never looked at before it
+# shipped; these are the premiums the device and the 2026-09-12 measurement actually read.
+def gauge_states():
+    rows = [
+        ('TSLAx, +0.09% on $1.3M', 'Token vs NYSE close, scale 2.5%', '+0.09%', 51.8, None),
+        ('NVDAx, -0.95% on $1.9M, the tick that pinned at 0.5%', 'Token vs NYSE close, scale 2.5%', '-0.95%', 31.0, None),
+        ('NFLXx, -2.34% on $12.5k, the widest the tracked set went', 'Token vs NYSE close, scale 2.5%', '-2.34%', 3.2, None),
+        ('Past the scale, low side', 'Token vs NYSE close, past the 2.5% scale', '-4.10%', 0, 'left'),
+        ('Past the scale, high side', 'Token vs NYSE close, past the 2.5% scale', '+6.80%', 100, 'right'),
+    ]
+    body = "".join(
+        f'<div style="padding: 22px 20px 0 20px; flex: none; {t(13, 500, MUTED, "line-height: 18px;")}">{title}</div>'
+        + gauge(caption, value, pos, off)
+        for title, caption, value, pos, off in rows
+    )
+    return f"""{header()}
+<div style="padding: 20px 20px 0 20px; flex: none; {t(20, 600, INK, 'line-height: 26px; letter-spacing: -0.01em;')}">Gauge, every reading the market gave</div>
+{body}
+<div style="height: 28px; flex: none;"></div>
 """
 
 def detail_rest():
@@ -286,19 +395,24 @@ def screen_detail_full():
 
 # ----- List -----
 def list_rows():
+    # The composites and the words as the Seeker drew them on 2026-09-13, not the 0 to 1 scale the
+    # canvas used to invent: /summary serves a percentile 0-100 and the device prints the integer
+    # (design review 2026-09-13, "Where the built screen is right and the canvas is wrong").
+    # Every analyzed row keeps the word's column open, so PGRx lines up with the rest.
     return "".join([
-        list_row('TSLAx', 'Tesla, Inc.', '0.71', 'strong', '+0.09% vs NYSE close · 2 d old'),
-        list_row('NVDAx', 'NVIDIA Corp.', '0.68', 'strong', '-0.04% vs NYSE close · 1 d old'),
-        list_row('AAPLx', 'Apple Inc.', '0.61', 'fair', '+0.01% vs NYSE close · 2 d old'),
-        list_row('MSFTx', 'Microsoft Corp.', '0.58', 'fair', '+0.03% vs NYSE close · 6 d old'),
-        list_row('AMZNx', 'Amazon.com, Inc.', '0.55', 'fair', '-0.02% vs NYSE close · 2 d old'),
-        list_row('COINx', 'Coinbase Global', '0.47', 'weak', '+0.08% vs NYSE close · 3 d old', last=True),
+        list_row('NEMx', 'Newmont Corp.', '84', 'strong', 'Analysis 7 d old', reserve_sub=True),
+        list_row('NVDAx', 'NVIDIA Corporation', '79', 'fair', '-0.95% vs NYSE close · 7 d old', reserve_sub=True),
+        list_row('PGRx', 'Progressive Corp.', '79', '', 'Analysis 7 d old', reserve_sub=True),
+        list_row('APPx', 'AppLovin Corporation', '75', 'fair', 'Pool holds $34, too thin to track', reserve_sub=True),
+        list_row('GILDx', 'Gilead Sciences, Inc.', '73', 'strong', 'Analysis 7 d old', reserve_sub=True),
+        list_row('ABNBx', 'Airbnb, Inc.', '72', 'weak', 'Analysis 1 d old', reserve_sub=True, last=True),
     ])
 
 def screen_list():
     body = f"""{header()}
 {tabs('List')}
 {strip('Today: 3 watched, next report TSLAx on Oct 22')}
+{banner('The NYSE is closed, the reference is the last close')}
 <div style="height: 22px; flex: none;"></div>
 {field('Search', 'Ticker or company', placeholder=True, value_style=t(16, 400, MUTED, 'line-height: 24px;'))}
 {heading('Analyzed', top=30)}
@@ -442,6 +556,62 @@ def screen_watchlist():
 """
     return frame(body)
 
+def screen_portfolio_cold():
+    """
+    Portfolio on a cold open: no wallet session, so no chain read was ever made.
+
+    This is what a judge meets first. Until 2026-09-13 the Holdings heading was followed by
+    "Connect your wallet to see the xStocks in it." and the one real holding the product owns sat
+    500dp lower under Recent swaps, filed as a transaction (design review, finding 9). The app's
+    own record now stands in the holdings slot, with the sentence that says what it is above the
+    figures, exactly as the liquidity floor states its pool before the pair it disqualifies.
+    Numbers are the Seeker's own receipt.
+    """
+    body = f"""{header()}
+{tabs('Portfolio')}
+{heading('Holdings')}
+<div style="padding: 4px 20px 14px 20px; {t(15, 400, INK, 'line-height: 23px;')} flex: none;">What this app recorded when its own swaps landed. The wallet itself has not been read.</div>
+<div style="display: flex; flex-direction: row; justify-content: flex-end; padding: 0 20px; flex: none;">{text_action('Connect wallet')}</div>
+{list_row('TSLAx', 'Tesla, Inc.', '0.013629', '', 'Swapped 13 Sep 2026 08:08 UTC', last=True)}
+{heading('Recent swaps', top=30)}
+{list_row('4.995 USDC', 'to 0.013629 TSLAx', '', '', 'all-in cost 0.32% \u00b7 13 Sep 2026 08:08 UTC', last=True)}
+<div style="padding: 16px 20px 0 20px; {t(13, 400, MUTED, 'line-height: 18px;')} flex: none;">The record this app kept of the swaps it made from this device.</div>
+"""
+    return frame(body)
+
+
+def scrim_states():
+    """
+    The same scrolled hero with the scrim and without it, so the difference can be looked at.
+
+    The content scrolls under a transparent status bar by design and nothing is sticky. What was
+    never drawn is the moment the 64sp Ink ticker passes under the white system clock, because
+    every artboard was an 890dp content frame with no bars in it.
+    """
+    def panel(label, scrim, note):
+        hero = f"""<div style="position: absolute; left: 0; right: 0; top: -26px; padding: 12px 20px 0 20px; box-sizing: border-box;">
+  <div style="{m(64, 500, INK, 'line-height: 64px; letter-spacing: -0.035em;')}">NVDAx</div>
+  <div style="{t(16, 400, INK2, 'line-height: 22px; margin-top: 6px;')}">NVIDIA Corporation</div>
+  <div style="display: flex; flex-direction: row; align-items: flex-end; justify-content: space-between; padding-top: 24px;">
+    <div style="{m(40, 500, INK, 'line-height: 44px; letter-spacing: -0.03em;')}">$216.18</div>
+    <div style="{m(20, 400, INK2, 'line-height: 24px;')}">$218.26</div>
+  </div>
+</div>"""
+        return f"""<div style="flex: none; padding: 0 0 8px 0;">
+  <div style="padding: 0 20px 8px 20px; {t(13, 500, MUTED, 'line-height: 18px;')}">{label}</div>
+  <div style="position: relative; height: 210px; overflow: hidden; background: {BG}; border: 1px solid {LINE_STRONG}; box-sizing: border-box;">
+    {hero}
+    {system_bars(scrim=scrim)}
+  </div>
+  <div style="padding: 8px 20px 0 20px; {t(13, 400, INK2, 'line-height: 19px;')}">{note}</div>
+</div>"""
+
+    return f"""<div style="height: 28px; flex: none;"></div>
+{panel('Before', False, 'The hero and the clock in the same pixels. Read on the Seeker on 2026-09-13.')}
+<div style="height: 20px; flex: none;"></div>
+{panel('After', True, 'Canvas across the 36dp inset, then 16dp of fade. Nothing is sticky and nothing moved.')}
+"""
+
 SCREENS = {
     "Onboarding.dc.html": screen_onboarding(),
     "List.dc.html": screen_list(),
@@ -449,7 +619,11 @@ SCREENS = {
     "SwapSheet.dc.html": screen_swap(),
     "Receipt.dc.html": screen_receipt(),
     "DetailFull.dc.html": screen_detail_full(),
+    "DetailBelowFloor.dc.html": frame(detail_below_floor()),
+    "GaugeStates.dc.html": frame(gauge_states(), height=680),
     "Portfolio.dc.html": screen_portfolio(),
+    "PortfolioColdOpen.dc.html": screen_portfolio_cold(),
+    "ScrimStates.dc.html": frame(scrim_states(), height=560, bars=False),
     "Watchlist.dc.html": screen_watchlist(),
 }
 for name, html in SCREENS.items():
@@ -467,10 +641,16 @@ canvas = {
         {"file": "DetailFull.dc.html", "title": "3b Detail, full scroll", "x": X(0), "y": H + 200, "w": W, "h": 2640},
         {"file": "Portfolio.dc.html", "title": "6 Portfolio", "x": X(1), "y": H + 200, "w": W, "h": H},
         {"file": "Watchlist.dc.html", "title": "7 Watchlist", "x": X(2), "y": H + 200, "w": W, "h": H},
+        {"file": "DetailBelowFloor.dc.html", "title": "3c Detail, below the liquidity floor", "x": X(0), "y": H + 3040, "w": W, "h": H},
+        {"file": "GaugeStates.dc.html", "title": "3d Gauge, every reading the market gave", "x": X(1), "y": H + 3040, "w": W, "h": 680},
+        {"file": "PortfolioColdOpen.dc.html", "title": "6b Portfolio, cold open with no wallet", "x": X(2), "y": H + 3040, "w": W, "h": H},
+        {"file": "ScrimStates.dc.html", "title": "8 The status bar scrim, before and after", "x": X(3), "y": H + 3040, "w": W, "h": 560},
     ],
     "annotations": [
         {"id": "read", "x": X(0), "y": -220, "w": 980,
          "text": "PlainTicker Mobile, direction Instrument. Seeker, 412dp portrait, dark canvas.\nA reading tool for tokenized US stocks: the token's own facts first (reserves, issuer controls, split multiplier, live from the mint), then the company against its sector, then one Swap. Outfit for words, JetBrains Mono for every number. One blue accent for interaction and live state; amber only on issuer-control risk. Sharp corners.\nSignature elements: the tracking gauge (token tick against the NYSE close), the live bar, blueprint grids for facts.\nSample data is illustrative."},
+        {"id": "floor", "x": X(2), "y": H + 3040, "w": 420,
+         "text": "Below the liquidity floor the premium is withheld, so the two figures it would be computed from may not be staged as a comparison: the pool sentence is read first, both figures are set at 20 mono, and the token's is labelled Pool quote. Drawn from APPx as the Seeker read it on 2026-09-13.\nThe gauge scale is the measured spread of the tracked set, plus or minus 2.5 percent, and a premium past it stands its tick off the end of the track instead of resting on it."},
         {"id": "ia", "x": X(3), "y": H + 200, "w": 420,
          "text": "Screen order kept from the plan: trust first, fundamentals second, one Swap after Method; Watch in the header; List, Portfolio and Watchlist as top tabs.\nOne change for mobile: Quality, Valuation and Momentum share one section, Against the sector, with three marker tracks and a fact grid, instead of three sections with the same layout."},
     ],

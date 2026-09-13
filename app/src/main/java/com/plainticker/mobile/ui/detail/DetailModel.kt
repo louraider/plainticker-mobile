@@ -55,11 +55,22 @@ enum class DetailBanner(@StringRes val text: Int) {
 }
 
 /**
- * The price row: the token's own price left, the reference right. The reference is a *close* only
+ * The price row: the token's own figure left, the reference right. The reference is a *close* only
  * while the exchange is shut; during its session the same field is a live price and the label says
  * so, which is the whole reason [PriceLabel] exists in the data layer.
+ *
+ * The row also carries the liquidity floor's own sentence, because the floor is a property of this
+ * block and not of the gauge under it. See [lead] and [comparable].
  */
 data class PriceRow(
+    /**
+     * The sentence that disqualifies the comparison, read before either figure. Non-null exactly
+     * where the floor withheld the premium (DESIGN.md section 1.1), which is also exactly where
+     * the gauge draws nothing.
+     */
+    val lead: Copy?,
+    /** What the token's own figure is called: a price above the floor, a pool quote below it. */
+    val tokenLabel: Copy,
     val tokenPrice: String?,
     /** Why there is no token price, when there is none. */
     val tokenNote: Copy?,
@@ -67,7 +78,19 @@ data class PriceRow(
     val referencePrice: String?,
     /** Why there is no reference price, when there is none. */
     val referenceNote: Copy?,
-)
+) {
+    /**
+     * Whether the two figures may be read against one another.
+     *
+     * False below the floor, and the screen sets them at one size there. The shipped v0.2.0 did
+     * not: it printed the token at 40sp Ink over the NYSE close at 20sp Ink 2 with the pool
+     * sentence at 13sp between them, so on APPx a reader was handed $611.56 and $323.00 and
+     * subtracted them to the +89.34 percent the floor exists to suppress. The floor's own argument
+     * settles it: if the quote is too thin to compare, the figure is not a price of the company
+     * either, and it may not be the largest true thing on the screen.
+     */
+    val comparable: Boolean get() = lead == null
+}
 
 /** The live bar over the trust grid: what it says, and whether it may breathe. */
 data class LiveLine(
@@ -145,8 +168,11 @@ internal const val INPUT_SYMBOL = "USDC"
  */
 internal const val LIVE_WINDOW_MILLIS = 60_000L
 
-/** The scale the gauge is drawn on, as DESIGN.md section 4 fixes it. */
-internal const val GAUGE_SCALE_PCT = 0.5
+/**
+ * The scale the gauge is drawn on, as DESIGN.md section 4 fixes it: the spread the tracked
+ * catalogue actually produced, measured beside the floor itself.
+ */
+internal const val GAUGE_SCALE_PCT = TrackingQuality.TRACKED_SPREAD_PCT
 
 /** The nine F-Score signals, in the fixed order of docs/data-map.md. Never re-sorted. */
 internal val F_SCORE_SIGNALS: List<Int> = listOf(
@@ -203,12 +229,28 @@ val DetailUiState.banner: DetailBanner?
  * The price row. A quote that failed is a missing price with a reason, never a zero; a token
  * Jupiter answered about without pricing says that instead, because "Jupiter refused" and "Jupiter
  * does not price this" are different facts about the token.
+ *
+ * The floor speaks here, at the top of the block, rather than under it: the sentence that says the
+ * two figures cannot be compared has to be read before them, and the figures have to stop being a
+ * staged comparison. [PriceRow.lead] carries the sentence the gauge used to carry, and
+ * [PriceRow.comparable] is what the screen sets the type from.
  */
 val DetailUiState.priceRow: PriceRow
     get() {
         val live = priceLabel == PriceLabel.TRACKING_WITHIN
         val reference = price?.stockData?.price
+        val lead = when (val quality = tracking) {
+            is TrackingQuality.Thin ->
+                words(R.string.detail_gauge_thin, Fmt.compactMoney(quality.poolUsd, roundDown = true))
+
+            TrackingQuality.Untracked -> words(R.string.detail_gauge_pool_unknown)
+
+            // Tracked, or no quote at all: nothing to withhold, and the notes below say the rest.
+            else -> null
+        }
         return PriceRow(
+            lead = lead,
+            tokenLabel = words(if (lead == null) R.string.detail_token_price else R.string.detail_pool_quote),
             tokenPrice = price?.usdPrice?.let(Fmt::price),
             tokenNote = when {
                 price != null -> null

@@ -23,6 +23,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.snapshotRepository,
             container.watchlistStore,
             container.digestStore,
+            container.clock,
         )
     }
     initializer {
