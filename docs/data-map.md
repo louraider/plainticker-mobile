@@ -758,6 +758,74 @@ cannot leak a sub-floor premium, because `TrackingQuality.Thin.premiumPct` is nu
 `Fmt.MONTHS` is the app's date format rather than copy, is unchanged by this task, and the copy lint
 passes over it.
 
+## Two pipelines, one fact: the composite and the analysis age (server lane)
+
+**The symptom.** On the Seeker on 2026-09-13 the List drew NVDAx as "79" with "Analysis 7 d old".
+One tap later Detail drew "composite 77" and "Analysis from 2 d ago". Two numbers for one fact,
+one tap apart, in the product whose case is that claims carry their evidence
+(docs/design-review-2026-09-13.md, finding 4).
+
+**Which pipeline each screen reads.** Neither screen is wrong and neither reads the other's field.
+
+| Screen | Cell | Field | Timestamp behind the age |
+|---|---|---|---|
+| List | row value right | `/api/v1/summary` -> `rows[].composite` | `rows[].computed_at`, served pre-counted as `rows[].age_days` |
+| Detail | "composite {n}" in the heading | `/api/v1/{TICKER}` -> `composite_percentile` | `as_of`, counted on the device by `Fmt.relativeAgo` |
+
+**The measurement, taken live on 2026-09-13 at 09:37 UTC.** Seven tickers, both endpoints, within
+the same minute. `Fmt.decimal(composite, 0)` is what the List prints and `composite_percentile` is
+what Detail prints.
+
+| Ticker | `summary.composite` | `summary.computed_at` | `composite_percentile` | `as_of` | Agree |
+|---|---|---|---|---|---|
+| USB | 61.094208 | 2026-09-13T03:05:50Z | 61 | 2026-09-13T03:04:43Z | yes |
+| CHTR | 59.916653 | 2026-09-13T03:04:42Z | 60 | 2026-09-13T03:03:57Z | yes |
+| AMT | 57.81229 | 2026-09-13T03:06:45Z | 58 | 2026-09-13T03:05:51Z | yes |
+| VZ | 51.838345 | 2026-09-13T03:00:36Z | 52 | 2026-09-13T03:00:16Z | yes |
+| BKNG | 80.2809 | 2026-09-06T03:01:45Z | 80 | 2026-09-11T11:13:25Z | yes |
+| NEM | 83.80406 | 2026-09-06T03:01:11Z | 82 | 2026-09-06T20:24:52Z | **no** |
+| NVDA | 79.072655 | 2026-09-06T03:01:30Z | 77 | 2026-09-11T03:13:41Z | **no** |
+
+**What that settles.** `composite` and `composite_percentile` are the same quantity, not a raw
+score and a rank: every pair written by one extraction run agrees exactly once the float is
+rounded the way the List rounds it, and `fscore` and `setup_score` agree on every row including
+the two that disagree here (NVDA reads 3 and 3 in both). Both mismatches have the same shape: the
+per-ticker payload carries a LATER timestamp than the summary row. `/summary` is a materialized
+snapshot written at extraction time and **it is not rewritten when a single ticker is
+re-extracted**, so a row's `composite`, its `computed_at` and therefore its `age_days` lag that
+ticker's own payload until the next full run rewrites the table.
+
+**The scale of it.** The same response had `generated_at` 2026-09-13T09:37Z, and of its 179 rows
+**140 carried `computed_at` 2026-09-06**, with 13 on 09-09, 4 on 09-11, 10 on 09-12 and 12 on
+09-13. Every one of those 140 is a candidate for the same disagreement the moment its ticker is
+re-extracted on its own. The `stale` flag does not catch it either: NVDA's row reads
+`stale: false` while carrying a seven-day-old composite.
+
+**The fix is server-side and additive.** Re-materialize the summary row for a ticker whenever that
+ticker is re-extracted, so `composite`, `computed_at` and `age_days` are written by the same run
+that writes the payload. A cheaper half-measure, if the materializer cannot be made incremental,
+is for `/summary` to carry the per-ticker `as_of` alongside `computed_at` so the client can see
+which rows are behind; but that only lets the client describe the disagreement, and the client has
+nothing useful to say about it.
+
+**What the client must not do, and why each was rejected.**
+
+- **Rescale or re-rank one field into the other.** They are the same quantity. The four same-run
+  pairs above are the proof, and `TwoPipelinesTest` keeps it in the test suite precisely so this
+  repair cannot be attempted by someone who reads "composite" and "composite_percentile" as two
+  different measures.
+- **Fetch the per-ticker payload for the rows the List draws.** That is 157 round trips in front
+  of the first row, against a list that currently paints from a bundled snapshot in 243 ms.
+- **Name the pipeline on each screen.** "composite (daily list)" against "composite (full
+  analysis)" is jargon a reader cannot act on, and it advertises an inconsistency instead of
+  fixing one. Both screens keep the plain label.
+- **Have Detail print the summary composite.** It would agree, and it would be the older of the
+  two numbers on the screen that has the newer one in its hand.
+
+So: nothing changes in the app, the disagreement stays visible, and it is written up here with the
+reproduction above. A wrong repair here would be worse than the documented gap, because every
+repair available to the client hides an upstream staleness rather than removing it.
+
 ## Known gaps to decide before T9
 
 1. `/api/v1/{TICKER}` has no leaf fundamentals (ROIC, margins, P/E, EV/S, 52-week position). Either drop the fact grid under the tracks or add an additive `facts` block server-side. Recommendation: add `facts` server-side (Week 2 server lane, small) so Detail has the evidence cells the canvas shows.
