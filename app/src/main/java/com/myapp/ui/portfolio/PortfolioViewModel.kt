@@ -10,10 +10,10 @@ import com.myapp.data.jupiter.PriceFetch
 import com.myapp.data.jupiter.TrackingQuality
 import com.myapp.data.receipts.ReceiptStore
 import com.myapp.data.receipts.SwapReceipt
-import com.myapp.data.rpc.MintFacts
 import com.myapp.data.rpc.TokenBalance
 import com.myapp.data.xstocks.XStockAsset
 import com.myapp.repo.CatalogRepository
+import com.myapp.repo.MintReading
 import com.myapp.repo.MintRepository
 import com.myapp.repo.PriceRepository
 import com.myapp.repo.RpcRepository
@@ -268,14 +268,19 @@ class PortfolioViewModel(
             return
         }
         val assets = runCatching { catalog.catalog() }.getOrElse {
-            _state.update { it.copy(isLoading = false, catalogUnavailable = true) }
+            // The chain answered on the way here, so any sentence saying it did not has to go:
+            // the banner names the source that is actually out, never the one that was out last
+            // time. Only the catalog is missing now.
+            _state.update {
+                it.copy(isLoading = false, chainUnavailable = false, catalogUnavailable = true)
+            }
             return
         }
 
         val byMint = assets.mapNotNull { asset -> asset.solanaMint?.let { it to asset } }.toMap()
         // Only xStocks: a wallet's USDC, its SOL and every other token in it are not this
         // screen's subject and are never listed.
-        val owned = balances.filter { it.mint in byMint }
+        val owned = heldByMint(balances.filter { it.mint in byMint })
 
         val facts = readMints(owned)
         // A wallet holding no xStock costs Jupiter nothing: there is no mint to price.
@@ -305,6 +310,29 @@ class PortfolioViewModel(
     }
 
     /**
+     * What the wallet holds of each mint, which is the sum of its token accounts for that mint.
+     *
+     * `getTokenAccountsByOwner` answers one entry per token ACCOUNT, and one owner may keep
+     * several for the same mint: the associated account, plus any auxiliary one older tooling or
+     * a venue created. Listing them as they came would draw one holding as two rows, each with
+     * part of the quantity, and the rows are keyed by mint, so the second one would throw the
+     * duplicate-key exception rather than merely reading oddly. The list screen learned the same
+     * lesson from a duplicated ticker ([com.myapp.ui.list.ListViewModel]).
+     *
+     * Folded first account first, so the order the node answered in is the order of the rows
+     * before they are sorted by value.
+     */
+    private fun heldByMint(balances: List<TokenBalance>): List<TokenBalance> {
+        val out = LinkedHashMap<String, TokenBalance>(balances.size)
+        for (balance in balances) {
+            val seen = out[balance.mint]
+            out[balance.mint] =
+                if (seen == null) balance else seen.copy(amountRaw = seen.amountRaw + balance.amountRaw)
+        }
+        return out.values.toList()
+    }
+
+    /**
      * One `getAccountInfo(mint, jsonParsed)` per held mint, in order.
      *
      * Sequential, and one call each on purpose. The forwarder rate-limits per IP and forwards the
@@ -316,10 +344,10 @@ class PortfolioViewModel(
      * A mint that throws and a mint that answers with something this app cannot read as a
      * Token-2022 mint are the same answer here: null, which the row states.
      */
-    private suspend fun readMints(owned: List<TokenBalance>): Map<String, MintFacts?> {
-        val out = LinkedHashMap<String, MintFacts?>(owned.size)
+    private suspend fun readMints(owned: List<TokenBalance>): Map<String, MintReading?> {
+        val out = LinkedHashMap<String, MintReading?>(owned.size)
         for (balance in owned) {
-            out[balance.mint] = runCatching { mints.mint(balance.mint) }.getOrNull()?.facts
+            out[balance.mint] = runCatching { mints.mint(balance.mint) }.getOrNull()
         }
         return out
     }
@@ -327,13 +355,19 @@ class PortfolioViewModel(
     private fun position(
         balance: TokenBalance,
         asset: XStockAsset,
-        facts: MintFacts?,
+        reading: MintReading?,
         entry: PriceEntry?,
     ): PortfolioPosition {
+        val facts = reading?.facts
+        // The clock of the read itself, because the multiplier in force is a question about a
+        // moment and this is the moment the mint was read at.
+        val readAt = reading?.readAtMillis ?: 0L
         // A mint with no scaled amount extension is not rescaled at all, which is a multiplier of
-        // one read off the chain; a mint that was never read carries neither number.
+        // one read off the chain; a mint that was never read carries neither number. A scheduled
+        // change whose moment has passed is the multiplier the chain is already applying, so it
+        // is the one the shares are counted with, not the value the mint still has stored.
         val multiplier = facts?.let {
-            it.scaledUiAmount?.let(SplitMultiplier::ofMint)?.current ?: SplitMultiplier.NONE
+            it.scaledUiAmount?.let(SplitMultiplier::ofMint)?.effectiveAt(readAt) ?: SplitMultiplier.NONE
         }
         return PortfolioPosition(
             symbol = asset.symbol,
