@@ -462,7 +462,7 @@ def gallery_html(entries, tile_px, exponent, box):
             crop_w=entry["crop"].width,
         ))
     return PAGE.format(cards="".join(cards), tile_px=tile_px, dp="{:.0f}".format(tile_px / 3.0),
-                       unit="{:.2f}".format(tile_px / VISIBLE), exponent="{:.1f}".format(exponent),
+                       unit="{:.2f}".format(tile_px / VISIBLE), exponent="{:.2f}".format(exponent),
                        x=box[0], y=box[1])
 
 
