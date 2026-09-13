@@ -44,11 +44,11 @@ if (!releaseSigningConfigured) {
 }
 
 android {
-    namespace = "com.myapp"
+    namespace = "com.plainticker.mobile"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.myapp"
+        applicationId = "com.plainticker.mobile"
         minSdk = 26
         targetSdk = 37
         versionCode = appVersionCode

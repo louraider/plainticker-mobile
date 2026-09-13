@@ -1,0 +1,529 @@
+package com.plainticker.mobile.ui.detail
+
+import androidx.annotation.StringRes
+import com.plainticker.mobile.R
+import com.plainticker.mobile.data.MultiplierSource
+import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.data.plainticker.Axis
+import com.plainticker.mobile.data.xstocks.MarketSource
+import com.plainticker.mobile.data.xstocks.PriceLabel
+import com.plainticker.mobile.data.xstocks.Reserves
+import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.raw
+import com.plainticker.mobile.ui.words
+import java.time.Instant
+import java.time.ZoneOffset
+
+/**
+ * What the Detail screen says, decided away from the composition (task T9, design task DT6).
+ *
+ * The screen is a join of six sources with three renderings each (the fact, its absence, and a
+ * source that could not be read), so the rules that matter are the ones that pick a sentence, not
+ * the ones that place a pixel. They live here as pure functions over [DetailUiState] so every
+ * state in plan section 13 Pass 2 is a unit test rather than a device run, and so a regression
+ * that turns "we could not read the mint" into "the issuer holds nothing" fails the gate.
+ *
+ * Two rules are enforced here and nowhere else:
+ *
+ * 1. **No premium is computed in a composable.** The gauge is handed [DetailUiState.tracking], the
+ *    one answer from [TrackingQuality], and draws or withholds on that alone.
+ * 2. **Caution belongs to the value of an issuer control that is actually present**, which is the
+ *    permanent delegate and pausable transfers and nothing else (DESIGN.md section 2). A mint that
+ *    could not be read is Unknown in Ink, never a warning and never a clean bill.
+ */
+
+// ---- The pieces the screen draws ---------------------------------------------------------------
+
+/** The one banner slot on Detail: where the venue is, and nothing else (DESIGN.md section 4). */
+enum class DetailBanner(@StringRes val text: Int) {
+    /** The issuer stopped trading this asset, which is not the exchange closing. */
+    HALTED(R.string.banner_market_halted),
+
+    /** The venue's own block says the exchange session is over. */
+    CLOSED(R.string.banner_market_closed),
+
+    /** No venue block answered, so the weekday schedule decided and the banner says so. */
+    CLOSED_LOCAL(R.string.banner_market_closed_local),
+
+    /**
+     * The weekday schedule reads as a session and no venue block confirmed it. The schedule knows
+     * no holidays, so an open it alone claims is named as the schedule's claim: the price row is
+     * labelled live off that answer, and a reader is told where it came from.
+     */
+    OPEN_LOCAL(R.string.banner_market_open_local),
+}
+
+/**
+ * The price row: the token's own price left, the reference right. The reference is a *close* only
+ * while the exchange is shut; during its session the same field is a live price and the label says
+ * so, which is the whole reason [PriceLabel] exists in the data layer.
+ */
+data class PriceRow(
+    val tokenPrice: String?,
+    /** Why there is no token price, when there is none. */
+    val tokenNote: Copy?,
+    val referenceLabel: Copy,
+    val referencePrice: String?,
+    /** Why there is no reference price, when there is none. */
+    val referenceNote: Copy?,
+)
+
+/** The live bar over the trust grid: what it says, and whether it may breathe. */
+data class LiveLine(
+    val label: Copy,
+    val meta: Copy,
+    /** Breathing is the only continuous motion on the screen, and only while the read is live. */
+    val live: Boolean,
+    /** Stable on purpose: a screen reader must not be interrupted by the ticking age. */
+    val announcement: Copy,
+)
+
+/** One cell of the "Backing and controls" grid. */
+data class TrustFact(
+    val label: Copy,
+    val value: Copy,
+    val sub: Copy?,
+    val span: Int = 1,
+    val subMono: Boolean = false,
+    /** Caution on the value only, and only where the issuer actually holds the control. */
+    val caution: Boolean = false,
+)
+
+/**
+ * One axis of "Against the sector". A [value] of null is a SEC-derived field the filer does not
+ * publish (a foreign 20-F filer, a young one): the row says it is not available for this filer and
+ * draws no marker, because a marker at zero would be a claim the payload never made.
+ */
+data class TrackRow(
+    val label: Copy,
+    val value: String?,
+    /** The server's own state word, lowercased. Empty when the payload sent none. */
+    val state: String,
+    val positionPct: Float,
+)
+
+/** One F-Score signal in the fixed order of docs/data-map.md. [ok] is null for "n/a". */
+data class SignalItem(@StringRes val name: Int, val ok: Boolean?)
+
+/** The F-Score block: the numeral out of its scale, then the nine signals. */
+data class FScoreContent(
+    /** Null when the filer has no F-Score at all; the block then states that instead of a zero. */
+    val score: String?,
+    val outOf: String,
+    val signals: List<SignalItem>,
+) {
+    /**
+     * True when the filer publishes no F-Score at all, which is the SEC-null case: no numeral and
+     * nine signals nobody evaluated. The heading stays and one line says so, rather than a zero
+     * over nine rows of "n/a".
+     */
+    val unavailable: Boolean get() = score == null && signals.all { it.ok == null }
+}
+
+/** The Method block: how old the analysis is, what it is, and where it came from. */
+data class MethodContent(
+    /** Only past a day (docs/data-map.md, Detail "Analysis age"). */
+    val age: Copy?,
+    val statement: Copy,
+    val sources: Copy,
+)
+
+/** The one line that replaces the fundamentals when there are none, with its next step. */
+data class FundamentalsNotice(val text: Copy, val hint: Copy?)
+
+// ---- The rules ---------------------------------------------------------------------------------
+
+/** USDC is the input side of every swap in the hackathon build; the symbol is not translated copy. */
+internal const val INPUT_SYMBOL = "USDC"
+
+/**
+ * How long a mint read stays live. The forwarder caches each `getAccountInfo` for 60 s, so past a
+ * minute what is on screen is no longer the newest the node would hand over: the bar stops
+ * breathing and the meta line keeps counting, which is the honest pair.
+ */
+internal const val LIVE_WINDOW_MILLIS = 60_000L
+
+/** The scale the gauge is drawn on, as DESIGN.md section 4 fixes it. */
+internal const val GAUGE_SCALE_PCT = 0.5
+
+/** The nine F-Score signals, in the fixed order of docs/data-map.md. Never re-sorted. */
+internal val F_SCORE_SIGNALS: List<Int> = listOf(
+    R.string.signal_roa_positive,
+    R.string.signal_cfo_positive,
+    R.string.signal_roa_improving,
+    R.string.signal_accruals,
+    R.string.signal_leverage_falling,
+    R.string.signal_liquidity_improving,
+    R.string.signal_no_new_shares,
+    R.string.signal_gross_margin_improving,
+    R.string.signal_asset_turnover_improving,
+)
+
+/** The default F-Score scale when the payload does not state one. */
+private const val F_SCORE_OUT_OF = 9
+
+/** The hero: the token's symbol once the catalog names it, the plain ticker until then. */
+val DetailUiState.heroTicker: String get() = symbol ?: ticker
+
+/** The company, from the analysis first because it is the registrant's own name. */
+val DetailUiState.heroCompany: String? get() = analysis?.company ?: asset?.name
+
+/** The token's own facts can only be drawn once the catalog names a mint for this ticker. */
+val DetailUiState.hasToken: Boolean get() = catalogAsset.valueOrNull?.solanaMint != null
+
+/**
+ * One line where the whole token side would be, when there is no token side: the catalog answered
+ * and this ticker has no xStock, or the catalog did not answer at all. Null whenever a mint is
+ * known, including while the reads against it are still in flight.
+ */
+val DetailUiState.tokenNotice: Copy?
+    get() = when {
+        hasToken || catalogAsset.isLoading -> null
+        catalogAsset.isFailed -> words(R.string.list_catalog_unavailable)
+        else -> words(R.string.detail_no_xstock)
+    }
+
+/** Where the venue is. Nothing to say while the venue itself reports its own session. */
+val DetailUiState.banner: DetailBanner?
+    get() {
+        val market = market ?: return null
+        val guessed = market.source == MarketSource.LOCAL_SCHEDULE
+        return when {
+            market.halted -> DetailBanner.HALTED
+            market.regularSession && guessed -> DetailBanner.OPEN_LOCAL
+            market.regularSession -> null
+            guessed -> DetailBanner.CLOSED_LOCAL
+            else -> DetailBanner.CLOSED
+        }
+    }
+
+/**
+ * The price row. A quote that failed is a missing price with a reason, never a zero; a token
+ * Jupiter answered about without pricing says that instead, because "Jupiter refused" and "Jupiter
+ * does not price this" are different facts about the token.
+ */
+val DetailUiState.priceRow: PriceRow
+    get() {
+        val live = priceLabel == PriceLabel.TRACKING_WITHIN
+        val reference = price?.stockData?.price
+        return PriceRow(
+            tokenPrice = price?.usdPrice?.let(Fmt::price),
+            tokenNote = when {
+                price != null -> null
+                quote.isFailed -> words(R.string.list_prices_unavailable)
+                quote.isAbsent -> words(R.string.detail_price_absent)
+                else -> null
+            },
+            referenceLabel = words(if (live) R.string.detail_nyse_price else R.string.detail_nyse_close),
+            referencePrice = reference?.let(Fmt::price),
+            // Jupiter priced the token and sent no `stockData`: there is a token price and nothing
+            // to measure it against, which is a missing reference and not a tracking failure.
+            referenceNote = if (reference == null && price != null) {
+                words(R.string.detail_reference_unavailable)
+            } else {
+                null
+            },
+        )
+    }
+
+/**
+ * What the gauge is measuring, named by the same market state as the price row. The premium itself
+ * is never computed here: [DetailUiState.tracking] already decided whether one may be drawn.
+ */
+val DetailUiState.gaugeReference: Copy
+    get() = words(
+        if (priceLabel == PriceLabel.TRACKING_WITHIN) {
+            R.string.detail_gauge_reference_live
+        } else {
+            R.string.detail_gauge_reference_close
+        },
+    )
+
+/** The gauge is drawn only where there is a quote to judge; the price row explains the rest. */
+val DetailUiState.gauge: TrackingQuality? get() = tracking
+
+/**
+ * The live bar. A mint that could not be read keeps the slot and says so: the trust rows below it
+ * are then Unknown, and a reader has to be told why before reading them.
+ */
+val DetailUiState.liveLine: LiveLine?
+    get() {
+        val read = chain.valueOrNull
+        if (read == null) {
+            if (!chain.isFailed) return null
+            return LiveLine(
+                label = words(R.string.detail_live_unread_label),
+                meta = words(R.string.detail_live_unread_meta),
+                live = false,
+                announcement = words(R.string.detail_live_unread_label),
+            )
+        }
+        val slot = Fmt.slot(read.slot)
+        val ageMillis = (nowMillis - read.readAtMillis).coerceAtLeast(0L)
+        return LiveLine(
+            label = words(R.string.detail_live_label),
+            meta = words(
+                R.string.detail_live_meta,
+                slot,
+                Fmt.relativeAgo(Instant.ofEpochMilli(read.readAtMillis), Instant.ofEpochMilli(nowMillis)),
+            ),
+            live = ageMillis <= LIVE_WINDOW_MILLIS,
+            announcement = words(R.string.detail_live_a11y, slot),
+        )
+    }
+
+/** True while any source behind "Backing and controls" is still in flight. */
+val DetailUiState.trustLoading: Boolean
+    get() = chain.isLoading || reserves.isLoading || split.isLoading
+
+/**
+ * The five cells of "Backing and controls", in the order DESIGN.md section 5 fixes: the reserves
+ * spanning the first row, then the two issuer controls, then the multiplier and the hook.
+ *
+ * Every cell has three renderings and they are kept apart on purpose. An extension the mint does
+ * not carry reads "None", which is a fact. A mint that could not be read reads "Unknown" with the
+ * reason under it, which is an absence of facts. Only the first can ever be reassuring, and only
+ * a control the issuer actually holds takes Caution.
+ */
+val DetailUiState.trustFacts: List<TrustFact>
+    get() = listOf(reservesCell(), delegateCell(), pausableCell(), splitCell(), hookCell())
+
+private fun DetailUiState.reservesCell(): TrustFact {
+    val label = words(R.string.detail_fact_por)
+    val held = reserves.valueOrNull
+    if (held == null) {
+        return TrustFact(
+            label = label,
+            value = words(R.string.detail_value_unknown),
+            sub = words(
+                if (reserves.isAbsent) R.string.detail_fact_por_absent_sub else R.string.detail_fact_por_failed_sub,
+            ),
+            span = 2,
+        )
+    }
+    return TrustFact(
+        label = label,
+        value = held.coverage?.let { raw(Fmt.percent(it * 100.0, signed = false, decimals = 1)) }
+            ?: words(R.string.detail_value_unknown),
+        sub = held.coverageSub(),
+        span = 2,
+        subMono = true,
+    )
+}
+
+/** "26,101 shares held by Alpaca for 25,924 tokens", naming the custodian when exactly one is. */
+private fun Reserves.coverageSub(): Copy {
+    val shares = Fmt.tokenAmount(sharesHeld, maxDecimals = 2)
+    val tokens = Fmt.tokenAmount(tokensInCirculation, maxDecimals = 2)
+    val named = custodian
+    return if (named != null) {
+        words(R.string.detail_fact_por_custodian_sub, shares, named, tokens)
+    } else {
+        words(R.string.detail_fact_por_sub, shares, tokens)
+    }
+}
+
+private fun DetailUiState.delegateCell(): TrustFact {
+    val label = words(R.string.detail_fact_delegate)
+    val facts = chain.valueOrNull?.facts ?: return unreadCell(label)
+    val delegate = facts.permanentDelegate
+    return if (delegate != null && delegate.active) {
+        TrustFact(
+            label = label,
+            value = words(R.string.value_yes),
+            sub = words(R.string.detail_fact_delegate_sub),
+            caution = true,
+        )
+    } else {
+        // The extension absent, or present with the delegate revoked: nobody can move a holder's
+        // tokens either way, so the row is a fact and not a warning.
+        TrustFact(label = label, value = words(R.string.value_none), sub = words(R.string.detail_fact_delegate_none_sub))
+    }
+}
+
+private fun DetailUiState.pausableCell(): TrustFact {
+    val label = words(R.string.detail_fact_pausable)
+    val facts = chain.valueOrNull?.facts ?: return unreadCell(label)
+    val pausable = facts.pausable
+        ?: return TrustFact(
+            label = label,
+            value = words(R.string.value_none),
+            sub = words(R.string.detail_fact_pausable_none_sub),
+        )
+    return TrustFact(
+        label = label,
+        value = words(R.string.value_yes),
+        sub = words(
+            if (pausable.paused) R.string.detail_fact_pausable_paused_sub else R.string.detail_fact_pausable_sub,
+        ),
+        caution = true,
+    )
+}
+
+/**
+ * The multiplier, and the split still to come. The cell names its source whenever the answer is
+ * the issuer's description rather than the chain's own extension, so an xStocks statement is never
+ * drawn as an on-chain fact (docs/data-map.md, "The split multiplier prefers the chain").
+ */
+private fun DetailUiState.splitCell(): TrustFact {
+    val label = words(R.string.detail_fact_split)
+    val multiplier = split.valueOrNull
+        ?: return TrustFact(
+            label = label,
+            value = words(R.string.detail_value_unknown),
+            sub = words(R.string.detail_fact_split_failed_sub),
+        )
+    val fromMint = multiplier.source == MultiplierSource.MINT
+    val pending = multiplier.pending?.takeIf { !it.activated(nowMillis) }
+    val sub = when {
+        pending != null -> words(
+            if (fromMint) R.string.detail_fact_split_changes_sub else R.string.detail_fact_split_changes_xstocks_sub,
+            Fmt.decimal(pending.multiplier),
+            Fmt.day(Instant.ofEpochMilli(pending.activatesAtMillis()).atZone(ZoneOffset.UTC).toLocalDate()),
+        )
+
+        fromMint -> words(R.string.detail_fact_split_sub)
+        else -> words(R.string.detail_fact_split_from_xstocks)
+    }
+    return TrustFact(label = label, value = raw(Fmt.decimal(multiplier.current)), sub = sub)
+}
+
+private fun DetailUiState.hookCell(): TrustFact {
+    val label = words(R.string.detail_fact_hook)
+    val facts = chain.valueOrNull?.facts ?: return unreadCell(label)
+    val hook = facts.transferHook
+    val program = hook?.programId
+    return if (program != null) {
+        TrustFact(label = label, value = raw(Fmt.shortKey(program)), sub = words(R.string.detail_fact_hook_runs_sub))
+    } else {
+        // No extension, or the extension with an empty slot: either way no program runs on a
+        // transfer, which is the fact a reader needs and the only one the mint supports.
+        TrustFact(label = label, value = words(R.string.value_none), sub = words(R.string.detail_fact_hook_sub))
+    }
+}
+
+/** A chain fact nobody could read: Unknown, with the reason, in Ink. Never "None", never Caution. */
+private fun unreadCell(label: Copy): TrustFact = TrustFact(
+    label = label,
+    value = words(R.string.detail_value_unknown),
+    sub = words(R.string.detail_chain_unread_sub),
+)
+
+/** "composite 51", from the percentile the payload carries; absent when it carries none. */
+val DetailUiState.compositeMeta: Copy?
+    get() = analysis?.compositePercentile?.let { words(R.string.detail_composite, Fmt.decimal(it, decimals = 0)) }
+
+/**
+ * Quality, valuation and momentum, in that order, each with the server's own state word lowercased.
+ * The v1.1 payload carries no leaf fundamentals, so nothing stands under these three
+ * (docs/data-map.md, gap 1): three tracks and the composite in the heading is the whole section.
+ */
+val DetailUiState.tracks: List<TrackRow>
+    get() {
+        val axes = analysis?.axes ?: return emptyList()
+        return listOf(
+            trackRow(R.string.detail_track_quality, axes.quality),
+            trackRow(R.string.detail_track_valuation, axes.valuation),
+            trackRow(R.string.detail_track_momentum, axes.momentum),
+        )
+    }
+
+private fun trackRow(@StringRes label: Int, axis: Axis?): TrackRow = TrackRow(
+    label = words(label),
+    value = axis?.value?.takeIf { it.isFinite() }?.let { axisValue(it, axis.scale) },
+    state = (axis?.labelEn ?: axis?.state).orEmpty().lowercase(),
+    positionPct = ((axis?.position ?: 0.0) * 100.0).toFloat(),
+)
+
+/**
+ * An axis value in the shape its own scale asks for: "8/9" out of nine, "51" out of a hundred,
+ * "0.79" out of one. An unknown scale falls back to two decimals rather than guessing a shape.
+ */
+internal fun axisValue(value: Double, scale: String?): String = when (scale) {
+    "0-9" -> Fmt.decimal(value, decimals = 0) + "/9"
+    "0-100" -> Fmt.decimal(value, decimals = 0)
+    "0-1" -> Fmt.decimal(value, decimals = 2)
+    else -> Fmt.decimal(value, decimals = 2)
+}
+
+/**
+ * The F-Score numeral and the nine signals. A filer with no F-Score at all keeps the heading and
+ * says the score is not available for it; a single signal the filings cannot answer reads "n/a".
+ */
+val DetailUiState.fScore: FScoreContent?
+    get() {
+        val payload = analysis ?: return null
+        val fscore = payload.fscore
+        val outOf = fscore?.scale?.substringAfter('-', "")?.toIntOrNull() ?: F_SCORE_OUT_OF
+        val signals = F_SCORE_SIGNALS.mapIndexed { index, name ->
+            SignalItem(name = name, ok = fscore?.signals?.getOrNull(index))
+        }
+        return FScoreContent(
+            score = fscore?.score?.let { Fmt.count(it) },
+            outOf = Fmt.count(outOf),
+            signals = signals,
+        )
+    }
+
+/**
+ * The Method block. The statement is the payload's own sentence whenever it sent one; the bundled
+ * one is the same disclaimer, so a payload that omits it still carries the claim it has to carry.
+ */
+val DetailUiState.method: MethodContent?
+    get() {
+        val payload = analysis ?: return null
+        val asOf = payload.asOfEpochMillis()
+        return MethodContent(
+            age = if (analysisAgeShown && asOf != null) {
+                words(
+                    R.string.detail_analysis_age,
+                    Fmt.relativeAgo(Instant.ofEpochMilli(asOf), Instant.ofEpochMilli(nowMillis)),
+                )
+            } else {
+                null
+            },
+            statement = payload.method?.statementEn?.takeIf { it.isNotBlank() }?.let(::raw)
+                ?: words(R.string.detail_method_body),
+            sources = words(R.string.detail_method_sources),
+        )
+    }
+
+/**
+ * The one line that stands where the fundamentals would be. The trust layer above it is untouched:
+ * a token nobody has classified still gets its reserves and its issuer controls, which is the half
+ * of the product that has to work for a new listing.
+ */
+val DetailUiState.fundamentalsNotice: FundamentalsNotice?
+    get() = when (analysisState) {
+        is AnalysisState.Served, is AnalysisState.Loading -> null
+
+        is AnalysisState.NotServed -> FundamentalsNotice(
+            text = words(R.string.detail_analysis_pending),
+            hint = words(R.string.detail_analysis_pending_action),
+        )
+
+        is AnalysisState.Incomplete -> FundamentalsNotice(words(R.string.detail_analysis_incomplete), null)
+
+        is AnalysisState.Unavailable -> FundamentalsNotice(words(R.string.detail_analysis_unavailable), null)
+    }
+
+/** "Swap USDC to TSLAx". Null until the catalog names the token, because the verb needs an object. */
+val DetailUiState.swapLabel: Copy?
+    get() = symbol?.let { words(R.string.detail_swap_button, INPUT_SYMBOL, it) }
+
+/**
+ * The mono line under the Swap button. Before a quote exists it states the pool the swap would go
+ * through, which is the only cost fact this screen holds; the all-in cost joins it once an order
+ * has been asked for at the tap (T10). No pool and no quote means no line, never an empty one.
+ */
+fun DetailUiState.costLine(allInCostPct: Double?): Copy? {
+    val pool = price?.liquidity?.let { Fmt.compactMoney(it) }
+    return when {
+        allInCostPct != null && pool != null ->
+            words(R.string.detail_cost_line, Fmt.percent(allInCostPct, signed = false), pool)
+
+        pool != null -> words(R.string.detail_liquidity_line, pool)
+        else -> null
+    }
+}
