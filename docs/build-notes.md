@@ -8,7 +8,7 @@ Launcher JDK 17; the daemon runs on the JDK 21 toolchain pinned in
 Git Bash, `nproc` = 28.
 
 Scenario: warm daemon (left over from `:app:testDebugUnitTest`), one-line content change to
-`app/src/main/java/com/myapp/core/Clock.kt`, then
+`app/src/main/java/com/plainticker/mobile/core/Clock.kt`, then
 
 ```bash
 time ./gradlew :app:assembleDebug
