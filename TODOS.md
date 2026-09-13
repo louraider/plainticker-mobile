@@ -130,9 +130,21 @@
 
 ## Completed
 
-### Redo the app icon with taste-skill
+### The app icon, attempt three
 
-**Done 2026-09-13** on `design/app-icon`. The mark is the tracking gauge, not a letter: an Ink scale with the reference graduation hanging under its centre and the token tick standing over it in Accent, drawn at a weight that survives 48dp (no shape thinner than 4dp there, against the 1.3dp tick that made the old mark look weak). Three candidates were drawn as real drawables and rendered at 48dp, 72dp and 108dp under a circle and a squircle mask on both grounds: `design/brand/icon-candidates.png`, from `design/brand/render_icons.py`. Geometry lives in `design/brand/marks.py`, `BrandAssetsTest` pins it and the 4dp floor, DESIGN.md section 9 is rewritten.
+**The founder saw the new mark on the phone and said it is not much better. That is the verdict.** It ships as it is only until someone tries again, and what follows is why the first two attempts failed, so the third does not repeat them.
+
+Both were argued for from first principles and both are defensible on paper. The letter was the product's initial; the gauge is the product's own instrument; each survives 48dp; each has a working monochrome layer. Neither looks good. A mark that wins every argument and still looks weak has lost the only argument that counts.
+
+What the two failures share is more useful than either alone.
+
+- **Both were built from the design system's smallest parts**, a traced glyph and a hairline with two ticks. Those parts exist to stay quiet inside a screen someone reads for a minute, which is the opposite of the job a tile has in a launcher grid. An icon competes on silhouette and mass at a glance, and three thin rectangles are a diagram rather than a form. Diagrams explain. Icons are recognised.
+- **The tile is near-black in a drawer of saturated colour.** The last review noticed that its edge is invisible and the mark floats on the wallpaper, and accepted it. Next to Phantom and Jupiter it reads as a hole. Inverting it, an accent field carrying a canvas-coloured mark, has never been tried and costs one render to judge.
+- **The constraint set was inherited from the interface without anyone asking whether it belongs here.** Radius zero, one accent, no gradient, no mass. Those rules earn their place on a reading screen. An icon is seen for half a second beside thirty others and may deserve rules of its own, written down deliberately rather than assumed.
+
+For the third attempt: start from mass and silhouette rather than from a concept, render candidates into a screenshot of the real drawer beside the real neighbours rather than onto a neutral sheet, and judge them there before anyone explains what they mean. A mark that needs its explanation does not work. `design/brand/render_icons.py` and the frozen candidates under `design/brand/candidates/` make another round cheap, and `BrandAssetsTest` plus `Mark.mirrors_itself` move with whatever wins.
+
+**What shipped 2026-09-13** on `design/app-icon`. The mark is the tracking gauge, not a letter: an Ink scale with the reference graduation hanging under its centre and the token tick standing over it in Accent, drawn at a weight that survives 48dp (no shape thinner than 4dp there, against the 1.3dp tick that made the old mark look weak). Three candidates were drawn as real drawables and rendered at 48dp, 72dp and 108dp under a circle and a squircle mask on both grounds: `design/brand/icon-candidates.png`, from `design/brand/render_icons.py`. Geometry lives in `design/brand/marks.py`, `BrandAssetsTest` pins it and the 4dp floor, DESIGN.md section 9 is rewritten.
 
 Review changed the construction, not the direction. The gauge was first drawn with the track, the reference tick and the token tick all centred on y 54, which is a cross: in colour the Accent tick separated and it read as the gauge, but the monochrome layer and the 24dp notification silhouette have no colour to separate with and both read as a plus sign. The two layers the constraints call non-negotiable were the two that failed, and they had only been judged in the render script. The ticks now point opposite ways, `Mark.mirrors_itself` and `no layer of the mark is a plus sign once the color is gone` refuse any symmetric construction, and the rejected drawing is frozen at `design/brand/candidates/crossed_*.xml` and kept as a row of the comparison sheet.
 
