@@ -72,14 +72,18 @@ class FakeCatalogRepository(
         private set
     val reservesAsked = mutableListOf<String>()
 
+    /** What every [catalogUpdates] collection asked for, so a test can tell a screen from a reader. */
+    val userAsked = mutableListOf<Boolean>()
+
     override suspend fun catalog(): List<XStockAsset> {
         catalogCalls++
         return assets.getOrThrow()
     }
 
     /** Emissions in page order, each carrying everything published so far. */
-    override fun catalogUpdates(): Flow<CatalogUpdate> = flow {
+    override fun catalogUpdates(userAsked: Boolean): Flow<CatalogUpdate> = flow {
         catalogCalls++
+        this@FakeCatalogRepository.userAsked += userAsked
         val all = assets.getOrThrow()
         if (pageSize <= 0 || all.size <= pageSize) {
             emit(CatalogUpdate(all, whole = true))
@@ -311,9 +315,9 @@ class HeldCatalogRepository(
         return inner.catalog()
     }
 
-    override fun catalogUpdates(): Flow<CatalogUpdate> = flow {
+    override fun catalogUpdates(userAsked: Boolean): Flow<CatalogUpdate> = flow {
         gate.await()
-        inner.catalogUpdates().collect { emit(it) }
+        inner.catalogUpdates(userAsked).collect { emit(it) }
     }
 }
 

@@ -10,8 +10,15 @@ import com.myapp.data.xstocks.XStockAsset
 import com.myapp.data.xstocks.XStocksApi
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -248,6 +255,9 @@ class CachedCatalogRepositoryTest {
         assertEquals("and fetched once", 2, catalogRequests(mock))
     }
 
+    /** Long enough that a wait this test does not want would be a wait, short enough to fail fast. */
+    private val SCREEN_WAIT_MS = 2_000L
+
     @Test
     fun `a catalog stamped in the future is expired, not fresh for as long as the clock is wrong`() = runTest {
         val disk = cache()
@@ -287,6 +297,114 @@ class CachedCatalogRepositoryTest {
         val asked = catalogRequests(mock)
         assertEquals("a stale catalog beats no catalog", listOf("OLDx"), repo.catalog().map { it.symbol })
         assertTrue("the empty answer was not cached", catalogRequests(mock) > asked)
+    }
+
+    // ---- The lock, and the one fetch every caller shares --------------------------------------
+
+    /**
+     * The catalog pages, held until the test lets them answer. The multiplier and the reserves
+     * answer at once, so a test can say what a Detail screen gets while a catalog fetch is out.
+     * [reached] completes when a page request is inside the engine: the mock's own request log
+     * only grows once a call has answered, so a held one is invisible to it.
+     */
+    private fun heldCatalogApi(reached: CompletableDeferred<Unit>, gate: CompletableDeferred<Unit>) =
+        MockApi { request: HttpRequestData ->
+            val path = request.url.encodedPath
+            when {
+                path.endsWith("/assets") -> {
+                    reached.complete(Unit)
+                    gate.await()
+                    respondJson(Fixtures.read("xstocks/assets-page-${request.url.parameters["page"]?.toIntOrNull() ?: 0}.json"))
+                }
+
+                path.endsWith("/multiplier") -> respondJson(Fixtures.read("xstocks/multiplier-nflxx.json"))
+                path.contains("/proof-of-reserves/") -> respondJson(Fixtures.read("xstocks/por-tslax.json"))
+                else -> respondJson("""{"error":"unexpected"}""", HttpStatusCode.NotFound)
+            }
+        }
+
+    @Test
+    fun `a Detail screen opened during a catalog fetch does not wait behind it`() = runTest {
+        val reached = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val mock = heldCatalogApi(reached, gate)
+        val repo = repository(mock)
+
+        val fetch = launch { repo.catalog() }
+        reached.await()
+
+        // Seven seconds of catalog is no reason for one symbol to wait: both of these are small
+        // requests to the same host and neither one touches what the catalog fetch is doing. The
+        // wait is real rather than virtual, because the engine answers off the test dispatcher.
+        val record = withContext(Dispatchers.Default) {
+            withTimeout(SCREEN_WAIT_MS) { repo.multiplierRecord("NFLXx") }
+        }
+        assertEquals(10.0, record.currentMultiplier, 0.0)
+        assertNotNull(
+            withContext(Dispatchers.Default) { withTimeout(SCREEN_WAIT_MS) { repo.proofOfReserves("TSLAx") } },
+        )
+
+        gate.complete(Unit)
+        fetch.join()
+    }
+
+    @Test
+    fun `two screens on a cold cache share one fetch instead of paying 4_31 MB twice`() = runTest {
+        val reached = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val mock = heldCatalogApi(reached, gate)
+        val repo = repository(mock, cache())
+
+        // The List streams the catalog; a Detail screen asks for the whole thing mid-run.
+        val streamed = async { repo.catalogUpdates().toList() }
+        reached.await()
+        val opened = async { repo.catalog() }
+        advanceUntilIdle()
+        gate.complete(Unit)
+
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), opened.await().map { it.symbol })
+        assertTrue(streamed.await().last().whole)
+        assertEquals("one catalog fetched, not one per screen", 2, catalogRequests(mock))
+    }
+
+    // ---- A reader who asks the app to look again ----------------------------------------------
+
+    @Test
+    fun `a screen opening stays inside the disk window and a reader who asks reaches the network`() = runTest {
+        val disk = cache()
+        repository(catalogApi(), disk).catalog()
+        val captured = disk.read()!!.capturedAtMillis
+
+        // A second launch, well inside the day the file is good for.
+        now += CatalogCache.TTL_MS / 2
+        val next = catalogApi()
+        val repo = repository(next, disk)
+
+        val opened = repo.catalogUpdates().toList()
+        assertEquals("a screen opening asks the network nothing", 0, catalogRequests(next))
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), opened.single().assets.map { it.symbol })
+
+        val asked = repo.catalogUpdates(userAsked = true).toList()
+        assertEquals("a reader who asks reaches the network inside the window", 2, catalogRequests(next))
+        assertTrue("the file paints first, so the list never goes back to skeletons", asked.first().whole)
+        assertTrue(asked.last().whole)
+        assertEquals(listOf("XRXx", "TSLAx", "ASx"), asked.last().assets.map { it.symbol })
+        assertTrue("and the file was brought forward", disk.read()!!.capturedAtMillis > captured)
+    }
+
+    @Test
+    fun `a reader who asks steps over the memory cache too`() = runTest {
+        val disk = cache()
+        val mock = catalogApi()
+        val repo = repository(mock, disk)
+        repo.catalog()
+        assertEquals(2, catalogRequests(mock))
+
+        repo.catalogUpdates().toList()
+        assertEquals("the memory cache answers a screen opening", 2, catalogRequests(mock))
+
+        repo.catalogUpdates(userAsked = true).toList()
+        assertEquals("and never a reader who asked", 4, catalogRequests(mock))
     }
 
     @Test
