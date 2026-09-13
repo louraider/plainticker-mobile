@@ -8,6 +8,7 @@ import com.plainticker.mobile.ui.theme.Ink
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.hypot
+import kotlin.math.min
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,14 +18,25 @@ import org.w3c.dom.Document
 import org.w3c.dom.Element
 
 /**
- * Brand assets, DESIGN.md section 9 (DT3), read straight from disk like [ManifestTest]: the
- * adaptive launcher icon is Canvas behind the JetBrains Mono P in Ink with the Accent gauge tick,
- * carries a monochrome layer with the same shapes, keeps every coordinate inside the 66dp safe
- * zone, and no template bitmap is left in a mipmap folder. The splash theme paints Canvas behind
- * the same vector with light system bar icons and hands over to the app theme; the notification
- * icon is the glyph in white. Colors are compared with the Kotlin tokens, not with copied literals.
+ * Brand assets, DESIGN.md section 9, read straight from disk like [ManifestTest]: the adaptive
+ * launcher icon is Canvas behind the tracking gauge, an Ink track and reference tick with the
+ * token tick in Accent, carries a monochrome layer with the same shapes, keeps every coordinate
+ * inside the 66dp safe zone, and no template bitmap is left in a mipmap folder. The splash theme
+ * paints Canvas behind the same vector with light system bar icons and hands over to the app
+ * theme; the notification icon is the same mark in white. Colors are compared with the Kotlin
+ * tokens, not with copied literals.
+ *
+ * The tests that matter here are the ones about size. An icon is read at 48dp, and a launcher
+ * shows the central 72 of the 108 viewport, so one viewport unit is 0.667dp on a launcher grid.
+ * The mark this replaced carried its only distinguishing detail in a 2 unit tick, 1.3dp at 48dp,
+ * which nobody ever saw. [MIN_STROKE] is that lesson: no shape may be thinner than 4dp at 48dp.
  */
 class BrandAssetsTest {
+
+    private companion object {
+        /** The thinnest a shape of the 108 viewport may be: 6 units is 4dp at 48dp. */
+        const val MIN_STROKE = 6.0
+    }
 
     private val androidNs = "http://schemas.android.com/apk/res/android"
 
@@ -142,28 +154,68 @@ class BrandAssetsTest {
         return out
     }
 
+    /** A rectangle of the mark, in viewport units. Radius 0: the shape lock lives in the art. */
+    private data class Box(val left: Double, val top: Double, val right: Double, val bottom: Double) {
+        val width get() = right - left
+        val height get() = bottom - top
+        val thinnest get() = min(width, height)
+        val centerX get() = (left + right) / 2
+        val centerY get() = (top + bottom) / 2
+    }
+
+    /** Every path of the mark is an axis-aligned rectangle; a path that is not fails here. */
+    private fun box(pathData: String): Box {
+        val corners = points(pathData)
+        assertEquals("not the four corners of a rectangle: $pathData", 4, corners.size)
+        val box = Box(corners.minOf { it.first }, corners.minOf { it.second },
+                      corners.maxOf { it.first }, corners.maxOf { it.second })
+        assertEquals(
+            "not an axis-aligned rectangle: $pathData",
+            setOf(box.left to box.top, box.right to box.top, box.right to box.bottom, box.left to box.bottom),
+            corners.toSet(),
+        )
+        return box
+    }
+
+    private fun Vector.boxes(): List<Box> = data.map(::box)
+
     @Test
-    fun `foreground is the ink glyph and the accent tick inside the safe zone`() {
+    fun `foreground is the tracking gauge with the token tick in accent`() {
         val fg = vector("ic_launcher_foreground.xml")
         assertEquals(108, fg.size)
-        assertEquals(listOf(hex(Ink), hex(Accent)), fg.fills)
+        // Two Ink shapes and exactly one Accent shape: DESIGN.md section 2 allows one accent.
+        assertEquals(listOf(hex(Ink), hex(Ink), hex(Accent)), fg.fills)
 
-        val glyph = points(fg.data[0])
-        val tick = points(fg.data[1])
-        (glyph + tick).forEach { (x, y) ->
+        val (track, reference, token) = fg.boxes()
+        // The track carries the scale, the reference tick stands on its center where the NYSE
+        // close sits, and the token tick stands off it. That offset is the whole mark.
+        assertTrue("the track is not the widest shape", track.width > reference.width + token.width)
+        assertEquals("the reference is not on the center", 54.0, reference.centerX, 0.011)
+        assertTrue("the token does not sit off the reference", token.left > reference.right)
+        assertTrue("the token has left the track", token.left > track.left && token.right < track.right)
+        listOf(reference, token).forEach {
+            assertTrue("a tick does not cross the track", it.top < track.top && it.bottom > track.bottom)
+        }
+        assertTrue("the token does not read louder than the reference", token.height > reference.height)
+    }
+
+    @Test
+    fun `every shape of the launcher mark survives being seen at 48dp`() {
+        val fg = vector("ic_launcher_foreground.xml")
+        val boxes = fg.boxes()
+        boxes.forEach {
+            val dp = it.thinnest * 48.0 / 72.0
+            assertTrue("a $dp dp shape is not there at 48dp: $it", it.thinnest >= MIN_STROKE)
+        }
+        // The mask can be a circle, a squircle or a rounded square, so only the central 66dp
+        // circle is guaranteed visible. Every corner is inside it.
+        fg.data.flatMap(::points).forEach { (x, y) ->
             val radius = hypot(x - 54.0, y - 54.0)
             assertTrue("($x, $y) is $radius from the center, outside the 33 safe radius", radius <= 33.0)
         }
-        // A traced TrueType outline: quadratic curves and two contours (the bowl has a counter).
-        assertTrue(fg.data[0].contains('Q'))
-        assertEquals(2, fg.data[0].count { it == 'Z' })
-        // The tick is a 2 high bar under the baseline, as wide as the glyph.
-        val tickTop = tick.minOf { it.second }
-        val tickBottom = tick.maxOf { it.second }
-        assertEquals(2.0, tickBottom - tickTop, 0.011)
-        assertTrue("tick overlaps the glyph", tickTop > glyph.maxOf { it.second })
-        assertEquals(glyph.minOf { it.first }, tick.minOf { it.first }, 0.011)
-        assertEquals(glyph.maxOf { it.first }, tick.maxOf { it.first }, 0.011)
+        // And the block sits in the middle of the viewport, so no mask crops it unevenly.
+        assertEquals(54.0, (boxes.minOf { it.left } + boxes.maxOf { it.right }) / 2, 0.011)
+        assertEquals(54.0, (boxes.minOf { it.top } + boxes.maxOf { it.bottom }) / 2, 0.011)
     }
 
     @Test
@@ -171,21 +223,34 @@ class BrandAssetsTest {
         val fg = vector("ic_launcher_foreground.xml")
         val mono = vector("ic_launcher_monochrome.xml")
         assertEquals(108, mono.size)
+        // A themed icon has no color to lean on, so the shapes have to be the same ones: the
+        // reference tick and the token tick differ by height and position, not by fill.
         assertEquals(fg.data, mono.data)
         assertEquals(1, mono.fills.toSet().size)
     }
 
     @Test
-    fun `notification small icon is the glyph in white inside the 20dp live area`() {
+    fun `notification small icon is the same mark in white inside the 20dp live area`() {
         val stat = vector("ic_stat_plainticker.xml")
         assertEquals(24, stat.size)
-        assertEquals(2, stat.paths.size)
+        assertEquals(3, stat.paths.size)
         assertEquals(setOf("#FFFFFF"), stat.fills.toSet())
         // A 24dp status bar icon keeps 2dp of padding on every side (the 20dp live area).
         stat.data.flatMap(::points).forEach { (x, y) ->
             assertTrue("($x, $y) is outside the 20dp live area", x >= 2.0 && x <= 22.0 && y >= 2.0 && y <= 22.0)
         }
-        assertTrue(stat.data[0].contains('Q'))
+        // It gets one color, so the shape is all it has. It is the launcher mark scaled to fill
+        // the live area, never a redrawn simplification that can drift away from the icon.
+        val launcher = vector("ic_launcher_foreground.xml").boxes()
+        val scale = 20.0 / (launcher.maxOf { it.right } - launcher.minOf { it.left })
+        stat.boxes().zip(launcher).forEach { (small, big) ->
+            assertEquals("width", big.width * scale, small.width, 0.011)
+            assertEquals("height", big.height * scale, small.height, 0.011)
+            assertEquals("across", 12.0 + (big.centerX - 54.0) * scale, small.centerX, 0.011)
+            assertEquals("down", 12.0 + (big.centerY - 54.0) * scale, small.centerY, 0.011)
+        }
+        // 2 of the 24 viewport is 2dp in the status bar, the floor for a silhouette.
+        stat.boxes().forEach { assertTrue("$it is thinner than 2dp in the status bar", it.thinnest >= 2.0) }
     }
 
     // ---- Splash and manifest ------------------------------------------------------------------

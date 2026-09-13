@@ -20,13 +20,13 @@ a text companion in `res/font/`, so the license texts ship as assets and are pac
 - `app/src/main/assets/licenses/outfit_ofl.txt` (Copyright 2021 The Outfit Project Authors)
 - `app/src/main/assets/licenses/jetbrains_mono_ofl.txt` (Copyright 2020 The JetBrains Mono Project Authors)
 
-## Brand glyph
+## Brand mark
 
-The launcher and notification icons (DESIGN.md section 9) are the "P" of `jetbrains_mono_medium.ttf`
-traced into vector paths by `design/brand/glyph.py`; they ship as drawables, not as a font. The OFL
-permits using glyph outlines in artwork this way. Its Reserved Font Name clause covers only derived
-fonts, and no derived font is built or distributed, so the JetBrains Mono license text above covers
-the glyph as well.
+The launcher and notification icons (DESIGN.md section 9) no longer borrow a letter from a font.
+They are the tracking gauge, three rectangles written by `design/brand/glyph.py` from the geometry
+in `design/brand/marks.py`, and they ship as drawables. Until 2026-09-13 they were the "P" of
+`jetbrains_mono_medium.ttf` traced into vector paths, which the OFL permits (its Reserved Font Name
+clause covers only derived fonts, and none was built); nothing now depends on that reading.
 
 ## Updating
 
