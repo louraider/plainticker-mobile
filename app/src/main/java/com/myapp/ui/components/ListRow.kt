@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,12 @@ import com.myapp.ui.theme.PlainTickerType
  * a 13 sub word right, an optional trailing text action, one Line divider below. One focusable
  * item for a screen reader (descendants merged) with the click labelled "Open TSLAx"; the
  * trailing action stays its own target. [muted] is the price-only row: everything in Muted.
+ *
+ * [description] is what the merged item says instead of its parts read end to end. Without it a
+ * reader hears the row's cells in order, punctuation and all ("TSLAx Tesla, Inc. 2.01364 TSLAx
+ * · +0.09% vs NYSE close"); with it the row is one spoken sentence, which is what plan section 13
+ * Pass 6 asks of a list row. The caller composes it, because only the caller knows which cell is
+ * which; [com.myapp.ui.components.spoken] is what turns a numeral into words.
  */
 @Composable
 fun ListRow(
@@ -51,6 +58,7 @@ fun ListRow(
     divider: Boolean = true,
     onClick: (() -> Unit)? = null,
     onClickLabel: String = "Open $ticker",
+    description: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -67,6 +75,13 @@ fun ListRow(
     } else {
         Modifier.semantics(mergeDescendants = true) {}
     }
+    // On the same node as the merge above, so it replaces what the cells would have said rather
+    // than being read after them.
+    val spokenAs = if (description != null) {
+        Modifier.semantics { contentDescription = description }
+    } else {
+        Modifier
+    }
     Column(modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -74,6 +89,7 @@ fun ListRow(
                 .focusOutline(interactionSource)
                 .background(if (pressed) Elevated else Color.Transparent)
                 .then(interaction)
+                .then(spokenAs)
                 .defaultMinSize(minHeight = 64.dp)
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
