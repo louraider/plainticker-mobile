@@ -170,12 +170,19 @@ data class PortfolioUiState(
      * nothing was read at all: no wallet session, which is every cold open, and a wallet whose
      * chain read failed. In both, the strongest true thing the app can put on this screen is what
      * it did itself.
+     *
+     * So this is written as those two states rather than as everything else, and that is the
+     * whole of the difference. Stated the other way round, by ruling out [isEmpty] and [isCold],
+     * it let through the one state where the chain answered and the *catalog* did not:
+     * [PortfolioViewModel.load] reads the balances first, so a catalog that fails afterwards
+     * leaves `chainUnavailable` false, `settled` false and no positions, and the screen drew the
+     * record under a sentence that says the wallet has not been read when it just had been. The
+     * record may never contradict a read that happened, and it may never deny one either.
      */
     val showsRecorded: Boolean
         get() = recorded.isNotEmpty() &&
             positions.isEmpty() &&
-            !isEmpty &&
-            !isCold &&
+            (!connected || chainUnavailable) &&
             phase != WalletPhase.CONNECTING
 
     val banner: PortfolioBanner?
