@@ -3,6 +3,7 @@ package com.myapp.data.plainticker
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.Instant
+import java.time.LocalDate
 
 /** Colour hint PlainTicker attaches to a headline or an axis. Unknown values decode as null. */
 @Serializable
@@ -54,6 +55,7 @@ data class AnalysisPayload(
     val fscore: FScore? = null,
     @SerialName("composite_percentile") val compositePercentile: Double? = null,
     val setup: Setup? = null,
+    val forward: Forward? = null,
     val method: Method? = null,
 ) {
     /** Epoch millis of `as_of`, or null when missing or not ISO-8601. */
@@ -64,8 +66,37 @@ data class AnalysisPayload(
     fun ageDays(nowEpochMillis: Long = System.currentTimeMillis()): Long? =
         asOfEpochMillis()?.let { (nowEpochMillis - it).coerceAtLeast(0L) / 86_400_000L }
 
+    /**
+     * The next report date as a calendar day, or null when the provider sent none and null when
+     * it sent something that is not a date. The Watchlist is the one screen that reads it: a
+     * watched company's next report is the reason a person watches, and it is the only field of
+     * `forward` this build renders (docs/data-map.md, "Watchlist (T12)").
+     */
+    fun nextReportDate(): LocalDate? =
+        forward?.raw?.nextEarningsDate?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+
     val schemaVersion: String? get() = method?.schemaVersion
 }
+
+/**
+ * The forward block, modelled down to the one field this app draws.
+ *
+ * The rest of `forward.raw` (the 3Y EPS CAGR, the forward multiples, the beat history) stays off
+ * the hackathon build by decision, and `forward.score` never reaches a screen at all; both are
+ * recorded in docs/data-map.md. `raw` itself is null when the provider call failed, and every
+ * field inside it may be null on its own, so nothing here has a default that invents a date.
+ */
+@Serializable
+data class Forward(
+    val raw: ForwardRaw? = null,
+)
+
+@Serializable
+data class ForwardRaw(
+    /** The next scheduled report as an ISO calendar day, e.g. "2026-10-28". */
+    val nextEarningsDate: String? = null,
+)
 
 /** The three strata the detail screen draws: quality, valuation, momentum. */
 @Serializable
