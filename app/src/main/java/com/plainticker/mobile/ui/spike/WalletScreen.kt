@@ -27,6 +27,7 @@ import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.MainViewModel
 import com.plainticker.mobile.WalletUiState
 import com.plainticker.mobile.ui.theme.PlainTickerTheme
+import com.plainticker.mobile.wallet.MwaWalletSession
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 /**
@@ -45,7 +46,9 @@ fun SpikeScreen(
     WalletScreen(
         state = state,
         onConnect = { viewModel.connect(sender) },
-        onSignMessage = { viewModel.signMessage(sender, "Hello from Myapp!") },
+        // The wallet shows this text to a person and asks them to sign it, so it says the
+        // product's name, from the one place the name lives.
+        onSignMessage = { viewModel.signMessage(sender, "Hello from " + MwaWalletSession.IDENTITY_NAME) },
         onDisconnect = { viewModel.disconnect(sender) },
         onProbeCapabilities = { viewModel.probeCapabilities(sender) },
         onSwapTsla = { viewModel.swapForXStock(sender, "TSLAx", MainViewModel.TSLAX_MINT) },
@@ -73,7 +76,7 @@ fun WalletScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Myapp + Mobile Wallet Adapter",
+            text = MwaWalletSession.IDENTITY_NAME + " + Mobile Wallet Adapter",
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
         )
