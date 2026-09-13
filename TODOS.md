@@ -126,7 +126,9 @@
 
 **Effort:** M
 **Priority:** P3
-**Depends on:** stake-to-unlock shipped; Sep 24 checkpoint green; the RPC forwarder.
+**Depends on:** a founder trigger for the web repository (its 2026-05-18 instruction is still live), migration 0023 applied to production by the operator (one Neon, so a migration reaches prod directly), and a collector address that is not the founder's own wallet.
+
+**Superseded 2026-09-13.** This is no longer the second layer and no longer waits on stake-to-unlock, which the founder rejected as too weak on its own. Curation is the SKR integration. The identity proof changed too: a memo transaction rather than a signed nonce, because the production web app contains no signature verification anywhere and making the signer the voter by construction removes the nonce store, the token lifetime and the replay window. Full specification in the mobile repository, `docs/skr-curation-spec-2026-09-13.md`.
 
 ## Completed
 
