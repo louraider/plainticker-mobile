@@ -17,6 +17,18 @@ class InMemoryOnboardingStore(private var onboarded: Boolean = false) : Onboardi
     }
 }
 
+class InMemoryNotificationPromptStore(private var asked: Boolean = false) : NotificationPromptStore {
+    var writes = 0
+        private set
+
+    override fun hasAsked(): Boolean = asked
+
+    override fun setAsked() {
+        writes++
+        asked = true
+    }
+}
+
 class InMemoryWatchlistStore(initial: Set<String> = emptySet()) : WatchlistStore {
     private val _tickers = MutableStateFlow(initial)
     override val tickers: StateFlow<Set<String>> = _tickers.asStateFlow()

@@ -13,7 +13,9 @@ import com.myapp.data.rpc.SolanaRpcApi
 import com.myapp.data.xstocks.CatalogCache
 import com.myapp.data.xstocks.FileCatalogCache
 import com.myapp.data.xstocks.XStocksApi
+import com.myapp.prefs.NotificationPromptStore
 import com.myapp.prefs.OnboardingStore
+import com.myapp.prefs.SharedPrefsNotificationPromptStore
 import com.myapp.prefs.SharedPrefsOnboardingStore
 import com.myapp.prefs.SharedPrefsWatchlistStore
 import com.myapp.prefs.WatchlistStore
@@ -34,8 +36,11 @@ import com.myapp.wallet.MwaWalletSession
 import com.myapp.watchlist.DigestNotifier
 import com.myapp.watchlist.DigestStore
 import com.myapp.watchlist.SharedPrefsDigestStore
+import com.myapp.watchlist.WatchlistCheck
 import com.myapp.watchlist.WatchlistFacts
 import com.myapp.watchlist.WatchlistNotifications
+import com.myapp.watchlist.WatchlistScheduler
+import com.myapp.watchlist.WorkManagerWatchlistScheduler
 import com.myapp.wallet.WalletSessionHolder
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import io.ktor.client.HttpClient
@@ -68,6 +73,9 @@ interface AppContainer {
     val onboardingStore: OnboardingStore
     val watchlistStore: WatchlistStore
 
+    /** Whether this device has already been asked to allow notifications. Asked once, ever. */
+    val notificationPromptStore: NotificationPromptStore
+
     /** The app's own record of the swaps it landed; Portfolio (T11) reads it. */
     val receiptStore: ReceiptStore
 
@@ -79,6 +87,12 @@ interface AppContainer {
 
     /** Where a produced digest goes besides the screen. */
     val digestNotifier: DigestNotifier
+
+    /** One run of the daily check. The worker and the debug entry point share this instance. */
+    val watchlistCheck: WatchlistCheck
+
+    /** The daily job itself, and the way to fire it now. */
+    val watchlistScheduler: WatchlistScheduler
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -118,6 +132,9 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val onboardingStore: OnboardingStore by lazy { SharedPrefsOnboardingStore(prefs) }
     override val watchlistStore: WatchlistStore by lazy { SharedPrefsWatchlistStore(prefs) }
+    override val notificationPromptStore: NotificationPromptStore by lazy {
+        SharedPrefsNotificationPromptStore(prefs)
+    }
 
     // filesDir, not cache: a receipt is the only record of what a swap cost and must survive
     // the system reclaiming space.
@@ -134,6 +151,21 @@ class DefaultAppContainer(context: Context) : AppContainer {
     }
 
     override val digestNotifier: DigestNotifier by lazy { WatchlistNotifications(app) }
+
+    // The digest is words as much as rules, and the words are in strings.xml: the check resolves
+    // them through the application context, so the notification and the screen read one file.
+    override val watchlistCheck: WatchlistCheck by lazy {
+        WatchlistCheck(
+            watchlist = watchlistStore,
+            facts = watchlistFacts,
+            digests = digestStore,
+            strings = { id, args -> app.getString(id, *args.toTypedArray()) },
+            notifier = digestNotifier,
+            clock = clock,
+        )
+    }
+
+    override val watchlistScheduler: WatchlistScheduler by lazy { WorkManagerWatchlistScheduler(app) }
 
     companion object {
         const val PREFS_NAME = "plainticker"

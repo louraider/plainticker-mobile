@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.myapp.BuildConfig
 import com.myapp.R
 import com.myapp.ui.components.TextAction
 import com.myapp.ui.components.TopBar
@@ -24,6 +25,7 @@ import com.myapp.ui.components.TopTabs
 import com.myapp.ui.list.ListScreen
 import com.myapp.ui.portfolio.PortfolioScreen
 import com.myapp.ui.watchlist.WatchlistScreen
+import com.myapp.ui.watchlist.WatchlistViewModel
 
 enum class HomeTab(@StringRes val label: Int) {
     LIST(R.string.tab_list),
@@ -77,14 +79,19 @@ fun HomeScreen(
                 header = header,
             )
 
-            HomeTab.WATCHLIST -> WatchlistScreen(
-                viewModel = viewModel(factory = factory),
-                onOpenDetail = onOpenDetail,
-                // Nothing watched yet is the common first state, and the one place to fix it is
-                // the list. The tab is the host's to select, so the screen asks for it.
-                onBrowseList = { selected = HomeTab.LIST.ordinal },
-                header = header,
-            )
+            HomeTab.WATCHLIST -> {
+                val watchlist: WatchlistViewModel = viewModel(factory = factory)
+                WatchlistScreen(
+                    viewModel = watchlist,
+                    onOpenDetail = onOpenDetail,
+                    // Nothing watched yet is the common first state, and the one place to fix it
+                    // is the list. The tab is the host's to select, so the screen asks for it.
+                    onBrowseList = { selected = HomeTab.LIST.ordinal },
+                    // The same gate the gallery and the wallet spike sit behind.
+                    onRunCheck = if (BuildConfig.DEBUG) watchlist::runCheckNow else null,
+                    header = header,
+                )
+            }
         }
     }
 }
