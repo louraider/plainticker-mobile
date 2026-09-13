@@ -22,6 +22,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.priceRepository,
             container.snapshotRepository,
             container.watchlistStore,
+            container.digestStore,
         )
     }
     initializer {
@@ -58,7 +59,13 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         )
     }
     initializer {
-        WatchlistViewModel(container.watchlistStore)
+        WatchlistViewModel(
+            container.watchlistStore,
+            container.watchlistFacts,
+            container.digestStore,
+            container.digestNotifier,
+            container.clock,
+        )
     }
     initializer {
         OnboardingViewModel(container.onboardingStore)

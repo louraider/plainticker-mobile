@@ -16,12 +16,15 @@ import com.myapp.repo.CatalogUpdate
 import com.myapp.repo.PriceRepository
 import com.myapp.repo.SnapshotRepository
 import com.myapp.repo.SummaryRepository
+import com.myapp.watchlist.DigestStore
+import com.myapp.watchlist.WatchedReport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -122,6 +125,18 @@ data class ListUiState(
     val withoutAnalysis: List<ListRow> = emptyList(),
     /** How many tickers are watched, for the Today strip; the strip is hidden at zero. */
     val watched: Int = 0,
+    /**
+     * The nearest report among the watched tickers, as the last daily check found it. It comes
+     * from the digest the check stored rather than from a call of this screen's own: the report
+     * date lives in the per-ticker analysis payload, and fetching one per watched ticker on the
+     * path to the first row would put a second network round trip in front of the list.
+     *
+     * Null when no check has run yet, when nothing it saw reports ahead, and when the ticker it
+     * named is no longer watched: the record can be a day old, and an hour of the strip naming a
+     * company the reader has just taken off the list is an hour of the app stating what is no
+     * longer true.
+     */
+    val nextReport: WatchedReport? = null,
     val generatedAt: String? = null,
     /** The day the bundled snapshot was captured, when the rows came from it. */
     val snapshotCapturedOn: LocalDate? = null,
@@ -212,6 +227,7 @@ class ListViewModel(
     private val prices: PriceRepository,
     private val snapshots: SnapshotRepository,
     private val watchlist: WatchlistStore,
+    private val digests: DigestStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ListUiState(isLoading = true, watched = watchlist.tickers.value.size))
@@ -249,7 +265,11 @@ class ListViewModel(
 
     init {
         viewModelScope.launch {
-            watchlist.tickers.collect { watched -> _state.update { it.copy(watched = watched.size) } }
+            combine(watchlist.tickers, digests.record) { watched, digest ->
+                watched.size to digest.nextReport?.takeIf { it.ticker in watched }
+            }.collect { (count, report) ->
+                _state.update { it.copy(watched = count, nextReport = report) }
+            }
         }
         load(userAsked = false)
     }
