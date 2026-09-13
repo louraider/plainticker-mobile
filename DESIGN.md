@@ -24,6 +24,19 @@ This is disclosure, not curation. Nothing is filtered out, no section is added a
 
 The gauge slot is then empty, and the screen is shorter. That is correct: there is nothing to draw there, and the same sentence in two places is how it drifts back under the pair.
 
+### 1.2 The app's own record, where the chain has said nothing
+
+The wallet session does not survive process death: the MWA auth token lives in the adapter's memory and the authorized account with it, so every cold open finds no wallet and never asks the chain. Read on the device on 2026-09-13, that left the Portfolio, the screen carrying the one piece of evidence this product actually owns, showing "Connect your wallet to see the xStocks in it." under its "Holdings" heading, while the real holding bought through the app, 0.01362917 TSLAx, sat 500dp further down filed under "Recent swaps" as a transaction.
+
+What the app still knows is what it did. It writes a receipt the moment a swap lands, and those receipts net out to a quantity. So **where the chain has told the screen nothing, the app's own record stands in the holdings slot**, under four rules:
+
+- **It is drawn only where nothing was read.** A connected wallet with positions draws the positions. A connected wallet the chain answered for and found empty draws the empty sentence, because the chain is the authority on what a wallet holds and a receipt is history, not a contradiction of it. What is left is the two states where no read happened at all: no wallet session, and a wallet whose chain read failed.
+- **The sentence is read first**, above the figures, at body 15 in Ink: "What this app recorded when its own swaps landed. The wallet itself has not been read." That is section 1.1's rule, applied to a different screen for the same reason.
+- **It carries a quantity and never a value.** No price is applied to it and it is not summed into the total. A recorded quantity multiplied by a live quote is half a chain read wearing the other half's clothes.
+- **It never claims a confirmation.** A fill the execute answer did not report adds nothing rather than the quote it was estimated at, and the unreported fill is disclosed once, on the swap row under "Recent swaps", never twice.
+
+Persisting the session was the alternative and was not taken, for two reasons rather than one. The auth token is a bearer grant for signing authority, and writing it to disk to make a screen look better is a security decision taken for a cosmetic reason. Persisting only the account address and reading the chain for it silently would show real data, but it would read a wallet that has not authorized this launch and leave the screen unable to say whether it is connected. The record needs no network, no consent and no wallet, and it is the only thing on the screen the app can vouch for itself.
+
 ## 2. Color palette and roles
 
 - **Canvas** `#0B0F14`: page background. Cool near-black, never pure black.

@@ -133,6 +133,11 @@ data class PortfolioUiState(
     val positions: List<PortfolioPosition> = emptyList(),
     /** The app's own record of the swaps it landed, newest first. Read with or without a chain read. */
     val receipts: List<SwapReceipt> = emptyList(),
+    /**
+     * What those receipts net out to, named by the catalog where it could name them. Drawn only
+     * where the chain has told this screen nothing: see [showsRecorded].
+     */
+    val recorded: List<RecordedHolding> = emptyList(),
     /** Sum of the positions that could be valued; null when none of them could. */
     val totalUsd: Double? = null,
     val chainUnavailable: Boolean = false,
@@ -154,6 +159,24 @@ data class PortfolioUiState(
 
     /** Skeletons are only for a screen with nothing on it; a refresh over drawn rows keeps them. */
     val isCold: Boolean get() = connected && isLoading && positions.isEmpty() && !settled
+
+    /**
+     * Whether the app's own record stands where a chain read would.
+     *
+     * The rule is that the record speaks only where the chain has said nothing. A connected wallet
+     * with positions draws the positions; a connected wallet the chain has answered for and found
+     * empty draws [isEmpty]'s sentence, because the chain is the authority on what a wallet holds
+     * and a receipt is history, not a contradiction of it. What is left is the two states where
+     * nothing was read at all: no wallet session, which is every cold open, and a wallet whose
+     * chain read failed. In both, the strongest true thing the app can put on this screen is what
+     * it did itself.
+     */
+    val showsRecorded: Boolean
+        get() = recorded.isNotEmpty() &&
+            positions.isEmpty() &&
+            !isEmpty &&
+            !isCold &&
+            phase != WalletPhase.CONNECTING
 
     val banner: PortfolioBanner?
         get() = when {
@@ -197,14 +220,21 @@ class PortfolioViewModel(
 
     private var loadJob: Job? = null
 
+    /**
+     * The catalog by mint, kept so the record can be named without a wallet. Empty until one read
+     * has answered, which leaves a recorded row with its symbol and no company rather than nothing.
+     */
+    private var namesByMint: Map<String, XStockAsset> = emptyMap()
+
     init {
         viewModelScope.launch {
             wallet.account.collect { account ->
                 if (account == null) {
                     loadJob?.cancel()
                     // The receipts are this device's own record and belong to no wallet, so a
-                    // disconnect takes the holdings off the screen and leaves them alone.
-                    _state.update { PortfolioUiState(receipts = it.receipts) }
+                    // disconnect takes the chain's holdings off the screen and leaves the record
+                    // standing. That is the whole point of it: the screen keeps something true.
+                    _state.update { PortfolioUiState(receipts = it.receipts, recorded = it.recorded) }
                 } else {
                     start(account)
                 }
@@ -213,10 +243,29 @@ class PortfolioViewModel(
         viewModelScope.launch {
             receipts.receipts.collect { landed ->
                 val newestFirst = landed.sortedByDescending { it.landedAtMillis }
-                _state.update { it.copy(receipts = newestFirst) }
+                _state.update { it.copy(receipts = newestFirst, recorded = named(newestFirst)) }
+                // The record names itself from the catalog rather than from a chain read, because
+                // it is drawn on a screen that may never make one. The catalog is kept on disk for
+                // the day and the list screen has usually already paid for it, so this is normally
+                // a cache hit; a device with no receipts never asks at all.
+                if (newestFirst.isNotEmpty() && namesByMint.isEmpty()) rememberNames(newestFirst)
             }
         }
     }
+
+    /** The catalog, once, so the recorded rows can carry a company and a way through to Detail. */
+    private suspend fun rememberNames(receipts: List<SwapReceipt>) {
+        val assets = runCatching { catalog.catalog() }.getOrNull() ?: return
+        namesByMint = assets.mapNotNull { asset -> asset.solanaMint?.let { it to asset } }.toMap()
+        _state.update { it.copy(recorded = named(receipts)) }
+    }
+
+    /** The receipts folded into holdings, with whatever the catalog can currently name on them. */
+    private fun named(receipts: List<SwapReceipt>): List<RecordedHolding> =
+        recordedHoldings(receipts).map { holding ->
+            val asset = namesByMint[holding.mint] ?: return@map holding
+            holding.copy(ticker = asset.underlyingTicker, company = asset.name)
+        }
 
     fun connect() {
         viewModelScope.launch {
@@ -278,6 +327,9 @@ class PortfolioViewModel(
         }
 
         val byMint = assets.mapNotNull { asset -> asset.solanaMint?.let { it to asset } }.toMap()
+        // The same catalog answers both questions, so a chain read that got this far also names
+        // the record, and the record is right again the moment the wallet goes away.
+        namesByMint = byMint
         // Only xStocks: a wallet's USDC, its SOL and every other token in it are not this
         // screen's subject and are never listed.
         val owned = heldByMint(balances.filter { it.mint in byMint })
@@ -300,6 +352,7 @@ class PortfolioViewModel(
                 isLoading = false,
                 settled = true,
                 positions = positions,
+                recorded = named(it.receipts),
                 totalUsd = positions.mapNotNull { p -> p.valueUsd }.takeIf { v -> v.isNotEmpty() }?.sum(),
                 chainUnavailable = false,
                 catalogUnavailable = false,

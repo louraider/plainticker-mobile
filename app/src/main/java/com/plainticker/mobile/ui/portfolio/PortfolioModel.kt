@@ -24,6 +24,10 @@ import com.plainticker.mobile.ui.words
  * 3. **Nothing here computes a cost basis or a change.** There is no arithmetic in this file that
  *    the chain did not carry: the shares come from the mint, the value from Jupiter, and the only
  *    sum is over the positions that have one.
+ * 4. **The app's own record is never dressed as a chain read.** [recordedHoldings] folds this
+ *    device's receipts into what the app put in the wallet, and that is all it claims: no price
+ *    is applied to it, it is not summed into a total, and the screen states above it that the
+ *    wallet has not been read.
  */
 
 // ---- The pieces the screen draws ---------------------------------------------------------------
@@ -49,6 +53,47 @@ data class HoldingRow(
     val tracking: Copy?,
     /** The value right, or null for a position that could not be valued. */
     val value: String?,
+)
+
+/**
+ * One xStock this app's own receipts say it swapped into, with nothing read from any chain.
+ *
+ * This exists because the wallet session does not survive process death, so a cold open finds no
+ * account and the chain is never asked. What the app still knows is what it did: it wrote a
+ * receipt the moment each swap landed, and those receipts net out to a quantity. That quantity is
+ * the app's record, not the wallet's balance, and the two can differ the moment anything moves
+ * the token elsewhere, so the screen says which one it is drawing before it draws it.
+ *
+ * Two things are deliberately absent. There is no value, because no price was read and a quantity
+ * multiplied by a live quote would be half a chain read wearing the other half's clothes. There is
+ * no [TrackingQuality] either, for the same reason: a premium is a statement about a pool this
+ * screen has not looked at.
+ */
+data class RecordedHolding(
+    val mint: String,
+    /** The token symbol as the receipt recorded it, e.g. "TSLAx". */
+    val symbol: String,
+    /** Underlying equity ticker, once the catalog has named it; null leaves the row unopenable. */
+    val ticker: String? = null,
+    /** The company behind the token, once the catalog has named it. */
+    val company: String? = null,
+    /** Net base units over every receipt naming this mint. Positive by construction. */
+    val amountRaw: Long,
+    /** The decimals those base units are counted in, as the receipt recorded them. */
+    val decimals: Int,
+    /** When the newest swap touching this mint landed. */
+    val landedAtMillis: Long,
+)
+
+/** One recorded holding in the parts a 64dp row draws. */
+data class RecordedRow(
+    /** The Detail route, null when the catalog has not named the token. */
+    val ticker: String?,
+    val symbol: String,
+    val company: String?,
+    /** The quantity, drawn right in mono: the one number on the row and the app's own. */
+    val quantity: String,
+    val meta: Copy,
 )
 
 /** One landed swap out of the app's own record: what was paid, what came back, the cost and when. */
@@ -141,6 +186,66 @@ fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
         ?.let { words(R.string.portfolio_swap_cost, Fmt.percent(it, signed = false)) }
         ?: words(R.string.portfolio_swap_cost_unknown),
     landed = raw(Fmt.utc(receipt.landedAtMillis)),
+)
+
+/**
+ * What this device's receipts say the app put in the wallet, netted per mint.
+ *
+ * Both sides of every swap count: an output adds and an input subtracts, so a token swapped back
+ * out leaves no row rather than a row the wallet has not held since. USDC drops out by the same
+ * arithmetic, because it is only ever paid and never received here, and a mint that nets to zero
+ * or below is not a holding.
+ *
+ * A receipt whose fill was never reported ([SwapReceipt.outputAmountRaw] null) adds nothing. That
+ * understates rather than invents, which is the only direction this file is allowed to be wrong
+ * in, and the swap itself is still on the screen under "Recent swaps" saying its amount was not
+ * reported. The disclosure is owned there, once: the same sentence in two places is how the two
+ * drift apart.
+ *
+ * Pure over the receipts. The catalog names the rows afterwards, so this answers with or without
+ * a network.
+ */
+fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
+    val net = LinkedHashMap<String, RecordedHolding>(receipts.size)
+    fun fold(mint: String, symbol: String, decimals: Int, delta: Long, landedAtMillis: Long) {
+        val seen = net[mint]
+        net[mint] = seen?.copy(
+            amountRaw = seen.amountRaw + delta,
+            landedAtMillis = maxOf(seen.landedAtMillis, landedAtMillis),
+        ) ?: RecordedHolding(
+            mint = mint,
+            symbol = symbol,
+            amountRaw = delta,
+            decimals = decimals,
+            landedAtMillis = landedAtMillis,
+        )
+    }
+    for (receipt in receipts) {
+        receipt.outputAmountRaw?.let {
+            fold(receipt.outputMint, receipt.outputSymbol, receipt.outputDecimals, it, receipt.landedAtMillis)
+        }
+        fold(
+            receipt.inputMint,
+            receipt.inputSymbol,
+            receipt.inputDecimals,
+            -receipt.inputAmountRaw,
+            receipt.landedAtMillis,
+        )
+    }
+    return net.values.filter { it.amountRaw > 0L }.sortedBy { it.symbol }
+}
+
+/**
+ * One recorded holding as a row. The quantity is drawn where a position draws its dollar value,
+ * because on this screen in this state it is the only number there is and the symbol beside it
+ * says what it counts. The meta is the provenance: when the swap behind it landed.
+ */
+fun recordedRow(holding: RecordedHolding): RecordedRow = RecordedRow(
+    ticker = holding.ticker,
+    symbol = holding.symbol,
+    company = holding.company,
+    quantity = Fmt.tokenAmount(holding.amountRaw, holding.decimals),
+    meta = words(R.string.portfolio_recorded_meta, Fmt.utc(holding.landedAtMillis)),
 )
 
 /** What the one banner slot says. The order of the tiers is [PortfolioUiState.banner]'s. */

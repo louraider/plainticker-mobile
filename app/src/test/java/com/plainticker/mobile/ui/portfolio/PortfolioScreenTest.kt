@@ -110,6 +110,11 @@ class PortfolioScreenTest {
             "SkeletonRows(",
             "R.string.portfolio_empty",
             "R.string.action_browse_analyzed",
+            // A cold open has no wallet and no chain read, and still draws the app's own record
+            // rather than an invitation (design review 2026-09-13, finding 9).
+            "R.string.portfolio_recorded_lede",
+            "R.string.portfolio_recorded_note",
+            "Recorded(",
         ).forEach { assertTrue("the screen has no $it", it in content) }
         // A spinner is never the answer (DESIGN.md section 8).
         assertEquals(0, count("CircularProgressIndicator"))
