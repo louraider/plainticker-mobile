@@ -6,30 +6,35 @@ Researched 2026-09-11 against docs.solanamobile.com, legal.solanamobile.com, the
 
 The publishing flow described in older guides (a local `dapp-store init` / `create publisher` / `create app` / `create release` / `publish submit` sequence that minted a Publisher NFT from your own keypair) is retired. The current README of solana-mobile/dapp-publishing states: "The legacy config-driven `init`, `create`, `validate`, and direct `publish submit|update|remove|support` flows are no longer part of the active CLI surface." Publishing now goes through the Solana dApp Publisher Portal at https://publish.solanamobile.com: you sign up, "Fill out your publisher profile and submit your KYC/KYB verification", connect a browser-extension wallet holding "sufficient SOL (~0.2 SOL) to cover transaction fees and ArDrive upload costs", create the app record (this mints the App NFT), and submit a release (this uploads assets to Arweave via ArDrive and mints the Release NFT). The `@solana-mobile/dapp-store-cli` package still exists but is now a portal-backed tool for pushing new versions with an API key. There is no separate publisher-NFT mint step for you to run; the publisher identity is the portal account plus the connected wallet, and the docs warn: "Your publisher wallet is required for all future submissions of this app. Do not lose access to it or you will not be able to make new submissions of this app." Review takes "3-5 business days", and the hackathon Terms require the app to be "published, listed, and publicly available on the Solana dApp Store no later than thirty (30) calendar days after the date on which the winners are first publicly announced", with the explicit statement that "Merely submitting an application for store review does not constitute publication." The correct Week 1 action is therefore: create the portal account, clear KYC/KYB, fund and back up the publisher wallet, and create the app record, so that only the release submission and the review wait remain after winners are announced.
 
-## Progress (updated 2026-09-12)
+## Progress (updated 2026-09-13)
 
 | Step | State |
 |---|---|
 | 3. Portal account and KYC/KYB | **Done 2026-09-12**, six days ahead of the Sep 18 internal deadline. The unknown that worried this document most (provider and turnaround) is closed. |
 | 1, 2. Publisher wallet chosen, funded ~0.2 SOL, backed up | Open. The wallet funded on 2026-09-12 is the **demo** wallet for the video and fixtures, not the publisher wallet (founder's decision the same day). |
 | 4. Storage provider and ArDrive balance | Open, needs the APK size. |
-| 5. App record and App NFT | **BLOCKED, see below.** Do not create it yet. |
+| 5. App record and App NFT | **Still blocked, see below**, but on one thing now instead of two. Do not create it yet. |
 | 6. Release signing key | Done in T6: env-driven signing, keystore off-machine, `docs/release-signing.md`. |
 
 ### Why step 5 is blocked
 
-The portal reads the Android package name from the APK and that name is the app's permanent identity: changing it later means a new app record, a new App NFT and a lost listing. Two things must land before the record is created.
+The portal reads the Android package name from the APK and that name is the app's permanent identity: changing it later means a new app record, a new App NFT and a lost listing. Two things had to land before the record is created. One has.
 
-1. **The package is still `com.myapp`**, the Android Studio template default. `applicationId` and `namespace` in `app/build.gradle.kts` and 75 tracked files carry it. Plan section 6 Week 1 lists "package rename" under App hygiene and it was never done. Renaming is mechanical but broad, so it goes in its own commit on a quiet branch, never in parallel with other app work.
-2. **`assetlinks.json` does not exist.** Plan task T3 is ticked and names it, but there is no `.well-known/assetlinks.json` in the server repo and `https://www.plainticker.com/.well-known/assetlinks.json` returns 404 (checked 2026-09-12). It also has no Android App Links intent filter to pair with in `AndroidManifest.xml`. The file must carry the final package name plus the SHA-256 of the release signing certificate, so it is downstream of the rename and of the keystore from T6.
+1. ~~The package is still `com.myapp`.~~ **Done 2026-09-13** on `chore/package-rename`. `applicationId` and `namespace` are `com.plainticker.mobile`; the Kotlin main, test and androidTest trees moved from `com/myapp` to `com/plainticker/mobile` with `git mv`, so history follows each of the 161 files; every reference that was a string rather than a symbol moved with them. The gate is unchanged: 605 unit tests green, the same count as `main`. The debug APK installs, launches and runs on the Seeker under the new name. What the portal will read out of the APK is now final.
+2. **`assetlinks.json` still does not exist.** Plan task T3 is ticked and names it, but there is no `.well-known/assetlinks.json` in the server repo and `https://www.plainticker.com/.well-known/assetlinks.json` returns 404 (checked 2026-09-12). It also has no Android App Links intent filter to pair with in `AndroidManifest.xml`. The file must carry the package name, which now exists, plus the SHA-256 of the release signing certificate, which does not: `scripts/make-keystore.sh` has never been run and no signing environment variable is set, so a release build would produce `app-release-unsigned.apk` and there would be no certificate to fingerprint. The keystore is the founder's to create, because the password custody and the off-machine backup are theirs (`docs/release-signing.md`). Until it exists there is nothing honest to write into `sha256_cert_fingerprints`, and an `autoVerify` intent filter added ahead of the file would fail verification on every install, so the rename added neither.
 
-Order: rename the package, regenerate the release APK, read the certificate fingerprint, publish `assetlinks.json` on plainticker.com, verify it resolves, then create the app record in the portal.
+Order, with the first step done: ~~rename the package~~, create the release keystore and back it up, cut a tag so the release workflow prints the SHA-256 of the certificate it actually signed with, publish `assetlinks.json` on plainticker.com, add the App Links intent filter, verify it resolves, then create the app record in the portal.
 
 ### Decisions taken 2026-09-12
 
 - **Package name: `com.plainticker.mobile`.** Reverse domain of plainticker.com plus the client, matching the repository name and leaving `com.plainticker.*` free for anything later. It is permanent once the App NFT exists.
-- **`assetlinks.json` ships with the rename**, not separately: rename, release APK, certificate fingerprint, the file on plainticker.com, then the App Links intent filter in the manifest.
+- **`assetlinks.json` ships with the rename**, not separately: rename, release APK, certificate fingerprint, the file on plainticker.com, then the App Links intent filter in the manifest. **Amended 2026-09-13:** it did not, and could not. The rename landed alone because the release keystore does not exist yet, so there is no certificate fingerprint to write and no signed release APK to read one from. `assetlinks.json` and the intent filter now hang off the keystore rather than off the rename.
 - **No portal actions until the app is finished locally on the Seeker.** KYC is cleared and that is where the portal work stops for now; the app record waits until the device walkthrough is done.
+
+### Decisions taken 2026-09-13
+
+- **The identity a wallet shows a person is `PlainTicker` over `https://www.plainticker.com`.** Both were Android Studio template values (`Myapp`, `https://yourdapp.com`) in `MainViewModel` until today. The app now builds exactly one `ConnectionIdentity`, in `MwaWalletSession.defaultAdapter()`, and the debug wallet spike shares it, so the Seed Vault approval prompt and `assetlinks.json` name the same host and cannot drift apart.
+- **What the rename deliberately did not touch**, because it is user-visible state rather than the package, and changing it would silently reset something under an already installed app: the `watchlist-digest` notification channel id, the `plainticker` SharedPreferences file, and the `watchlist-daily` / `watchlist-now` unique work names. `rootProject.name` and the npm package name stay `myapp` as well; neither reaches the APK or the portal.
 
 ## Numbered checklist
 
