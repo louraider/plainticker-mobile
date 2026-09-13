@@ -144,8 +144,11 @@ internal const val INPUT_SYMBOL = "USDC"
  */
 internal const val LIVE_WINDOW_MILLIS = 60_000L
 
-/** The scale the gauge is drawn on, as DESIGN.md section 4 fixes it. */
-internal const val GAUGE_SCALE_PCT = 0.5
+/**
+ * The scale the gauge is drawn on, as DESIGN.md section 4 fixes it: the spread the tracked
+ * catalogue actually produced, measured beside the floor itself.
+ */
+internal const val GAUGE_SCALE_PCT = TrackingQuality.TRACKED_SPREAD_PCT
 
 /** The nine F-Score signals, in the fixed order of docs/data-map.md. Never re-sorted. */
 internal val F_SCORE_SIGNALS: List<Int> = listOf(

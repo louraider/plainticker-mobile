@@ -27,42 +27,40 @@ import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
  * The tracking gauge, the signature element of Detail (DESIGN.md section 1): a 1dp Line strong
- * track, a 1dp Muted tick at 50 percent for the reference (the NYSE close) and a 2dp Accent tick
- * for the token, placed on a stated scale and clamped to the track. Caption left in Outfit 13,
- * the signed premium right in mono 13 Accent.
+ * track between two end stops, a 1dp Muted tick at 50 percent for the reference (the NYSE close)
+ * and a 2dp Accent tick for the token, placed on a stated scale. Caption left in Outfit 13, the
+ * signed premium right in mono 13 Accent.
  *
  * The gauge is drawn only where the quote behind it means something. [TrackingQuality] is the one
  * rule, shared with the list row, and it is asked here rather than by the caller so no screen can
- * draw a tracking gauge for a token nothing tracks: below the liquidity floor the track is not
- * drawn at all and one sentence states the pool instead. The sentence is a fact about the token,
- * so it is Ink 2 like any other caption and never Caution, which DESIGN.md section 2 keeps for
- * explicit issuer control.
+ * draw a tracking gauge for a token nothing tracks: below the liquidity floor nothing is drawn
+ * here at all. The sentence that states the pool instead belongs above the two figures it
+ * disqualifies rather than under them, so the surface owns it (DESIGN.md section 1.1): a sentence
+ * in this slot was read after both operands and lost the argument to them.
  *
  * A [TrackingQuality.Tracked] token whose reference price Jupiter did not send draws nothing at
  * all: there is no premium to place, and the price row above already says the reference is
  * unavailable (docs/data-map.md, Detail).
  *
+ * **The scale is stated and its ends are drawn.** A premium past [scalePct] is drawn as a cap
+ * standing off the track, never as a tick resting on the end: the tracked set runs out to about
+ * 2.3 percent and any fixed scale can be exceeded, so a saturated tick had to be made
+ * unmistakable rather than made impossible. See [gaugeTick].
+ *
  * @param referenceLabel what the token is being measured against, e.g. "Token vs NYSE close".
  * @param tracking the answer from the one rule, built from the Price v3 entry.
- * @param scalePct the premium that fills half the track on each side; 0.5 percent by default.
+ * @param scalePct the premium that reaches the end of the track on each side. The default is the
+ *   spread the tracked catalogue actually produced, [TrackingQuality.TRACKED_SPREAD_PCT].
  */
 @Composable
 fun Gauge(
     referenceLabel: String,
     tracking: TrackingQuality,
     modifier: Modifier = Modifier,
-    scalePct: Double = 0.5,
+    scalePct: Double = TrackingQuality.TRACKED_SPREAD_PCT,
 ) {
-    when (tracking) {
-        is TrackingQuality.Tracked ->
-            tracking.premiumPct?.let { GaugeTrack(referenceLabel, it, scalePct, modifier) }
-
-        is TrackingQuality.Thin ->
-            PoolLine(stringResource(R.string.detail_gauge_thin, Fmt.compactMoney(tracking.poolUsd, roundDown = true)), modifier)
-
-        TrackingQuality.Untracked ->
-            PoolLine(stringResource(R.string.detail_gauge_pool_unknown), modifier)
-    }
+    val premiumPct = (tracking as? TrackingQuality.Tracked)?.premiumPct ?: return
+    GaugeTrack(referenceLabel, premiumPct, scalePct, modifier)
 }
 
 @Composable
@@ -72,9 +70,13 @@ private fun GaugeTrack(
     scalePct: Double,
     modifier: Modifier,
 ) {
-    val fraction = gaugePosition(tokenPremiumPct, scalePct)
+    val tick = gaugeTick(tokenPremiumPct, scalePct)
     val premiumText = Fmt.percent(tokenPremiumPct)
-    val caption = stringResource(R.string.detail_gauge_caption, referenceLabel, Fmt.plain(scalePct) + "%")
+    val caption = stringResource(
+        if (tick.offScale) R.string.detail_gauge_caption_off else R.string.detail_gauge_caption,
+        referenceLabel,
+        Fmt.plain(scalePct) + "%",
+    )
     val description = "$referenceLabel: ${spoken(premiumText)}"
     Column(
         modifier = modifier
@@ -86,9 +88,23 @@ private fun GaugeTrack(
         DrawCanvas(Modifier.fillMaxWidth().height(14.dp)) {
             val one = 1.dp.toPx()
             val two = 2.dp.toPx()
-            drawRect(color = LineStrong, topLeft = Offset(0f, 6.dp.toPx()), size = Size(size.width, one))
-            drawRect(color = Muted, topLeft = Offset((size.width - one) / 2f, 2.dp.toPx()), size = Size(one, 10.dp.toPx()))
-            drawRect(color = Accent, topLeft = Offset((size.width - two) * fraction, 0f), size = Size(two, size.height))
+            // The track stops short of the padding: a gutter of OffScaleGap plus the tick's own
+            // width is left at each end, so a tick past the scale has somewhere to stand that is
+            // visibly not on the track.
+            val gutter = OffScaleGap.toPx() + two
+            val trackWidth = size.width - gutter * 2
+            drawRect(color = LineStrong, topLeft = Offset(gutter, 6.dp.toPx()), size = Size(trackWidth, one))
+            // End stops, so the scale has a span whose ends can be seen. Without them a tick at
+            // the end and a tick past the end are the same picture.
+            drawRect(color = LineStrong, topLeft = Offset(gutter, 4.dp.toPx()), size = Size(one, 6.dp.toPx()))
+            drawRect(color = LineStrong, topLeft = Offset(gutter + trackWidth - one, 4.dp.toPx()), size = Size(one, 6.dp.toPx()))
+            drawRect(color = Muted, topLeft = Offset(gutter + (trackWidth - one) / 2f, 2.dp.toPx()), size = Size(one, 10.dp.toPx()))
+            val x = when {
+                !tick.offScale -> gutter + (trackWidth - two) * tick.fraction
+                tick.fraction > 0.5f -> size.width - two
+                else -> 0f
+            }
+            drawRect(color = Accent, topLeft = Offset(x, 0f), size = Size(two, size.height))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = caption, style = PlainTickerType.small, color = Ink2, modifier = Modifier.weight(1f))
@@ -97,24 +113,32 @@ private fun GaugeTrack(
     }
 }
 
-/** What stands where the gauge would be: one sentence about the pool, in the gauge's own slot. */
-@Composable
-private fun PoolLine(text: String, modifier: Modifier) {
-    Text(
-        text = text,
-        style = PlainTickerType.small,
-        color = Ink2,
-        modifier = modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp),
-    )
-}
+/** The gap between the end of the track and a tick standing off it. */
+private val OffScaleGap = 6.dp
 
 /**
- * Where the token tick sits along the track, 0 to 1: the reference is at 0.5 and a premium of
- * plus or minus [scalePct] reaches the end. 0.09 on a 0.5 scale is 0.59. Clamped.
+ * Where the token tick goes, and whether it is a position or a cap.
+ *
+ * @param fraction 0 to 1 along the track, the reference at 0.5. It is a position on the stated
+ *   scale only while [offScale] is false; past the end it is clamped, and a clamped tick is
+ *   exactly the thing a reader must never be handed as a value.
+ * @param offScale true when the premium runs past the stated scale. The gauge then stands the
+ *   tick off the track and the caption says the reading is past the scale, so a saturated tick
+ *   cannot be read as the end of the scale. The exact premium is printed beside it either way.
  */
-fun gaugePosition(tokenPremiumPct: Double, scalePct: Double): Float {
-    if (scalePct <= 0.0 || tokenPremiumPct.isNaN()) return 0.5f
-    return (0.5 + tokenPremiumPct / scalePct * 0.5).coerceIn(0.0, 1.0).toFloat()
+data class GaugeTick(val fraction: Float, val offScale: Boolean)
+
+/**
+ * The one answer behind both the drawing and the caption, so the two cannot drift: 0.09 on a 2.5
+ * scale is 0.518, minus 0.95 is 0.31, minus 2.34 is 0.032, and minus 3.0 is past the scale.
+ *
+ * A scale of zero, or a premium that is not a finite number, puts the tick on the reference and
+ * claims nothing.
+ */
+fun gaugeTick(tokenPremiumPct: Double, scalePct: Double): GaugeTick {
+    if (scalePct <= 0.0 || !tokenPremiumPct.isFinite()) return GaugeTick(0.5f, offScale = false)
+    val raw = 0.5 + tokenPremiumPct / scalePct * 0.5
+    return GaugeTick(raw.coerceIn(0.0, 1.0).toFloat(), offScale = raw < 0.0 || raw > 1.0)
 }
 
 @InstrumentPreviews
@@ -122,13 +146,17 @@ fun gaugePosition(tokenPremiumPct: Double, scalePct: Double): Float {
 private fun GaugePreview() {
     PreviewCanvas {
         Column {
+            // Premiums the live catalogue actually produced. The preview drawing only +0.09
+            // percent is why a pinned tick reached a signed release without being seen.
             Gauge("Token vs NYSE close", TrackingQuality.Tracked(0.09, poolUsd = 1_300_000.0))
-            Gauge("Token vs NYSE close", TrackingQuality.Tracked(-0.61, poolUsd = 184_000.0))
-            Gauge("Token vs NYSE close", TrackingQuality.Tracked(2.4, poolUsd = 12_500.0))
-            // Below the floor: the track is gone and the pool is stated. APPx and UBERx as read
-            // live on 2026-09-12, and a token Jupiter priced without reporting any depth.
+            Gauge("Token vs NYSE close", TrackingQuality.Tracked(-0.95, poolUsd = 1_900_000.0))
+            Gauge("Token vs NYSE close", TrackingQuality.Tracked(-2.34, poolUsd = 12_500.0))
+            // Past the scale on each side: the tick stands off the track and the caption says so.
+            Gauge("Token vs NYSE close", TrackingQuality.Tracked(-4.10, poolUsd = 11_200.0))
+            Gauge("Token vs NYSE close", TrackingQuality.Tracked(6.80, poolUsd = 10_400.0))
+            // Below the floor, and priced with no depth: the gauge draws nothing at all, because
+            // the price block above it has already stated the pool.
             Gauge("Token vs NYSE close", TrackingQuality.Thin(poolUsd = 34.0))
-            Gauge("Token vs NYSE close", TrackingQuality.Thin(poolUsd = 9_840.0))
             Gauge("Token vs NYSE close", TrackingQuality.Untracked)
         }
     }

@@ -83,6 +83,8 @@
     <string name="detail_nyse_close">NYSE close</string>
     <string name="detail_nyse_price">NYSE price</string>
     <string name="detail_gauge_caption">%1$s, scale %2$s</string>
+    <!-- The premium runs past the end of the stated scale, so the tick is a cap and not a value. -->
+    <string name="detail_gauge_caption_off">%1$s, past the %2$s scale</string>
     <string name="detail_gauge_reference_close">Token vs NYSE close</string>
     <string name="detail_gauge_reference_live">Token vs NYSE price</string>
     <string name="detail_gauge_thin">Pool holds %1$s, too thin to track the NYSE close</string>
