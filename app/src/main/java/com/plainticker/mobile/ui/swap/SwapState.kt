@@ -246,13 +246,19 @@ data class SwapFunds(
 
 // ---- The amount --------------------------------------------------------------------------------
 
-/** Why an amount cannot be swapped. Each one is refused before any network call is made. */
-enum class AmountProblem(@StringRes val text: Int) {
-    EMPTY(R.string.swap_enter_amount),
-    NOT_A_NUMBER(R.string.swap_amount_not_a_number),
-    TOO_PRECISE(R.string.swap_amount_too_precise),
-    NOT_ABOVE_ZERO(R.string.swap_amount_not_above_zero),
-    ABOVE_BALANCE(R.string.swap_amount_above_balance),
+/**
+ * Why an amount cannot be swapped. Each one is refused before any network call is made.
+ *
+ * No resource id here: [TOO_PRECISE] says how many decimals the token counts, which is counted
+ * copy and lives in R.plurals, and one enum cannot carry both kinds of id honestly. The sentence
+ * for each is picked in one place, the sheet's own amountNotice.
+ */
+enum class AmountProblem {
+    EMPTY,
+    NOT_A_NUMBER,
+    TOO_PRECISE,
+    NOT_ABOVE_ZERO,
+    ABOVE_BALANCE,
 }
 
 /**

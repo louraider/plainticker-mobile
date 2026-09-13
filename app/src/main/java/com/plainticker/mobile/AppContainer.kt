@@ -35,6 +35,7 @@ import com.plainticker.mobile.repo.SummaryRepository
 import com.plainticker.mobile.wallet.MwaWalletSession
 import com.plainticker.mobile.watchlist.DigestNotifier
 import com.plainticker.mobile.watchlist.DigestStore
+import com.plainticker.mobile.watchlist.DigestStrings
 import com.plainticker.mobile.watchlist.SharedPrefsDigestStore
 import com.plainticker.mobile.watchlist.WatchlistCheck
 import com.plainticker.mobile.watchlist.WatchlistFacts
@@ -159,7 +160,13 @@ class DefaultAppContainer(context: Context) : AppContainer {
             watchlist = watchlistStore,
             facts = watchlistFacts,
             digests = digestStore,
-            strings = { id, args -> app.getString(id, *args.toTypedArray()) },
+            strings = object : DigestStrings {
+                override fun get(id: Int, args: List<String>): String =
+                    app.getString(id, *args.toTypedArray())
+
+                override fun quantity(id: Int, quantity: Int, args: List<String>): String =
+                    app.resources.getQuantityString(id, quantity, *args.toTypedArray())
+            },
             notifier = digestNotifier,
             clock = clock,
         )

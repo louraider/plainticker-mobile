@@ -1,9 +1,11 @@
 package com.plainticker.mobile.watchlist
 
+import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.words
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -34,7 +36,7 @@ sealed interface DigestLine {
 
     /** How many tickers the check looked at. Never news on its own: it is the opening clause. */
     data class Watched(val count: Int) : DigestLine {
-        override val copy: Copy get() = words(R.string.digest_watched, Fmt.count(count))
+        override val copy: Copy get() = counted(R.plurals.digest_watched, count, Fmt.count(count))
     }
 
     /**
@@ -54,14 +56,22 @@ sealed interface DigestLine {
             get() = when (inDays) {
                 0L -> words(R.string.digest_reports_today, symbol)
                 1L -> words(R.string.digest_reports_tomorrow, symbol)
-                else -> words(R.string.digest_reports_in_days, symbol, Fmt.count(inDays))
+                else -> counted(R.plurals.digest_reports_in_days, inDays.toInt(), symbol, Fmt.count(inDays))
             }
     }
 }
 
-/** The one place a digest becomes a string: resources in the app, the same table in a test. */
-fun interface DigestStrings {
+/**
+ * The one place a digest becomes a string: resources in the app, the same table in a test.
+ *
+ * [quantity] is the second method because a digest counts out loud and English has to agree with
+ * it: "1 stock watched." and "4 stocks watched." are one resource with two forms, and only the
+ * platform knows which one a number selects.
+ */
+interface DigestStrings {
     fun get(@StringRes id: Int, args: List<String>): String
+
+    fun quantity(@PluralsRes id: Int, quantity: Int, args: List<String>): String
 }
 
 /**
@@ -102,6 +112,7 @@ data class Digest(
         lines.joinToString(" ") { line ->
             when (val copy = line.copy) {
                 is Copy.Words -> strings.get(copy.id, copy.args)
+                is Copy.Counted -> strings.quantity(copy.id, copy.quantity, copy.args)
                 is Copy.Raw -> copy.text
             }
         }

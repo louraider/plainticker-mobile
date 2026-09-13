@@ -933,7 +933,7 @@ class ListViewModelTest {
         val watchlist = InMemoryWatchlistStore(setOf("AAPL"))
         val digests = InMemoryDigestStore(
             DigestRecord(
-                text = "1 watched. AAPLx reports in 45 days.",
+                text = "1 stock watched. AAPLx reports in 45 days.",
                 producedAtMillis = 1_789_257_600_000L,
                 nextReportTicker = "AAPL",
                 nextReportSymbol = "AAPLx",

@@ -122,7 +122,7 @@ class PortfolioModelTest {
     fun `the total covers the priced positions and the sentence counts them`() {
         val block = totalBlock(state(position(), position(symbol = "NVDAx", ticker = "NVDA", priceUsd = 182.11)))
 
-        assertEquals(Copy.Words(R.string.portfolio_priced_by, listOf("2")), block.sub)
+        assertEquals(Copy.Counted(R.plurals.portfolio_priced_by, 2, listOf("2")), block.sub)
         assertTrue(block.value!!.startsWith("$"))
     }
 
@@ -136,7 +136,8 @@ class PortfolioModelTest {
             ),
         )
 
-        assertEquals(Copy.Words(R.string.portfolio_priced_partial, listOf("1", "3")), block.sub)
+        // The count that picks the noun is how many are on screen, not how many were priced.
+        assertEquals(Copy.Counted(R.plurals.portfolio_priced_partial, 3, listOf("1", "3")), block.sub)
         assertEquals("\$737.33", block.value)
     }
 
@@ -145,7 +146,7 @@ class PortfolioModelTest {
         val block = totalBlock(state(position(priceUsd = null, referencePriceUsd = null)))
 
         assertNull(block.value)
-        assertEquals(Copy.Words(R.string.portfolio_priced_none, listOf("1")), block.sub)
+        assertEquals(Copy.Counted(R.plurals.portfolio_priced_none, 1, listOf("1")), block.sub)
     }
 
     // ---- Recent swaps ----------------------------------------------------------------------
@@ -265,12 +266,17 @@ class PortfolioModelTest {
         val copies = listOf(
             holdingRow(position()).quantity,
             holdingRow(position(decimals = null, multiplier = null)).quantity,
-            totalBlock(state(position())).sub,
             swapRow(receipt()).paid,
             swapRow(receipt()).received,
             swapRow(receipt()).cost,
         )
         copies.forEach { assertTrue("$it is not a resource", it is Copy.Words) }
         copies.forEach { assertTrue("resource id is missing", words(it).id != 0) }
+        // The one sentence on this screen that says a number out loud is counted copy instead,
+        // so it still comes out of the file and still carries the count that chose its form.
+        val sub = totalBlock(state(position())).sub
+        assertTrue("$sub is not counted copy", sub is Copy.Counted)
+        assertTrue("resource id is missing", (sub as Copy.Counted).id != 0)
+        assertEquals(1, sub.quantity)
     }
 }

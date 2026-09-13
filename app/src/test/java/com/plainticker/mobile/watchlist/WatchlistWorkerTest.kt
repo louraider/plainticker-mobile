@@ -37,7 +37,7 @@ class WatchlistWorkerTest {
 
     @Test
     fun `a produced digest succeeded`() = runTest {
-        assertEquals(Result.success(), WatchlistWorker.decide { CheckOutcome.Produced("1 watched.") })
+        assertEquals(Result.success(), WatchlistWorker.decide { CheckOutcome.Produced("1 stock watched.") })
     }
 
     @Test

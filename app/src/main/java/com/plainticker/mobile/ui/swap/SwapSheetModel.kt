@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.raw
 import com.plainticker.mobile.ui.words
 
@@ -335,12 +336,21 @@ private fun running(
 private fun SwapState.Amount.amountNotice(): Copy? = when {
     leg.intoToken && balanceRaw == 0L -> words(R.string.swap_no_usdc)
     note != null -> words(note.text)
-    input.problem != null -> words(
-        input.problem.text,
-        leg.input.symbol,
-        Fmt.count(leg.input.decimals),
-    )
-    else -> null
+    else -> input.problem?.let { problem ->
+        when (problem) {
+            AmountProblem.EMPTY -> words(R.string.swap_enter_amount)
+            AmountProblem.NOT_A_NUMBER -> words(R.string.swap_amount_not_a_number)
+            AmountProblem.NOT_ABOVE_ZERO -> words(R.string.swap_amount_not_above_zero)
+            AmountProblem.ABOVE_BALANCE -> words(R.string.swap_amount_above_balance, leg.input.symbol)
+            // The one amount problem that counts out loud, so the one that has to agree with it.
+            AmountProblem.TOO_PRECISE -> counted(
+                R.plurals.swap_amount_too_precise,
+                leg.input.decimals,
+                leg.input.symbol,
+                Fmt.count(leg.input.decimals),
+            )
+        }
+    }
 }
 
 /**

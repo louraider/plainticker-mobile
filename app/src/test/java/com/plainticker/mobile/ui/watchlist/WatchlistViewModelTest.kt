@@ -176,9 +176,9 @@ class WatchlistViewModelTest {
 
         vm.state.test {
             awaitUntil { it.rows.isNotEmpty() }
-            digests.save(DigestRecord(text = "1 watched. AAPLx reports in 45 days.", producedAtMillis = NOW))
+            digests.save(DigestRecord(text = "1 stock watched. AAPLx reports in 45 days.", producedAtMillis = NOW))
             val state = awaitUntil { it.digest.text != null }
-            assertEquals("1 watched. AAPLx reports in 45 days.", state.digest.text)
+            assertEquals("1 stock watched. AAPLx reports in 45 days.", state.digest.text)
             cancelAndIgnoreRemainingEvents()
         }
     }

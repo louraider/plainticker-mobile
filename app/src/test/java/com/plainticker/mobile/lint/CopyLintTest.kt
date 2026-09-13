@@ -87,14 +87,32 @@ class CopyLintTest {
 
     // ---- strings.xml ------------------------------------------------------------------------
 
-    private val resourceElement = Regex("""<(string|item)\b([^>]*)>(.*?)</\1>""", RegexOption.DOT_MATCHES_ALL)
+    private val stringElement = Regex("""<string\b([^>]*)>(.*?)</string>""", RegexOption.DOT_MATCHES_ALL)
+    private val pluralsElement = Regex("""<plurals\b([^>]*)>(.*?)</plurals>""", RegexOption.DOT_MATCHES_ALL)
+    private val itemElement = Regex("""<item\b([^>]*)>(.*?)</item>""", RegexOption.DOT_MATCHES_ALL)
     private val nameAttribute = Regex("""\bname="([^"]*)"""")
+    private val quantityAttribute = Regex("""\bquantity="([^"]*)"""")
 
-    private fun parseResources(xml: String): List<Resource> =
-        resourceElement.findAll(xml).map { m ->
-            val name = nameAttribute.find(m.groupValues[2])?.groupValues?.get(1) ?: "(item)"
-            Resource(name, lineAt(xml, m.range.first), decodeResource(m.groupValues[3]))
-        }.toList()
+    /**
+     * Every sentence in the file, counted copy included: a `<plurals>` contributes one resource
+     * per form, named `list_today/one`, so both forms go through every rule below and a duplicate
+     * name still means a duplicate name.
+     */
+    private fun parseResources(xml: String): List<Resource> {
+        val plain = stringElement.findAll(xml).map { m ->
+            val name = nameAttribute.find(m.groupValues[1])?.groupValues?.get(1) ?: "(string)"
+            Resource(name, lineAt(xml, m.range.first), decodeResource(m.groupValues[2]))
+        }
+        val counted = pluralsElement.findAll(xml).flatMap { block ->
+            val name = nameAttribute.find(block.groupValues[1])?.groupValues?.get(1) ?: "(plurals)"
+            val at = block.groups[2]!!.range.first
+            itemElement.findAll(block.groupValues[2]).map { item ->
+                val quantity = quantityAttribute.find(item.groupValues[1])?.groupValues?.get(1) ?: "(item)"
+                Resource("$name/$quantity", lineAt(xml, at + item.range.first), decodeResource(item.groupValues[2]))
+            }
+        }
+        return (plain + counted).toList()
+    }
 
     /** Inline markup dropped, XML entities and Android escapes decoded, so `&#8212;` and `\u2014` are seen. */
     private fun decodeResource(raw: String): String {
@@ -318,7 +336,8 @@ class CopyLintTest {
         assertEquals("resource names are unique", resources.size, byName.size)
         assertTrue("expected the seeded copy, found ${resources.size} strings", resources.size >= 120)
         resources.forEach {
-            assertTrue("${it.name} is not snake_case", it.name.matches(Regex("[a-z][a-z0-9_]*")))
+            // Counted copy carries its quantity keyword after a slash: "portfolio_priced_by/one".
+            assertTrue("${it.name} is not snake_case", it.name.matches(Regex("[a-z][a-z0-9_]*(/(one|other))?")))
             assertTrue("${it.name} is blank", it.text.isNotBlank())
         }
         assertEquals("PlainTicker", byName["app_name"])

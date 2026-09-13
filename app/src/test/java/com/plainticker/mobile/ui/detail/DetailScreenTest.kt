@@ -107,7 +107,7 @@ class DetailScreenTest {
         assertOrder(
             "FScoreBlock",
             body("private fun FScoreBlock(", "private fun MethodBlock("),
-            listOf("fScoreNumeral", "R.string.detail_fscore_of", "SignalRow("),
+            listOf("fScoreNumeral", "R.plurals.detail_fscore_of", "SignalRow("),
         )
         assertOrder(
             "MethodBlock",
@@ -183,11 +183,17 @@ class DetailScreenTest {
     fun `every sentence on the screen comes from strings xml`() {
         listOf(
             "action_watch", "action_watching", "detail_token_price", "detail_heading_backing",
-            "detail_heading_sector", "detail_heading_fscore", "detail_heading_method", "detail_fscore_of",
-            "detail_fscore_a11y", "detail_not_available_filer", "value_missing",
+            "detail_heading_sector", "detail_heading_fscore", "detail_heading_method",
+            "detail_not_available_filer", "value_missing",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
             assertTrue("DetailScreen.kt does not read R.string.$name", "R.string.$name" in scan.code)
+        }
+        // The F-Score caption counts its signals out loud, so both of its sentences are counted
+        // copy: a plurals with a one and an other, never a string (CountCopyTest).
+        listOf("detail_fscore_of", "detail_fscore_a11y").forEach { name ->
+            assertTrue("$name is not declared as a plurals", """<plurals name="$name">""" in stringsXml)
+            assertTrue("DetailScreen.kt does not read R.plurals.$name", "R.plurals.$name" in scan.code)
         }
         // Everything the model picks between lives there, not here: the screen never chooses a word.
         listOf(

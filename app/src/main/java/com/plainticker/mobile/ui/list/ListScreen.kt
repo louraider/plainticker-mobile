@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -177,8 +178,15 @@ private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Uni
  */
 @Composable
 private fun todayText(state: ListUiState): String {
-    val report = state.nextReport ?: return stringResource(R.string.list_today_watched, Fmt.count(state.watched))
-    return stringResource(R.string.list_today, Fmt.count(state.watched), report.symbol, Fmt.monthDay(report.on))
+    val report = state.nextReport
+        ?: return pluralStringResource(R.plurals.list_today_watched, state.watched, Fmt.count(state.watched))
+    return pluralStringResource(
+        R.plurals.list_today,
+        state.watched,
+        Fmt.count(state.watched),
+        report.symbol,
+        Fmt.monthDay(report.on),
+    )
 }
 
 @Composable

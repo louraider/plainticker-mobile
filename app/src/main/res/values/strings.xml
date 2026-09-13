@@ -5,6 +5,11 @@
   section 13 Pass 2 (empty, error and stale states). Guarded by CopyLintTest: no verdict words,
   no em or en dash, no exclamation mark, no emoji, no marketing words, at most one middle dot per
   string. Every number arrives as an argument already formatted by com.plainticker.mobile.ui.Fmt.
+
+  A sentence that says a whole number out loud is a plurals, never a string: English needs a one
+  form and an other form, and the Portfolio drew "1 xStocks, priced by Jupiter" on the Seeker on
+  2026-09-13 because it was a string (docs/data-map.md). CountCopyTest renders every one of them
+  at one and at many, and fails the gate if a count reaches a plain string again.
 -->
 <resources>
     <string name="app_name">PlainTicker</string>
@@ -48,7 +53,10 @@
     <string name="onboarding_continue">Read the list</string>
 
     <!-- List -->
-    <string name="list_today">Today: %1$s watched, next report %2$s on %3$s</string>
+    <plurals name="list_today">
+        <item quantity="one">Today: %1$s stock watched, next report %2$s on %3$s</item>
+        <item quantity="other">Today: %1$s stocks watched, next report %2$s on %3$s</item>
+    </plurals>
     <string name="list_today_stale">Checked %1$s, tap to refresh</string>
     <string name="list_search_label">Search</string>
     <string name="list_search_placeholder">Ticker or company</string>
@@ -72,7 +80,10 @@
     <string name="list_snapshot_banner_undated">List from a bundled snapshot</string>
     <string name="list_snapshot_refreshing">List from a bundled snapshot of %1$s, refreshing now</string>
     <string name="list_snapshot_refreshing_undated">List from a bundled snapshot, refreshing now</string>
-    <string name="list_today_watched">Today: %1$s watched</string>
+    <plurals name="list_today_watched">
+        <item quantity="one">Today: %1$s stock watched</item>
+        <item quantity="other">Today: %1$s stocks watched</item>
+    </plurals>
     <string name="list_row_meta_age">Analysis %1$s</string>
     <string name="list_state_strong">strong</string>
     <string name="list_state_fair">fair</string>
@@ -140,8 +151,14 @@
     <string name="detail_fact_six_months_sub">relative price change</string>
     <string name="detail_fact_sector_median">sector median %1$s</string>
     <string name="detail_heading_fscore">F-Score</string>
-    <string name="detail_fscore_of">of %1$s signals</string>
-    <string name="detail_fscore_a11y">F-Score %1$s of %2$s</string>
+    <plurals name="detail_fscore_of">
+        <item quantity="one">of %1$s signal</item>
+        <item quantity="other">of %1$s signals</item>
+    </plurals>
+    <plurals name="detail_fscore_a11y">
+        <item quantity="one">F-Score %1$s of %2$s signal</item>
+        <item quantity="other">F-Score %1$s of %2$s signals</item>
+    </plurals>
     <string name="signal_roa_positive">Return on assets positive</string>
     <string name="signal_cfo_positive">Operating cash flow positive</string>
     <string name="signal_roa_improving">Return on assets improving</string>
@@ -205,7 +222,10 @@
 
     <!-- Swap sheet: what the state machine says (T10) -->
     <string name="swap_amount_not_a_number">Enter the amount in numbers</string>
-    <string name="swap_amount_too_precise">%1$s counts %2$s decimals</string>
+    <plurals name="swap_amount_too_precise">
+        <item quantity="one">%1$s counts %2$s decimal</item>
+        <item quantity="other">%1$s counts %2$s decimals</item>
+    </plurals>
     <string name="swap_amount_not_above_zero">Enter an amount above zero</string>
     <string name="swap_amount_above_balance">More than the %1$s in this wallet</string>
     <string name="swap_worst_case">At least %1$s %2$s after slippage</string>
@@ -241,9 +261,18 @@
 
     <!-- Portfolio -->
     <string name="portfolio_heading_holdings">Holdings</string>
-    <string name="portfolio_priced_by">%1$s xStocks, priced by Jupiter</string>
-    <string name="portfolio_priced_partial">%1$s of %2$s xStocks priced by Jupiter, the total covers those</string>
-    <string name="portfolio_priced_none">%1$s xStocks, none of them priced by Jupiter</string>
+    <plurals name="portfolio_priced_by">
+        <item quantity="one">%1$s xStock, priced by Jupiter</item>
+        <item quantity="other">%1$s xStocks, priced by Jupiter</item>
+    </plurals>
+    <plurals name="portfolio_priced_partial">
+        <item quantity="one">%1$s of %2$s xStock priced by Jupiter, the total covers it</item>
+        <item quantity="other">%1$s of %2$s xStocks priced by Jupiter, the total covers those</item>
+    </plurals>
+    <plurals name="portfolio_priced_none">
+        <item quantity="one">%1$s xStock, not priced by Jupiter</item>
+        <item quantity="other">%1$s xStocks, none of them priced by Jupiter</item>
+    </plurals>
     <string name="portfolio_total_a11y">Total %1$s. %2$s</string>
     <string name="portfolio_row_quantity">%1$s %2$s</string>
     <string name="portfolio_row_mint_unread">Mint not read, quantity unknown</string>
@@ -275,11 +304,17 @@
     <string name="watchlist_empty">Nothing watched yet. Watch a stock from its page to see its next report date here, and get one digest a day.</string>
 
     <!-- The daily digest: one sentence per clause, assembled by com.plainticker.mobile.watchlist.digest -->
-    <string name="digest_watched">%1$s watched.</string>
+    <plurals name="digest_watched">
+        <item quantity="one">%1$s stock watched.</item>
+        <item quantity="other">%1$s stocks watched.</item>
+    </plurals>
     <string name="digest_moved">%1$s moved from %2$s to %3$s against the NYSE close.</string>
     <string name="digest_reports_today">%1$s reports today.</string>
     <string name="digest_reports_tomorrow">%1$s reports tomorrow.</string>
-    <string name="digest_reports_in_days">%1$s reports in %2$s days.</string>
+    <plurals name="digest_reports_in_days">
+        <item quantity="one">%1$s reports in %2$s day.</item>
+        <item quantity="other">%1$s reports in %2$s days.</item>
+    </plurals>
 
     <!-- Notifications -->
     <string name="notification_channel_watchlist">Watchlist</string>

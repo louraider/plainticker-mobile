@@ -84,7 +84,7 @@ class WatchlistCheckTest {
 
         val outcome = check.run()
 
-        val text = "1 watched. AAPLx reports in 45 days."
+        val text = "1 stock watched. AAPLx reports in 45 days."
         assertEquals(CheckOutcome.Produced(text), outcome)
         assertEquals(text, digests.record.value.text)
         assertEquals(day, digests.record.value.producedAtMillis)
@@ -187,7 +187,7 @@ class WatchlistCheckTest {
 
         assertEquals(
             CheckOutcome.Produced(
-                "1 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. NVDAx reports in 66 days.",
+                "1 stock watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. NVDAx reports in 66 days.",
             ),
             check.run(),
         )

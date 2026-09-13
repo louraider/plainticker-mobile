@@ -516,7 +516,8 @@ class DetailModelTest {
     fun `the nine signals keep the fixed order of the data map`() {
         val fscore = served().fScore!!
         assertEquals("8", fscore.score)
-        assertEquals("9", fscore.outOf)
+        // A number, not a numeral: it is what selects the plural of "signals" on the screen.
+        assertEquals(9, fscore.outOf)
         assertEquals(
             listOf(
                 R.string.signal_roa_positive,
