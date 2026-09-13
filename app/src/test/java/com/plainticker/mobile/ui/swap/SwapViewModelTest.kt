@@ -181,6 +181,32 @@ class SwapViewModelTest {
         }
     }
 
+    /**
+     * The connect step's own failure, which the approval step no longer shares with it.
+     *
+     * CONNECT_REFUSED was WALLET_REFUSED, and the only test that pinned it drove the approval
+     * step, which is a cancellation now. That left the connect half of it unasserted, so this
+     * asserts it: the wallet was never read, nothing was quoted, and the sentence the reader
+     * gets is about connecting rather than about a swap that did not land.
+     */
+    @Test
+    fun `a connect that errors fails before the amount step and keeps its words in the log`() = runTest {
+        val mock = jupiter()
+        val wallet = FakeWalletSession().apply { enqueue(WalletOutcome.Error("association failed")) }
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            vm.open(tslax)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.CONNECT_REFUSED, failed.reason)
+            assertNull("the wallet was never read", failed.funds)
+            assertTrue("so nothing was quoted", mock.requests.isEmpty())
+            assertTrue("the upstream words are logged, never drawn", logged.any { "association failed" in it })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `a chain that cannot be read fails before the amount step`() = runTest {
         val mock = jupiter()
