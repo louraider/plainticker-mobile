@@ -25,66 +25,75 @@ scripts/redaction-guard.sh
 scripts/redaction-guard.sh --history
 ```
 
-**State on 2026-09-13: the tree is clean and history is not.**
+**Both pass as of 2026-09-13, after the rewrite in step 3.**
 
 | run | result |
 |---|---|
 | working tree | OK, 241,715 distinct base58 candidates, no hit |
-| `--history` | FAILED, 403,493 candidates, one hit |
+| `--history` | OK, 2,393,234 distinct candidates across every commit on every ref, no hit |
 
-The hit is the Sep 10 spike signature at `aeac9bb:docs/plan-2026-09-10.md:32`, the first plan
-commit. Exactly one commit carries it, and the line has since been rewritten in the working tree.
-That signature resolves on any block explorer to the founder's own wallet, which is the Seed Vault
-wallet of the phone and holds the SKR stake and the Genesis token, so this is not a cosmetic leak
-and step 3 applies before the flip.
+Before the rewrite `--history` failed on one hit: the Sep 10 spike signature at
+`aeac9bb:docs/plan-2026-09-10.md:32`, the first plan commit. The line had been corrected in the
+working tree long before, which is exactly the trap: deleting text from a file does not delete it
+from history. That signature resolves on any block explorer to the founder's own wallet, which is
+the Seed Vault wallet of the phone and holds the SKR stake and the Genesis token.
 
-**CI on `main` is red because of this, on purpose.** `.github/workflows/ci.yml` runs the
-`--history` guard as its own job, and it began failing the moment the digest went into the
-denylist. That is the guard doing its job: it goes green again when the rewrite lands, and
-silencing it would be silencing the only thing standing between this repository and a doxxed
-wallet.
-
-Also grep for anything that is not base58 shaped and was ever secret: RPC URLs with keys, key
-prefixes, `.env` names.
+Also grep for anything that is not base58 shaped and was ever secret. Run 2026-09-13 over every
+commit on every ref: the only matches were this checklist quoting its own command, two Helius
+documentation links, and `apiKey: config.apiKey` in a code sample, which is a field name and not a
+value. No keystore, `.p12` or `.pem` was ever added in any commit.
 
 ```bash
 git log --all -p | grep -nE 'api-key=|apiKey|helius|sk_live|sk_test' | head
+git log --all --diff-filter=A --name-only --pretty=format: | grep -iE '\.(jks|keystore|p12|pem)$'
 ```
 
 ## 3. History ever contained a secret: rewrite it before the flip
 
-**This step is live.** `git filter-repo` (not `filter-branch`), on a fresh mirror clone, then
-re-push. The replacements file is built from the offending commit itself, so the signature is
-never displayed, pasted or held in the shell history:
+**Done 2026-09-13, authorised by the founder.** `git filter-repo` 2.47 over a `--no-local --mirror`
+clone, one replacement, then `git push --force --mirror`. The replacements file was built by
+extracting the base58 run straight out of the offending commit, so the signature was never
+displayed, pasted or left in a shell history, and its digest was checked against the denylist
+before the rewrite ran.
 
 ```bash
-git clone --mirror git@github.com:<org>/<repo>.git repo-rewrite && cd repo-rewrite
+git clone --no-local --mirror <repo> repo-rewrite && cd repo-rewrite   # --no-local or filter-repo refuses: hardlinked clone
 
 git show aeac9bb:docs/plan-2026-09-10.md \
   | grep -oE '[1-9A-HJ-NP-Za-km-z]{80,90}' | sort -u \
-  | sed 's/$/==>[redacted]/' > replacements.txt
+  | sed 's/$/==>[redacted: signature of the Sep 10 spike swap]/' > ../replacements.txt
 
-# Confirm it caught the right thing and nothing else: one line, and its digest is the
-# denylisted one. Do not proceed if this prints anything but a single matching digest.
-cut -d'=' -f1 replacements.txt | while read -r s; do printf %s "$s" | sha256sum; done
-# expect: 44ccc5ca952d8ba1b8ea09760dd5be61ac2cd219c40f5942ddf0812a349f55f5
+cut -d'=' -f1 ../replacements.txt | while read -r s; do printf %s "$s" | sha256sum; done
+# must print exactly 44ccc5ca952d8ba1b8ea09760dd5be61ac2cd219c40f5942ddf0812a349f55f5 and nothing else
 
-git filter-repo --replace-text replacements.txt
-rm -f replacements.txt
-bash ../scripts/redaction-guard.sh --history     # must print OK before anything is pushed
-git push --force --mirror
+git filter-repo --replace-text ../replacements.txt && rm -f ../replacements.txt
+git rev-list --all | while read r; do git grep -qI -F '<needle>' "$r" && echo "FOUND $r"; done   # must print nothing
+git remote add origin <url> && git push --force --mirror
 ```
 
-Verified 2026-09-13 that the extraction returns exactly one 87-character string and that its
-digest matches the denylist entry.
+What it cost, measured rather than predicted:
 
-**What the rewrite costs, so it is chosen rather than discovered.** `aeac9bb` is the root of every
-branch and of the `v0.2.0` tag, so every commit hash in the repository changes. Commit messages,
-authors, dates and order survive, which is what the judges read (plan section 0: technical depth
-is scored from commits). The `v0.2.0` tag moves to a new hash; the signed APK CI already built
-from it is a finished artifact and is not affected, but a later `docs/release-signing.md` run
-should re-tag. Every clone and worktree on this machine must be deleted and re-cloned, or they
-will fight the new history forever.
+| | before | after |
+|---|---|---|
+| commits on all refs | 268 | 268 |
+| the first plan commit | `aeac9bb` | `c400b23` |
+| author, date and message of that commit | louraider, Thu Sep 10 17:32:35 2026 +0300 | unchanged |
+| the line itself | the signature | `[redacted: signature of the Sep 10 spike swap]` |
+| `v0.2.0` | `c1b70ac` | `1190ddd` |
+
+Nothing was lost. Every hash changed, because `aeac9bb` is the root of every branch, and commit
+messages, authors, dates and order survived, which is the half the judges read (plan section 0:
+technical depth is scored from commits). The signed APK CI already built from `v0.2.0` is a
+finished artifact and is unaffected; a submission tag should be cut fresh from the rewritten head.
+
+Afterwards every local ref was moved onto the rewritten history, reflogs expired and `git gc
+--prune=now` run, so `aeac9bb` is no longer reachable or present locally, and the four worktrees
+were removed and re-created at the same paths.
+
+**One loose end, deliberately.** A full mirror of the pre-rewrite history is kept at
+`C:\Users\dubys\AndroidStudioProjects\myapp-backup-before-rewrite.git` (23 MB, 39 refs). It is the
+only rollback and it still contains the signature. Delete it once the rewritten repository has been
+used for a day and nothing is missing, and never push from it.
 
 ## 4. Rotate nothing that was never committed
 
