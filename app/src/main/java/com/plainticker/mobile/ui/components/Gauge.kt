@@ -97,7 +97,12 @@ private fun GaugeTrack(
     }
 }
 
-/** What stands where the gauge would be: one sentence about the pool, in the gauge's own slot. */
+/**
+ * What stands where the gauge would be, in the gauge's own slot: what Jupiter reports behind the
+ * price, and why no premium is drawn from it. Attributed rather than asserted, because the figure
+ * is not the total it is documented as (docs/data-map.md, 2026-09-13). Wraps: this is the one
+ * surface with room for the whole sentence, so the list rows can stay terse.
+ */
 @Composable
 private fun PoolLine(text: String, modifier: Modifier) {
     Text(

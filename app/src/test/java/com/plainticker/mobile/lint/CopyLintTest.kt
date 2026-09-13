@@ -352,10 +352,18 @@ class CopyLintTest {
         assertEquals("Cost basis is not read from the chain.", byName["portfolio_cost_basis"])
         // The liquidity floor (DESIGN.md section 1, docs/data-map.md): the row and the gauge say
         // what the pool is worth in place of a premium nothing backs, in plain words and no flag.
-        assertEquals("Pool holds %1\$s, too thin to track", byName["list_row_meta_thin"])
-        assertEquals("Pool depth not reported", byName["list_row_meta_pool_unknown"])
-        assertEquals("Pool holds %1\$s, too thin to track the NYSE close", byName["detail_gauge_thin"])
-        assertEquals("Pool depth not reported, tracking cannot be checked", byName["detail_gauge_pool_unknown"])
+        assertEquals("%1\$s behind this price, too thin", byName["list_row_meta_thin"])
+        assertEquals("Depth not reported", byName["list_row_meta_pool_unknown"])
+        assertEquals(
+            "Jupiter reports %1\$s behind this price. That is too little for the token to follow the NYSE close, " +
+                "so the premium is left out.",
+            byName["detail_gauge_thin"],
+        )
+        assertEquals(
+            "Jupiter priced this token but did not report how much stands behind the price, so whether it " +
+                "follows the NYSE close cannot be checked.",
+            byName["detail_gauge_pool_unknown"],
+        )
         // The wrong truth the Seeker drew on 2026-09-13 (docs/data-map.md): a wallet sheet closed
         // without an approval is not a swap that failed, and the app cannot tell a decline from a
         // sheet that went away, so the sentence it gets names neither and claims no fault.

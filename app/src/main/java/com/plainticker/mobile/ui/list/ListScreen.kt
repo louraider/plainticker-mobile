@@ -236,11 +236,14 @@ private fun PriceOnlyRow(row: ListRow, last: Boolean, onOpenDetail: (String) -> 
  * What the quote is worth, then the age of the analysis, one middle dot between them.
  *
  * Above the liquidity floor the first half is the premium against the NYSE close and nothing
- * here changed. Below it [TrackingQuality] withholds the premium, so the row states the pool
- * instead (docs/data-map.md, "The liquidity floor, measured 2026-09-12"): a pool of $34 makes a
- * quoted premium arithmetic rather than a price, and the reader is owed the reason. The sentence
- * is a fact about the token and not a risk flag, so it stays in the Muted meta line and never
- * takes Caution, which DESIGN.md section 2 keeps for issuer control.
+ * here changed. Below it [TrackingQuality] withholds the premium, so the row states what stands
+ * behind the price instead (docs/data-map.md): $34 makes a quoted premium arithmetic rather than
+ * a price, and the reader is owed the reason. The figure is Jupiter's and the row does not call
+ * it the pool, because measured against DexScreener and GeckoTerminal on 2026-09-13 it runs at
+ * 0.21 to 0.54 of what they count. The sentence is a fact about the token and not a risk flag, so
+ * it stays in the Muted meta line and never takes Caution, which DESIGN.md section 2 keeps for
+ * issuer control. It is deliberately no longer than the string it replaced: the meta line is one
+ * ellipsized line and it still has to carry the analysis age after a middle dot.
  *
  * Either half can be missing: an unpriced row keeps its age, an analysis from today prints no
  * age at all, and a row with neither has no meta line. It is one line in every case, so no row

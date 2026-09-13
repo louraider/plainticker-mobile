@@ -64,8 +64,8 @@
     <string name="list_heading_without_analysis">Without analysis</string>
     <!-- The row meta halves and the source banners below are shared with the Portfolio -->
     <string name="list_row_meta_premium">%1$s vs NYSE close</string>
-    <string name="list_row_meta_thin">Pool holds %1$s, too thin to track</string>
-    <string name="list_row_meta_pool_unknown">Pool depth not reported</string>
+    <string name="list_row_meta_thin">%1$s behind this price, too thin</string>
+    <string name="list_row_meta_pool_unknown">Depth not reported</string>
     <string name="list_row_meta_join">%1$s · %2$s</string>
     <string name="list_search_empty">No xStock matches \'%1$s\'</string>
     <string name="list_search_look_again">Check for new tokens</string>
@@ -96,8 +96,8 @@
     <string name="detail_gauge_caption">%1$s, scale %2$s</string>
     <string name="detail_gauge_reference_close">Token vs NYSE close</string>
     <string name="detail_gauge_reference_live">Token vs NYSE price</string>
-    <string name="detail_gauge_thin">Pool holds %1$s, too thin to track the NYSE close</string>
-    <string name="detail_gauge_pool_unknown">Pool depth not reported, tracking cannot be checked</string>
+    <string name="detail_gauge_thin">Jupiter reports %1$s behind this price. That is too little for the token to follow the NYSE close, so the premium is left out.</string>
+    <string name="detail_gauge_pool_unknown">Jupiter priced this token but did not report how much stands behind the price, so whether it follows the NYSE close cannot be checked.</string>
     <string name="detail_live_label">Live from the mint</string>
     <string name="detail_live_meta">slot %1$s · %2$s</string>
     <string name="detail_live_a11y">Live from the mint, updated %1$s</string>
@@ -172,8 +172,8 @@
     <string name="detail_method_body">Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice.</string>
     <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close.</string>
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
-    <string name="detail_cost_line">est. all-in cost %1$s · liquidity %2$s</string>
-    <string name="detail_liquidity_line">liquidity %1$s</string>
+    <string name="detail_cost_line">est. all-in cost %1$s · depth %2$s</string>
+    <string name="detail_liquidity_line">%1$s behind this price</string>
     <string name="detail_analysis_pending">Analysis not yet available</string>
     <string name="detail_analysis_pending_action">Watch to be notified</string>
     <string name="detail_analysis_incomplete">Analysis incomplete for this filer</string>
