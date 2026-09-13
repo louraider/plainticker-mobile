@@ -2,7 +2,7 @@
 
 The app ships both faces of the Instrument design system (DESIGN.md section 3) as static TTF
 resources, so type renders the same offline and on every device. Compose maps them in
-`app/src/main/java/com/myapp/ui/theme/Type.kt` (`Outfit`, `JetBrainsMono`).
+`app/src/main/java/com/plainticker/mobile/ui/theme/Type.kt` (`Outfit`, `JetBrainsMono`).
 
 | Face | Weights | Version | Upstream | Resource files (`app/src/main/res/font/`) |
 |---|---|---|---|---|
