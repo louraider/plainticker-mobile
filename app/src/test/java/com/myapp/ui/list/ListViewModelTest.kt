@@ -29,6 +29,7 @@ import com.myapp.repo.PriceRepository
 import com.myapp.repo.SnapshotRepository
 import com.myapp.repo.SummaryRepository
 import com.myapp.prefs.WatchlistStore
+import com.myapp.watchlist.DigestRecord
 import com.myapp.watchlist.DigestStore
 import com.myapp.watchlist.InMemoryDigestStore
 import com.myapp.repo.price
@@ -918,6 +919,50 @@ class ListViewModelTest {
             assertEquals(3, awaitUntil { it.watched == 3 }.watched)
             watchlist.remove("AAPL")
             assertEquals(2, awaitUntil { it.watched == 2 }.watched)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * The strip names the nearest report out of the digest the daily check stored, which can be a
+     * day old, so it names it only while that ticker is still watched. Without the guard the List
+     * would go on naming a company for up to a day after the reader took it off the watchlist.
+     */
+    @Test
+    fun `the today strip names the nearest report only while its ticker is watched`() = runTest {
+        val watchlist = InMemoryWatchlistStore(setOf("AAPL"))
+        val digests = InMemoryDigestStore(
+            DigestRecord(
+                text = "1 watched. AAPLx reports in 45 days.",
+                producedAtMillis = 1_789_257_600_000L,
+                nextReportTicker = "AAPL",
+                nextReportSymbol = "AAPLx",
+                nextReportOn = "2026-10-28",
+            ),
+        )
+        val vm = viewModel(watchlist = watchlist, digests = digests)
+
+        vm.state.test {
+            val named = awaitUntil { it.nextReport != null }
+            assertEquals("AAPLx", named.nextReport?.symbol)
+            assertEquals(LocalDate.of(2026, 10, 28), named.nextReport?.on)
+
+            watchlist.remove("AAPL")
+            watchlist.add("TSLA")
+            val other = awaitUntil { it.nextReport == null }
+            assertEquals("the count stands, only the name goes", 1, other.watched)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the today strip has no report to name before the first check has run`() = runTest {
+        val vm = viewModel(watchlist = InMemoryWatchlistStore(setOf("AAPL")))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing }
+            assertEquals(1, state.watched)
+            assertNull(state.nextReport)
             cancelAndIgnoreRemainingEvents()
         }
     }
