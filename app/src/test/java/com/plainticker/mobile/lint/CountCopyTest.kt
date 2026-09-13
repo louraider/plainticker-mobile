@@ -21,6 +21,7 @@ import com.plainticker.mobile.watchlist.watched
 import java.io.File
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -91,8 +92,8 @@ class CountCopyTest {
             Case(4, listOf("4"), "4 xStocks, priced by Jupiter"),
         ),
         "portfolio_priced_partial" to listOf(
-            Case(1, listOf("1", "1"), "1 of 1 xStock priced by Jupiter, the total covers it"),
-            Case(3, listOf("1", "3"), "1 of 3 xStocks priced by Jupiter, the total covers those"),
+            Case(1, listOf("1", "1"), "1 of 1 xStock priced by Jupiter, the total covers what is priced"),
+            Case(3, listOf("1", "3"), "1 of 3 xStocks priced by Jupiter, the total covers what is priced"),
         ),
         "portfolio_priced_none" to listOf(
             Case(1, listOf("1"), "1 xStock, not priced by Jupiter"),
@@ -130,6 +131,27 @@ class CountCopyTest {
             ShippedCopy.plurals.keys.sorted(),
             expected.keys.sorted(),
         )
+    }
+
+    /**
+     * The one sentence that carries two counts, and the half a plurals cannot agree with.
+     *
+     * "%1$s of %2$s xStocks priced by Jupiter, the total covers ..." says two numbers out loud.
+     * A plurals selects on one of them, and it has to be the one that governs "xStocks", so the
+     * clause about the priced ones has to read the same at one as at many. It did not: the wallet
+     * that held one priced token beside two unpriced ones read "the total covers those", a plural
+     * over a count of one, which is the defect of 2026-09-13 again in the sentence beside it.
+     */
+    @Test
+    fun `the partial total names the priced ones without agreeing with how many they are`() {
+        val agrees = setOf("those", "these", "them", "they", "ones")
+        ShippedCopy.plurals.getValue("portfolio_priced_partial").forEach { (form, text) ->
+            val clause = text.substringAfter("priced by Jupiter, ")
+            assertFalse(
+                "portfolio_priced_partial/$form says \"$clause\" over a count it cannot select on",
+                clause.split(' ', ',', '.').any { it in agrees },
+            )
+        }
     }
 
     // ---- The models that count ------------------------------------------------------------------
@@ -187,7 +209,7 @@ class CountCopyTest {
             ),
         )
         assertEquals(
-            "1 of 2 xStocks priced by Jupiter, the total covers those",
+            "1 of 2 xStocks priced by Jupiter, the total covers what is priced",
             ShippedCopy.render(totalBlock(portfolio(position(), position("NVDAx", "NVDA", null))).sub),
         )
     }
