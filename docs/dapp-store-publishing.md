@@ -25,6 +25,21 @@ The portal reads the Android package name from the APK and that name is the app'
 
 Order, with the first step done: ~~rename the package~~, create the release keystore and back it up, cut a tag so the release workflow prints the SHA-256 of the certificate it actually signed with, publish `assetlinks.json` on plainticker.com, add the App Links intent filter, verify it resolves, then create the app record in the portal.
 
+### Cleared 2026-09-13
+
+- **The release keystore exists.** `~/keystores/plainticker-release.jks`, RSA 4096, SHA256withRSA, valid until 2054, PKCS12 so the store and key passwords are one string. It is outside the repository, the redaction guard confirms nothing of the kind is tracked, and the founder holds the password and the backups. Losing it means a new app identity and a new listing, so it never changes again.
+- **The package is `com.plainticker.mobile`**, renamed before anything could freeze the template name.
+- **`assetlinks.json` is live.** Published from the PlainTicker repository at `public/.well-known/assetlinks.json` and served at `https://www.plainticker.com/.well-known/assetlinks.json` and on the apex, 200, `application/json`, no redirect. Verified with Google's own Digital Asset Links API, which is the service Android's verifier uses: one statement, package `com.plainticker.mobile`, the release certificate's SHA-256. A regression test in that repository guards the file, its shape and the empty redirect table, because nothing imports it and nothing links to it.
+
+This is what makes Mobile Wallet Adapter able to tell a person that the app asking them to approve a swap is the app that owns plainticker.com. A debug build is signed with the debug key, so it will not verify; only a release build will.
+
+### Still open before the app record
+
+1. Three GitHub secrets for the tag workflow, which only the founder can set because one of them is the keystore password: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. The exact commands were printed by `scripts/make-keystore.sh`.
+2. A signed release build from a `v*` tag, which is also the only build that can move real money, since `SUBMIT_SWAPS` is false in debug.
+3. The storage provider and the ArDrive balance, which need the APK size.
+4. Then, and only then, the app record and its App NFT.
+
 ### Decisions taken 2026-09-12
 
 - **Package name: `com.plainticker.mobile`.** Reverse domain of plainticker.com plus the client, matching the repository name and leaving `com.plainticker.*` free for anything later. It is permanent once the App NFT exists.

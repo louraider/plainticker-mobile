@@ -16,6 +16,16 @@ Rules, in order of how much they hurt when broken:
 3. **Local release builds do not happen on this machine** (`assembleRelease` under full load is
    what freezes it). Releases come from the tag workflow.
 
+## Status, 2026-09-13
+
+Created. `~/keystores/plainticker-release.jks`, alias `plainticker-release`, RSA 4096, SHA256withRSA, valid until 29 January 2054. Certificate SHA-256, public by design because it is served at the URL below:
+
+```
+66:CE:92:EA:FA:2F:81:9B:9A:2F:6E:4E:ED:DC:33:AC:51:BE:46:64:4C:29:5A:02:75:02:31:B1:22:9A:49:AF
+```
+
+It is already published at `https://www.plainticker.com/.well-known/assetlinks.json` and verified through Google's Digital Asset Links API. What is not done is the three repository secrets for the tag workflow, which need the password.
+
 ## 1. Create it (once)
 
 ```bash
