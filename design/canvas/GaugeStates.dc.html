@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <style>
+    body { margin: 0; background: #0B0F14; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    a { color: #5AA9E6; } a:hover { color: #E8ECF1; }
+    @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+</helmet>
+<div style="width: 400px; height: 680px; overflow: hidden; background: #0B0F14; position: relative; display: flex; flex-direction: column; box-sizing: border-box;">
+<div style="height: 24px; flex: none;"></div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 600; color: #E8ECF1; letter-spacing: -0.01em;">PlainTicker</div>
+  <span></span>
+</div>
+<div style="padding: 20px 20px 0 20px; flex: none; font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em;">Gauge, every reading the market gave</div>
+<div style="padding: 22px 20px 0 20px; flex: none; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">TSLAx, +0.09% on $1.3M</div><div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
+  <div style="position: relative; height: 14px;">
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
+    <div style="position: absolute; left: calc(8px + (100% - 18px) * 0.5180); top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
+  </div>
+  <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Token vs NYSE close, scale 2.5%</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: #5AA9E6; font-variant-numeric: tabular-nums; line-height: 18px;">+0.09%</div>
+  </div>
+</div><div style="padding: 22px 20px 0 20px; flex: none; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">NVDAx, -0.95% on $1.9M, the tick that pinned at 0.5%</div><div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
+  <div style="position: relative; height: 14px;">
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
+    <div style="position: absolute; left: calc(8px + (100% - 18px) * 0.3100); top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
+  </div>
+  <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Token vs NYSE close, scale 2.5%</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: #5AA9E6; font-variant-numeric: tabular-nums; line-height: 18px;">-0.95%</div>
+  </div>
+</div><div style="padding: 22px 20px 0 20px; flex: none; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">NFLXx, -2.34% on $12.5k, the widest the tracked set went</div><div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
+  <div style="position: relative; height: 14px;">
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
+    <div style="position: absolute; left: calc(8px + (100% - 18px) * 0.0320); top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
+  </div>
+  <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Token vs NYSE close, scale 2.5%</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: #5AA9E6; font-variant-numeric: tabular-nums; line-height: 18px;">-2.34%</div>
+  </div>
+</div><div style="padding: 22px 20px 0 20px; flex: none; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Past the scale, low side</div><div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
+  <div style="position: relative; height: 14px;">
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
+    <div style="position: absolute; left: 0; top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
+  </div>
+  <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Token vs NYSE close, past the 2.5% scale</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: #5AA9E6; font-variant-numeric: tabular-nums; line-height: 18px;">-4.10%</div>
+  </div>
+</div><div style="padding: 22px 20px 0 20px; flex: none; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #7F8A99; line-height: 18px;">Past the scale, high side</div><div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
+  <div style="position: relative; height: 14px;">
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: rgba(232,236,241,0.22);"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: #7F8A99;"></div>
+    <div style="position: absolute; right: 0; top: 0; width: 2px; height: 14px; background: #5AA9E6;"></div>
+  </div>
+  <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
+    <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px;">Token vs NYSE close, past the 2.5% scale</div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 500; color: #5AA9E6; font-variant-numeric: tabular-nums; line-height: 18px;">+6.80%</div>
+  </div>
+</div>
+<div style="height: 28px; flex: none;"></div>
+
+</div>
+</x-dc>
+</body>
+</html>

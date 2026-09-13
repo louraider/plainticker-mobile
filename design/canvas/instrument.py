@@ -190,13 +190,25 @@ def list_row(ticker, company, right_main="", right_sub="", sub="", muted=False, 
 def strip(text):
     return f'<div style="padding: 12px 20px; border-bottom: 1px solid {LINE}; {t(13, 500, INK2, "line-height: 18px;")} flex: none;">{text}</div>'
 
-def gauge(left_text, premium_value, pos_pct):
-    # reference tick fixed at 50%; token tick placed on a +-0.5% scale (0.09% -> 59%)
+def gauge(left_text, premium_value, pos_pct, off_scale=None):
+    # The scale is +-2.5%, the spread the tracked set actually produced (DESIGN.md 1.1), so
+    # 0.09% is 51.8% along and -0.95% is 31%. The track stops 8px short at each end, which is a
+    # 6px gap plus the tick's own 2px, and carries an end stop at each end: a premium past the
+    # scale (off_scale="left" or "right") stands its tick in that gutter, clear of the track,
+    # instead of resting on the end where it would read as the end of the scale.
+    if off_scale == "left":
+        tick = f'<div style="position: absolute; left: 0; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>'
+    elif off_scale == "right":
+        tick = f'<div style="position: absolute; right: 0; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>'
+    else:
+        tick = f'<div style="position: absolute; left: calc(8px + (100% - 18px) * {pos_pct / 100:.4f}); top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>'
     return f"""<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px 20px 0 20px; flex: none;">
   <div style="position: relative; height: 14px;">
-    <div style="position: absolute; left: 0; right: 0; top: 6px; height: 1px; background: {LINE_STRONG};"></div>
-    <div style="position: absolute; left: 50%; top: 2px; width: 1px; height: 10px; background: {MUTED};"></div>
-    <div style="position: absolute; left: {pos_pct}%; top: 0; width: 2px; height: 14px; background: {ACCENT};"></div>
+    <div style="position: absolute; left: 8px; right: 8px; top: 6px; height: 1px; background: {LINE_STRONG};"></div>
+    <div style="position: absolute; left: 8px; top: 4px; width: 1px; height: 6px; background: {LINE_STRONG};"></div>
+    <div style="position: absolute; right: 8px; top: 4px; width: 1px; height: 6px; background: {LINE_STRONG};"></div>
+    <div style="position: absolute; left: calc(50% - 0.5px); top: 2px; width: 1px; height: 10px; background: {MUTED};"></div>
+    {tick}
   </div>
   <div style="display: flex; flex-direction: row; justify-content: space-between; gap: 12px;">
     <div style="{t(13, 400, INK2, 'line-height: 18px;')}">{left_text}</div>
@@ -221,7 +233,7 @@ def detail_top():
     <div style="{m(20, 400, INK2, 'line-height: 24px;')}">{D['ref']}</div>
   </div>
 </div>
-{gauge('Token vs NYSE close, scale 0.5%', D['premium'], 59)}
+{gauge('Token vs NYSE close, scale 2.5%', D['premium'], 51.8)}
 <div style="height: 28px; flex: none;"></div>
 {live('Live from the mint', f"slot {D['slot']} · {D['ago']}")}
 {heading('Backing and controls', top=28)}
@@ -232,6 +244,61 @@ def detail_top():
     cell('Split multiplier', '1.00', 'No pending split'),
     cell('Transfer hook', 'None', 'No transfer hook program'),
 ])}
+"""
+
+# Detail below the liquidity floor. APPx exactly as the signed v0.2.0 read it on the Seeker on
+# 2026-09-13: pool $34, token $611.56, NYSE close $323.00, which are +89.34% apart. The canvas
+# never drew this state, which is why the screen shipped handing a reader both operands at 40sp
+# and 20sp with the caveat at 13sp between them. Here the sentence is read first, both figures
+# are set at 20 mono, and the token's is called what it is.
+def detail_below_floor():
+    return f"""{header(text_action('Watch'))}
+{strip('The NYSE is closed, the reference is the last close')}
+<div style="display: flex; flex-direction: column; padding: 12px 20px 0 20px; flex: none;">
+  <div style="{m(64, 500, INK, 'line-height: 64px; letter-spacing: -0.035em;')}">APPx</div>
+  <div style="{t(16, 400, INK2, 'line-height: 22px; margin-top: 6px;')}">AppLovin Corporation</div>
+</div>
+<div style="padding: 28px 20px 0 20px; flex: none; {t(15, 400, INK, 'line-height: 23px;')}">Pool holds $34, too thin to track the NYSE close</div>
+<div style="display: flex; flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 14px 20px 0 20px; flex: none;">
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <div style="{t(13, 500, MUTED, 'line-height: 18px;')}">Pool quote</div>
+    <div style="{m(20, 400, INK, 'line-height: 24px;')}">$611.56</div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+    <div style="{t(13, 500, MUTED, 'line-height: 18px;')}">NYSE close</div>
+    <div style="{m(20, 400, INK2, 'line-height: 24px;')}">$323.00</div>
+  </div>
+</div>
+<div style="height: 28px; flex: none;"></div>
+{live('Live from the mint', f"slot 446,664,185 · 3 s ago")}
+{heading('Backing and controls', top=28)}
+{grid([
+    cell('Proof of reserves', '102.9%', '2,134 shares held by Alpaca for 2,074.5 tokens', span=2, value_size=32, sub_mono=True),
+    cell('Permanent delegate', 'Yes', 'Issuer can move tokens', tone=CAUTION),
+    cell('Transfers pausable', 'Yes', 'Not paused now, issuer can pause', tone=CAUTION),
+])}
+"""
+
+# Every gauge state the live catalogue can produce, on one artboard. The canvas drew +0.09% and
+# nothing else, so a tick pinned against the end of the track was never looked at before it
+# shipped; these are the premiums the device and the 2026-09-12 measurement actually read.
+def gauge_states():
+    rows = [
+        ('TSLAx, +0.09% on $1.3M', 'Token vs NYSE close, scale 2.5%', '+0.09%', 51.8, None),
+        ('NVDAx, -0.95% on $1.9M, the tick that pinned at 0.5%', 'Token vs NYSE close, scale 2.5%', '-0.95%', 31.0, None),
+        ('NFLXx, -2.34% on $12.5k, the widest the tracked set went', 'Token vs NYSE close, scale 2.5%', '-2.34%', 3.2, None),
+        ('Past the scale, low side', 'Token vs NYSE close, past the 2.5% scale', '-4.10%', 0, 'left'),
+        ('Past the scale, high side', 'Token vs NYSE close, past the 2.5% scale', '+6.80%', 100, 'right'),
+    ]
+    body = "".join(
+        f'<div style="padding: 22px 20px 0 20px; flex: none; {t(13, 500, MUTED, "line-height: 18px;")}">{title}</div>'
+        + gauge(caption, value, pos, off)
+        for title, caption, value, pos, off in rows
+    )
+    return f"""{header()}
+<div style="padding: 20px 20px 0 20px; flex: none; {t(20, 600, INK, 'line-height: 26px; letter-spacing: -0.01em;')}">Gauge, every reading the market gave</div>
+{body}
+<div style="height: 28px; flex: none;"></div>
 """
 
 def detail_rest():
@@ -449,6 +516,8 @@ SCREENS = {
     "SwapSheet.dc.html": screen_swap(),
     "Receipt.dc.html": screen_receipt(),
     "DetailFull.dc.html": screen_detail_full(),
+    "DetailBelowFloor.dc.html": frame(detail_below_floor()),
+    "GaugeStates.dc.html": frame(gauge_states(), height=680),
     "Portfolio.dc.html": screen_portfolio(),
     "Watchlist.dc.html": screen_watchlist(),
 }
@@ -467,10 +536,14 @@ canvas = {
         {"file": "DetailFull.dc.html", "title": "3b Detail, full scroll", "x": X(0), "y": H + 200, "w": W, "h": 2640},
         {"file": "Portfolio.dc.html", "title": "6 Portfolio", "x": X(1), "y": H + 200, "w": W, "h": H},
         {"file": "Watchlist.dc.html", "title": "7 Watchlist", "x": X(2), "y": H + 200, "w": W, "h": H},
+        {"file": "DetailBelowFloor.dc.html", "title": "3c Detail, below the liquidity floor", "x": X(0), "y": H + 3040, "w": W, "h": H},
+        {"file": "GaugeStates.dc.html", "title": "3d Gauge, every reading the market gave", "x": X(1), "y": H + 3040, "w": W, "h": 680},
     ],
     "annotations": [
         {"id": "read", "x": X(0), "y": -220, "w": 980,
          "text": "PlainTicker Mobile, direction Instrument. Seeker, 412dp portrait, dark canvas.\nA reading tool for tokenized US stocks: the token's own facts first (reserves, issuer controls, split multiplier, live from the mint), then the company against its sector, then one Swap. Outfit for words, JetBrains Mono for every number. One blue accent for interaction and live state; amber only on issuer-control risk. Sharp corners.\nSignature elements: the tracking gauge (token tick against the NYSE close), the live bar, blueprint grids for facts.\nSample data is illustrative."},
+        {"id": "floor", "x": X(2), "y": H + 3040, "w": 420,
+         "text": "Below the liquidity floor the premium is withheld, so the two figures it would be computed from may not be staged as a comparison: the pool sentence is read first, both figures are set at 20 mono, and the token's is labelled Pool quote. Drawn from APPx as the Seeker read it on 2026-09-13.\nThe gauge scale is the measured spread of the tracked set, plus or minus 2.5 percent, and a premium past it stands its tick off the end of the track instead of resting on it."},
         {"id": "ia", "x": X(3), "y": H + 200, "w": 420,
          "text": "Screen order kept from the plan: trust first, fundamentals second, one Swap after Method; Watch in the header; List, Portfolio and Watchlist as top tabs.\nOne change for mobile: Quality, Valuation and Momentum share one section, Against the sector, with three marker tracks and a fact grid, instead of three sections with the same layout."},
     ],

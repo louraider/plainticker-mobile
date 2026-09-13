@@ -282,9 +282,50 @@ The copy, all of it in `strings.xml` and gated by `CopyLintTest`, with money thr
 | Where | `Thin` | `Untracked` |
 |---|---|---|
 | List row meta | `Pool holds $34, too thin to track` | `Pool depth not reported` |
-| In place of the gauge | `Pool holds $34, too thin to track the NYSE close` | `Pool depth not reported, tracking cannot be checked` |
+| Above Detail's price pair | `Pool holds $34, too thin to track the NYSE close` | `Pool depth not reported, tracking cannot be checked` |
 
 The row's meta line keeps its shape: the sentence takes the premium's half, the analysis age keeps the half after the middle dot, and the row stays one line and 64dp. The sentence is Muted on the row and Ink 2 under the price, never Caution: a shallow pool is a fact about the token, not an issuer-control risk (DESIGN.md section 2). Sorting and sections are untouched and nothing is filtered out: the choice was disclosure, not curation. Written up as DESIGN.md section 1.1.
+
+#### What the floor missed, read on the device 2026-09-13
+
+The floor was reviewed as a rule, then on the row, then on the gauge, and never as a finished Detail
+screen. On the signed v0.2.0, APPx withheld the premium correctly and then printed **$611.56** at
+40sp Ink over **$323.00** at 20sp Ink 2 with the withholding sentence at 13sp between them. The two
+figures are +89.34 percent apart: the screen refused to do the arithmetic and handed over both
+operands at the two largest sizes on it, with the caveat set smaller than either.
+
+Changed on `fix/design-blockers`, in the price block rather than in the floor:
+
+| | Above the floor | Below it |
+|---|---|---|
+| The sentence | none | first in the block, body 15 Ink, above both figures |
+| Token figure | `detail_token_price`, hero price 40 mono Ink | `detail_pool_quote`, reference price 20 mono Ink |
+| Reference figure | reference price 20 mono Ink 2, lifted 6dp onto the hero baseline | reference price 20 mono Ink 2, no lift |
+| Gauge slot | the track | nothing at all |
+
+`PriceRow.lead` carries the sentence and `PriceRow.comparable` is the one flag the type is set from,
+so the two figures cannot be styled apart by two separate edits. `DetailFinishedScreenTest` asserts
+it on APPx's own numbers.
+
+#### The gauge scale, and what happens past it
+
+`Gauge.kt` fixed `scalePct` at 0.5 and clamped the tick to the track with no off-scale mark. NVDAx,
+the deepest pool in the catalogue, read **-1.01 percent** when the review ran and **-0.95 percent**
+a few hours later, so the tick sat hard against the left end while the caption still said
+"scale 0.5%". The $10k to $100k band runs to -2.34 percent (NFLXx), so most of the tracked set
+pinned. `design/canvas/instrument.py` only ever drew +0.09 percent, which is why nobody had seen it.
+
+Two changes, because either alone leaves a hole:
+
+- **The scale is the measured spread.** `TrackingQuality.TRACKED_SPREAD_PCT` is **2.5**, read from
+  the same rows the floor was read from, and `GAUGE_SCALE_PCT` is that constant. Every premium the
+  tracked set has produced now lands inside the track: NVDAx -0.95 at 0.31, NFLXx -2.34 at 0.032,
+  TSLAx +0.09 at 0.518. The 13 deepest cluster near the reference tick, which is the true story.
+- **The ends are drawn, and past them the tick is a cap.** The track carries a 1dp Line strong end
+  stop at each end and stops 8dp short of the padding. A premium past the scale puts its tick in
+  that gutter, 6dp clear of the track, and the caption becomes `detail_gauge_caption_off`,
+  "Token vs NYSE close, past the 2.5% scale". No fixed scale can be promised, so a saturated tick
+  had to be made unmistakable rather than made impossible.
 
 ### Detail (T9)
 
@@ -292,9 +333,9 @@ The row's meta line keeps its shape: the sentence takes the premium's half, the 
 |---|---|---|
 | Hero ticker | catalog `symbol` | 64 mono |
 | Company | `company` | 16 Ink 2 |
-| Token price | Price v3 `usdPrice` | `Fmt.price` |
+| Token price | Price v3 `usdPrice` | `Fmt.price`; 40 mono Ink above the liquidity floor, 20 mono Ink and labelled "Pool quote" below it |
 | NYSE close | Price v3 `stockData.price` | `Fmt.price`; the label is "NYSE close" while the exchange is shut and "NYSE price" during its session (`MarketStatus.priceLabel`); null -> "Reference price unavailable" in the gauge's own slot, in Ink 2 and never Caution, gauge hidden |
-| Gauge | `TrackingQuality.of(entry)`, never arithmetic in a composable | scale 0.5 percent; caption "Token vs NYSE close, scale 0.5%", or "Token vs NYSE price" during the exchange session; value `Fmt.percent`; below the liquidity floor the pool sentence takes the whole slot |
+| Gauge | `TrackingQuality.of(entry)`, never arithmetic in a composable | scale `GAUGE_SCALE_PCT`, 2.5 percent each side; caption "Token vs NYSE close, scale 2.5%", or "Token vs NYSE price" during the exchange session; past the scale "Token vs NYSE close, past the 2.5% scale" and the tick stands off the track; value `Fmt.percent`; below the liquidity floor the gauge draws nothing and the pool sentence leads the price block above it |
 | Live bar meta | `getAccountInfo` context `slot` and fetch time | "slot {Fmt.slot} · {Fmt.relativeAgo}"; hollow (not live) when the RPC call failed |
 | Proof of reserves | xStocks PoR `sharesHeld`, `tokensInCirculation` | ratio `Fmt.percent(unsigned)` value; sub "{shares} shares held for {tokens} tokens" mono |
 | Permanent delegate | mint extension `permanentDelegate.delegate` | present -> "Yes" Caution + "Issuer can move tokens"; absent -> "None" |

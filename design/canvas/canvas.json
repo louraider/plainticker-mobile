@@ -63,6 +63,22 @@
       "y": 1090,
       "w": 400,
       "h": 890
+    },
+    {
+      "file": "DetailBelowFloor.dc.html",
+      "title": "3c Detail, below the liquidity floor",
+      "x": 0,
+      "y": 3930,
+      "w": 400,
+      "h": 890
+    },
+    {
+      "file": "GaugeStates.dc.html",
+      "title": "3d Gauge, every reading the market gave",
+      "x": 496,
+      "y": 3930,
+      "w": 400,
+      "h": 680
     }
   ],
   "annotations": [
@@ -72,6 +88,13 @@
       "y": -220,
       "w": 980,
       "text": "PlainTicker Mobile, direction Instrument. Seeker, 412dp portrait, dark canvas.\nA reading tool for tokenized US stocks: the token's own facts first (reserves, issuer controls, split multiplier, live from the mint), then the company against its sector, then one Swap. Outfit for words, JetBrains Mono for every number. One blue accent for interaction and live state; amber only on issuer-control risk. Sharp corners.\nSignature elements: the tracking gauge (token tick against the NYSE close), the live bar, blueprint grids for facts.\nSample data is illustrative."
+    },
+    {
+      "id": "floor",
+      "x": 992,
+      "y": 3930,
+      "w": 420,
+      "text": "Below the liquidity floor the premium is withheld, so the two figures it would be computed from may not be staged as a comparison: the pool sentence is read first, both figures are set at 20 mono, and the token's is labelled Pool quote. Drawn from APPx as the Seeker read it on 2026-09-13.\nThe gauge scale is the measured spread of the tracked set, plus or minus 2.5 percent, and a premium past it stands its tick off the end of the track instead of resting on it."
     },
     {
       "id": "ia",
