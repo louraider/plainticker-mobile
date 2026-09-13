@@ -140,7 +140,8 @@ class Mark:
         )
         if layer == "foreground":
             return (
-                '  Brand mark, DESIGN.md section 9: "{}", {}\n'
+                '  Brand mark, DESIGN.md section 9: "{}",\n'
+                "  {}\n"
                 "  Ink shapes and one Accent shape over the Canvas background layer.\n".format(self.title, self.idea)
                 + where
             )
