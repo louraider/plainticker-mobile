@@ -355,6 +355,42 @@ Two changes, because either alone leaves a hole:
 | Not served | detail 404 `unsupported_ticker` or `not_available` | trust layer still renders from chain + xStocks; fundamentals replaced by one row "Analysis not yet available" |
 | forward.* | all fields | not rendered in the hackathon build (design decision); may feed a later "Expectations" section |
 
+#### v0.3.0 walked on the Seeker without destroying the receipt, 2026-09-13
+
+The debug build was never the only way onto the phone. A CI release is signed with the same
+keystore as the build already installed, so `adb install -r` is an upgrade rather than a reinstall
+and the app data survives. Tag `v0.3.0`, both CI jobs green, APK downloaded from the release, and
+`apksigner verify --print-certs` gave `66ce92ea...29a49af`, byte for byte the fingerprint published
+in `assetlinks.json`. Installed over v0.2.0:
+
+| | before | after |
+|---|---|---|
+| versionCode | 200 | 300 |
+| versionName | 0.2.0 | 0.3.0 |
+| `firstInstallTime` | 2026-09-13 10:48:55 | **unchanged** |
+| `lastUpdateTime` | 2026-09-13 10:48:55 | 2026-09-13 17:33:36 |
+
+`firstInstallTime` holding while `lastUpdateTime` moves is the definition of an upgrade, and the
+Portfolio screen proved it directly: the receipt of the real swap is still there, "4.995 USDC, to
+0.013629 TSLAx, all-in cost 0.32% · 13 Sep 2026 08:08 UTC". A mismatched certificate would have
+refused the install rather than wiped anything, so the downside was bounded before it was taken.
+
+What the phone then confirmed, none of it previously seen on hardware:
+
+- **The rewritten copy.** APPx reads "$34 behind this price, too thin · 1 d old" where it read
+  "Pool holds $34, too thin to track".
+- **The floor at $4,000.** NFLXx reads "-1.95% vs NYSE close · 7 d old" in the list and draws a
+  full Detail. On the $10,000 floor its $9,370 put it below the line and the premium was withheld.
+- **The gauge at 4.5.** Detail prints "Token vs NYSE close, scale 4.5%" with the tick inside the
+  track, and the accessibility label reads "Token vs NYSE close: minus 1.95 percent".
+- **Portfolio on a cold open** leads with the recorded holding under its own lede instead of an
+  invitation to connect a wallet.
+- **The scrim.** The wordmark clears the system clock on a scrolling hero.
+- **The market-hours banner on the List**, which Detail used to carry alone.
+
+Read only apart from the install. Nothing was written to `/sdcard`: every dump went through
+`uiautomator dump /dev/tty`. Screenshots kept off-tree in the session scratchpad.
+
 #### The floor re-measured against independent sources, 2026-09-13
 
 The founder asked how liquidity is checked, on the reasonable ground that the whole world trades
