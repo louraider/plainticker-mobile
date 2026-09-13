@@ -205,6 +205,7 @@
     <string name="swap_enter_amount">Enter an amount</string>
     <string name="swap_no_usdc">No USDC in this wallet</string>
     <string name="swap_cancelled">Cancelled in Wallet</string>
+    <string name="swap_not_approved">No signature came back, so nothing was sent. The amount is still here.</string>
     <string name="swap_debug_banner">Debug build · signed, not submitted</string>
 
     <!-- Swap sheet: the phases, with the elapsed time the wallet round trip actually took -->
@@ -240,8 +241,7 @@
     <string name="swap_failed_quote_unavailable">No quote came back. Nothing was sent.</string>
     <string name="swap_failed_quote_refused">This pair cannot be quoted at this size right now</string>
     <string name="swap_failed_no_transaction">The quote carried nothing to approve</string>
-    <string name="swap_failed_wallet_refused">The wallet did not return a signature</string>
-    <string name="swap_failed_nothing_signed">The wallet returned no signed transaction</string>
+    <string name="swap_failed_connect_refused">The wallet did not answer, so nothing was connected</string>
     <string name="swap_failed_submit_unavailable">The result did not come back. Check Portfolio before trying again.</string>
     <string name="swap_failed_quote_gone">The quote went twice over. Start again from the amount.</string>
     <string name="swap_failed_swap_refused">The swap did not land. Nothing was swapped.</string>

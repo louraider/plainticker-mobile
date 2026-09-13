@@ -356,6 +356,20 @@ class CopyLintTest {
         assertEquals("Pool depth not reported", byName["list_row_meta_pool_unknown"])
         assertEquals("Pool holds %1\$s, too thin to track the NYSE close", byName["detail_gauge_thin"])
         assertEquals("Pool depth not reported, tracking cannot be checked", byName["detail_gauge_pool_unknown"])
+        // The wrong truth the Seeker drew on 2026-09-13 (docs/data-map.md): a wallet sheet closed
+        // without an approval is not a swap that failed, and the app cannot tell a decline from a
+        // sheet that went away, so the sentence it gets names neither and claims no fault.
+        assertEquals(
+            "No signature came back, so nothing was sent. The amount is still here.",
+            byName["swap_not_approved"],
+        )
+        assertTrue(
+            "a wallet that signed nothing is no longer a failure, so it has no failure sentence",
+            "swap_failed_nothing_signed" !in byName && "swap_failed_wallet_refused" !in byName,
+        )
+        assertEquals("The wallet did not answer, so nothing was connected", byName["swap_failed_connect_refused"])
+        // "The swap did not land" belongs to an execute that refused, and to nothing else.
+        assertEquals("The swap did not land. Nothing was swapped.", byName["swap_failed_swap_refused"])
     }
 
     // ---- Tests: the lint itself -----------------------------------------------------------
