@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,6 +69,7 @@ import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.PrimaryButton
 import com.plainticker.mobile.ui.components.SignalRow
 import com.plainticker.mobile.ui.components.SkeletonBar
+import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.components.Track
@@ -82,6 +84,10 @@ import com.plainticker.mobile.ui.theme.Ink
 import com.plainticker.mobile.ui.theme.Ink2
 import com.plainticker.mobile.ui.theme.Muted
 import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.vote.VoteActions
+import com.plainticker.mobile.ui.vote.VoteSheet
+import com.plainticker.mobile.ui.vote.VoteState
+import com.plainticker.mobile.ui.vote.VoteViewModel
 import java.math.BigInteger
 import java.time.Instant
 
@@ -103,11 +109,13 @@ import java.time.Instant
 fun DetailScreen(
     viewModel: DetailViewModel,
     swapViewModel: SwapViewModel,
+    voteViewModel: VoteViewModel,
     onViewPortfolio: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
+    val vote by voteViewModel.state.collectAsStateWithLifecycle()
 
     // The one permission this app asks for, at the one moment it means anything: the tap that puts
     // the first ticker on the watchlist, which is the tap that creates something to notify about.
@@ -118,6 +126,15 @@ fun DetailScreen(
     DetailContent(
         state = state,
         swap = swap,
+        vote = vote,
+        voteActions = VoteActions(
+            onConfirm = voteViewModel::confirm,
+            onRetry = voteViewModel::retry,
+            onClose = voteViewModel::close,
+        ),
+        // The vote names the token the way this screen does, so the sheet it opens says NFLXx
+        // where the hero says NFLXx, and the ticker under it is the key the server joins on.
+        onVote = { voteViewModel.vote(state.ticker, state.symbol ?: state.ticker) },
         swapActions = SwapActions(
             onAmountChanged = swapViewModel::amountChanged,
             onMax = swapViewModel::useMax,
@@ -160,6 +177,10 @@ internal fun DetailContent(
     onToggleWatch: () -> Unit,
     onSwap: () -> Unit,
     modifier: Modifier = Modifier,
+    vote: VoteState = VoteState.Closed,
+    voteActions: VoteActions = NoVoteActions,
+    /** Null in the previews and the gallery, where no wallet can be reached. */
+    onVote: (() -> Unit)? = null,
 ) {
     // The only Box on Detail, and the only thing in it that does not scroll is the scrim: the
     // 64sp hero used to draw in the same pixels as the white system clock, because the content
@@ -202,6 +223,7 @@ internal fun DetailContent(
             }
 
             FundamentalsBlock(state)
+            VoteBlock(state = state, onVote = onVote)
             SwapBlock(state = state, swap = swap, onSwap = onSwap)
             Spacer(Modifier.height(TailGap))
 
@@ -210,6 +232,7 @@ internal fun DetailContent(
             // returns early when the catalog has not named a symbol, and a sheet that vanished
             // mid-landing would take a landed swap's receipt with it.
             SwapSheet(state = swap, actions = swapActions)
+            VoteSheet(state = vote, actions = voteActions)
         }
         TopScrim(Modifier.align(Alignment.TopCenter))
     }
@@ -546,6 +569,26 @@ private fun SwapBlock(
     }
 }
 
+/**
+ * "Vote to cover next", under the line that says there is no analysis to show.
+ *
+ * It is offered for exactly one state of this screen, [AnalysisState.NotServed]: PlainTicker
+ * answered and classifies nothing for this ticker, which is the only case where a vote would
+ * change anything. A call that failed leaves it unknown whether the ticker is covered at all
+ * ([AnalysisState.Unavailable]), and voting to cover something that may already be covered is
+ * exactly the kind of guess this screen refuses everywhere else.
+ *
+ * A text action and not a button: DESIGN.md gives this screen one primary control, the swap, and
+ * a second filled button under it would say the two carry the same weight. They do not.
+ */
+@Composable
+private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?) {
+    if (!state.analysisNotServed || onVote == null) return
+    Row(modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = VoteGap)) {
+        TextAction(label = stringResource(R.string.vote_action), onClick = onVote, contentPadding = VoteActionPadding)
+    }
+}
+
 // ---- Shared pieces -----------------------------------------------------------------------------
 
 /** One sentence where a block would be, so no state of this screen is a blank column. */
@@ -598,6 +641,15 @@ private val SectionGap = 28.dp
 private val FScoreGap = 6.dp
 private val FScoreCounterLift = 4.dp
 private val SwapGap = 32.dp
+
+/** Close under the sentence that says nothing is classified here, which is what it answers. */
+private val VoteGap = 10.dp
+
+/** The action leads the row, so its 48dp target starts at the same edge as every other block. */
+private val VoteActionPadding = PaddingValues(start = 0.dp, top = 14.dp, end = 0.dp, bottom = 14.dp)
+
+/** Detail's previews and the component gallery reach no wallet, so the vote sheet is never up. */
+private val NoVoteActions = VoteActions(onConfirm = {}, onRetry = {}, onClose = {})
 private val TailGap = 48.dp
 private val CellValueSize = 24.sp
 private val SpanValueSize = 32.sp

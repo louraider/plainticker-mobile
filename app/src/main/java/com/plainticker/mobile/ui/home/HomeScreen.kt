@@ -68,6 +68,9 @@ fun HomeScreen(
         when (tabs[selected]) {
             HomeTab.LIST -> ListScreen(
                 viewModel = viewModel(factory = factory),
+                // Scoped to the home entry like every other ViewModel here, so a vote that is
+                // mid-flight survives a tab switch and comes back to its own sheet.
+                voteViewModel = viewModel(factory = factory),
                 onOpenDetail = onOpenDetail,
                 header = header,
             )

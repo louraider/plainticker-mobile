@@ -103,6 +103,7 @@ fun AppNavHost(
             DetailScreen(
                 viewModel = viewModel(factory = factory),
                 swapViewModel = viewModel(factory = factory),
+                voteViewModel = viewModel(factory = factory),
                 // A landed swap sends the reader to the holding it made, and home is replaced
                 // rather than stacked so Portfolio reads the chain again with the swap in it.
                 onViewPortfolio = {

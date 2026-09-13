@@ -7,6 +7,7 @@ import com.plainticker.mobile.data.jupiter.JupiterPriceApi
 import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.PlainTickerApi
+import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.receipts.FileReceiptStore
 import com.plainticker.mobile.data.receipts.ReceiptStore
 import com.plainticker.mobile.data.rpc.SolanaRpcApi
@@ -56,6 +57,9 @@ interface AppContainer {
     val httpClient: HttpClient
 
     val plainTickerApi: PlainTickerApi
+
+    /** The one call SKR-weighted coverage curation makes; the app cannot build the transaction. */
+    val voteApi: VoteApi
     val xStocksApi: XStocksApi
     val jupiterPriceApi: JupiterPriceApi
     val jupiterSwapApi: JupiterSwapApi
@@ -104,6 +108,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val httpClient: HttpClient by lazy { HttpClientFactory.create() }
 
     override val plainTickerApi: PlainTickerApi by lazy { PlainTickerApi(httpClient) }
+    override val voteApi: VoteApi by lazy { VoteApi(httpClient) }
     override val xStocksApi: XStocksApi by lazy { XStocksApi(httpClient) }
     override val jupiterPriceApi: JupiterPriceApi by lazy { JupiterPriceApi(httpClient) }
     override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }

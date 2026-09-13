@@ -11,6 +11,7 @@ import com.plainticker.mobile.ui.nav.Routes
 import com.plainticker.mobile.ui.onboarding.OnboardingViewModel
 import com.plainticker.mobile.ui.portfolio.PortfolioViewModel
 import com.plainticker.mobile.ui.swap.SwapViewModel
+import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
 
 /** One ViewModel per screen, each built from [AppContainer]; the detail ticker comes from the route. */
@@ -68,6 +69,13 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.digestNotifier,
             container.watchlistScheduler,
             container.clock,
+        )
+    }
+    initializer {
+        VoteViewModel(
+            container.voteApi,
+            container.walletSession,
+            container.rpcRepository,
         )
     }
     initializer {
