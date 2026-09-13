@@ -1,0 +1,159 @@
+package com.myapp.ui.portfolio
+
+import com.myapp.R
+import com.myapp.data.jupiter.TrackingQuality
+import com.myapp.data.receipts.SwapReceipt
+import com.myapp.ui.Copy
+import com.myapp.ui.Fmt
+import com.myapp.ui.raw
+import com.myapp.ui.words
+
+/**
+ * What the Portfolio screen says, decided away from the composition (task T11, design task DT8).
+ *
+ * The same split the Detail screen keeps: a model picks the sentence, a composable places it. It
+ * is worth the file here for three reasons, each of which is a rule a later edit could quietly
+ * undo and a unit test can pin:
+ *
+ * 1. **The liquidity floor is the list's, not a second copy of it.** A holding's tracking half
+ *    comes from [TrackingQuality] and reads with the same words the list row uses, out of the same
+ *    string resources, so the two screens cannot disagree about a $34 pool.
+ * 2. **A missing number is a sentence, never a zero.** A mint that was not read has no quantity
+ *    and no value, a position Jupiter cannot price keeps its quantity and shows no value, and the
+ *    total says how many positions it covers.
+ * 3. **Nothing here computes a cost basis or a change.** There is no arithmetic in this file that
+ *    the chain did not carry: the shares come from the mint, the value from Jupiter, and the only
+ *    sum is over the positions that have one.
+ */
+
+// ---- The pieces the screen draws ---------------------------------------------------------------
+
+/** The big number under the Holdings heading and the sentence that says what it covers. */
+data class TotalBlock(
+    /** The total of the valued positions, or null when none of them could be valued. */
+    val value: String?,
+    /** How many of the positions on screen that total covers. */
+    val sub: Copy,
+)
+
+/** One holding, in the parts a 64dp row draws and a screen reader speaks in order. */
+data class HoldingRow(
+    /** Underlying equity ticker: the Detail route, never drawn. */
+    val ticker: String,
+    /** The token symbol, drawn left in mono. */
+    val symbol: String,
+    val company: String,
+    /** The first half of the meta line: the shares held, or why there is no quantity. */
+    val quantity: Copy,
+    /** The second half: the premium, the pool sentence below the floor, or nothing at all. */
+    val tracking: Copy?,
+    /** The value right, or null for a position that could not be valued. */
+    val value: String?,
+)
+
+/** One landed swap out of the app's own record: what was paid, what came back, the cost and when. */
+data class SwapRow(
+    /** The identity of the row, which is the identity of the landing. */
+    val signature: String,
+    val paid: Copy,
+    val received: Copy,
+    val cost: Copy,
+    val landed: Copy,
+)
+
+// ---- The rules ----------------------------------------------------------------------------------
+
+/**
+ * The total and its sentence. Only called with positions on screen: an empty wallet is its own
+ * state and says so in words rather than drawing a total of zero.
+ */
+fun totalBlock(state: PortfolioUiState): TotalBlock {
+    val held = state.positions.size
+    val valued = state.valuedCount
+    return TotalBlock(
+        value = state.totalUsd?.let(Fmt::price),
+        sub = when {
+            valued == held -> words(R.string.portfolio_priced_by, Fmt.count(held))
+            valued == 0 -> words(R.string.portfolio_priced_none, Fmt.count(held))
+            else -> words(R.string.portfolio_priced_partial, Fmt.count(valued), Fmt.count(held))
+        },
+    )
+}
+
+/**
+ * One holding as a row. The quantity is the mint's answer or the statement that there is none;
+ * the tracking half is withheld along with it, because a premium beside "quantity unknown" invites
+ * a reader to multiply two numbers, one of which this app does not have.
+ */
+fun holdingRow(position: PortfolioPosition): HoldingRow = HoldingRow(
+    ticker = position.ticker,
+    symbol = position.symbol,
+    company = position.company,
+    quantity = position.quantity
+        ?.let { words(R.string.portfolio_row_quantity, Fmt.tokenAmount(it), position.symbol) }
+        ?: words(R.string.portfolio_row_mint_unread),
+    tracking = if (position.mintRead) trackingCopy(position.tracking) else null,
+    value = position.valueUsd?.let(Fmt::price),
+)
+
+/**
+ * The quote's half of the meta line, in the list's own words (DESIGN.md section 1.1): the signed
+ * premium above the liquidity floor, the pool below it, and the plain statement that Jupiter
+ * reported no depth. Null when Jupiter did not price the token at all, which the banner explains.
+ */
+private fun trackingCopy(quality: TrackingQuality?): Copy? = when (quality) {
+    is TrackingQuality.Tracked ->
+        quality.premiumPct?.let { words(R.string.list_row_meta_premium, Fmt.percent(it)) }
+
+    is TrackingQuality.Thin ->
+        words(R.string.list_row_meta_thin, Fmt.compactMoney(quality.poolUsd, roundDown = true))
+
+    TrackingQuality.Untracked -> words(R.string.list_row_meta_pool_unknown)
+
+    null -> null
+}
+
+/**
+ * One receipt as a row.
+ *
+ * Every number is the app's own record of the landing and is drawn the same way whether or not
+ * anything has since looked the signature up: this screen makes no chain read for these rows and
+ * therefore claims no confirmation. An output the execute answer did not report stays unreported
+ * here, rather than being filled in from the quote it was estimated at.
+ */
+fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
+    signature = receipt.signature,
+    paid = words(
+        R.string.portfolio_row_quantity,
+        Fmt.tokenAmount(receipt.inputAmountRaw, receipt.inputDecimals),
+        receipt.inputSymbol,
+    ),
+    received = receipt.outputAmountRaw
+        ?.let {
+            words(
+                R.string.portfolio_swap_row_received,
+                Fmt.tokenAmount(it, receipt.outputDecimals),
+                receipt.outputSymbol,
+            )
+        }
+        ?: words(R.string.portfolio_swap_row_received_unknown, receipt.outputSymbol),
+    cost = receipt.allInCostPct
+        ?.let { words(R.string.portfolio_swap_cost, Fmt.percent(it, signed = false)) }
+        ?: words(R.string.portfolio_swap_cost_unknown),
+    landed = raw(Fmt.utc(receipt.landedAtMillis)),
+)
+
+/** What the one banner slot says. The order of the tiers is [PortfolioUiState.banner]'s. */
+fun bannerText(banner: PortfolioBanner): Copy = when (banner) {
+    PortfolioBanner.ChainUnavailable -> words(R.string.portfolio_error_unavailable)
+    PortfolioBanner.CatalogUnavailable -> words(R.string.list_catalog_unavailable)
+    PortfolioBanner.PricesUnavailable -> words(R.string.list_prices_unavailable)
+    PortfolioBanner.PricesPartial -> words(R.string.list_prices_partial)
+    is PortfolioBanner.Wallet -> words(banner.note.text)
+}
+
+/**
+ * Whether the banner offers a way to ask again. A wallet note carries none: the action that
+ * answers it is the connect action already standing where the holdings would be.
+ */
+fun bannerRetries(banner: PortfolioBanner): Boolean = banner !is PortfolioBanner.Wallet
