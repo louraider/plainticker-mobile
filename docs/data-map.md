@@ -535,12 +535,83 @@ The chain carries no cost basis, so the app writes its own record when a swap la
 
 ### Portfolio (T11)
 
-| Cell | Field |
+| Cell | Field | Rule |
+|---|---|---|
+| Total | sum of the positions that carry a value | `Fmt.price`; null when none of them do, and the slot then takes the neutral "-" rather than a zero |
+| Total sub | how many positions the total covers | all of them "3 xStocks, priced by Jupiter"; some "1 of 3 xStocks priced by Jupiter, the total covers those"; none "3 xStocks, none of them priced by Jupiter" |
+| Row ticker | catalog `symbol` | mono 18 |
+| Row company | catalog `name` | 13 Ink 2 |
+| Row quantity | token account `amount` over the **mint's** `decimals`, times the mint's `scaledUiAmountConfig.multiplier` | `Fmt.tokenAmount`; the first half of the meta line ("2.01364 TSLAx") |
+| Row tracking | `TrackingQuality.of(entry)`, the list's own rule and the list's own strings | the signed premium above the floor, "Pool holds $34, too thin to track" below it, "Pool depth not reported" with no depth; absent when Jupiter did not price the token |
+| Row value | quantity × Price v3 `usdPrice` | `Fmt.price`; absent for a position with no quantity or no price |
+| Footnote | static "Cost basis is not read from the chain." | |
+| Recent swaps | local receipts table (T10) | paid "5 USDC", received "to 0.01364 TSLAx" (mono: it is an amount and a ticker), meta "all-in cost 0.09% · 10 Sep 2026 12:57 UTC" |
+| Swaps footnote | static "The record this app kept of the swaps it made from this device." | |
+
+**The mint decides the quantity, and an unread mint decides nothing.** The multiplier comes from
+the Token-2022 `scaledUiAmountConfig` on the mint account, through `MintRepository`, and so do the
+decimals. A mint that carries no such extension is a multiplier of one, which is a fact read off
+the chain. A mint that could not be read is neither: the row says "Mint not read, quantity
+unknown", shows no value, is left out of the total and withholds its tracking half as well, since
+a premium printed beside a missing quantity invites a reader to multiply two numbers, one of which
+this app does not have. Falling back to a multiplier of one there would be a wrong share count
+that reads as a measured one, and two tests fail the moment it is put back.
+
+**One `getAccountInfo(mint, jsonParsed)` per held mint, in order.** `getMultipleAccounts` would
+read them all in one call and is not on the forwarder's list (see Sources above), so batching is a
+server change rather than a client one. A wallet holds a handful of xStocks and the forwarder
+caches each mint 60 s server-side, so a Detail screen opened afterwards pays nothing for the same
+read.
+
+**States.** Not connected (one sentence and "Connect wallet"), connecting, connected and empty
+("No xStocks in this wallet yet. A swap from any stock page puts the token here." with the way
+back to the list), the chain out, the catalog out, prices wholly or partly missing, and a refresh.
+The banner order is what could not be read at all, then what is partly missing, then the note from
+the last wallet round-trip; a wallet note carries no Retry because the connect action beside it is
+the answer to it. A load that fails leaves the drawn rows where they are and raises a banner: the
+"never walk backwards" rule the list learned the same week. An empty wallet and a chain that could
+not be read are different states and never share a sentence.
+
+**No cost basis, and nothing derived from one.** There is no profit, no loss and no change-since
+figure in the state, the model or the composition, and `PortfolioScreenTest` fails the build if one
+appears. The chain does not carry a cost basis and the footnote says so rather than leaving a
+reader to assume the app forgot.
+
+#### Portfolio on the Seeker, 2026-09-13
+
+Walked on SM02E4072810430 (Android 16, 1200x2670 at 480 dpi, nothing overridden) against a debug
+build with `SUBMIT_SWAPS` false. Nothing was signed and no money moved.
+
+**The wallet the device can authorize holds no xStock.** Seed Vault offers two entries and both
+authorize the same key, the founder's, and that wallet holds no xStock and no USDC (the swap sheet
+said as much on 2026-09-12). The public demo wallet is not in this device's Seed Vault, so the
+holdings rows, the total and the tracking sentences are **not yet verified on hardware**; they are
+covered by `PortfolioModelTest`, `PortfolioViewModelTest` and the four previews at 360, 412 and
+412 at 1.3x. What the walk did prove:
+
+| What | Evidence |
 |---|---|
-| Total | sum of quantity × `usdPrice` |
-| Row | token account amount × multiplier as quantity; `Fmt.tokenAmount`; value `Fmt.price`; premium from Price v3 |
-| Footnote | static "Cost basis is not read from the chain." |
-| Recent swaps | local receipts table (T10) |
+| Not connected | "Connect your wallet to see the xStocks in it." at [60,869][808,1007] with "Connect wallet" at [856,908][1140,968], inside the 20 dp gutters |
+| The MWA round trip | the Seed Vault sheet with the identity verified against `assetlinks.json`, then the wallet fragment in the Holdings heading at [933,679][1140,733] |
+| Connected and empty | "No xStocks in this wallet yet. A swap from any stock page puts the token here." with "Browse analyzed stocks", which switches the host to the List tab |
+| The chain is really read | with the network up, a refresh raises no banner, which only happens when `tokenBalances` and the catalog both answered |
+| The chain out | with the radios off, Refresh draws "On-chain data unavailable" with Retry (hit box [988,569][1140,713], 144 px = 48 dp), the empty sentence correctly disappears, and the receipts stay |
+| Retry | with the network back, one tap clears the banner and the empty state returns |
+| Receipts with no chain read | both rows drew while the wallet was disconnected and again while the chain was out |
+| One spoken sentence per row | `content-desc="5 USDC, to 0.01364 TSLAx, all-in cost 0.09 percent, 10 Sep 2026 12:57 UTC"`, so the numerals are spoken and the cells are not read out one by one |
+| An unreported fill | `content-desc="20 USDC, to NVDAx, amount not reported, all-in cost not reported, 3 Sep 2026 12:57 UTC"` |
+| Targets | Refresh [682,1166][879,1310] and Disconnect [879,1166][1140,1310], both 144 px tall, which is 48 dp |
+
+The two receipt rows were a **synthetic fixture** written into `files/swap-receipts.json` with
+`run-as` and deleted afterwards: no swap has ever landed on this device, the signing leg is still
+unexercised, and the only honest way to see the section on hardware was to seed the record the app
+would have written. The signatures in it were obviously fake and nothing was sent anywhere.
+
+The walk found one real defect: the received amount and its ticker were drawn in Outfit, because
+the row's second cell is the company slot and the canvas helper draws it in the UI face. DESIGN.md
+section 3 gives every numeral and every ticker to JetBrains Mono, so `ListRow` gained `companyMono`
+and the swap row passes it; the cell went from 585 px to 650 px wide on the device, which is how
+the fix was confirmed.
 
 ### Watchlist (T12)
 
