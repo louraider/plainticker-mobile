@@ -266,8 +266,8 @@
         <item quantity="other">%1$s xStocks, priced by Jupiter</item>
     </plurals>
     <plurals name="portfolio_priced_partial">
-        <item quantity="one">%1$s of %2$s xStock priced by Jupiter, the total covers it</item>
-        <item quantity="other">%1$s of %2$s xStocks priced by Jupiter, the total covers those</item>
+        <item quantity="one">%1$s of %2$s xStock priced by Jupiter, the total covers what is priced</item>
+        <item quantity="other">%1$s of %2$s xStocks priced by Jupiter, the total covers what is priced</item>
     </plurals>
     <plurals name="portfolio_priced_none">
         <item quantity="one">%1$s xStock, not priced by Jupiter</item>

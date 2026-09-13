@@ -542,7 +542,7 @@ The chain carries no cost basis, so the app writes its own record when a swap la
 | Cell | Field | Rule |
 |---|---|---|
 | Total | sum of the positions that carry a value | `Fmt.price`; null when none of them do, and the slot then takes the neutral "-" rather than a zero |
-| Total sub | how many positions the total covers | all of them "3 xStocks, priced by Jupiter"; some "1 of 3 xStocks priced by Jupiter, the total covers those"; none "3 xStocks, none of them priced by Jupiter" |
+| Total sub | how many positions the total covers | all of them "3 xStocks, priced by Jupiter"; some "1 of 3 xStocks priced by Jupiter, the total covers what is priced"; none "3 xStocks, none of them priced by Jupiter" |
 | Row ticker | catalog `symbol` | mono 18 |
 | Row company | catalog `name` | 13 Ink 2 |
 | Row quantity | token account `amount` over the **mint's** `decimals`, times the mint's `scaledUiAmountConfig.multiplier` | `Fmt.tokenAmount`; the first half of the meta line ("2.01364 TSLAx") |
@@ -844,7 +844,7 @@ shape, so all nine are `<plurals>` now and the platform picks the form:
 | Resource | one | other |
 |---|---|---|
 | `portfolio_priced_by` | `1 xStock, priced by Jupiter` | `4 xStocks, priced by Jupiter` |
-| `portfolio_priced_partial` | `1 of 1 xStock priced by Jupiter, the total covers it` | `1 of 3 xStocks priced by Jupiter, the total covers those` |
+| `portfolio_priced_partial` | `1 of 1 xStock priced by Jupiter, the total covers what is priced` | `1 of 3 xStocks priced by Jupiter, the total covers what is priced` |
 | `portfolio_priced_none` | `1 xStock, not priced by Jupiter` | `3 xStocks, none of them priced by Jupiter` |
 | `list_today_watched` | `Today: 1 stock watched` | `Today: 12 stocks watched` |
 | `list_today` | `Today: 1 stock watched, next report TSLAx on Oct 22` | `Today: 12 stocks watched, next report TSLAx on Oct 22` |
@@ -860,6 +860,14 @@ rather than nine judgements. `CountCopyTest` renders each of them out of the shi
 one and at many, asks every model that counts twice, and lints `src/main` for a `Fmt.count(...)`
 handed to `stringResource`, `words` or `getString`. That last rule is the bug's own shape: it
 printed the six real call sites the moment it was written.
+
+Review then found the class once more, inside one of the new plurals. `portfolio_priced_partial`
+says **two** numbers out loud and a plurals agrees with only one of them, which has to be the one
+that governs "xStocks". The clause after it read "the total covers those", so a wallet holding one
+priced token beside two unpriced ones drew `1 of 3 xStocks priced by Jupiter, the total covers
+those`: a plural over a count of one again, in the sentence next to the one that started this.
+The clause is now number-neutral, "the total covers what is priced", and `CountCopyTest` refuses
+a plural pronoun in it.
 
 **2. The wrong truth. Swap sheet, after the wallet closes.**
 
