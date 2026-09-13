@@ -743,3 +743,48 @@ Two rendering rules if these ever reach a screen:
 - `epsGrowthShort.pct` off a near-zero base is huge (DASH read +635%). It is arithmetically true and rhetorically misleading, so it needs the window label beside it or it should stay off the screen.
 
 Open decision for T9: the payload has no leaf fundamentals (gap 1 above), and these three fields are the only SEC-derived evidence the Detail screen could show under the tracks. Either keep `forward.*` off the hackathon build as decided, or surface one honest line ("Earnings turned positive; 2 y window, no 3 y rate"). Founder's call; the default remains tracks only.
+
+## The device smoke walk (T13, DT9), measured 2026-09-13
+
+`scripts/device-smoke.sh` walks the app on SM02E4072810430 (Android 16, 1200x2670 at 480 dpi,
+nothing overridden) and asserts rather than screenshots. Two clean runs the same evening: **66
+assertions over 24 dumps, 225 s and 223 s**, exit 0 both times. The numbers the script's own
+constants are cut from, all read on this phone:
+
+| What | Measured | What it decides |
+|---|---|---|
+| one `uiautomator dump` over `exec-out` | 2.2 to 2.6 s | one dump per assertion point, never a dump in a loop |
+| one `dumpsys window` focus read | about 0.1 s | how the walk waits for the wallet, the permission dialog and the way back |
+| one `dumpsys gfxinfo` read | about 0.1 s | how the walk waits for the list to stop changing, and how it measures motion |
+| `am start -W` TotalTime, cold after `pm clear` | 1131, 1142, 1155, 1160, 1165, 1233 ms | ceiling 2750 ms, the whole measured time to first content, of which TotalTime is only the part before the first frame |
+| frames rendered over 2 s on Detail, live bar on screen | 484 to 488 | breathing needs at least 100 |
+| the same, with `animator_duration_scale 0` | 4 | static allows at most 20 |
+| tallest numeral at font scale 1.3 against itself at 1.0 | 119% | a wrap would be about 260%; the bound is 145% of the scale |
+
+**Three things the walk found that are worth keeping.**
+
+1. **The snapshot banner moves the screen under a tap.** The banner occupies a 126 px band, so a
+   dump taken while it is still up gives coordinates that are wrong by 42 dp the moment the catalog
+   is whole. The walk now waits for the list to stop rendering (`dumpsys gfxinfo` reporting no
+   frames for a second) before it reads coordinates, and `open_detail` re-taps once if Detail did
+   not open. This is a harness lesson, not a product bug, but any future device automation will
+   meet it.
+2. **Font scale 2.0 does not break the layout.** Probed by running the scale pass at 2.0: nothing
+   wrapped, nothing left its control, nothing left the 20 dp gutters, and the tallest numeral grew
+   to 166% rather than 200%, because Android 14's non-linear font scaling plus `maxLines = 1` and
+   autosize shrink the glyph instead of taking a second line. Whether the shrunken header ticker is
+   still *legible* at 2.0 is a judgement and sits in docs/qa-checklist.md, not in the script.
+3. **A debug build's swap ends at the wallet handoff, and that is the honest boundary.** Tapping
+   Swap raises `com.solanamobile.wallet` before the app's own sheet is ever composed, so there is
+   no machine assertion to make about the sheet on this device. The walk asserts the handoff
+   happened, presses back, and asserts Detail returns. Nothing is signed and no money moves.
+
+**The jobscheduler count has to be the registered jobs and nothing else.** `dumpsys jobscheduler`
+mentions the package 18 times after a walk, almost all of it history, quota bookkeeping and
+recently completed work. Only lines matching `^  JOB .*com.plainticker.mobile` are a schedule: 0
+before the first watch, 1 while a ticker is watched, 0 again after unwatching.
+
+**Caution has no colour in a dump.** What the script can read is the wording that is drawn in
+Caution, so it asserts that "Issuer can move tokens" and "issuer can pause" appear on the two
+issuer-control cells whose value is Yes and on no other cell on the screen. The colour itself stays
+pinned by `DetailModelTest` without a device.
