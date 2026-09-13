@@ -84,8 +84,44 @@ stops at signing by design and can never prove a swap landed.
   13 September and nothing wrapped, clipped or left its control, because the numerals carry
   `maxLines = 1` and autosize down instead. Whether the shrunken ticker is legible is a judgement.
 
+### 5.9, 5.7 and 5.5 walked on v0.3.0, 2026-09-13
+
+Three of the ten device-matrix rows need no wallet and no person, so they were run against the
+release build the moment it was installed. The install itself is the new fact: a CI release shares
+its signing certificate with the build already on the phone, so `adb install -r` upgrades in place
+and the receipt of the real swap survives. A debug build does not, which is why this matrix had
+been waiting.
+
+**5.9, ten cold starts.** Ten `am force-stop` and ten launches, polling the screen until at least
+three known tickers were drawn. **Ten passes, zero failures, no `FATAL EXCEPTION` and no ANR in
+logcat.** First content landed at 2,946 to 2,994 ms, a spread of 48 ms across ten runs, measured
+with a 500 ms polling granularity so the true figure is a little under. Consistent with the 2.75 s
+recorded on 2026-09-13 by screen recording.
+
+**5.7, rotation.** `settings put system user_rotation 1` with `accelerometer_rotation` on. The
+window stayed at `rotation="0"` and `bounds=[0,0][1200,2670]`, and the activity configuration held
+`sw400dp w400dp h890dp 480dpi port`, which is also a direct confirmation of the 400 by 890 frame
+`DESIGN.md` records. Nothing rotated and nothing was recreated.
+
+**5.5, airplane mode.** `cmd connectivity airplane-mode enable`, then a cold start.
+
+| screen | what it said |
+|---|---|
+| List | drew from the bundled snapshot with the banner "List from a bundled snapshot, captured 12 Sep 2026" and a Retry action |
+| Detail | "Prices unavailable", "Mint not read", and the line "Nothing below this line is read from the chain"; every trust row read Unknown with its own reason, "Reserves could not be read", "The mint could not be read", "Neither the mint nor xStocks answered" |
+| Portfolio | the recorded holding and the receipt, which need no network, under their own lede |
+
+No spinner, no snackbar, no crash, and nothing stale presented as live on any of the three. With
+airplane mode off the app recovered on its own: the snapshot banner gave way to the market-hours
+banner and the ages went from 6 d to 7 d, which is the live `/summary` replacing the 12 September
+capture.
+
+The phone was left on the List tab and sent Home, Wi-Fi back at its own address, and nothing was
+written to `/sdcard`: every read went through `uiautomator dump /dev/tty`.
+
 ## 7. Log
 
 | Date | Build | Unit tests | device-smoke | Sections 1 to 5 | Who | Notes |
 |---|---|---|---|---|---|---|
 | 2026-09-13 | debug | 605 green | OK, 66 assertions, 24 dumps, 225 s | not run | machine | sections 1 to 4 wait on a wallet on this device that holds USDC |
+| 2026-09-13 | release v0.3.0 | 644 green | not re-run on this build | 5.9, 5.7 and 5.5 pass; 1 to 4 and 5.1 to 5.4, 5.6, 5.8, 5.10 still wait | machine | installed with `adb install -r` over v0.2.0, receipt intact; ten cold starts clean, portrait lock held, offline states all name what is missing |
