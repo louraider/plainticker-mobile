@@ -703,6 +703,20 @@ runs were minutes apart on a closed market, so the "moved from x to y" clause is
 `DigestTest` and `WatchlistCheckTest` only; and a real overnight run of the periodic job, which the
 job scheduler dump shows scheduled but which nothing can observe inside one session.
 
+#### What the cross-model review changed (`fix(T12): review findings`)
+
+| What | Why it mattered |
+|---|---|
+| `WatchlistNotifications.enabled()` reads the channel as well as the permission and the app-wide switch | A reader who turns off the "Watchlist" category alone leaves both of the other two on, so the footer went on reading "Notifications on, one check a day." beside a digest that could never arrive, and hid the one Enable action that undoes it. Walked on the Seeker: with `POST_NOTIFICATIONS` still granted and only the channel blocked (`mImportance=0`), the footer now reads "Notifications off, the digest stays on this screen." with Enable |
+| `WatchlistWorker.decide` is the worker's whole decision, and `WatchlistWorkerTest` covers it | The shell was the one part of the check with no test at all: a `doWork` that answered `success` to a crash would cost the reader a day in silence, and nothing would have failed |
+| `AppNavHost` no longer re-navigates on the notification's own cold start | The guard compared a filled route ("home?tab=2") against the pattern a destination is registered under ("home?tab={tab}"), so it never matched: the tab the graph had just opened was popped and built again, and every call its screens make was paid for twice |
+
+Three findings from the outside model were checked and not taken. Dropping `cancel()` from the
+schedule would leave a daily job running against an empty watchlist forever. `WatchedTicker.premiumPct`
+cannot leak a sub-floor premium, because `TrackingQuality.Thin.premiumPct` is null by construction.
+`Fmt.MONTHS` is the app's date format rather than copy, is unchanged by this task, and the copy lint
+passes over it.
+
 ## Known gaps to decide before T9
 
 1. `/api/v1/{TICKER}` has no leaf fundamentals (ROIC, margins, P/E, EV/S, 52-week position). Either drop the fact grid under the tracks or add an additive `facts` block server-side. Recommendation: add `facts` server-side (Week 2 server lane, small) so Detail has the evidence cells the canvas shows.

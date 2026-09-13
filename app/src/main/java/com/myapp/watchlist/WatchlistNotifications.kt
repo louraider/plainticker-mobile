@@ -21,7 +21,7 @@ import com.myapp.ui.home.HomeTab
  *
  * Three things it deliberately does not do. It does not ask for anything: the permission is
  * requested once, at the moment the first ticker is watched, and this class only ever reads the
- * answer. It does not create its channel until it has something to post, so a build that is
+ * answer, the app-wide switch and this channel. It does not create its channel until it has something to post, so a build that is
  * installed and never used leaves no channel behind in the system settings. And it never throws:
  * a refused permission, a blocked channel or a system that declines the post all mean the digest
  * stays on the screen, which it does anyway, and the worker finishes normally.
@@ -34,9 +34,23 @@ class WatchlistNotifications(context: Context) : DigestNotifier {
 
     private val app: Context = context.applicationContext
 
-    override fun enabled(): Boolean = granted() && NotificationManagerCompat.from(app).areNotificationsEnabled()
+    /**
+     * What this device will actually do with the next digest, which is three questions and not
+     * one: the runtime permission, the app-wide switch, and this channel. A reader who long
+     * presses the digest and turns off "Watchlist" leaves the first two untouched, and a screen
+     * that only asked those two would go on promising a notification that can never arrive and
+     * would hide the Enable action that is the way back. The channel does not exist until the
+     * first post, so its absence is not a refusal.
+     */
+    override fun enabled(): Boolean {
+        if (!granted()) return false
+        val manager = NotificationManagerCompat.from(app)
+        if (!manager.areNotificationsEnabled()) return false
+        val channel = manager.getNotificationChannelCompat(CHANNEL_ID) ?: return true
+        return channel.importance != NotificationManagerCompat.IMPORTANCE_NONE
+    }
 
-    // Checked by [enabled] on the line above, which lint cannot see through.
+    // Checked by [enabled] just above, which lint cannot see through.
     @SuppressLint("MissingPermission")
     override fun post(text: String) {
         if (!enabled()) return
