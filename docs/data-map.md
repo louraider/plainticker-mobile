@@ -557,6 +557,23 @@ a premium printed beside a missing quantity invites a reader to multiply two num
 this app does not have. Falling back to a multiplier of one there would be a wrong share count
 that reads as a measured one, and two tests fail the moment it is put back.
 
+**The multiplier in force, not the one the mint has stored (review, 2026-09-13).** Token-2022 keeps
+a scheduled change beside the old value and switches at its timestamp by itself:
+`ScaledUiAmountConfig::total_multiplier` answers `newMultiplier` from
+`newMultiplierEffectiveTimestamp` onwards, and the stored `multiplier` field is only rewritten the
+next time the authority updates the extension. Between a split taking effect and that next write,
+the stored value is last week's number. `SplitMultiplier.effectiveAt(nowMillis)` is therefore what
+scales a balance, asked at the clock of the mint read itself, and `current` stays what the mint has
+stored. The Detail screen still draws `current` as today's multiplier, which is the same gap on a
+fact line rather than in a share count; it is a small fix and it is not in this branch.
+
+**One row per mint, not per token account (review, 2026-09-13).** `getTokenAccountsByOwner` answers
+one entry per token *account*, and one owner may keep several for the same mint (the associated
+account plus any auxiliary one). The balances are folded by mint and their raw amounts summed
+before anything is drawn. Without the fold one holding was drawn as two rows each carrying part of
+the quantity, and since the rows are keyed by mint the second one threw the `LazyColumn` duplicate
+key rather than merely reading oddly: the same crash the list found in a duplicated ticker.
+
 **One `getAccountInfo(mint, jsonParsed)` per held mint, in order.** `getMultipleAccounts` would
 read them all in one call and is not on the forwarder's list (see Sources above), so batching is a
 server change rather than a client one. A wallet holds a handful of xStocks and the forwarder
@@ -570,7 +587,9 @@ The banner order is what could not be read at all, then what is partly missing, 
 the last wallet round-trip; a wallet note carries no Retry because the connect action beside it is
 the answer to it. A load that fails leaves the drawn rows where they are and raises a banner: the
 "never walk backwards" rule the list learned the same week. An empty wallet and a chain that could
-not be read are different states and never share a sentence.
+not be read are different states and never share a sentence. A banner names the source that is
+out now and not the one that was out last time: a run whose chain read answered clears the chain
+sentence even when the catalog is what failed after it.
 
 **No cost basis, and nothing derived from one.** There is no profit, no loss and no change-since
 figure in the state, the model or the composition, and `PortfolioScreenTest` fails the build if one
