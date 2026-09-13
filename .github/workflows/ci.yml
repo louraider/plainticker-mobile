@@ -73,6 +73,19 @@ jobs:
       - name: device-smoke usage
         run: bash scripts/device-smoke.sh --help
 
+      # coverage-health reaches five live upstreams, so a runner cannot run it for real without
+      # being flaky and burning a keyless rate limit on every push. What CI can prove is that its
+      # judgement is right, which is the half that decides whether a demo gets recorded: the
+      # rules are a pure function and --self-test walks nine cases including the two that must
+      # fail. A person runs the live half on day one, the morning of the video and the morning of
+      # the submission, and writes the result into docs/qa-checklist.md.
+      - name: coverage-health scripts parse
+        run: |
+          for f in scripts/*.mjs; do node --check "$f"; done
+
+      - name: coverage-health judgement
+        run: node scripts/coverage-health.mjs --self-test
+
   redaction-guard:
     name: Redaction guard
     runs-on: ubuntu-latest
