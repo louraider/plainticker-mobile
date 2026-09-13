@@ -19,6 +19,8 @@
     <string name="action_max">Max</string>
     <string name="action_clear">Clear</string>
     <string name="action_retry">Retry</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_disconnect">Disconnect</string>
     <string name="action_close">Close</string>
     <string name="action_back">Back</string>
     <string name="action_enable">Enable</string>
@@ -52,6 +54,7 @@
     <string name="list_search_placeholder">Ticker or company</string>
     <string name="list_heading_analyzed">Analyzed</string>
     <string name="list_heading_without_analysis">Without analysis</string>
+    <!-- The row meta halves and the source banners below are shared with the Portfolio -->
     <string name="list_row_meta_premium">%1$s vs NYSE close</string>
     <string name="list_row_meta_thin">Pool holds %1$s, too thin to track</string>
     <string name="list_row_meta_pool_unknown">Pool depth not reported</string>
@@ -239,13 +242,24 @@
     <!-- Portfolio -->
     <string name="portfolio_heading_holdings">Holdings</string>
     <string name="portfolio_priced_by">%1$s xStocks, priced by Jupiter</string>
-    <string name="portfolio_row_meta">%1$s · %2$s vs NYSE close</string>
+    <string name="portfolio_priced_partial">%1$s of %2$s xStocks priced by Jupiter, the total covers those</string>
+    <string name="portfolio_priced_none">%1$s xStocks, none of them priced by Jupiter</string>
+    <string name="portfolio_total_a11y">Total %1$s. %2$s</string>
+    <string name="portfolio_row_quantity">%1$s %2$s</string>
+    <string name="portfolio_row_mint_unread">Mint not read, quantity unknown</string>
     <string name="portfolio_cost_basis">Cost basis is not read from the chain.</string>
     <string name="portfolio_heading_recent_swaps">Recent swaps</string>
-    <string name="portfolio_swap_row_company">to %1$s</string>
+    <string name="portfolio_swap_row_received">to %1$s %2$s</string>
+    <string name="portfolio_swap_row_received_unknown">to %1$s, amount not reported</string>
+    <string name="portfolio_swap_cost">all-in cost %1$s</string>
+    <string name="portfolio_swap_cost_unknown">all-in cost not reported</string>
     <string name="portfolio_swap_row_meta">%1$s · %2$s</string>
+    <string name="portfolio_receipts_note">The record this app kept of the swaps it made from this device.</string>
     <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
-    <string name="portfolio_empty">No xStocks in this wallet yet</string>
+    <string name="portfolio_connecting">Waiting for the wallet to answer</string>
+    <string name="portfolio_wallet_cancelled">Cancelled in the wallet, nothing was connected</string>
+    <string name="portfolio_wallet_refused">The wallet did not answer, so nothing was connected</string>
+    <string name="portfolio_empty">No xStocks in this wallet yet. A swap from any stock page puts the token here.</string>
     <string name="portfolio_error_unavailable">On-chain data unavailable</string>
 
     <!-- Watchlist -->

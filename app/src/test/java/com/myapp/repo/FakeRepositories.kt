@@ -203,17 +203,28 @@ fun price(usd: Double, reference: Double? = null, liquidity: Double? = 250_000.0
     stockData = reference?.let { com.myapp.data.jupiter.StockData(id = "xstocks", price = it) },
 )
 
-/** Answers [MintRepository] from a fixed reading, or throws to stand in for a chain that is out. */
+/**
+ * Answers [MintRepository] from a fixed reading, or throws to stand in for a chain that is out.
+ *
+ * [readings] answers per mint, which is what a screen holding several tokens needs: one mint can
+ * carry a split multiplier while the one beside it cannot be read at all. A mint that is not in
+ * the map falls back to [reading].
+ */
 class FakeMintRepository(
     var reading: Result<MintReading> = Result.success(MintReading(facts = null, slot = 0L, readAtMillis = 0L)),
+    var readings: Map<String, Result<MintReading>> = emptyMap(),
 ) : MintRepository {
     val asked = mutableListOf<String>()
 
     override suspend fun mint(mint: String): MintReading {
         asked += mint
-        return reading.getOrThrow()
+        return (readings[mint] ?: reading).getOrThrow()
     }
 }
+
+/** A mint reading that answered, carrying [facts]; the slot and the clock are a Detail concern. */
+fun mintReading(facts: MintFacts?, slot: Long = 445_912_118L, readAtMillis: Long = 0L): MintReading =
+    MintReading(facts = facts, slot = slot, readAtMillis = readAtMillis)
 
 /** A readable mint whose extensions are all absent unless a test names one. */
 fun mintFacts(
