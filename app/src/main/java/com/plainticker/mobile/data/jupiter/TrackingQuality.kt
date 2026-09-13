@@ -50,41 +50,58 @@ sealed interface TrackingQuality {
         /**
          * The shallowest pool whose quote this app will present as a tracking figure, in USD.
          *
-         * Measured live on 2026-09-12 against production (docs/data-map.md): of the 157 analyzed
-         * xStocks that reach the Analyzed section Jupiter priced 55. The 13 pools at or above
-         * $100k all tracked the NYSE close within 0.8 percent. The 6 pools between $10k and $100k
-         * deviated plausibly rather than absurdly: NFLXx -2.34 percent on $12.5k, UNHx -2.12
-         * percent on $12.3k, XOMx -1.58 percent on $18.8k, which is a real spread on a shallow
-         * venue and still a description of the market. Under $10k the number stops describing
-         * anything: UBERx read +152.13 percent on a pool of $80, APPx +89.34 percent on $34,
-         * CRWDx -42.15 percent on $48, ASMLx +30.42 percent on $61, and 32 of the 55 priced
-         * tokens sat in that range.
+         * Re-measured live on 2026-09-13 after the founder asked how liquidity is checked at all.
+         * That check found the figure is not the pool it is documented as (docs/data-map.md), so
+         * the floor is now read from what the quote does rather than from what the depth claims.
+         * Every analyzed xStock Jupiter reports a depth for, sorted by that depth:
          *
-         * $10k is therefore the lowest depth at which the quote still moved with the underlying
-         * instead of with the pool. The floor is deliberately not $100k: that would take the
-         * premium off six rows whose numbers are readable, in exchange for a precision the row
-         * never claims (it prints two decimals of a percent, not a tracking error budget).
+         * | floor | rows that keep a premium | widest premium in the set |
+         * |---|---|---|
+         * | $10,000 | 19 | INTCx -4.13% |
+         * | **$4,000** | **22** | **INTCx -4.13%** |
+         * | $2,500 | 25 | Vx +6.64% |
+         * | $1,000 | 29 | JPMx +37.98% |
+         *
+         * **$4,000 buys three readable rows for nothing.** NFLXx at $9,370 reads -1.95, PEPx at
+         * $5,351 reads +0.11 and ORCLx at $4,444 reads -0.78, and the widest premium in the whole
+         * tracked set does not move, because it already belonged to INTCx at $26,205, far above
+         * either floor. The next step down is where it breaks: Vx at $2,513 prints +6.64 and JPMx
+         * at $2,002 prints +37.98, which are pool arithmetic and not prices.
+         *
+         * Below it the number stops describing anything at all. UBERx read +152.13 percent on $80,
+         * APPx +89.34 on $34, CRWDx -42.15 on $48. Those are not understated depths: on 2026-09-13
+         * DexScreener indexed no trading pair for any of them, GeckoTerminal agreed, and a $100
+         * order into UBERx came back at -64.2 percent price impact.
+         *
+         * The floor is deliberately not $100k, and no longer $10k. Both withhold rows whose
+         * numbers a reader can use, in exchange for a precision the row never claims: it prints
+         * two decimals of a percent, not a tracking error budget.
          */
-        const val MIN_POOL_USD = 10_000.0
+        const val MIN_POOL_USD = 4_000.0
 
         /**
          * The widest deviation from the NYSE close a pool above [MIN_POOL_USD] produced when the
          * catalogue was measured, in percent, and therefore the narrowest scale a gauge over the
          * tracked set may be drawn on.
          *
-         * Same measurement as the floor (docs/data-map.md, 2026-09-12): the 13 pools at or above
-         * $100k tracked within 0.8 percent, and the 6 between $10k and $100k ran out to NFLXx
-         * -2.34 percent, UNHx -2.12 percent, XOMx -1.58 percent. NVDAx, the deepest pool in the
-         * catalogue, read -1.01 percent on 2026-09-13 and -0.95 percent the day after, so the
-         * 0.8 percent band is a measurement and not a bound. **2.5** covers every premium the
-         * tracked set has produced, and it is here rather than in the UI because it is a fact
-         * about the market, read from the same rows the floor was read from.
+         * Re-measured 2026-09-13 against the live catalogue, over the 22 rows the floor above
+         * now tracks: the widest is INTCx at -4.13 percent on $26,205, then HOODx -3.93 on
+         * $358,520 and XOMx -3.18 on $17,019. All three sit far above even the old $10k floor, so
+         * this number was already too narrow for the set it describes and lowering the floor did
+         * not make it so: at either floor the widest premium is the same INTCx reading.
          *
-         * It is a scale, not a limit: a premium past it is still drawn, as an off-scale cap
-         * rather than as a position on the track, because no fixed scale can be guaranteed and a
-         * gauge that silently saturates reports a number it does not have.
+         * **4.5** covers it with headroom. The previous value, 2.5, was read on 2026-09-12 when
+         * the widest tracked premium was NFLXx at -2.34 percent, and one day later three of the
+         * 22 tracked rows ran past it. A gauge that leaves its scale for one row in seven is
+         * reporting the scale badly, not reporting an exception.
+         *
+         * The cost is accepted rather than hidden: the deepest pools read within 1 percent, so on
+         * a 4.5 scale they sit close to the reference and the gauge says "on the close" about
+         * them, which is the true story. The exact premium is printed in mono beside the track
+         * either way. It lives here rather than in the UI because it is a fact about the market,
+         * read from the same rows the floor was read from.
          */
-        const val TRACKED_SPREAD_PCT = 2.5
+        const val TRACKED_SPREAD_PCT = 4.5
 
         /**
          * The rule. Null when Jupiter did not price the token at all: with no quote there is no

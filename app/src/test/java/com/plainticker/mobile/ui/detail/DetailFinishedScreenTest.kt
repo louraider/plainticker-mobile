@@ -140,9 +140,17 @@ class DetailFinishedScreenTest {
             "TSLAx" to 0.09,
             "AAPLx" to 0.12,
             "the widest of the 13 deepest" to 0.8,
-            "XOMx on \$18.8k" to -1.58,
-            "UNHx on \$12.3k" to -2.12,
-            "NFLXx on \$12.5k" to -2.34,
+            // Re-measured 2026-09-13, the day the floor dropped to $4,000. The first three are
+            // the widest the tracked set produced and all three sit far above even the old $10k
+            // floor, which is why the scale had to widen whatever the floor did. The last three
+            // are the rows the new floor admits, and the reason it was worth admitting them.
+            "INTCx on \$26.2k, the widest tracked" to -4.13,
+            "HOODx on \$358k" to -3.93,
+            "XOMx on \$17.0k" to -3.18,
+            "UNHx on \$10.3k" to -2.79,
+            "NFLXx on \$9.4k, admitted by the $4,000 floor" to -1.95,
+            "PEPx on \$5.4k, admitted by the $4,000 floor" to 0.11,
+            "ORCLx on \$4.4k, admitted by the $4,000 floor" to -0.78,
         )
         measured.forEach { (name, premiumPct) ->
             val state = tracking(premiumPct)
@@ -155,13 +163,14 @@ class DetailFinishedScreenTest {
         }
 
         // No tracked token was measured past the scale, and that is exactly why the cap has to
-        // exist: a scale wide enough for today is not a promise about tomorrow, and a tick that
+        // exist: a scale wide enough for today is not a promise about tomorrow, and the one day
+        // this was treated as a promise the set ran past it within twenty-four hours. A tick that
         // stops at the end while the caption still names the scale reports a number it does not
-        // have. Past the scale the tick is a cap, on both sides, and it is clamped only so the
-        // drawing has somewhere to put it.
-        listOf(-6.2, -2.51, 2.51, 89.34).forEach { premiumPct ->
+        // have. Past the scale the tick is a cap, on both sides, clamped only so the drawing has
+        // somewhere to put it.
+        listOf(-6.2, -4.51, 4.51, 89.34).forEach { premiumPct ->
             val tick = gaugeTick(premiumPct, GAUGE_SCALE_PCT)
-            assertTrue("$premiumPct percent is drawn as a position on a 2.5 percent scale", tick.offScale)
+            assertTrue("$premiumPct percent is drawn as a position on the stated scale", tick.offScale)
             assertEquals(if (premiumPct < 0) 0f else 1f, tick.fraction, 0f)
         }
         // The end of the scale is on the scale; one step past it is not.

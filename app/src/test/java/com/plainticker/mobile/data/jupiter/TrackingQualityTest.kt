@@ -26,8 +26,8 @@ class TrackingQualityTest {
     // ---- The floor ------------------------------------------------------------------------
 
     @Test
-    fun `the floor is ten thousand dollars`() {
-        assertEquals(10_000.0, MIN_POOL_USD, 0.0)
+    fun `the floor is four thousand dollars`() {
+        assertEquals(4_000.0, MIN_POOL_USD, 0.0)
     }
 
     @Test
@@ -38,9 +38,9 @@ class TrackingQualityTest {
         assertEquals(MIN_POOL_USD, at.poolUsd!!, 0.0)
 
         val under = TrackingQuality.of(priceUsd = 100.5, referenceUsd = 100.0, poolUsd = MIN_POOL_USD - 0.01)
-        assertEquals(TrackingQuality.Thin(9_999.99), under)
+        assertEquals(TrackingQuality.Thin(MIN_POOL_USD - 0.01), under)
         assertNull("no premium below the floor", under!!.premiumPct)
-        assertEquals(9_999.99, under.poolUsd!!, 0.0)
+        assertEquals(MIN_POOL_USD - 0.01, under.poolUsd!!, 0.0)
 
         val over = TrackingQuality.of(priceUsd = 100.5, referenceUsd = 100.0, poolUsd = MIN_POOL_USD + 0.01)
         assertTrue(over is TrackingQuality.Tracked)

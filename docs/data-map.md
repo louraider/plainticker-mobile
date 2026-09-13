@@ -420,26 +420,28 @@ impact when comparing a $1000 buy against a $500 buy", re-checked every 30 minut
 same choice this measurement points at, made by the people who own the router, and it explains the
 `NO_ROUTES_FOUND` on UBERx and APPx exactly: Metis had already dropped those markets.
 
-**Open for the founder: where the floor sits now.** $10,000 was calibrated against a figure that
-runs at roughly half of what the aggregators report, so it has been acting as a $20k to $50k floor.
-The evidence for moving it, all measured 2026-09-13:
+**Decided 2026-09-13: the floor drops to $4,000, and the gauge scale widens to 4.5 percent.**
+Re-measured the whole catalogue at four candidate floors on the afternoon of the 13th:
 
-| Price v3 figure | ticker | premium | what a real order does |
-|---|---|---|---|
-| $13,399 | AMDx | -0.90% | 2.35% impact on $1,000 |
-| $9,350 | NFLXx | -1.96% | -0.141% impact on $100 |
-| $5,351 | PEPx | +0.11% | -0.471% impact on $100 |
-| $4,450 | ORCLx | -0.76% | -1.555% impact on $100 |
-| $3,966 | LLYx | +1.53% | one pair, $181 of 24-hour volume |
-| $2,529 | Vx | +6.99% | eight pairs, premium already noise |
-| $839 | BACx | -1.37% | no indexed pair anywhere |
+| floor | rows that keep a premium | widest premium in the set |
+|---|---|---|
+| $10,000 | 19 | INTCx -4.13% |
+| **$4,000** | **22** | **INTCx -4.13%** |
+| $2,500 | 25 | Vx +6.64% |
+| $1,000 | 29 | JPMx +37.98% |
 
-The break is between roughly $4,000 and $2,500 on this figure, not at $10,000: everything at
-$3,966 and above reads sanely and trades, and Vx at $2,529 is already printing +6.99%. Dropping the
-floor to $4,000 would return the premium to ORCLx, NFLXx, PEPx and LLYx and keep every dead token
-out. Holding at $10,000 stays defensible and costs four rows. This is the founder's call, the same
-one made on 2026-09-12 when disclosure was chosen over curation, so it is recorded rather than
-taken.
+$4,000 buys three readable rows for nothing at all: NFLXx at $9,370 reads -1.95, PEPx at $5,351
+reads +0.11, ORCLx at $4,444 reads -0.78, and the widest premium in the tracked set does not move,
+because it already belonged to INTCx at $26,205, far above either floor. One step further down is
+where it breaks: Vx at $2,513 prints +6.64 and JPMx at $2,002 prints +37.98.
+
+The same measurement condemned `TRACKED_SPREAD_PCT`. It was set to 2.5 on 2026-09-12 as "the
+widest deviation the tracked set produced", when that was NFLXx at -2.34. One day later three of
+the 22 tracked rows ran past it: INTCx -4.13 on $26,205, HOODx -3.93 on $358,520, XOMx -3.18 on
+$17,019. All three sit above even the old floor, so the scale was already too narrow for the set it
+described and lowering the floor did not cause it. **4.5** covers today's set with headroom, by the
+same rule that produced 2.5. The off-scale cap stays: a scale wide enough for today is not a
+promise about tomorrow, and this is the second day running that a fresh reading moved it.
 
 #### Swap v2 refuses tradable tokens, found 2026-09-13
 
