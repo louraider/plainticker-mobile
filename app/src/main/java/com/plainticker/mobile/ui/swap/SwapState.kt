@@ -12,9 +12,9 @@ import java.util.Locale
  *
  * It is written as a machine rather than as a phase plus a handful of booleans because every
  * interesting rule of this screen is a rule about which state may follow which: a shortfall is
- * refused before the wallet ever opens, a cancelled approval costs nothing, and the one automatic
- * requote is exactly one. A sealed state makes those rules readable, and makes each of them a
- * test that names a transition instead of a string.
+ * refused before the wallet ever opens, an approval that came back with no signature costs
+ * nothing, and the one automatic requote is exactly one. A sealed state makes those rules
+ * readable, and makes each of them a test that names a transition instead of a string.
  *
  * The transitions, all of them:
  *
@@ -34,15 +34,16 @@ import java.util.Locale
  *                              : the quote needs more SOL than the wallet has   : enough SOL
  *                              v                                                v
  *                          Shortfall                                      AwaitingWallet
- *                        (never opened                                      :   :   :
- *                         the wallet)                                       :   :   : signed
- *                                                                           :   :   v
- *                                        cancelled in wallet ...............+   :  Landing
- *                                        (back to Amount, nothing lost)         :   :   :
- *                                                                               :   :   : landed
- *                                        the wallet refused ....................+   :   v
- *                                                                                   :  Landed
- *                                        SUBMIT_SWAPS false ......................> Signed
+ *                        (never opened                                        :   :
+ *                         the wallet)                                         :   : signed
+ *                                                                             :   v
+ *                                        no signature came back ..............+  Landing
+ *                                        (back to Amount, nothing lost:           :   :
+ *                                         declined, closed, or the                :   : landed
+ *                                         session dropped, and the app            :   v
+ *                                         cannot tell the three apart)            :  Landed
+ *                                                                                 :
+ *                                        SUBMIT_SWAPS false ....................> Signed
  *                                        (debug: never submitted)
  *
  *     From Landing, a -1003, -2003 or -2004 goes back to Quoting(requote = true) exactly once,
@@ -450,11 +451,13 @@ enum class SwapFailure(@StringRes val text: Int) {
     /** The order came back without a transaction, so there is nothing to approve. */
     NO_TRANSACTION(R.string.swap_failed_no_transaction),
 
-    /** The wallet returned an error that was not a cancellation. */
-    WALLET_REFUSED(R.string.swap_failed_wallet_refused),
-
-    /** The wallet came back with no signed payload. */
-    NOTHING_SIGNED(R.string.swap_failed_nothing_signed),
+    /**
+     * The authorize round-trip failed, so the wallet was never read and nothing was quoted.
+     *
+     * This is the connect step only. An approval that comes back without a signature is not a
+     * failure at all: it is [SwapNote.NOT_APPROVED], and it goes back to the amount step.
+     */
+    CONNECT_REFUSED(R.string.swap_failed_connect_refused),
 
     /**
      * POST /execute did not answer, or answered with no structured code. The transaction was
@@ -471,8 +474,22 @@ enum class SwapFailure(@StringRes val text: Int) {
 
 /** A neutral word about a round-trip that is not a failure. */
 enum class SwapNote(@StringRes val text: Int) {
-    /** The user closed or declined the wallet. Nothing was lost and nothing is owed. */
+    /** The authorize round-trip ended without an account. Nothing was read and nothing is owed. */
     CANCELLED_IN_WALLET(R.string.swap_cancelled),
+
+    /**
+     * The approval round-trip came back with no signature.
+     *
+     * The person declined, the sheet went away, or the session dropped: Mobile Wallet Adapter
+     * does not tell the three apart, and the device log of 2026-09-13 shows why (docs/data-map.md,
+     * "What the first real swap taught us"). The attempt that was not approved and the one that
+     * landed both read "Encrypted session established" and then "mobile-wallet-adapter session
+     * closed"; the only difference the app can see is whether a signature came back with it.
+     *
+     * So the sentence claims none of the three. What it can say is what is certainly true:
+     * nothing was signed, nothing was sent, and the typed amount is still there.
+     */
+    NOT_APPROVED(R.string.swap_not_approved),
 }
 
 // ---- Time --------------------------------------------------------------------------------------

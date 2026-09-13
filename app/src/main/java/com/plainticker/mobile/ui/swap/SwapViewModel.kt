@@ -58,8 +58,10 @@ fun interface SwapDebugLog {
  *    bytes are dead: a fresh /order is the only way on, and fresh bytes need a fresh approval, so
  *    the requote reaches [SwapState.AwaitingWallet] with `requote = true` and the sheet says so.
  *    A second one is terminal.
- * 4. **A cancelled approval is not a failure.** It returns to [SwapState.Amount] with the typed
- *    amount intact and a neutral note. Nothing was signed, nothing was sent, nothing is owed.
+ * 4. **An approval that comes back without a signature is not a failure.** Declined, closed, or a
+ *    session that dropped: the app cannot tell them apart, and it does not have to. Nothing was
+ *    signed, nothing was sent, nothing is owed, so it returns to [SwapState.Amount] with the typed
+ *    amount intact and a neutral note, and the sentence claims no fault.
  *
  * [submitSwaps] is BuildConfig.SUBMIT_SWAPS, false in every debug build, so a debug build signs
  * and stops at [SwapState.Signed]: no /execute, no money, and no receipt.
@@ -107,7 +109,7 @@ class SwapViewModel(
                 }
                 is WalletOutcome.Error -> {
                     debugLog.raw("connect: ${outcome.message}")
-                    return@launch failOpen(leg, SwapFailure.WALLET_REFUSED)
+                    return@launch failOpen(leg, SwapFailure.CONNECT_REFUSED)
                 }
             }
 
@@ -229,19 +231,24 @@ class SwapViewModel(
             timing = timing.closeWallet(clock.nowMillis())
             val signed = when (outcome) {
                 is WalletOutcome.Success -> outcome.value.signedPayloads.firstOrNull()
+                // The wallet itself is gone, which is not something a second tap can fix.
                 is WalletOutcome.NoWallet -> return fail(leg, funds, input, SwapFailure.NO_WALLET, quote, requote, timing)
-                is WalletOutcome.Cancelled -> {
-                    // Nothing was signed and nothing was sent: back to the amount, with it intact.
-                    _state.value = SwapState.Amount(leg, funds, input, SwapNote.CANCELLED_IN_WALLET)
-                    return
-                }
+                is WalletOutcome.Cancelled -> null
                 is WalletOutcome.Error -> {
                     debugLog.raw("wallet: ${outcome.message}")
-                    return fail(leg, funds, input, SwapFailure.WALLET_REFUSED, quote, requote, timing)
+                    null
                 }
             }
             if (signed == null) {
-                return fail(leg, funds, input, SwapFailure.NOTHING_SIGNED, quote, requote, timing)
+                // No signature came back. Whether the person declined, the sheet went away or the
+                // session dropped is not something this app can know: the device log of the
+                // attempt that was not approved and of the one that landed differ only in whether
+                // a signature followed the session closing (docs/data-map.md). What is certain is
+                // the same in all three: nothing was signed, /execute was never called, and no
+                // money moved. So it is a cancellation and not a failure, and it returns to the
+                // amount step with the typed amount intact rather than to a terminal screen.
+                _state.value = SwapState.Amount(leg, funds, input, SwapNote.NOT_APPROVED)
+                return
             }
 
             if (!submitSwaps) {
