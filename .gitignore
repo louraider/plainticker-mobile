@@ -22,3 +22,6 @@ resp.json
 
 # per-machine device list
 /.idea/deviceManager.xml
+
+# python bytecode from the design scripts
+__pycache__/
