@@ -120,7 +120,11 @@ class DetailScreenTest {
     fun `the screen is one scrolling column, so the traversal order is the visual order`() {
         assertEquals("exactly one scroll container", 1, count("verticalScroll("))
         assertEquals("nothing is sticky and nothing overlaps", 0, count("zIndex("))
-        assertEquals(0, count("Box("))
+        // One Box, holding the scroll and the status-bar scrim. The scrim is the only thing on
+        // Detail that does not scroll, and it is not content: it draws no text and takes no
+        // touch, so the header still scrolls away (Insets.kt, and TopScrimTest holds the rest).
+        assertEquals("the only Box is the one the scrim needs", 1, count("Box("))
+        assertEquals("one scrim over the scroll", 1, count("TopScrim("))
         assertEquals("the navigation inset is part of the scrolled content", 1, count("navigationBarsPadding()"))
     }
 

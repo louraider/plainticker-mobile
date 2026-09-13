@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -66,6 +67,7 @@ import com.plainticker.mobile.ui.components.PrimaryButton
 import com.plainticker.mobile.ui.components.SignalRow
 import com.plainticker.mobile.ui.components.SkeletonBar
 import com.plainticker.mobile.ui.components.TopBar
+import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.components.Track
 import com.plainticker.mobile.ui.swap.SwapActions
 import com.plainticker.mobile.ui.text
@@ -157,50 +159,57 @@ internal fun DetailContent(
     onSwap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            // After the scroll, so the padding is part of the scrolled content (Insets.kt).
-            .navigationBarsPadding(),
-    ) {
-        TopBar(
-            action = stringResource(if (state.watched) R.string.action_watching else R.string.action_watch),
-            onAction = onToggleWatch,
-        )
-        state.banner?.let { Banner(text = stringResource(it.text)) }
+    // The only Box on Detail, and the only thing in it that does not scroll is the scrim: the
+    // 64sp hero used to draw in the same pixels as the white system clock, because the content
+    // scrolls under a transparent status bar and nothing stood between them (Insets.kt). Nothing
+    // here is sticky and the section order below is unchanged.
+    Box(modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                // After the scroll, so the padding is part of the scrolled content (Insets.kt).
+                .navigationBarsPadding(),
+        ) {
+            TopBar(
+                action = stringResource(if (state.watched) R.string.action_watching else R.string.action_watch),
+                onAction = onToggleWatch,
+            )
+            state.banner?.let { Banner(text = stringResource(it.text)) }
 
-        Hero(state)
+            Hero(state)
 
-        val tokenNotice = state.tokenNotice
-        if (tokenNotice != null) {
-            // No mint, so no price, no gauge, no chain and no reserves: one line instead of five
-            // blocks that would each have to say the same thing.
-            NoticeLine(tokenNotice)
-        } else {
-            PriceBlock(state)
-            state.gauge?.let {
-                Gauge(
-                    referenceLabel = state.gaugeReference.text(),
-                    tracking = it,
-                    scalePct = GAUGE_SCALE_PCT,
-                )
+            val tokenNotice = state.tokenNotice
+            if (tokenNotice != null) {
+                // No mint, so no price, no gauge, no chain and no reserves: one line instead of five
+                // blocks that would each have to say the same thing.
+                NoticeLine(tokenNotice)
+            } else {
+                PriceBlock(state)
+                state.gauge?.let {
+                    Gauge(
+                        referenceLabel = state.gaugeReference.text(),
+                        tracking = it,
+                        scalePct = GAUGE_SCALE_PCT,
+                    )
+                }
+                Spacer(Modifier.height(LiveGap))
+                LiveBlock(state)
+                Heading(text = stringResource(R.string.detail_heading_backing), topPadding = BackingGap)
+                TrustBlock(state)
             }
-            Spacer(Modifier.height(LiveGap))
-            LiveBlock(state)
-            Heading(text = stringResource(R.string.detail_heading_backing), topPadding = BackingGap)
-            TrustBlock(state)
+
+            FundamentalsBlock(state)
+            SwapBlock(state = state, swap = swap, onSwap = onSwap)
+            Spacer(Modifier.height(TailGap))
+
+            // The sheet is a modal surface and draws in its own window, so where it sits in this
+            // column does not matter. What matters is that it is not inside SwapBlock: that block
+            // returns early when the catalog has not named a symbol, and a sheet that vanished
+            // mid-landing would take a landed swap's receipt with it.
+            SwapSheet(state = swap, actions = swapActions)
         }
-
-        FundamentalsBlock(state)
-        SwapBlock(state = state, swap = swap, onSwap = onSwap)
-        Spacer(Modifier.height(TailGap))
-
-        // The sheet is a modal surface and draws in its own window, so where it sits in this
-        // column does not matter. What matters is that it is not inside SwapBlock: that block
-        // returns early when the catalog has not named a symbol, and a sheet that vanished
-        // mid-landing would take a landed swap's receipt with it.
-        SwapSheet(state = swap, actions = swapActions)
+        TopScrim(Modifier.align(Alignment.TopCenter))
     }
 }
 

@@ -14,10 +14,16 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.plainticker.mobile.ui.theme.Canvas
 import com.plainticker.mobile.ui.theme.LineStrong
 
 /*
@@ -33,7 +39,56 @@ import com.plainticker.mobile.ui.theme.LineStrong
  *   column the padding comes after verticalScroll, so it is part of the scrolled content.
  * - Sheet: Material pads the sheet content by SheetInsets and consumes the top inset by the
  *   sheet offset, so the top only counts once the sheet is dragged up to the status bar.
+ * - Over the top of every scrolling surface, and nowhere else: [TopScrim].
  */
+
+/**
+ * The band the system clock sits in, painted in Canvas and faded out under it.
+ *
+ * Scrolling under a transparent status bar was decided deliberately above, and on the device on
+ * 2026-09-13 it put the 64sp Ink hero and the white system clock in the same pixels, "NVDAx" over
+ * "11:40". The state was never looked at because every canvas artboard is an 890dp content frame
+ * with no system bars drawn. This is the fix the review asked for, and it costs the decision
+ * nothing: the header still scrolls away, nothing is sticky, and no content moves.
+ *
+ * Three properties make it a scrim rather than a bar.
+ *
+ * 1. **It is Canvas over Canvas, so at rest it is invisible.** The page background already fills
+ *    this band. The scrim only becomes visible when something that is not the background passes
+ *    under it, which is exactly when it is needed.
+ * 2. **It holds nothing.** No text, no action, no semantics and no pointer input: it is one Box
+ *    with a gradient, so a touch goes through it and a screen reader never meets it. A sticky
+ *    header is a header that stays; this stays and is not a header.
+ * 3. **It is opaque only where the clock is.** Full Canvas across the status bar inset, then a
+ *    [ScrimFade] fall to nothing, so content dissolves as it leaves rather than being cut off by
+ *    a hard edge. A hard edge is what a status-bar background looks like, and it would make the
+ *    890dp artboards wrong in the other direction.
+ */
+@Composable
+fun TopScrim(modifier: Modifier = Modifier) {
+    val inset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val opaqueTo = scrimOpaqueFraction(inset)
+    val stops = if (opaqueTo > 0f) {
+        arrayOf(0f to Canvas, opaqueTo to Canvas, 1f to Color.Transparent)
+    } else {
+        arrayOf(0f to Canvas, 1f to Color.Transparent)
+    }
+    Box(modifier.fillMaxWidth().height(inset + ScrimFade).background(Brush.verticalGradient(*stops)))
+}
+
+/** How far past the status bar the scrim falls to nothing. Short, so it reads as a fade. */
+val ScrimFade: Dp = 16.dp
+
+/**
+ * Where the fade begins, as a fraction of the whole scrim band: the bottom edge of the status
+ * bar. Everything above it is full Canvas, which is the half of this that matters, because that
+ * is the band the clock is drawn in.
+ *
+ * A window with no status bar at all (a preview, a desktop frame) has nothing to cover and gets
+ * the fade alone, rather than a gradient with two stops in the same place.
+ */
+internal fun scrimOpaqueFraction(inset: Dp, fade: Dp = ScrimFade): Float =
+    (inset / (inset + fade)).coerceIn(0f, 1f)
 
 /**
  * What the sheet content sits above: the navigation bar, plus the keyboard while the amount field
