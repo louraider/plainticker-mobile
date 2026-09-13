@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,10 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.Elevated
 import com.plainticker.mobile.ui.theme.Ink
@@ -55,6 +58,14 @@ fun ListRow(
     trailingAction: String? = null,
     onTrailingAction: (() -> Unit)? = null,
     muted: Boolean = false,
+    /**
+     * Whether to keep the state word's column open on a row that has no word.
+     *
+     * A section where some rows carry a word and some do not is still one column of numerals to
+     * a reader scanning it, so the caller says so once for the whole section and the odd row out
+     * lines up with its neighbours instead of sitting [ValueSubWidth] to their right.
+     */
+    reserveValueSub: Boolean = valueSub != null,
     /**
      * The second cell in the numeral face. A receipt's "to 0.01364 TSLAx" is an amount and a
      * ticker, and DESIGN.md section 3 gives both to JetBrains Mono; the words that join them come
@@ -144,13 +155,19 @@ fun ListRow(
                             modifier = Modifier.alignByBaseline(),
                         )
                     }
-                    if (valueSub != null) {
+                    // The word gets a column of its own, so its width stops deciding where the
+                    // number starts. It is set at the start of that column rather than the end,
+                    // which puts two aligned left edges and one aligned right edge on the screen:
+                    // a table, which is what a column of tabular numerals is for.
+                    if (valueSub != null || reserveValueSub) {
                         Text(
-                            text = valueSub,
+                            text = valueSub.orEmpty(),
                             style = PlainTickerType.small,
                             color = Muted,
                             maxLines = 1,
-                            modifier = Modifier.alignByBaseline(),
+                            modifier = Modifier
+                                .alignByBaseline()
+                                .width(valueSubWidth(LocalDensity.current.fontScale)),
                         )
                     }
                 }
@@ -167,16 +184,73 @@ fun ListRow(
     }
 }
 
+/**
+ * The width the state word's column is given, at a font scale of one.
+ *
+ * Measured on the Seeker from a uiautomator dump on 2026-09-13: "strong" is 112 physical pixels
+ * at 480dpi, which is 37.3dp, and it is the widest of the three words the list uses. Before this
+ * the word and the number were right-aligned as one group, so the word's width decided where the
+ * number began: "84" started at x940, "72" at x960, "79" at x989, a 49px jog down the one column
+ * a reader scans, in the app whose type system was chosen for tabular numerals.
+ */
+val ValueSubWidth: Dp = 40.dp
+
+/**
+ * That column at the reader's font scale.
+ *
+ * Android 14 scales 13sp text non-linearly, so a scale of 1.3 grows a glyph by about 1.19 (the
+ * device smoke walk measured 119 percent). Scaling the column by the raw factor therefore
+ * over-allocates slightly, which spends a little whitespace and can never clip the word. Held at
+ * one from below, because a reader who shrinks the type does not need the column to shrink with
+ * it, and at two from above, so the largest scale cannot eat the ticker beside it.
+ */
+internal fun valueSubWidth(fontScale: Float): Dp = ValueSubWidth * fontScale.coerceIn(1f, 2f)
+
 @InstrumentPreviews
 @Composable
 private fun ListRowPreview() {
     PreviewCanvas {
         Column {
+            // The three state words in the order the device drew them, so the preview shows the
+            // one thing the finding was about: three numerals that end in the same place.
+            ListRow(
+                ticker = "NEMx",
+                company = "Newmont Corp.",
+                meta = "Analysis 7 d old",
+                valueRight = "84",
+                valueSub = "strong",
+                onClick = {},
+            )
+            ListRow(
+                ticker = "ABNBx",
+                company = "Airbnb, Inc.",
+                meta = "Analysis 1 d old",
+                valueRight = "72",
+                valueSub = "weak",
+                onClick = {},
+            )
+            ListRow(
+                ticker = "NVDAx",
+                company = "NVIDIA Corporation",
+                meta = "-0.95% vs NYSE close · 7 d old",
+                valueRight = "79",
+                valueSub = "fair",
+                onClick = {},
+            )
+            // A classified row with no state word keeps the column open, so it lines up too.
+            ListRow(
+                ticker = "PGRx",
+                company = "Progressive Corp.",
+                meta = "Analysis 7 d old",
+                valueRight = "100",
+                reserveValueSub = true,
+                onClick = {},
+            )
             ListRow(
                 ticker = "TSLAx",
                 company = "Tesla, Inc.",
                 meta = "+0.09% vs NYSE close · 2 d old",
-                valueRight = "0.71",
+                valueRight = "71",
                 valueSub = "strong",
                 onClick = {},
             )

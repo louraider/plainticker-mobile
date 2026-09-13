@@ -73,13 +73,13 @@ Fonts are bundled as resources on Android (Outfit and JetBrains Mono, SIL Open F
 - **FactGrid** two columns, 1dp Line gaps and border, cells on Canvas: label 13 Muted, value mono, sub line 13 Ink 2 (mono 12 when it carries numbers); the first cell may span both columns. Exactly as many cells as facts.
 - **Track** label 15 Ink 2, value mono 20 and state word 13 Muted right, hairline track with a 2dp Ink marker. Never a filled bar.
 - **SignalRow** 44dp, name 15 Ink 2 left, "yes" or "no" in mono 14 right.
-- **ListRow** 64dp, ticker mono 18 + company 13 left with a mono 12 meta line, value mono 18 right; one Line divider between rows; text action trailing when needed.
+- **ListRow** 64dp, ticker mono 18 + company 13 left with a mono 12 meta line, value mono 18 right; one Line divider between rows; text action trailing when needed. The value and the state word are two columns, not one right-aligned group: the word is set at the start of a 40dp column (the widest of "strong", "weak" and "fair" is 37.3dp, measured on the device) and grows with the reader's font scale, so the number's right edge is the same on every row. Right-aligned as a group, the word's width decided where the number began: "84" ended at x1004, "79" at x1053 and "72" at x1024 on the Seeker, a 16dp jog down the one column a reader scans. A section where some rows carry no word keeps the column open anyway (`reserveValueSub`), so the odd row lines up with its neighbours.
 - **Field** label above (13 Muted), value mono 36 or Outfit 16, 1dp Line strong underline, Accent underline on focus, one text action right (Max, Clear). No placeholder-as-label.
 - **PrimaryButton** 56dp, Accent fill, Canvas text 16/600, radius 0. **SecondaryButton** Line strong border, Ink text. **DisabledButton** Line border, Muted text.
 - **Sheet** Elevated surface, 1dp Line strong top edge, 28x2dp Line strong handle, radius 0.
 - **Panel** Elevated with a Line border (digest, onboarding). The only card-like container; used for one grouped message, never for lists.
 - **Skeleton** Elevated bars with a 200 ms fade to content. Never a spinner.
-- **Banner** one slot under the TopBar, Elevated, Outfit 13/500; priority offline > stale > hours > device.
+- **Banner** one slot under the TopBar, Elevated, Outfit 13/500; priority offline > stale > hours > device. The hours tier is drawn on the List as well as on Detail, out of the same four strings and decided from the same `MarketHours`: the List prints a premium "vs NYSE close" on every tracked row, so it owes the same caveat the screen one tap away pays, and until 2026-09-13 it paid nothing. The List reads the venue from the first catalog asset carrying a `trading` block, since every block describes the one exchange, and clears the halt flag on the way: a halt is one issuer stopping one token and is Detail's to state, never a sentence about 157 rows.
 
 Shape lock: radius 0 on everything. Touch targets 48dp minimum; list rows 64dp; text actions get 14dp vertical padding.
 

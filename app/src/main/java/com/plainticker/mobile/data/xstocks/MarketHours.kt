@@ -87,6 +87,28 @@ object MarketHours {
         of(asset?.trading, halted = asset?.isTradingHalted == true, nowMillis = nowMillis)
 
     /**
+     * The exchange behind a whole catalog, for a screen that draws many tickers at once.
+     *
+     * Every asset here is a US equity on one exchange, and every `trading` block describes that
+     * one exchange, so the first block that answers answers for all of them. A halt is excluded
+     * deliberately: it is one issuer stopping one asset, and a list of 157 rows must not tell a
+     * reader the market is shut because the first row in catalog order is halted. The per-asset
+     * halt is Detail's to state, on the screen that is about that asset.
+     *
+     * Null for an empty catalog, which is not an answer about the venue: with no assets at all
+     * there is nothing to read, and a screen with no rows on it has no premium to caveat.
+     */
+    fun ofCatalog(assets: List<XStockAsset>, nowMillis: Long): MarketStatus? {
+        if (assets.isEmpty()) return null
+        // The halt is cleared on both levels, the asset's and the block's own flag, because
+        // [of] folds the two together and either one would answer HALTED for the whole list.
+        // The period and the open flag still come from the block: it is only the halt that is
+        // about one token rather than about the exchange behind all of them.
+        val block = assets.firstNotNullOfOrNull { it.trading }?.copy(isTradingHalted = false)
+        return of(block, halted = false, nowMillis = nowMillis)
+    }
+
+    /**
      * The state from one `trading` block. A null [trading] is the only case that reaches the local
      * schedule; a block that answers is believed even when it disagrees with the calendar.
      */

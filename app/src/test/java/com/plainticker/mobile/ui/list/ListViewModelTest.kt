@@ -34,7 +34,12 @@ import com.plainticker.mobile.watchlist.DigestStore
 import com.plainticker.mobile.watchlist.InMemoryDigestStore
 import com.plainticker.mobile.repo.price
 import com.plainticker.mobile.repo.snapshot
+import com.plainticker.mobile.core.Clock
+import com.plainticker.mobile.data.xstocks.Trading
+import com.plainticker.mobile.data.xstocks.TradingPeriod
+import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.repo.xStock
+import com.plainticker.mobile.repo.xStockTrading
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.repo.CatalogUpdate
 import kotlinx.coroutines.CompletableDeferred
@@ -79,11 +84,43 @@ class ListViewModelTest {
     private fun summary(): SummaryResponse =
         HttpClientFactory.json.decodeFromString(SummaryResponse.serializer(), summaryJson)
 
-    private fun catalog() = listOf(
-        xStock("TSLAx", "TSLA", tslaMint, "Tesla xStock"),
-        xStock("JPMx", "JPM", jpmMint, "JPMorgan xStock"),
-        xStock("AAPLx", "AAPL", aaplMint, "Apple xStock"),
-    )
+    /**
+     * Monday 2026-09-14, 10:00 in New York: the NYSE is open, by the calendar and by the block
+     * below alike. Fixed, because the hours banner is a function of the clock and a test that
+     * reads the wall clock changes its mind at 09:30 New York every weekday.
+     */
+    private val marketOpen = Clock { 1_789_394_400_000L }
+
+    /** The same week, 17:00 in New York: the exchange has shut and the close is last night's. */
+    private val marketShut = Clock { 1_789_419_600_000L }
+
+    /**
+     * The catalog carries a `trading` block on every asset, as production does: the xStocks
+     * catalog is filtered to assets that have one (docs/data-map.md, Sources), and that block is
+     * the source of truth about the venue. A fixture without one reaches the weekday fallback,
+     * which is a state the app only meets when the issuer goes quiet.
+     */
+    private fun catalog(trading: Trading? = Trading(currentPeriod = TradingPeriod.MARKET, openNow = true)) =
+        listOf(
+            Triple("TSLAx", "TSLA", tslaMint) to "Tesla xStock",
+            Triple("JPMx", "JPM", jpmMint) to "JPMorgan xStock",
+            Triple("AAPLx", "AAPL", aaplMint) to "Apple xStock",
+        ).map { (id, name) ->
+            val (symbol, ticker, mint) = id
+            if (trading == null) {
+                xStock(symbol, ticker, mint, name)
+            } else {
+                xStockTrading(symbol, ticker, mint, trading, name)
+            }
+        }
+
+    /**
+     * One catalog asset with the venue block, for the tests that build their own list of them.
+     * The block is what production has: the catalog is filtered to assets that carry one, so a
+     * fixture without one is testing the fallback rather than the ordinary case.
+     */
+    private fun openAsset(symbol: String, ticker: String, mint: String): XStockAsset =
+        xStockTrading(symbol, ticker, mint, Trading(currentPeriod = TradingPeriod.MARKET, openNow = true))
 
     private fun viewModel(
         summaries: SummaryRepository = FakeSummaryRepository(Result.success(summary())),
@@ -92,7 +129,8 @@ class ListViewModelTest {
         snapshots: SnapshotRepository = FakeSnapshotRepository(),
         watchlist: WatchlistStore = InMemoryWatchlistStore(),
         digests: DigestStore = InMemoryDigestStore(),
-    ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist, digests)
+        clock: Clock = marketOpen,
+    ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist, digests, clock)
 
     /** The bundled snapshot as the assets carry it: a whole list, dated, and with no price. */
     private fun bundled() = snapshot(
@@ -555,7 +593,7 @@ class ListViewModelTest {
         // Nine xStocks arriving in three pages, in an order that is not the order they are drawn
         // in, so a page that simply appended would show up as a reordering.
         val arrival = listOf("D", "A", "G", "C", "I", "B", "F", "H", "E")
-        val assets = arrival.map { xStock("${it}x", it, "Mint$it".padEnd(44, 'z')) }
+        val assets = arrival.map { openAsset("${it}x", it, "Mint$it".padEnd(44, 'z')) }
         val vm = viewModel(
             summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z"))),
             catalog = FakeCatalogRepository(Result.success(assets), pageSize = 3),
@@ -578,7 +616,7 @@ class ListViewModelTest {
 
     @Test
     fun `pages landing over a painted snapshot refine it and never empty the list`() = runTest {
-        val assets = (1..9).map { xStock("T${it}x", "T$it", "Mint$it".padEnd(44, 'z')) }
+        val assets = (1..9).map { openAsset("T${it}x", "T$it", "Mint$it".padEnd(44, 'z')) }
         val vm = viewModel(
             summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z"))),
             catalog = FakeCatalogRepository(Result.success(assets), pageSize = 3),
@@ -604,7 +642,7 @@ class ListViewModelTest {
         val jupiter = Gate()
         val prices = HeldPriceRepository(jupiter, FakePriceRepository(Result.success(emptyMap())))
         val mints = (1..9).map { "Mint$it".padEnd(44, 'z') }
-        val assets = mints.mapIndexed { index, mint -> xStock("T${index}x", "T$index", mint) }
+        val assets = mints.mapIndexed { index, mint -> openAsset("T${index}x", "T$index", mint) }
         val vm = viewModel(
             summaries = FakeSummaryRepository(Result.success(SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z"))),
             catalog = FakeCatalogRepository(Result.success(assets), pageSize = 3),
@@ -649,8 +687,8 @@ class ListViewModelTest {
         val bundledAssets = mints.mapIndexed { index, mint ->
             SnapshotAsset(symbol = "T${index}x", ticker = "T$index", name = "T$index xStock", mint = mint)
         }
-        val live = mints.mapIndexed { index, mint -> xStock("T${index}x", "T$index", mint) } +
-            xStock("NEWx", "NEW", "MintNew".padEnd(44, 'z'))
+        val live = mints.mapIndexed { index, mint -> openAsset("T${index}x", "T$index", mint) } +
+            openAsset("NEWx", "NEW", "MintNew".padEnd(44, 'z'))
         val empty = SummaryResponse("v1.1", "2026-09-12T00:00:00.000Z")
 
         val vm = viewModel(
@@ -1192,7 +1230,7 @@ class ListViewModelTest {
     /** A list wide enough to have a window and a rest: half analyzed, half catalog only. */
     private fun wide(mints: List<String>, prices: FakePriceRepository): ListViewModel {
         val analyzed = mints.take(mints.size / 2)
-        val assets = mints.mapIndexed { index, mint -> xStock("T${index}x", "T$index", mint) }
+        val assets = mints.mapIndexed { index, mint -> openAsset("T${index}x", "T$index", mint) }
         val rows = analyzed.mapIndexed { index, _ ->
             SummaryRow(
                 ticker = "T$index",

@@ -8,7 +8,12 @@ import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.SummaryRow
 import com.plainticker.mobile.data.plainticker.Tone
 import com.plainticker.mobile.data.snapshot.toSummaryRow
+import com.plainticker.mobile.core.Clock
+import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.snapshot.toXStockAsset
+import com.plainticker.mobile.data.xstocks.MarketHours
+import com.plainticker.mobile.data.xstocks.MarketSource
+import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
@@ -80,10 +85,16 @@ data class ListRow(
 
 /**
  * The one banner slot, in DESIGN.md section 4 order: offline, then stale, then hours, then
- * device. The List has no market-hours banner yet (T9 owns the trading calendar), so what is
- * left is the offline tier (the list could not be loaded at all, or came from the bundled
- * snapshot), the stale tier (nothing on screen is a fresh analysis) and the device tier (one
- * source the rows depend on is missing while the rest of the screen stands).
+ * device. The offline tier is a list that could not be loaded at all or came from the bundled
+ * snapshot, the stale tier is a list on which no analysis is fresh, the hours tier is where the
+ * exchange the premiums are measured against is, and the device tier is one source the rows
+ * depend on being missing while the rest of the screen stands.
+ *
+ * The hours tier was empty until 2026-09-13 and the omission was visible on the device: every
+ * tracked row prints a premium "vs NYSE close" against a last close, and Detail carried "The
+ * NYSE is closed, the reference is the last close" one tap away while the List carried nothing.
+ * The same caveat is owed on both surfaces or on neither, so both now read it out of the same
+ * strings and decide it from the same [MarketHours].
  */
 sealed interface ListBanner {
     /** Offline tier: nothing to draw, the user gets one Retry. */
@@ -102,6 +113,15 @@ sealed interface ListBanner {
 
     /** Stale tier: every analysis on screen is old; [newestDays] is the youngest of them. */
     data class Stale(val newestDays: Int) : ListBanner
+
+    /** Hours tier: the exchange is shut, so every premium on screen is against a last close. */
+    data object MarketClosed : ListBanner
+
+    /** Hours tier: shut by the bundled weekday schedule, because no venue block answered. */
+    data object MarketClosedLocal : ListBanner
+
+    /** Hours tier: open by that same schedule, which knows no holidays and says so. */
+    data object MarketOpenLocal : ListBanner
 
     /** Device tier: the xStocks catalog did not answer, so no row carries a token or a price. */
     data object CatalogUnavailable : ListBanner
@@ -168,6 +188,12 @@ data class ListUiState(
      * lower tier would be a different sentence arriving and leaving in the same second.
      */
     val snapshotBannerDue: Boolean = false,
+    /**
+     * Where the exchange behind these rows is, or null while no catalog has been read. Every
+     * tracked row measures its premium against the NYSE close, so this is what says whether that
+     * close is a live price or last night's.
+     */
+    val market: MarketStatus? = null,
 ) {
     val isEmpty: Boolean get() = !isLoading && !failed && analyzed.isEmpty() && withoutAnalysis.isEmpty()
 
@@ -185,11 +211,29 @@ data class ListUiState(
 
             fromSnapshot -> ListBanner.Snapshot(snapshotCapturedOn)
             allStaleDays != null -> ListBanner.Stale(allStaleDays)
+            hours != null -> hours
             catalogUnavailable -> ListBanner.CatalogUnavailable
             analysisUnavailable -> ListBanner.AnalysisUnavailable
             pricesUnavailable -> ListBanner.PricesUnavailable
             pricesPartial -> ListBanner.PricesPartial
             else -> null
+        }
+
+    /**
+     * The hours tier, decided exactly as Detail decides it (`DetailUiState.banner`) minus the
+     * halt, which is one asset's fact and not a list's. An open exchange says nothing, because
+     * then the reference the rows quote is simply the live price and there is no caveat to make.
+     */
+    private val hours: ListBanner?
+        get() {
+            val market = market ?: return null
+            val guessed = market.source == MarketSource.LOCAL_SCHEDULE
+            return when {
+                market.regularSession && guessed -> ListBanner.MarketOpenLocal
+                market.regularSession -> null
+                guessed -> ListBanner.MarketClosedLocal
+                else -> ListBanner.MarketClosed
+            }
         }
 }
 
@@ -228,6 +272,7 @@ class ListViewModel(
     private val snapshots: SnapshotRepository,
     private val watchlist: WatchlistStore,
     private val digests: DigestStore,
+    private val clock: Clock = WallClock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ListUiState(isLoading = true, watched = watchlist.tickers.value.size))
@@ -512,6 +557,9 @@ class ListViewModel(
                 catalogUnavailable = catalogDown,
                 analysisUnavailable = !analysisKnown,
                 allStaleDays = staleDays(allAnalyzed),
+                // Read off the same catalog the rows were joined against, so the banner cannot
+                // describe a venue the screen is not showing.
+                market = MarketHours.ofCatalog(assets, clock.nowMillis()),
                 generatedAt = generatedAt,
                 snapshotBannerDue = bannerGracePassed,
             )

@@ -203,6 +203,9 @@ private fun AnalyzedRow(row: ListRow, last: Boolean, onOpenDetail: (String) -> U
         meta = rowMeta(row),
         valueRight = row.composite?.let { Fmt.decimal(it, decimals = 0) },
         valueSub = row.state?.let { stringResource(it.label) },
+        // Every analyzed row keeps the word's column open, including the row that has no word,
+        // because the composites under this heading are one column to the reader scanning them.
+        reserveValueSub = true,
         divider = !last,
         onClick = { onOpenDetail(row.ticker) },
         onClickLabel = stringResource(R.string.action_open_ticker, row.display),
@@ -286,6 +289,14 @@ private fun StateBanner(banner: ListBanner, onRetry: () -> Unit) {
 
         is ListBanner.Stale ->
             Banner(text = stringResource(R.string.list_stale_banner, Fmt.daysOld(banner.newestDays)))
+
+        // The hours tier, in Detail's own words out of Detail's own strings: the caveat a reader
+        // meets one tap away must not be worded differently on the screen they came from.
+        ListBanner.MarketClosed -> Banner(text = stringResource(R.string.banner_market_closed))
+
+        ListBanner.MarketClosedLocal -> Banner(text = stringResource(R.string.banner_market_closed_local))
+
+        ListBanner.MarketOpenLocal -> Banner(text = stringResource(R.string.banner_market_open_local))
 
         ListBanner.CatalogUnavailable ->
             Banner(text = stringResource(R.string.list_catalog_unavailable), action = retry, onAction = onRetry)
