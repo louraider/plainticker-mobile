@@ -24,7 +24,13 @@ Created. `~/keystores/plainticker-release.jks`, alias `plainticker-release`, RSA
 66:CE:92:EA:FA:2F:81:9B:9A:2F:6E:4E:ED:DC:33:AC:51:BE:46:64:4C:29:5A:02:75:02:31:B1:22:9A:49:AF
 ```
 
-It is already published at `https://www.plainticker.com/.well-known/assetlinks.json` and verified through Google's Digital Asset Links API. What is not done is the three repository secrets for the tag workflow, which need the password.
+It is already published at `https://www.plainticker.com/.well-known/assetlinks.json` and verified through Google's Digital Asset Links API.
+
+**The chain is proven end to end, 2026-09-13.** Tag `v0.2.0` built a signed release APK in CI from the four repository secrets, and `apksigner` reported the certificate as `66ce92eafa2f819b9a2f6e4eeddc33ac51be46644c295a02750231b1229a49af`, which is the same certificate the published file names. The keystore password was changed once between creation and the build, which did not touch the certificate, exactly as expected: the password protects the file, the certificate is the identity.
+
+Seen on the phone: the Seed Vault Wallet's Connect sheet now names the application as `www.plainticker.com` rather than the template domain it would have shown before the rename and the file. That line is what a person reads before approving a swap.
+
+The release APK is 2.6 MB against the debug build's 16.7 MB, and it carries no debuggable flag, which is also what makes it the only build that can submit a swap.
 
 ## 1. Create it (once)
 
