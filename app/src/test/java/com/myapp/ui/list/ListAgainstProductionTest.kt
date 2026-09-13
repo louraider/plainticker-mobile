@@ -3,6 +3,7 @@ package com.myapp.ui.list
 import com.myapp.MainDispatcherRule
 import com.myapp.data.snapshot.ListSnapshot
 import com.myapp.prefs.InMemoryWatchlistStore
+import com.myapp.watchlist.InMemoryDigestStore
 import com.myapp.repo.AssetSource
 import com.myapp.repo.BundledSnapshotRepository
 import com.myapp.repo.FakeCatalogRepository
@@ -56,6 +57,7 @@ class ListAgainstProductionTest {
         prices,
         snapshots,
         InMemoryWatchlistStore(),
+        InMemoryDigestStore(),
     )
 
     private suspend fun snapshot(): ListSnapshot = checkNotNull(snapshots.listSnapshot())

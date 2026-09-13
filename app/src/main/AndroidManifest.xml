@@ -3,6 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Runtime on this phone's API level, and asked for exactly once: at the moment the first
+         ticker is watched, never at launch (plan section 13 Pass 2 and Pass 7). A refusal costs
+         the notification and nothing else; the digest is on the Watchlist screen either way. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".PlainTickerApp"
