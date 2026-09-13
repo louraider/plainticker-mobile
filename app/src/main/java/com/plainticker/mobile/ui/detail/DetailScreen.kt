@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +52,7 @@ import com.plainticker.mobile.data.xstocks.Reserves
 import com.plainticker.mobile.data.xstocks.Underlying
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactGrid
@@ -409,7 +411,9 @@ private fun FScoreBlock(fscore: FScoreContent) {
     }
     val score = fscore.score
     // Resolved before the semantics lambda, which is not a composable scope.
-    val spoken = score?.let { stringResource(R.string.detail_fscore_a11y, it, fscore.outOf) }
+    val spoken = score?.let {
+        pluralStringResource(R.plurals.detail_fscore_a11y, fscore.outOf, it, Fmt.count(fscore.outOf))
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -425,7 +429,7 @@ private fun FScoreBlock(fscore: FScoreContent) {
             maxLines = 1,
         )
         Text(
-            text = stringResource(R.string.detail_fscore_of, fscore.outOf),
+            text = pluralStringResource(R.plurals.detail_fscore_of, fscore.outOf, Fmt.count(fscore.outOf)),
             style = PlainTickerType.company,
             color = Muted,
             modifier = Modifier.padding(bottom = FScoreCounterLift),

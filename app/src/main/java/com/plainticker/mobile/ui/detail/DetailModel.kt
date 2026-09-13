@@ -110,7 +110,8 @@ data class SignalItem(@StringRes val name: Int, val ok: Boolean?)
 data class FScoreContent(
     /** Null when the filer has no F-Score at all; the block then states that instead of a zero. */
     val score: String?,
-    val outOf: String,
+    /** The scale, as a number and not as a numeral: it is what selects the plural of "signals". */
+    val outOf: Int,
     val signals: List<SignalItem>,
 ) {
     /**
@@ -461,7 +462,7 @@ val DetailUiState.fScore: FScoreContent?
         }
         return FScoreContent(
             score = fscore?.score?.let { Fmt.count(it) },
-            outOf = Fmt.count(outOf),
+            outOf = outOf,
             signals = signals,
         )
     }
