@@ -8,5 +8,5 @@
 #
 # Lines starting with '#' are ignored. The guard fails if an active line is not a hex digest.
 2246dcff0edadcf67df1c2dc870c1c8cfc52747f46cca06a0dbd1cc8f8e2ca1b  founder wallet public key
-#<sha256 here>  transaction signature of the Sep 10 spike swap — founder fills in
-#<sha256 here>  founder SKR stake account — founder fills in
+44ccc5ca952d8ba1b8ea09760dd5be61ac2cd219c40f5942ddf0812a349f55f5  transaction signature of the Sep 10 spike swap
+165286d8c03f3a00b15760d19bf4e7fb072cc52858742277271b4ebfc2bc5729  founder SKR stake account
