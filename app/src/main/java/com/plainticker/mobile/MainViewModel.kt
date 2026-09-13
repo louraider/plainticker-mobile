@@ -1,6 +1,5 @@
 package com.plainticker.mobile
 
-import android.net.Uri
 import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,9 +9,8 @@ import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.jupiter.SwapError
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.wallet.MwaWalletSession
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
-import com.solana.mobilewalletadapter.clientlib.ConnectionIdentity
-import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import com.solana.mobilewalletadapter.clientlib.Solana
 import com.solana.mobilewalletadapter.clientlib.TransactionResult
 import com.solana.mobilewalletadapter.common.ProtocolContract
@@ -33,19 +31,16 @@ data class WalletUiState(
 
 class MainViewModel : ViewModel() {
 
-    // Replace with your own domain and host a Digital Asset Links file there so
-    // wallets can verify your app identity: https://docs.solanamobile.com/android-native/using_mobile_wallet_adapter
-    private val walletAdapter = MobileWalletAdapter(
-        connectionIdentity = ConnectionIdentity(
-            identityUri = Uri.parse("https://yourdapp.com"),
-            iconUri = Uri.parse("favicon.ico"),
-            identityName = "Myapp",
-        )
-    ).apply {
-        // xStocks and Jupiter are mainnet-only, there is no devnet equivalent, so the
-        // capability probe has to run against the cluster the product will actually use.
-        blockchain = Solana.Mainnet
-    }
+    /**
+     * The app has one wallet identity and this is it: [MwaWalletSession.defaultAdapter], the same
+     * adapter the shipping screens use. What a person reads in the Seed Vault prompt is
+     * [MwaWalletSession.IDENTITY_NAME] over [MwaWalletSession.IDENTITY_URI], so the spike cannot
+     * drift from the product, and the identity moves in one place when it moves.
+     *
+     * Mainnet, as the adapter sets: xStocks and Jupiter have no devnet equivalent, so the
+     * capability probe has to run against the cluster the product will actually use.
+     */
+    private val walletAdapter = MwaWalletSession.defaultAdapter()
 
     private val httpClient = HttpClientFactory.create()
     private val swapApi = JupiterSwapApi(httpClient)
