@@ -1,0 +1,6 @@
+# composite.py rewrites every candidate into the whole 1200x2670 drawer screenshot and crops a
+# two-row strip out of it, which is ~4.6 MB of PNG that regenerates in one command. Only the
+# contact sheet is kept, because that is the one image somebody opens without running anything.
+# Everything the gallery needs is already inside gallery.html as data URIs.
+*-drawer.png
+*-crop.png
