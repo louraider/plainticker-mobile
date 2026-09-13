@@ -241,6 +241,8 @@ private fun Swap(receipt: SwapReceipt, last: Boolean) {
     InstrumentRow(
         ticker = paid,
         company = received,
+        // What came back is an amount and a ticker: numerals never sit in the UI face.
+        companyMono = true,
         meta = stringResource(R.string.portfolio_swap_row_meta, cost, landed),
         divider = !last,
         description = sentence(paid, received, cost, landed),

@@ -55,6 +55,12 @@ fun ListRow(
     trailingAction: String? = null,
     onTrailingAction: (() -> Unit)? = null,
     muted: Boolean = false,
+    /**
+     * The second cell in the numeral face. A receipt's "to 0.01364 TSLAx" is an amount and a
+     * ticker, and DESIGN.md section 3 gives both to JetBrains Mono; the words that join them come
+     * with it, exactly as they do on the mono meta line below.
+     */
+    companyMono: Boolean = false,
     divider: Boolean = true,
     onClick: (() -> Unit)? = null,
     onClickLabel: String = "Open $ticker",
@@ -108,7 +114,7 @@ fun ListRow(
                     if (company != null) {
                         Text(
                             text = company,
-                            style = PlainTickerType.small,
+                            style = if (companyMono) PlainTickerType.monoSmall else PlainTickerType.small,
                             color = companyColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
