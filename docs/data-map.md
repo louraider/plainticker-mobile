@@ -1,6 +1,6 @@
 # Data map for the Week 2 screens
 
-Which field feeds which cell, from the live sources as of 2026-09-11. Screens and cells are named as in `DESIGN.md` and `design/canvas/instrument.py`. Every number goes through `Fmt`. Kotlin models: `com.myapp.data.plainticker.PlainTickerModels`, `data.xstocks.XStocksModels`, `data.jupiter.JupiterModels`, `data.rpc.RpcModels`.
+Which field feeds which cell, from the live sources as of 2026-09-11. Screens and cells are named as in `DESIGN.md` and `design/canvas/instrument.py`. Every number goes through `Fmt`. Kotlin models: `com.plainticker.mobile.data.plainticker.PlainTickerModels`, `data.xstocks.XStocksModels`, `data.jupiter.JupiterModels`, `data.rpc.RpcModels`.
 
 ## Sources
 
@@ -82,7 +82,7 @@ This matters more than its size suggests: the list is the first thing a judge op
 
 The three client fixes above are in. Measured on the same phone, the same evening, same Wi-Fi.
 
-**Method.** Debug build installed over adb, `am force-stop`, `am start -n com.myapp/.MainActivity`,
+**Method.** Debug build installed over adb, `am force-stop`, `am start -n com.plainticker.mobile/.MainActivity`,
 and the launch recorded with `adb shell screenrecord` at the display's own rate. The recording is
 anchored to the system's own launch measurement: `ActivityTaskManager: Displayed` gives the
 milliseconds from the launch request to the activity's first frame, and that frame is found in the
@@ -646,7 +646,7 @@ the fix was confirmed.
 | Digest panel | `DigestRecord.text` as stored, with `Fmt.utc(producedAtMillis)` above it | "No digest yet. The first one lands about twelve hours after you watch a stock." when there is none |
 | Digest footer | "Notifications on, one check a day." / "Notifications off, the digest stays on this screen." + "Enable" | plus "Checked 3 h ago." once a check has run |
 
-**The digest (`com.myapp.watchlist.digest`) is a pure function of its inputs.** Three clauses in a
+**The digest (`com.plainticker.mobile.watchlist.digest`) is a pure function of its inputs.** Three clauses in a
 fixed order: the count watched, then up to two premiums that moved half a percentage point or more
 against the NYSE close since the previous check, largest first, then the nearest report ahead. Every
 list it builds is sorted by something the input carries, so the same rows on the same day produce
@@ -690,7 +690,7 @@ of the debug build, against production. No money moved and nothing was signed.
 | The check, fired by hand | the debug action enqueued the worker; the notification read **title "Daily digest", text "1 watched. NVDAx reports in 65 days."**, channel `watchlist-digest`, BigTextStyle, small icon `ic_stat_plainticker` |
 | The Panel says what was sent | "13 Sep 2026 02:16 UTC" over "1 watched. NVDAx reports in 65 days.", then "Notifications on, one check a day." and "Checked 0 s ago." |
 | The same digest twice is silent | a second run left the notification's `when=1789265818824` untouched and the Panel's produced time at 02:16, and only "Checked" moved |
-| The notification opens what it named | tapping it in the shade resumed `com.myapp/.MainActivity` on the Watchlist tab with the row and the Panel on screen |
+| The notification opens what it named | tapping it in the shade resumed `com.plainticker.mobile/.MainActivity` on the Watchlist tab with the row and the Panel on screen |
 | A refused permission degrades | with the permission revoked the footer read "Notifications off, the digest stays on this screen." with "Enable"; watching AAPLx raised **no** second dialog; the check then produced a new digest ("2 watched. AAPLx reports in 45 days.", 02:20 UTC) and posted nothing |
 | The Today strip | "Today: 1 watched, next report AAPLx on Oct 28" on the List, and the count alone when the named ticker is no longer watched |
 | Unwatching the last ticker | the empty sentence with "Browse analyzed stocks" returned, and the WorkManager job was gone from `dumpsys jobscheduler` |
