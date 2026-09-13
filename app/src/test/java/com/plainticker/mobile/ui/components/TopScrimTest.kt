@@ -58,7 +58,10 @@ class TopScrimTest {
         // And the scrim ends: it is a band, not a background. A phone with no status bar gets
         // the fade alone rather than a gradient with two stops in the same place.
         assertEquals(0f, scrimOpaqueFraction(0.dp), 0f)
-        assertTrue("the fade must be short enough to read as a fade", ScrimFade <= 24.dp)
+        // The ceiling is the wordmark, not taste. TopBar is 56dp after the inset with its 15sp
+        // label centred, so the topmost ink of "PlainTicker" is about 18dp into it. A fade that
+        // reached it would tint the wordmark at rest, and at rest this band must be invisible.
+        assertTrue("a softer fade would tint the wordmark at rest", ScrimFade < 18.dp)
         assertTrue(ScrimFade > 0.dp)
     }
 

@@ -76,7 +76,16 @@ fun TopScrim(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(inset + ScrimFade).background(Brush.verticalGradient(*stops)))
 }
 
-/** How far past the status bar the scrim falls to nothing. Short, so it reads as a fade. */
+/**
+ * How far past the status bar the scrim falls to nothing.
+ *
+ * It has a ceiling, and the ceiling is the wordmark. [TopBar] is 56dp after the inset with its
+ * 15sp label centred, so the topmost ink of "PlainTicker" sits about 18dp into that bar. A fade
+ * that reached it would tint the wordmark at rest, which is the one thing this band must never do:
+ * at rest it is Canvas over Canvas and therefore invisible. 16dp stops about 3dp above it.
+ *
+ * So a later edit that wants a softer fall has to move the wordmark first, not this number.
+ */
 val ScrimFade: Dp = 16.dp
 
 /**

@@ -79,6 +79,22 @@
       "y": 3930,
       "w": 400,
       "h": 680
+    },
+    {
+      "file": "PortfolioColdOpen.dc.html",
+      "title": "6b Portfolio, cold open with no wallet",
+      "x": 992,
+      "y": 3930,
+      "w": 400,
+      "h": 890
+    },
+    {
+      "file": "ScrimStates.dc.html",
+      "title": "8 The status bar scrim, before and after",
+      "x": 1488,
+      "y": 3930,
+      "w": 400,
+      "h": 560
     }
   ],
   "annotations": [

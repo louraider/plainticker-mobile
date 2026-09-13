@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <style>
+    body { margin: 0; background: #0B0F14; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    a { color: #5AA9E6; } a:hover { color: #E8ECF1; }
+    @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  </style>
+</helmet>
+<div style="width: 400px; height: 890px; overflow: hidden; background: #0B0F14; position: relative; display: flex; flex-direction: column; box-sizing: border-box;">
+<div style="height: 36px; flex: none;"></div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 600; color: #E8ECF1; letter-spacing: -0.01em;">PlainTicker</div>
+  <span></span>
+</div>
+<div style="display: flex; flex-direction: row; gap: 24px; padding: 0 20px; border-bottom: 1px solid rgba(232,236,241,0.10); flex: none;"><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #7F8A99;  padding: 12px 0 14px 0; border-bottom: 2px solid transparent;">List</div><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #E8ECF1;  padding: 12px 0 14px 0; border-bottom: 2px solid #5AA9E6;">Portfolio</div><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #7F8A99;  padding: 12px 0 14px 0; border-bottom: 2px solid transparent;">Watchlist</div></div>
+<div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; padding: 32px 20px 14px 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em;">Holdings</div>
+  
+</div>
+<div style="padding: 4px 20px 14px 20px; font-family: 'Outfit', system-ui, sans-serif; font-size: 15px; font-weight: 400; color: #E8ECF1; line-height: 23px; flex: none;">What this app recorded when its own swaps landed. The wallet itself has not been read.</div>
+<div style="display: flex; flex-direction: row; justify-content: flex-end; padding: 0 20px; flex: none;"><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 14px; font-weight: 600; color: #5AA9E6;  padding: 14px 0 14px 16px;">Connect wallet</div></div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; padding: 12px 20px; box-sizing: border-box; ">
+  <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 10px;">
+      <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 18px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 22px;">TSLAx</div>
+      <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Tesla, Inc.</div>
+    </div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 400; color: #7F8A99; font-variant-numeric: tabular-nums; line-height: 18px;">Swapped 13 Sep 2026 08:08 UTC</div>
+  </div>
+  <div style="display: flex; flex-direction: row; align-items: center; flex: none;">
+    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 8px;">
+      <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 18px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 22px; white-space: nowrap;">0.013629</div>
+      
+    </div>
+    
+  </div>
+</div>
+<div style="display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 12px; padding: 30px 20px 14px 20px; flex: none;">
+  <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 20px; font-weight: 600; color: #E8ECF1; line-height: 26px; letter-spacing: -0.01em;">Recent swaps</div>
+  
+</div>
+<div style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; padding: 12px 20px; box-sizing: border-box; ">
+  <div style="display: flex; flex-direction: column; gap: 3px; min-width: 0;">
+    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 10px;">
+      <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 18px; font-weight: 500; color: #E8ECF1; font-variant-numeric: tabular-nums; line-height: 22px;">4.995 USDC</div>
+      <div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #B4BCC8; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">to 0.013629 TSLAx</div>
+    </div>
+    <div style="font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 12px; font-weight: 400; color: #7F8A99; font-variant-numeric: tabular-nums; line-height: 18px;">all-in cost 0.32% · 13 Sep 2026 08:08 UTC</div>
+  </div>
+  <div style="display: flex; flex-direction: row; align-items: center; flex: none;">
+    <div style="display: flex; flex-direction: row; align-items: baseline; gap: 8px;">
+      
+      
+    </div>
+    
+  </div>
+</div>
+<div style="padding: 16px 20px 0 20px; font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 400; color: #7F8A99; line-height: 18px; flex: none;">The record this app kept of the swaps it made from this device.</div>
+
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 52px; background: linear-gradient(to bottom, #0B0F14 0%, #0B0F14 69.2%, rgba(11,15,20,0) 100%); pointer-events: none;"></div><div style="position: absolute; left: 0; right: 0; top: 0; height: 36px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; pointer-events: none;"><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #FFFFFF; line-height: 18px;">11:40</div><div style="font-family: 'Outfit', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #FFFFFF; line-height: 18px;">100%</div></div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -133,7 +133,6 @@ internal fun PortfolioContent(
                         onOpenDetail = onOpenDetail,
                     )
                 }
-                item(key = "recorded-note") { Footnote(stringResource(R.string.portfolio_recorded_note)) }
             }
 
             !state.connected -> item(key = "connect") {
