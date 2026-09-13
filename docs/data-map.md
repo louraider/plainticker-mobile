@@ -43,7 +43,7 @@ English text sources: `axes.*.label_en` (state words), `method.statement_en` (di
 
 | Cell | Field | Rule |
 |---|---|---|
-| Today strip | Watchlist store + `forward.raw.nextEarningsDate` of watched tickers | hidden when nothing is watched; "next report {TICKER} on {date}" |
+| Today strip | Watchlist store + the nearest report the last daily check stored (`DigestRecord.nextReport`) | hidden when nothing is watched; "Today: 3 watched, next report TSLAx on Oct 22", and the count alone until a check has run or when the named ticker is no longer watched |
 | Row ticker | catalog `symbol` (e.g. TSLAx) | mono 18 |
 | Row company | `/summary.company`, fallback catalog `name` | 13, ellipsis |
 | Row value right | `/summary.composite` as `Fmt.count`-style 2 decimals of 0-1? No: composite is a percentile 0-100 on the web; on mobile show `composite_percentile`-style integer from `/summary.composite` | show as integer `71`, not `0.71` (fix the canvas sample later) |
@@ -632,12 +632,76 @@ section 3 gives every numeral and every ticker to JetBrains Mono, so `ListRow` g
 and the swap row passes it; the cell went from 585 px to 650 px wide on the device, which is how
 the fix was confirmed.
 
-### Watchlist (T12)
+### Watchlist (T12), as built
 
-| Cell | Field |
+| Cell | Field | Rule |
+|---|---|---|
+| Row ticker | catalog `symbol`, else the underlying ticker | mono 18; the row opens Detail |
+| Row company | `/summary.company`, else payload `company`, else catalog `name` | 13, ellipsis |
+| Row meta, first half | `Fmt.monthDay(forward.raw.nextEarningsDate)` as "Reports Oct 28" | "No report date" when the payload carries none |
+| Row meta, first half, dropped ticker | "Not in the analysis list" | when `/summary` no longer carries the ticker; no analysis is then fetched for it |
+| Row meta, second half | `TrackingQuality` exactly as the List row: premium, or the pool sentence below $10k, or "Pool depth not reported" | the two halves join with `list_row_meta_join`, one middle dot |
+| Trailing action | "Unwatch", 48dp, its own target; no swipe | the row itself opens Detail |
+| Empty | "Nothing watched yet. Watch a stock from its page to see its next report date here, and get one digest a day." + "Browse analyzed stocks" | the common first state |
+| Digest panel | `DigestRecord.text` as stored, with `Fmt.utc(producedAtMillis)` above it | "No digest yet. The first one lands about twelve hours after you watch a stock." when there is none |
+| Digest footer | "Notifications on, one check a day." / "Notifications off, the digest stays on this screen." + "Enable" | plus "Checked 3 h ago." once a check has run |
+
+**The digest (`com.myapp.watchlist.digest`) is a pure function of its inputs.** Three clauses in a
+fixed order: the count watched, then up to two premiums that moved half a percentage point or more
+against the NYSE close since the previous check, largest first, then the nearest report ahead. Every
+list it builds is sorted by something the input carries, so the same rows on the same day produce
+the same string. The copy is in strings.xml (`digest_*`) and resolved through one seam, so the
+notification and the Panel cannot word it differently.
+
+Half a point is the threshold because DESIGN.md section 1.1 measured every pool at or above $100k
+tracking within 0.8 percent: a token can sit anywhere in that band on any day without anything
+happening to it. A premium the liquidity floor withheld is not a baseline either, so a dead pool
+can never "move".
+
+**What the check does with what it found**
+
+| Outcome | Stored | Notification |
+|---|---|---|
+| News, and not yesterday's | text, `producedAtMillis`, premiums, next report | posted |
+| Identical to the last digest | premiums, next report, `lastCheckedAtMillis` | none: the reader has already been told |
+| Nothing worth a sentence | the same, and the old digest is left alone | none |
+| `/summary` did not answer | nothing at all | none; the worker asks for a retry |
+
+**The schedule.** One unique periodic `WatchlistWorker`, network constrained, enqueued with KEEP
+the moment the watchlist stops being empty, initial delay twelve hours, period one day; cancelled
+when the last ticker comes off. Watching a second stock therefore does not push the first digest
+another half day out. `POST_NOTIFICATIONS` is requested on the tap that puts the first ticker on an
+empty watchlist, once ever (`notifications_asked` in the same preferences), and a refusal leaves the
+digest on the screen with an Enable action beside it.
+
+#### On the Seeker, 2026-09-13
+
+Walked on SM02E4072810430 (Android 16, 1200x2670 at 480 dpi, nothing overridden), a clean install
+of the debug build, against production. No money moved and nothing was signed.
+
+| What | Evidence |
 |---|---|
-| Row sub | "Reports {date}" from `forward.raw.nextEarningsDate` (or "No report date") + premium |
-| Digest panel | last WorkManager digest text, stored locally |
+| Not asked at launch | after install and after onboarding, `POST_NOTIFICATIONS: granted=false` with no dialog in the dump |
+| Asked at the first watch | the tap on "Watch" in the NVDAx header raised `com.android.permissioncontroller` with "Allow PlainTicker to send you notifications?"; the action then read "Watching" |
+| The twelve hours are real | `dumpsys jobscheduler`: "Minimum latency: +11h59m59s985ms", "Network type: ... INTERNET", required constraints TIMING_DELAY and CONNECTIVITY |
+| The row | "NVDAx  NVIDIA Corporation" with "Reports Nov 17 · -0.19% vs NYSE close" and "Unwatch" in a 144 px box, which is 48 dp |
+| One spoken sentence | `content-desc="NVDAx, NVIDIA Corporation, Reports Nov 17, minus 0.19 percent vs NYSE close"` |
+| Before any check | the Panel read "No digest yet. The first one lands about twelve hours after you watch a stock." and there was no "Checked" line |
+| The check, fired by hand | the debug action enqueued the worker; the notification read **title "Daily digest", text "1 watched. NVDAx reports in 65 days."**, channel `watchlist-digest`, BigTextStyle, small icon `ic_stat_plainticker` |
+| The Panel says what was sent | "13 Sep 2026 02:16 UTC" over "1 watched. NVDAx reports in 65 days.", then "Notifications on, one check a day." and "Checked 0 s ago." |
+| The same digest twice is silent | a second run left the notification's `when=1789265818824` untouched and the Panel's produced time at 02:16, and only "Checked" moved |
+| The notification opens what it named | tapping it in the shade resumed `com.myapp/.MainActivity` on the Watchlist tab with the row and the Panel on screen |
+| A refused permission degrades | with the permission revoked the footer read "Notifications off, the digest stays on this screen." with "Enable"; watching AAPLx raised **no** second dialog; the check then produced a new digest ("2 watched. AAPLx reports in 45 days.", 02:20 UTC) and posted nothing |
+| The Today strip | "Today: 1 watched, next report AAPLx on Oct 28" on the List, and the count alone when the named ticker is no longer watched |
+| Unwatching the last ticker | the empty sentence with "Browse analyzed stocks" returned, and the WorkManager job was gone from `dumpsys jobscheduler` |
+
+Restored afterwards: nothing watched, no notification pending, `POST_NOTIFICATIONS` revoked (its
+state before the walk), and no file of this walk left on /sdcard.
+
+**Not seen on hardware:** a premium that actually moved half a point between two runs, since both
+runs were minutes apart on a closed market, so the "moved from x to y" clause is covered by
+`DigestTest` and `WatchlistCheckTest` only; and a real overnight run of the periodic job, which the
+job scheduler dump shows scheduled but which nothing can observe inside one session.
 
 ## Known gaps to decide before T9
 
