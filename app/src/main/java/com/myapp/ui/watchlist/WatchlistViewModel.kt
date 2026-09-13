@@ -9,6 +9,7 @@ import com.myapp.watchlist.DigestRecord
 import com.myapp.watchlist.DigestStore
 import com.myapp.watchlist.WatchedTicker
 import com.myapp.watchlist.WatchlistFacts
+import com.myapp.watchlist.WatchlistScheduler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -79,6 +80,7 @@ class WatchlistViewModel(
     private val facts: WatchlistFacts,
     private val digests: DigestStore,
     private val notifier: DigestNotifier,
+    private val scheduler: WatchlistScheduler,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -117,6 +119,17 @@ class WatchlistViewModel(
 
     /** Takes one ticker off the list. The rows follow from the store, so nothing is removed here. */
     fun unwatch(ticker: String) = watchlist.remove(ticker)
+
+    /**
+     * Fires the daily check now. Debug builds only (the screen offers no way to call it otherwise),
+     * and deliberately through WorkManager rather than straight into [com.myapp.watchlist.WatchlistCheck]:
+     * what needs testing without waiting a day is the whole path, the worker and its network
+     * constraint included, and not just the part of it that a unit test already covers.
+     *
+     * Nothing is returned. The digest lands in the store, the store reaches this screen, and the
+     * Panel redraws itself, which is exactly what happens when the daily run produces one.
+     */
+    fun runCheckNow() = scheduler.runNow()
 
     /**
      * Re-reads whether notifications are allowed, which is the one piece of this screen's state
