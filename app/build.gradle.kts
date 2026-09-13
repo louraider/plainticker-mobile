@@ -113,6 +113,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.mobile.wallet.adapter.clientlib.ktx)
     implementation(libs.multimult)
     implementation(libs.web3.solana)

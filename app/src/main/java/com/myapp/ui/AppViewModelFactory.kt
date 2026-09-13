@@ -36,6 +36,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.priceRepository,
             container.mintRepository,
             container.watchlistStore,
+            container.notificationPromptStore,
             container.clock,
         )
     }
@@ -64,6 +65,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.watchlistFacts,
             container.digestStore,
             container.digestNotifier,
+            container.watchlistScheduler,
             container.clock,
         )
     }

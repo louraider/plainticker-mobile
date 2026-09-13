@@ -20,6 +20,8 @@ import com.myapp.watchlist.DigestRecord
 import com.myapp.watchlist.FakeDigestNotifier
 import com.myapp.watchlist.InMemoryDigestStore
 import com.myapp.watchlist.WatchlistFacts
+import com.myapp.watchlist.WatchlistScheduler
+import java.time.Duration
 import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -43,13 +45,35 @@ class WatchlistViewModelTest {
     private val prices = FakePriceRepository()
     private val digests = InMemoryDigestStore()
     private val notifier = FakeDigestNotifier()
+    private val scheduler = RecordingScheduler()
     private val clock = Clock { NOW }
+
+    private class RecordingScheduler : WatchlistScheduler {
+        val scheduled = mutableListOf<Duration>()
+        var cancels = 0
+            private set
+        var runs = 0
+            private set
+
+        override fun scheduleDaily(initialDelay: Duration) {
+            scheduled += initialDelay
+        }
+
+        override fun cancel() {
+            cancels++
+        }
+
+        override fun runNow() {
+            runs++
+        }
+    }
 
     private fun viewModel(watching: Set<String> = emptySet()) = WatchlistViewModel(
         watchlist = InMemoryWatchlistStore(watching),
         facts = WatchlistFacts(summaries, catalog, prices),
         digests = digests,
         notifier = notifier,
+        scheduler = scheduler,
         clock = clock,
     )
 
@@ -171,6 +195,15 @@ class WatchlistViewModelTest {
             assertTrue(awaitUntil { it.notificationsOn }.notificationsOn)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `the debug entry point fires the check through the scheduler`() = runTest {
+        val vm = viewModel()
+
+        vm.runCheckNow()
+
+        assertEquals(1, scheduler.runs)
     }
 
     private companion object {

@@ -1,5 +1,9 @@
 package com.myapp.ui.detail
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -99,6 +103,12 @@ fun DetailScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
 
+    // The one permission this app asks for, at the one moment it means anything: the tap that puts
+    // the first ticker on the watchlist, which is the tap that creates something to notify about.
+    // Never at launch. The answer is not acted on here at all: a refusal leaves the digest on the
+    // Watchlist screen, which is where it is either way, and nothing asks again.
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     DetailContent(
         state = state,
         swap = swap,
@@ -115,7 +125,12 @@ fun DetailScreen(
                 onViewPortfolio()
             },
         ),
-        onToggleWatch = viewModel::toggleWatch,
+        onToggleWatch = {
+            val ask = viewModel.toggleWatch()
+            if (ask && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        },
         onSwap = {
             state.mint?.let { mint ->
                 swapViewModel.open(

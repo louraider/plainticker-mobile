@@ -8,6 +8,7 @@ import com.myapp.data.net.ApiException
 import com.myapp.data.xstocks.MarketHours
 import com.myapp.data.xstocks.XStockAsset
 import com.myapp.data.xstocks.toReserves
+import com.myapp.prefs.NotificationPromptStore
 import com.myapp.prefs.WatchlistStore
 import com.myapp.repo.CatalogRepository
 import com.myapp.repo.MintRepository
@@ -48,6 +49,7 @@ class DetailViewModel(
     private val prices: PriceRepository,
     private val mints: MintRepository,
     private val watchlist: WatchlistStore,
+    private val prompts: NotificationPromptStore,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -87,8 +89,24 @@ class DetailViewModel(
         }
     }
 
-    /** Adds or removes this ticker from the one watchlist the whole app shares. */
-    fun toggleWatch() = watchlist.toggle(ticker)
+    /**
+     * Adds or removes this ticker from the one watchlist the whole app shares, and answers whether
+     * the caller should now ask for permission to send notifications.
+     *
+     * True exactly once in the life of an install: on the tap that puts the first ticker on an
+     * empty watchlist, which is the moment the plan names (section 13 Pass 2 and Pass 7) and the
+     * only moment at which the request means anything to a reader. Never at launch, never on the
+     * second stock, and never again after a refusal, which is an answer rather than a state to
+     * work around. The permission itself is the screen's to request: this decides only when.
+     */
+    fun toggleWatch(): Boolean {
+        val watchedBefore = watchlist.tickers.value
+        val adding = ticker !in watchedBefore
+        watchlist.toggle(ticker)
+        if (!adding || watchedBefore.isNotEmpty() || prompts.hasAsked()) return false
+        prompts.setAsked()
+        return true
+    }
 
     fun refresh() {
         refreshJob?.cancel()
