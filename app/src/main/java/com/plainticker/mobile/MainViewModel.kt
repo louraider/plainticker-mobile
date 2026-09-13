@@ -32,10 +32,13 @@ data class WalletUiState(
 class MainViewModel : ViewModel() {
 
     /**
-     * The app has one wallet identity and this is it: [MwaWalletSession.defaultAdapter], the same
-     * adapter the shipping screens use. What a person reads in the Seed Vault prompt is
-     * [MwaWalletSession.IDENTITY_NAME] over [MwaWalletSession.IDENTITY_URI], so the spike cannot
-     * drift from the product, and the identity moves in one place when it moves.
+     * The app has one wallet identity and this is it: [MwaWalletSession.defaultAdapter] is the
+     * single place the identity is built, and the shipping screens reach the same builder
+     * through [AppContainer.walletAdapter]. This is a second adapter instance, not the shared
+     * one, so the spike carries its own authorization token; what it cannot carry is a
+     * different identity. What a person reads in the Seed Vault prompt is
+     * [MwaWalletSession.IDENTITY_NAME] over [MwaWalletSession.IDENTITY_URI] either way, so the
+     * spike cannot drift from the product, and the identity moves in one place when it moves.
      *
      * Mainnet, as the adapter sets: xStocks and Jupiter have no devnet equivalent, so the
      * capability probe has to run against the cluster the product will actually use.
