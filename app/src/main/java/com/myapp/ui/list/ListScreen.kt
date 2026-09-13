@@ -1,6 +1,7 @@
 package com.myapp.ui.list
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -14,6 +15,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -29,6 +31,7 @@ import com.myapp.ui.components.InstrumentPreviews
 import com.myapp.ui.components.ListRow as InstrumentRow
 import com.myapp.ui.components.PreviewCanvas
 import com.myapp.ui.components.SkeletonRows
+import com.myapp.ui.components.TextAction
 import com.myapp.ui.components.TodayStrip
 import com.myapp.ui.theme.Ink2
 import com.myapp.ui.theme.PlainTickerType
@@ -100,7 +103,18 @@ internal fun ListContent(
                 }
             }
 
-            state.searchMiss -> item(key = "miss") { EmptyLine(stringResource(R.string.list_search_empty, state.query)) }
+            // A token listed this morning is on neither the bundled snapshot nor the catalog kept
+            // on disk for the day, and the reader who searched for it is the one person who knows
+            // to look. This action is why a settled list has a way to reach the network at all:
+            // it goes to the same [ListViewModel.refresh] the banners offer, which asks the
+            // catalog for the network rather than for whichever cache still answers.
+            state.searchMiss -> item(key = "miss") {
+                EmptyLine(
+                    text = stringResource(R.string.list_search_empty, state.query),
+                    action = stringResource(R.string.list_search_look_again),
+                    onAction = onRetry,
+                )
+            }
 
             // Both sources answered and neither had a row. Rare, but the screen was otherwise
             // a wordmark, a search field and nothing else, with no banner to explain it.
@@ -139,15 +153,24 @@ internal fun ListContent(
     }
 }
 
-/** One sentence where the rows would be, so no state of this screen is a blank column. */
+/**
+ * One sentence where the rows would be, so no state of this screen is a blank column, with the
+ * one text action that state can offer beside it.
+ */
 @Composable
-private fun EmptyLine(text: String) {
-    Text(
-        text = text,
-        style = PlainTickerType.body,
-        color = Ink2,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = HeadingTopGap),
-    )
+private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            style = PlainTickerType.body,
+            color = Ink2,
+            modifier = Modifier.weight(1f).padding(vertical = HeadingTopGap),
+        )
+        if (action != null && onAction != null) TextAction(label = action, onClick = onAction)
+    }
 }
 
 @Composable
@@ -373,6 +396,20 @@ private fun ListSnapshotPreview() {
                 fromSnapshot = true,
                 snapshotCapturedOn = LocalDate.of(2026, 9, 12),
             ),
+            onQueryChange = {},
+            onClearSearch = {},
+            onRetry = {},
+            onOpenDetail = {},
+        )
+    }
+}
+
+@InstrumentPreviews
+@Composable
+private fun ListSearchMissPreview() {
+    PreviewCanvas {
+        ListContent(
+            state = PreviewState.copy(query = "RBLX", analyzed = emptyList(), withoutAnalysis = emptyList()),
             onQueryChange = {},
             onClearSearch = {},
             onRetry = {},

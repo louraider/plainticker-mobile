@@ -57,6 +57,7 @@
     <string name="list_row_meta_pool_unknown">Pool depth not reported</string>
     <string name="list_row_meta_join">%1$s · %2$s</string>
     <string name="list_search_empty">No xStock matches \'%1$s\'</string>
+    <string name="list_search_look_again">Check for new tokens</string>
     <string name="list_error_unavailable">Analysis list unavailable</string>
     <string name="list_prices_unavailable">Prices unavailable</string>
     <string name="list_prices_partial">Some prices are unavailable</string>
