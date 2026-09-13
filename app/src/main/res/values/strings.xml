@@ -272,10 +272,17 @@
     <string name="watchlist_empty">Nothing watched yet, tap Watch on any stock</string>
     <string name="watchlist_notifications_off">Notifications off</string>
 
+    <!-- The daily digest: one sentence per clause, assembled by com.myapp.watchlist.digest -->
+    <string name="digest_watched">%1$s watched.</string>
+    <string name="digest_moved">%1$s moved from %2$s to %3$s against the NYSE close.</string>
+    <string name="digest_reports_today">%1$s reports today.</string>
+    <string name="digest_reports_tomorrow">%1$s reports tomorrow.</string>
+    <string name="digest_reports_in_days">%1$s reports in %2$s days.</string>
+
     <!-- Notifications -->
     <string name="notification_channel_watchlist">Watchlist</string>
-    <string name="notification_reports_in">%1$s reports in %2$s</string>
-    <string name="notification_digest">Watchlist digest: %1$s stocks, %2$s premium moved</string>
+    <string name="notification_channel_watchlist_description">One digest a day about the stocks you watch.</string>
+    <string name="notification_digest_title">Daily digest</string>
 
     <!-- Debug builds only -->
     <string name="debug_open_wallet_spike">Open the wallet spike</string>
