@@ -7,6 +7,7 @@ import com.plainticker.mobile.ui.theme.Canvas
 import com.plainticker.mobile.ui.theme.Ink
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
 import org.junit.Assert.assertEquals
@@ -19,17 +20,24 @@ import org.w3c.dom.Element
 
 /**
  * Brand assets, DESIGN.md section 9, read straight from disk like [ManifestTest]: the adaptive
- * launcher icon is Canvas behind the tracking gauge, an Ink track and reference tick with the
- * token tick in Accent, carries a monochrome layer with the same shapes, keeps every coordinate
- * inside the 66dp safe zone, and no template bitmap is left in a mipmap folder. The splash theme
- * paints Canvas behind the same vector with light system bar icons and hands over to the app
- * theme; the notification icon is the same mark in white. Colors are compared with the Kotlin
- * tokens, not with copied literals.
+ * launcher icon is Canvas behind the tracking gauge, an Ink scale with the reference graduation
+ * hanging under it and the token tick standing over it in Accent, carries a monochrome layer with
+ * the same shapes, keeps every coordinate inside the 66dp safe zone, and no template bitmap is
+ * left in a mipmap folder. The splash theme paints Canvas behind the same vector with light system
+ * bar icons and hands over to the app theme; the notification icon is the same mark in white.
+ * Colors are compared with the Kotlin tokens, not with copied literals.
  *
- * The tests that matter here are the ones about size. An icon is read at 48dp, and a launcher
- * shows the central 72 of the 108 viewport, so one viewport unit is 0.667dp on a launcher grid.
- * The mark this replaced carried its only distinguishing detail in a 2 unit tick, 1.3dp at 48dp,
- * which nobody ever saw. [MIN_STROKE] is that lesson: no shape may be thinner than 4dp at 48dp.
+ * The tests that matter here are the two about how the mark is seen, and both are lessons.
+ *
+ * Size. An icon is read at 48dp, and a launcher shows the central 72 of the 108 viewport, so one
+ * viewport unit is 0.667dp on a launcher grid. The mark this replaced carried its only
+ * distinguishing detail in a 2 unit tick, 1.3dp at 48dp, which nobody ever saw. [MIN_STROKE] is
+ * that lesson: no shape may be thinner than 4dp at 48dp.
+ *
+ * Silhouette. The first construction of this gauge centred all three shapes on y 54. In colour the
+ * Accent tick pulled away and it read as the gauge; flattened for the themed icon and for the 24dp
+ * notification silhouette it read as a plus sign. Colour can pull two shapes apart; a silhouette
+ * can only be pulled apart by where its shapes point, so no layer may mirror itself top to bottom.
  */
 class BrandAssetsTest {
 
@@ -187,15 +195,18 @@ class BrandAssetsTest {
         assertEquals(listOf(hex(Ink), hex(Ink), hex(Accent)), fg.fills)
 
         val (track, reference, token) = fg.boxes()
-        // The track carries the scale, the reference tick stands on its center where the NYSE
-        // close sits, and the token tick stands off it. That offset is the whole mark.
+        // The track carries the scale, the reference graduation hangs under its center where the
+        // NYSE close sits, and the token tick stands over the track off that center. That offset
+        // is the whole mark.
         assertTrue("the track is not the widest shape", track.width > reference.width + token.width)
         assertEquals("the reference is not on the center", 54.0, reference.centerX, 0.011)
         assertTrue("the token does not sit off the reference", token.left > reference.right)
         assertTrue("the token has left the track", token.left > track.left && token.right < track.right)
-        listOf(reference, token).forEach {
-            assertTrue("a tick does not cross the track", it.top < track.top && it.bottom > track.bottom)
-        }
+        // The two ticks point opposite ways, which is what keeps the silhouette off a plus sign:
+        // the token crosses the track, the reference only hangs off its underside.
+        assertTrue("the token does not cross the track", token.top < track.top && token.bottom > track.bottom)
+        assertEquals("the reference is not joined to the track", track.bottom, reference.top, 0.011)
+        assertTrue("the reference does not hang under the track", reference.bottom > track.bottom)
         assertTrue("the token does not read louder than the reference", token.height > reference.height)
     }
 
@@ -216,6 +227,29 @@ class BrandAssetsTest {
         // And the block sits in the middle of the viewport, so no mask crops it unevenly.
         assertEquals(54.0, (boxes.minOf { it.left } + boxes.maxOf { it.right }) / 2, 0.011)
         assertEquals(54.0, (boxes.minOf { it.top } + boxes.maxOf { it.bottom }) / 2, 0.011)
+    }
+
+    @Test
+    fun `no layer of the mark is a plus sign once the color is gone`() {
+        // The first construction of this gauge put the track, the reference tick and the token tick
+        // all on y 54, so the silhouette was a perfect cross. In color the Accent tick separated and
+        // the mark read as the gauge; the monochrome layer and the notification icon have no color
+        // to separate with and both read as a plus. The rejected construction is kept for
+        // comparison in design/brand/candidates/crossed_*.xml.
+        listOf("ic_launcher_foreground.xml", "ic_launcher_monochrome.xml", "ic_stat_plainticker.xml").forEach { name ->
+            val layer = vector(name)
+            val middle = layer.size / 2.0
+            val order = compareBy<Box>({ it.left }, { it.top }, { it.right }, { it.bottom })
+            val here = layer.boxes().sortedWith(order)
+            val flipped = layer.boxes()
+                .map { Box(it.left, 2 * middle - it.bottom, it.right, 2 * middle - it.top) }
+                .sortedWith(order)
+            val mirrors = here.zip(flipped).all { (a, b) ->
+                abs(a.left - b.left) < 0.011 && abs(a.top - b.top) < 0.011 &&
+                    abs(a.right - b.right) < 0.011 && abs(a.bottom - b.bottom) < 0.011
+            }
+            assertFalse("$name mirrors itself top to bottom, so in one color it is a plus", mirrors)
+        }
     }
 
     @Test

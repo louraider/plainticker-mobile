@@ -7,10 +7,11 @@ Writes the three vector drawables that carry the mark, from the geometry in desi
   app/src/main/res/drawable/ic_launcher_monochrome.xml   the same paths in one color, themed icons
   app/src/main/res/drawable/ic_stat_plainticker.xml      24 viewport, white, notification small icon
 
-The mark is the tracking gauge of DESIGN.md section 1, not a letter: a track, the reference tick
-at the center where the NYSE close sits, and the token tick off it in Accent. It replaces the
-JetBrains Mono P shipped in DT3, whose 2-unit accent tick measured 1.3dp at 48dp and was not
-there. marks.py holds the rectangles, the safe-zone assertion and the stroke floor; this file only
+The mark is the tracking gauge of DESIGN.md section 1, not a letter: the scale, the reference
+graduation hanging under it at the center where the NYSE close sits, and the token tick standing
+over it in Accent. It replaces the JetBrains Mono P shipped in DT3, whose 2-unit accent tick
+measured 1.3dp at 48dp and was not there. marks.py holds the rectangles, the safe-zone assertion,
+the stroke floor and the symmetry rule that keeps the silhouette off a plus sign; this file only
 decides which mark ships (marks.CHOSEN) and where the files go. design/brand/render_icons.py draws
 every candidate at the sizes an icon is actually seen.
 

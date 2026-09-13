@@ -11,10 +11,13 @@ What it produces, per candidate, one row of the sheet:
   the monochrome layer alone, themed light and themed dark
   the 24dp notification silhouette alone, white on the status bar
 
-The last row is the mark being replaced, frozen in candidates/shipped_*.xml so the sheet keeps
-comparing against it after res/drawable has moved on.
+The last two rows are frozen in candidates/*.xml so the sheet keeps comparing against them after
+res/drawable has moved on: the first construction of the chosen mark, rejected at review because
+every one of its shapes was centred on y 54 and the silhouette was therefore a plus sign, and the
+"P" that shipped in DT3.
 
-48dp comes first in the row because 48dp is where an icon lives.
+48dp comes first in the row because 48dp is where an icon lives, and the monochrome and 24dp
+columns are the ones that decide: colour can separate two shapes, a silhouette cannot.
 
 Run:   PYTHONIOENCODING=utf-8 python design/brand/render_icons.py
 Needs: python -m pip install pillow numpy
@@ -304,6 +307,13 @@ def write_candidates():
 
 def main():
     rows = write_candidates()
+    rows.append({
+        "title": "Gauge, first cut",
+        "note": NL.join(["rejected: every", "shape on y 54, so", "in one colour the", "mark is a plus"]),
+        "foreground": CANDIDATES / "crossed_foreground.xml",
+        "monochrome": CANDIDATES / "crossed_monochrome.xml",
+        "stat": CANDIDATES / "crossed_stat.xml",
+    })
     rows.append({
         "title": "Shipped (P)",
         "note": NL.join(["the mark being", "replaced: cap 40,", "accent tick 2 high"]),
