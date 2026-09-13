@@ -30,6 +30,7 @@ data class DigestRecord(
     val lastCheckedAtMillis: Long? = null,
     /** The premiums the last completed check saw, by ticker. */
     val premiums: Map<String, Double> = emptyMap(),
+    val nextReportTicker: String? = null,
     val nextReportSymbol: String? = null,
     /** The nearest report ahead as an ISO calendar day, e.g. "2026-10-28". */
     val nextReportOn: String? = null,
@@ -37,9 +38,10 @@ data class DigestRecord(
     /** The nearest report the last check found, for the Today strip on the List. */
     val nextReport: WatchedReport?
         get() {
+            val ticker = nextReportTicker ?: return null
             val symbol = nextReportSymbol ?: return null
             val day = nextReportOn?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return null
-            return WatchedReport(symbol, day)
+            return WatchedReport(ticker, symbol, day)
         }
 
     /** What the run observed, kept when the run had nothing new to say. */
@@ -47,6 +49,7 @@ data class DigestRecord(
         copy(
             lastCheckedAtMillis = checkedAtMillis,
             premiums = premiums,
+            nextReportTicker = report?.ticker,
             nextReportSymbol = report?.symbol,
             nextReportOn = report?.on?.toString(),
         )

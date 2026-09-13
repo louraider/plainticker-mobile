@@ -64,8 +64,15 @@ fun interface DigestStrings {
     fun get(@StringRes id: Int, args: List<String>): String
 }
 
-/** The nearest report the last check found, which the Today strip on the List reads. */
-data class WatchedReport(val symbol: String, val on: LocalDate)
+/**
+ * The nearest report the last check found, which the Today strip on the List reads.
+ *
+ * It carries the underlying [ticker] as well as the [symbol] it is drawn as, so the strip can
+ * check that the ticker it is about to name is still watched: the record is a day old at most,
+ * but an hour in which the List names a company the reader has just taken off the list is an hour
+ * of the app stating something that is no longer true.
+ */
+data class WatchedReport(val ticker: String, val symbol: String, val on: LocalDate)
 
 // ---- The rules ---------------------------------------------------------------------------------
 
@@ -154,7 +161,7 @@ private fun moves(tickers: List<WatchedTicker>, previous: Map<String, Double>): 
  * a company reports in minus three days would be the app inventing a fact.
  */
 private fun nearestReport(tickers: List<WatchedTicker>, today: LocalDate): WatchedReport? = tickers
-    .mapNotNull { row -> row.nextReport?.takeUnless { it.isBefore(today) }?.let { WatchedReport(row.display, it) } }
+    .mapNotNull { row -> row.nextReport?.takeUnless { it.isBefore(today) }?.let { WatchedReport(row.ticker, row.display, it) } }
     .minWithOrNull(compareBy({ it.on }, { it.symbol }))
 
 /** Percentage points of movement a premium needs before the digest says it moved. */

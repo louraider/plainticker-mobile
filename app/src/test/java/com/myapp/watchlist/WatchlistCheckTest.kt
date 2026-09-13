@@ -90,7 +90,7 @@ class WatchlistCheckTest {
         assertEquals(day, digests.record.value.producedAtMillis)
         assertEquals(day, digests.record.value.lastCheckedAtMillis)
         assertEquals("the notification carries what the screen draws", listOf(text), notifier.posted)
-        assertEquals(WatchedReport("AAPLx", LocalDate.of(2026, 10, 28)), digests.record.value.nextReport)
+        assertEquals(WatchedReport("AAPL", "AAPLx", LocalDate.of(2026, 10, 28)), digests.record.value.nextReport)
     }
 
     // ---- Nothing to say -------------------------------------------------------------------

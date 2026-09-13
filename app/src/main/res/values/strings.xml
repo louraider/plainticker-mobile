@@ -262,15 +262,17 @@
     <string name="portfolio_empty">No xStocks in this wallet yet. A swap from any stock page puts the token here.</string>
     <string name="portfolio_error_unavailable">On-chain data unavailable</string>
 
-    <!-- Watchlist -->
+    <!-- Watchlist. The row meta is the list's, joined by list_row_meta_join -->
     <string name="watchlist_heading_watched">Watched</string>
-    <string name="watchlist_row_meta">Reports %1$s · %2$s vs NYSE close</string>
+    <string name="watchlist_row_reports">Reports %1$s</string>
     <string name="watchlist_row_no_date">No report date</string>
+    <string name="watchlist_row_unserved">Not in the analysis list</string>
     <string name="watchlist_heading_digest">Daily digest</string>
-    <string name="watchlist_notifications_on">Notifications on, delivered at %1$s.</string>
+    <string name="watchlist_digest_none">No digest yet. The first one lands about twelve hours after you watch a stock.</string>
+    <string name="watchlist_notifications_on">Notifications on, one check a day.</string>
+    <string name="watchlist_notifications_off">Notifications off, the digest stays on this screen.</string>
     <string name="watchlist_checked">Checked %1$s.</string>
-    <string name="watchlist_empty">Nothing watched yet, tap Watch on any stock</string>
-    <string name="watchlist_notifications_off">Notifications off</string>
+    <string name="watchlist_empty">Nothing watched yet. Watch a stock from its page to see its next report date here, and get one digest a day.</string>
 
     <!-- The daily digest: one sentence per clause, assembled by com.myapp.watchlist.digest -->
     <string name="digest_watched">%1$s watched.</string>

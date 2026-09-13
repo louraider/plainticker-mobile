@@ -93,7 +93,7 @@ class DigestTest {
             watched("TSLA", nextReport = null),
         )
         val result = digest(DigestInput(today, rows))
-        assertEquals(WatchedReport("AAPLx", LocalDate.of(2026, 9, 16)), result.nextReport)
+        assertEquals(WatchedReport("AAPL", "AAPLx", LocalDate.of(2026, 9, 16)), result.nextReport)
         assertEquals("3 watched. AAPLx reports in 3 days.", result.text(RealStrings.strings))
     }
 

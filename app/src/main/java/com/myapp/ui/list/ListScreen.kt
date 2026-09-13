@@ -86,9 +86,7 @@ internal fun ListContent(
         item(key = "header") { header() }
         item(key = "chrome") {
             Column(Modifier.fillMaxWidth()) {
-                if (state.watched > 0) {
-                    TodayStrip(text = stringResource(R.string.list_today_watched, Fmt.count(state.watched)))
-                }
+                if (state.watched > 0) TodayStrip(text = todayText(state))
                 state.banner?.let { StateBanner(banner = it, onRetry = onRetry) }
                 Spacer(Modifier.height(SearchTopGap))
                 SearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)
@@ -171,6 +169,16 @@ private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Uni
         )
         if (action != null && onAction != null) TextAction(label = action, onClick = onAction)
     }
+}
+
+/**
+ * The Today strip (docs/data-map.md, List (T8)): how many are watched, and the next report among
+ * them when the daily check has found one. The count alone stands until it has.
+ */
+@Composable
+private fun todayText(state: ListUiState): String {
+    val report = state.nextReport ?: return stringResource(R.string.list_today_watched, Fmt.count(state.watched))
+    return stringResource(R.string.list_today, Fmt.count(state.watched), report.symbol, Fmt.monthDay(report.on))
 }
 
 @Composable

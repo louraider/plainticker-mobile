@@ -168,6 +168,9 @@ object Fmt {
         return "${MONTHS[t.monthValue - 1]} ${t.dayOfMonth}"
     }
 
+    /** The same day without the year, for a report date the payload sends as a calendar day. */
+    fun monthDay(date: LocalDate): String = "${MONTHS[date.monthValue - 1]} ${date.dayOfMonth}"
+
     /** A calendar day, for a stamp that carries no time of day: "12 Sep 2026". */
     fun day(date: LocalDate): String = "${date.dayOfMonth} ${MONTHS[date.monthValue - 1]} ${date.year}"
 
