@@ -15,6 +15,13 @@ is its central 72, so one viewport unit is 48/72 = 0.667dp on a launcher grid. T
 2 units tall in the icon this replaces measured 1.3dp there and vanished. Nothing below
 MIN_STROKE units is drawn, which is 4dp at 48dp.
 
+And why nothing here is symmetric about its own middle: a mark that is, collapses in one colour.
+The first gauge drawn on 2026-09-13 put the track, the reference tick and the token tick all on
+y=54, and the three of them were a cross. In colour the Accent tick separated and it read as a
+gauge; flattened for the themed icon and for the 24 notification silhouette it read as a plus
+sign. `Mark.mirrors_itself` is that lesson, and the rejected construction is kept for comparison
+in design/brand/candidates/crossed_*.xml.
+
 Run:  PYTHONIOENCODING=utf-8 python design/brand/marks.py     (prints the geometry table)
 """
 import math
@@ -107,6 +114,24 @@ class Mark:
         assert abs((x0 + x1) / 2 - CENTER) < 0.01, "{} is not centered across".format(self.key)
         assert abs((y0 + y1) / 2 - CENTER) < 0.01, "{} is not centered down".format(self.key)
         assert sum(1 for r in self.rects if r.color == ACCENT) == 1, "{}: exactly one accent shape".format(self.key)
+        assert not self.mirrors_itself(), (
+            "{} is mirror-symmetric about its own horizontal middle, so in one color it collapses "
+            "into a glyph (a plus, an equals, an H) instead of reading as itself".format(self.key)
+        )
+
+    def mirrors_itself(self):
+        """
+        True when the silhouette flipped top to bottom is the same silhouette.
+
+        This is the rule the first gauge broke. Its track, reference tick and token tick were each
+        centered on y=54, so the three of them together were a perfect cross: in color the Accent
+        tick pulled away and the mark read as a gauge, but the monochrome layer and the 24
+        notification silhouette have no color to pull with, and both read as a plus sign. Colour
+        can separate two shapes; a silhouette can only be separated by where the shapes point.
+        """
+        here = sorted((r.x0, r.y0, r.x1, r.y1) for r in self.rects)
+        flipped = sorted((r.x0, 2 * CENTER - r.y1, r.x1, 2 * CENTER - r.y0) for r in self.rects)
+        return all(abs(a - b) < 1e-9 for row_a, row_b in zip(here, flipped) for a, b in zip(row_a, row_b))
 
     def stat_rects(self):
         """The same mark in the 24 notification viewport, fitted to the 20 live box."""
@@ -181,11 +206,11 @@ def vector(size, rects, override_color, comment):
 GAUGE = Mark(
     "gauge",
     "Gauge",
-    "the tracking gauge at icon weight: the track, the reference at the center, the token off it.",
+    "the tracking gauge at icon weight: the scale, the reference graduation under it, the token over it.",
     [
-        Rect("track", 26, 50, 82, 58, INK),
-        Rect("reference", 50, 44, 58, 64, INK),
-        Rect("token", 64, 32, 74, 76, ACCENT),
+        Rect("track", 26, 54, 82, 62, INK),
+        Rect("reference", 50, 62, 58, 76, INK),
+        Rect("token", 64, 32, 74, 68, ACCENT),
     ],
 )
 
