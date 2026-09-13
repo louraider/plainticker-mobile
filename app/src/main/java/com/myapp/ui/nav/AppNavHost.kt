@@ -2,7 +2,10 @@ package com.myapp.ui.nav
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -43,13 +46,23 @@ fun AppNavHost(
         if (onboarded && openTab != null) Routes.home(openTab) else Routes.start(onboarded)
     }
 
+    // True when the line above already opened the tab the intent named, which is the cold start
+    // from a notification. It cannot be read back off the graph: a destination's route is the
+    // pattern it was registered under ("home?tab={tab}") and never the filled one, so comparing
+    // routes always disagreed and the first tab was opened, popped and built a second time, with
+    // every call its screens make paid for twice. Consumed once, so a later tap always navigates.
+    var startTabPending by remember { mutableStateOf(startDestination != Routes.start(onboarded)) }
+
     // A second tap while the app is already open arrives here rather than at the start
     // destination, so the tab is switched by navigating home again in place.
     LaunchedEffect(openTab) {
         val tab = openTab ?: return@LaunchedEffect
         onTabOpened()
         if (!onboarded) return@LaunchedEffect
-        if (navController.currentDestination?.route == startDestination) return@LaunchedEffect
+        if (startTabPending) {
+            startTabPending = false
+            return@LaunchedEffect
+        }
         navController.navigate(Routes.home(tab)) {
             popUpTo(Routes.HOME_TAB) { inclusive = true }
             launchSingleTop = true
