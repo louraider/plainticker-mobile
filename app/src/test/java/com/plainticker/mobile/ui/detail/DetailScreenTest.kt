@@ -182,7 +182,7 @@ class DetailScreenTest {
     @Test
     fun `every sentence on the screen comes from strings xml`() {
         listOf(
-            "action_watch", "action_watching", "detail_token_price", "detail_heading_backing",
+            "action_watch", "action_watching", "detail_heading_backing",
             "detail_heading_sector", "detail_heading_fscore", "detail_heading_method", "detail_fscore_of",
             "detail_fscore_a11y", "detail_not_available_filer", "value_missing",
         ).forEach { name ->
@@ -191,6 +191,9 @@ class DetailScreenTest {
         }
         // Everything the model picks between lives there, not here: the screen never chooses a word.
         listOf(
+            // The token's own figure is named by the model too, because below the liquidity floor
+            // it is not called a price: the screen may not pick between the two words itself.
+            "detail_token_price", "detail_pool_quote",
             "detail_nyse_close", "detail_nyse_price", "detail_gauge_reference_close",
             "detail_gauge_reference_live", "detail_value_unknown", "detail_chain_unread_sub",
             "value_none", "value_yes", "detail_analysis_pending", "detail_no_xstock",

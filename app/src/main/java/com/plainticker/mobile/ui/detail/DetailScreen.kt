@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -232,39 +234,96 @@ private fun Hero(state: DetailUiState) {
 }
 
 /**
- * Token price left, the reference right. The two read as one sentence to a screen reader, and the
- * right column is labelled by the venue's state: the reference is a close only while the exchange
- * is shut, and the same field is a live price during its session.
+ * How the two figures of the price row are set. One decision, taken once, so the two figures
+ * cannot be styled apart by two separate edits.
+ */
+internal data class PriceFigureType(
+    val token: TextStyle,
+    val reference: TextStyle,
+    /** The skeleton stands in for the token figure, so it is the height of whatever that is. */
+    val skeletonHeight: Dp,
+    /** Lifts the smaller figure's baseline onto the larger one's. Nothing to lift when they match. */
+    val referenceLift: Dp,
+)
+
+/**
+ * The type of the price pair, which the liquidity floor decides and the screen only obeys.
  *
- * A missing reference takes the gauge's own slot under the row rather than the narrow right column,
- * because there is no gauge to draw without it and a sentence there would squeeze the price beside
- * it at a large font scale.
+ * Above the floor the pair is asymmetric on purpose: the token's own price leads at 40sp Ink and
+ * the reference sits beside it at 20sp Ink 2, so a reader knows which is which without being told.
+ *
+ * Below the floor that same asymmetry is a trap, and it is the one this screen shipped with. The
+ * screen has just said the pool is too thin to track the NYSE close, and then set the two numbers
+ * that withheld premium is computed from on one baseline, the larger of them the largest true
+ * thing on the screen. On APPx, $611.56 over $323.00: any reader subtracts them and gets the
+ * +89.34 percent the floor exists to suppress. So below the floor neither figure leads, both are
+ * set at the reference's size, and the sentence is read before either of them.
+ */
+internal fun priceFigureType(comparable: Boolean): PriceFigureType = if (comparable) {
+    PriceFigureType(
+        token = PlainTickerType.heroPrice,
+        reference = PlainTickerType.referencePrice,
+        skeletonHeight = 40.dp,
+        referenceLift = ReferenceLift,
+    )
+} else {
+    PriceFigureType(
+        token = PlainTickerType.referencePrice,
+        reference = PlainTickerType.referencePrice,
+        skeletonHeight = 20.dp,
+        referenceLift = 0.dp,
+    )
+}
+
+/**
+ * The token's own figure left, the reference right, and above them the one sentence the liquidity
+ * floor has to say. The pair reads as one sentence to a screen reader, and the right column is
+ * labelled by the venue's state: the reference is a close only while the exchange is shut, and the
+ * same field is a live price during its session.
+ *
+ * The lead sentence is first for a reason. It used to stand under the pair, in the gauge's slot at
+ * 13sp, below a 40sp figure and a 20sp one it was there to disqualify, and it lost: the reader had
+ * already read the two operands and done the subtraction the app refused to do. A caveat that
+ * arrives after the number it qualifies is not a caveat.
+ *
+ * A missing reference takes the slot under the row rather than the narrow right column, because
+ * there is no gauge to draw without it and a sentence there would squeeze the price beside it at a
+ * large font scale.
  */
 @Composable
 private fun PriceBlock(state: DetailUiState) {
     val row = state.priceRow
     val pending = state.quote.isLoading
+    val type = priceFigureType(row.comparable)
+    row.lead?.let {
+        Text(
+            text = it.text(),
+            style = PlainTickerType.body,
+            color = Ink,
+            modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = PriceTop),
+        )
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = Side, end = Side, top = PriceTop)
+            .padding(start = Side, end = Side, top = if (row.lead == null) PriceTop else LeadGap)
             .semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(text = stringResource(R.string.detail_token_price), style = PlainTickerType.label, color = Muted)
+            Text(text = row.tokenLabel.text(), style = PlainTickerType.label, color = Muted)
             val price = row.tokenPrice
             when {
                 price != null ->
-                    Text(text = price, style = PlainTickerType.heroPrice, color = Ink, maxLines = 1, softWrap = false)
+                    Text(text = price, style = type.token, color = Ink, maxLines = 1, softWrap = false)
 
-                pending -> SkeletonBar(width = 160.dp, height = 40.dp)
+                pending -> SkeletonBar(width = 160.dp, height = type.skeletonHeight)
 
                 // Jupiter answered and there is no price: a placeholder, never a zero.
                 else -> Text(
                     text = stringResource(R.string.value_missing),
-                    style = PlainTickerType.heroPrice,
+                    style = type.token,
                     color = Muted,
                     maxLines = 1,
                 )
@@ -275,14 +334,14 @@ private fun PriceBlock(state: DetailUiState) {
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(bottom = ReferenceLift),
+                modifier = Modifier.padding(bottom = type.referenceLift),
             ) {
                 Text(text = row.referenceLabel.text(), style = PlainTickerType.label, color = Muted)
                 val reference = row.referencePrice
                 if (reference != null) {
                     Text(
                         text = reference,
-                        style = PlainTickerType.referencePrice,
+                        style = type.reference,
                         color = Ink2,
                         maxLines = 1,
                         softWrap = false,
@@ -516,6 +575,8 @@ private val Side = 20.dp
 private val HeroTop = 12.dp
 private val HeroCompanyGap = 6.dp
 private val PriceTop = 28.dp
+/** Between the floor's sentence and the pair it governs: close enough to read as one block. */
+private val LeadGap = 14.dp
 private val ReferenceLift = 6.dp
 private val ReferenceNoteTop = 18.dp
 private val LiveGap = 28.dp

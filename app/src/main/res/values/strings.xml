@@ -80,6 +80,9 @@
 
     <!-- Detail -->
     <string name="detail_token_price">Token price</string>
+    <!-- What the token's own figure is called below the liquidity floor, where the quote is a
+         reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->
+    <string name="detail_pool_quote">Pool quote</string>
     <string name="detail_nyse_close">NYSE close</string>
     <string name="detail_nyse_price">NYSE price</string>
     <string name="detail_gauge_caption">%1$s, scale %2$s</string>

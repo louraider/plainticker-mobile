@@ -1,28 +1,33 @@
 package com.plainticker.mobile.ui.detail
 
+import com.plainticker.mobile.R
 import com.plainticker.mobile.data.jupiter.PriceEntry
 import com.plainticker.mobile.data.jupiter.StockData
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.lint.KotlinScan
+import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.components.gaugeTick
+import com.plainticker.mobile.ui.theme.PlainTickerType
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Properties of the finished Detail screen that every per-component review passed.
+ * The two properties of the finished Detail screen that every per-component review passed.
  *
- * The blockers in docs/design-review-2026-09-13.md are properties of a whole screen, so neither
- * could fail a test of a piece of it. `Gauge` was right about placing a tick on a stated scale and
- * `TrackingQuality` was right about the premium, and the screen those two compose into drew a tick
- * pinned at the end of a scale the live market leaves on most days. This file asserts the composed
- * screen, on the numbers the device actually read, which is the only level at which that is
- * visible.
+ * Both blockers in docs/design-review-2026-09-13.md are properties of a whole screen, so neither
+ * could fail a test of a piece of it. `TrackingQuality` was right about the floor, `PriceBlock` was
+ * right about its two figures, `Gauge` was right about placing a tick on a stated scale, and the
+ * screen those three compose into was wrong: it withheld a premium and then printed both operands
+ * at two sizes with the caveat between them, and it drew a tick pinned at the end of a scale the
+ * live market leaves on most days. This file asserts the composed screen, on the numbers the
+ * device actually read, which is the only level at which either of them is visible.
  *
  * What the screen *says* stays in [DetailModelTest]; where the screen *puts* things stays in
- * [DetailScreenTest]. What is here is neither: it is what a reader ends up able to read off it.
+ * [DetailScreenTest]. What is here is neither: it is what a reader ends up able to do.
  */
 class DetailFinishedScreenTest {
 
@@ -49,6 +54,77 @@ class DetailFinishedScreenTest {
     /** A screen whose token stands [premiumPct] off its reference, on a pool deep enough to track. */
     private fun tracking(premiumPct: Double) =
         detail("X", token = 100.0 + premiumPct, reference = 100.0, pool = 1_900_000.0)
+
+    private fun words(copy: Copy?): Copy.Words = copy as Copy.Words
+
+    // ---- Blocker 1: the floor and the composition above it -------------------------------------
+
+    @Test
+    fun `below the floor the screen hands the reader no arithmetic to do`() {
+        // APPx exactly as the signed v0.2.0 drew it on the Seeker: pool $34, token $611.56,
+        // NYSE close $323.00. The two of them are +89.34 percent apart, which is the number the
+        // liquidity floor exists to keep off the screen (docs/data-map.md).
+        val appx = detail("APP", token = 611.56, reference = 323.00, pool = 34.0)
+        val row = appx.priceRow
+
+        // The floor is disclosure, not curation: both figures are still printed, and the derived
+        // number is still withheld by the one rule.
+        assertEquals("\$611.56", row.tokenPrice)
+        assertEquals("\$323.00", row.referencePrice)
+        assertEquals(TrackingQuality.Thin(34.0), appx.tracking)
+        assertNull(appx.tracking?.premiumPct)
+
+        // 1. The sentence that disqualifies the comparison is part of the price block, and it is
+        //    read before either figure rather than under both of them.
+        assertFalse("the two figures are staged as a comparison the screen just refused", row.comparable)
+        assertEquals(R.string.detail_gauge_thin, words(row.lead).id)
+        assertEquals(listOf("\$34"), words(row.lead).args)
+        val block = source("ui/detail/DetailScreen.kt")
+            .substringAfter("private fun PriceBlock(")
+            .substringBefore("private fun LiveBlock(")
+        assertTrue("PriceBlock never draws the pool sentence", "row.lead" in block)
+        assertTrue(
+            "the pool sentence is drawn after the figures it disqualifies",
+            block.indexOf("row.lead") < block.indexOf("row.tokenPrice"),
+        )
+
+        // 2. Neither figure leads. One size for both, and not the hero size: by the floor's own
+        //    argument a quote off a $34 pool is not a price, so it may not be the largest true
+        //    thing on the screen.
+        val withheld = priceFigureType(row.comparable)
+        assertEquals(
+            "two operands at two sizes is the invitation to subtract them",
+            withheld.reference.fontSize.value,
+            withheld.token.fontSize.value,
+            0f,
+        )
+        assertTrue(
+            "a figure the screen just disqualified is still the largest thing on it",
+            withheld.token.fontSize.value < PlainTickerType.heroPrice.fontSize.value,
+        )
+        assertEquals("nothing to lift when the two figures match", 0f, withheld.referenceLift.value, 0f)
+
+        // 3. And the figure is named for what it is: a reading off the pool the sentence above it
+        //    just measured, not a price of AppLovin.
+        assertEquals(R.string.detail_pool_quote, words(row.tokenLabel).id)
+
+        // 4. The pool is stated once. Below the floor the gauge draws nothing at all, so the
+        //    sentence cannot drift back under the pair by being owned in two places.
+        assertTrue(appx.gauge !is TrackingQuality.Tracked)
+        val gauge = source("ui/components/Gauge.kt")
+        assertFalse("the gauge still states the pool under the pair", "R.string.detail_gauge_thin" in gauge)
+
+        // Above the floor nothing moves: NVDAx keeps the asymmetric pair the review called the
+        // best thing in the app, and says nothing about its pool.
+        val nvdax = detail("NVDA", token = 216.18, reference = 218.26, pool = 1_900_000.0)
+        val deep = nvdax.priceRow
+        assertNull(deep.lead)
+        assertTrue(deep.comparable)
+        assertEquals(R.string.detail_token_price, words(deep.tokenLabel).id)
+        val tracked = priceFigureType(deep.comparable)
+        assertEquals(PlainTickerType.heroPrice.fontSize.value, tracked.token.fontSize.value, 0f)
+        assertEquals(PlainTickerType.referencePrice.fontSize.value, tracked.reference.fontSize.value, 0f)
+    }
 
     // ---- Blocker 2: the gauge on real data -----------------------------------------------------
 
