@@ -27,7 +27,7 @@ class JupiterSwapApiTest {
 
     private val placeholderTaker = "11111111111111111111111111111111"
 
-    private fun api(mock: MockApi) = JupiterSwapApi(mock.client)
+    private fun api(mock: MockApi) = JupiterSwapApi(mock.client, retryDelayMs = 0L)
 
     // ---- GOLDEN: the real 2026-09-10 /order shape ------------------------------------------
 
@@ -309,5 +309,79 @@ class JupiterSwapApiTest {
         assertTrue(element["_fixture_note"] is JsonPrimitive)
         val order = HttpClientFactory.json.decodeFromJsonElement(SwapOrder.serializer(), element)
         assertEquals("01a08b00-0000-7000-8000-00000000cafe", order.requestId)
+    }
+
+    // ---- The RFQ refusal is not a dead end (measured 2026-09-13) -----------------------------
+
+    @Test
+    fun `order - a refusal naming no market maker is asked again without the RFQ router`() = runTest {
+        val refusal = Fixtures.read("jupiter/order-error-400-no-maker.json")
+        val golden = Fixtures.read("jupiter/order-usdc-tslax-5.json")
+        var calls = 0
+        val mock = MockApi {
+            calls++
+            if (calls == 1) respondJson(refusal, HttpStatusCode.BadRequest) else respondJson(golden)
+        }
+
+        val order = api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 5_000_000L, placeholderTaker)
+
+        assertEquals("the refusal must cost exactly one extra call, never a loop", 2, mock.requests.size)
+        val first = mock.requests[0].url
+        val second = mock.requests[1].url
+        assertNull("RFQ must get the first ask on its own terms", first.parameters["excludeRouters"])
+        assertEquals(JupiterSwapApi.RFQ_ROUTER, second.parameters["excludeRouters"])
+        // Everything the caller asked for survives the retry.
+        assertEquals(KnownMints.USDC, second.parameters["inputMint"])
+        assertEquals(KnownMints.TSLAX, second.parameters["outputMint"])
+        assertEquals("5000000", second.parameters["amount"])
+        assertEquals(placeholderTaker, second.parameters["taker"])
+        assertEquals("1366141", order.outAmount)
+    }
+
+    @Test
+    fun `order - a rejection that is not about a market maker is thrown on the first answer`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("jupiter/order-error-400.json"), HttpStatusCode.BadRequest) }
+
+        val error = expectThrows<SwapError> { api(mock).order(KnownMints.USDC, "nonsense", 5_000_000L) }
+
+        assertEquals("Invalid outputMint", error.detail)
+        assertEquals("a bad mint must not be retried against the aggregator", 1, mock.requests.size)
+    }
+
+    @Test
+    fun `order - a token the aggregator refuses too is thrown rather than asked a third time`() = runTest {
+        val refusal = Fixtures.read("jupiter/order-error-400-no-maker.json")
+        val mock = MockApi { respondJson(refusal, HttpStatusCode.BadRequest) }
+
+        val error = expectThrows<SwapError> { api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 5_000_000L) }
+
+        assertTrue(error is SwapError.OrderRejected)
+        assertEquals(2, mock.requests.size)
+        assertEquals(JupiterSwapApi.RFQ_ROUTER, mock.requests[1].url.parameters["excludeRouters"])
+    }
+
+    @Test
+    fun `noMarketMakerQuote separates the order-stage refusal from a maker declining after signing`() {
+        val json = HttpClientFactory.json
+        val refused = SwapError.fromErrorBody(
+            400,
+            Fixtures.read("jupiter/order-error-400-no-maker.json"),
+            SwapError.Stage.ORDER,
+            json,
+        )
+        assertTrue(refused.noMarketMakerQuote)
+        assertFalse("a refusal to quote is not a dead quote", refused.needsFreshOrder)
+
+        // -2004 carries the same two words and must stay out: it happens after we signed.
+        val declined = SwapError.fromCode(
+            SwapError.CODE_REJECTED_BY_MAKER,
+            "swap rejected by market maker",
+            SwapError.Stage.EXECUTE,
+        )
+        assertFalse(declined.noMarketMakerQuote)
+        assertTrue(declined.needsFreshOrder)
+
+        // A bad mint names no maker at all.
+        assertFalse(SwapError.fromErrorBody(400, """{"error":"Invalid outputMint"}""", SwapError.Stage.ORDER, json).noMarketMakerQuote)
     }
 }

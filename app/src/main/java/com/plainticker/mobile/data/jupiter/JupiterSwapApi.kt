@@ -10,6 +10,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -27,21 +28,51 @@ class JupiterSwapApi(
     private val client: HttpClient,
     private val baseUrl: String = BASE_URL,
     private val json: Json = HttpClientFactory.json,
+    /**
+     * Pause before the aggregator retry below. /order shares the keyless 0.5 rps bucket, so two
+     * calls back to back invite a 429 in place of the quote we went back for. Tests pass 0.
+     */
+    private val retryDelayMs: Long = RETRY_DELAY_MS,
 ) {
     /**
      * Quote and, when [taker] is given, the transaction to sign. Call it at the final tap:
      * an RFQ quote reserves part of its lifetime for the maker's own verification, so the
      * usable window is shorter than `expireAt` suggests.
      *
+     * Asks with Jupiter's default routing first, then once more without the RFQ router when the
+     * answer was [SwapError.noMarketMakerQuote]. Without that second ask the app refuses every
+     * xStock no market maker covers, which on the 2026-09-13 sample was five of the twelve that
+     * quote at all, each of them routing fine on the aggregator.
+     *
      * @throws SwapError.OrderRejected when Jupiter answers with an error body
      * @throws SwapError.Http on a non-2xx without a structured body
      */
-    suspend fun order(inputMint: String, outputMint: String, amount: Long, taker: String? = null): SwapOrder {
+    suspend fun order(inputMint: String, outputMint: String, amount: Long, taker: String? = null): SwapOrder =
+        try {
+            requestOrder(inputMint, outputMint, amount, taker, excludeRouters = null)
+        } catch (rfqRefused: SwapError) {
+            if (!rfqRefused.noMarketMakerQuote) throw rfqRefused
+            delay(retryDelayMs)
+            requestOrder(inputMint, outputMint, amount, taker, excludeRouters = RFQ_ROUTER)
+        }
+
+    /**
+     * One GET /order. [excludeRouters] is null on the first attempt so RFQ still gets to win when
+     * it can, and [RFQ_ROUTER] on the retry.
+     */
+    private suspend fun requestOrder(
+        inputMint: String,
+        outputMint: String,
+        amount: Long,
+        taker: String?,
+        excludeRouters: String?,
+    ): SwapOrder {
         val response = client.get("$baseUrl/order") {
             parameter("inputMint", inputMint)
             parameter("outputMint", outputMint)
             parameter("amount", amount)
             if (taker != null) parameter("taker", taker)
+            if (excludeRouters != null) parameter("excludeRouters", excludeRouters)
         }
         val text = response.bodyAsText()
         val obj = runCatching { json.parseToJsonElement(text) }.getOrNull() as? JsonObject
@@ -74,5 +105,16 @@ class JupiterSwapApi(
 
     companion object {
         const val BASE_URL = "https://api.jup.ag/swap/v2"
+
+        /**
+         * Jupiter's RFQ router. Excluding it falls the order back to the aggregator (Metis over
+         * Raydium, Whirlpool, Manifest and the rest), which is the only way to quote an xStock no
+         * market maker covers. Not excluded by default: RFQ prices better when it answers at all
+         * (TSLAx at $1,000 came back through it at a price improvement, 2026-09-12).
+         */
+        const val RFQ_ROUTER = "jupiterz"
+
+        /** Two seconds and change, one tick of the keyless 0.5 rps bucket. */
+        const val RETRY_DELAY_MS = 2_100L
     }
 }

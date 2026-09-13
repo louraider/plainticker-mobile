@@ -1,0 +1,5 @@
+{
+  "_fixture_note": "Live 400 from GET /swap/v2/order with no router argument, 2026-09-13. Verbatim body for NFLXx (XsEH7wWfJJu2ZT3UCFeVfALnVA6CP5ur7Ee11KmzVpL) at 5 USDC with a taker. The same request plus excludeRouters=jupiterz answered 200 with a 648-char Metis transaction over Raydium CLMM at -0.141 percent impact. Note there is no code field: the sentence is the only signal.",
+  "requestId": "01a09a4e-3b0b-740d-8012-2426fc01ecb3",
+  "error": "Quote not available from market maker"
+}

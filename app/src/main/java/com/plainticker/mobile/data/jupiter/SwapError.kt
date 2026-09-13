@@ -46,6 +46,23 @@ sealed class SwapError(
     class Http(stage: Stage, val status: Int, detail: String?) :
         SwapError(stage, null, detail, "HTTP $status from ${stage.name.lowercase()}: ${detail ?: "-"}")
 
+    /**
+     * The RFQ router refused because no market maker covers this pair, which is not a statement
+     * about whether the token trades. Measured 2026-09-13 (docs/data-map.md): the default
+     * `GET /order` answers 400 "Quote not available from market maker" for NFLXx, ORCLx, PEPx,
+     * UBERx and APPx at every size, and the same request excluding that router returns a full
+     * signable transaction through Metis on Raydium CLMM. Treating it as a dead end is what made
+     * the app refuse tokens that trade.
+     *
+     * Jupiter sends this body with no `code`, so the text is the only signal. Matched on the two
+     * words that carry it rather than the whole sentence: the message has no schema, and a
+     * re-worded refusal must not silently become a dead end again. The `code == null` guard keeps
+     * it apart from [RejectedByMaker] (-2004), which is a maker declining after we signed.
+     */
+    val noMarketMakerQuote: Boolean
+        get() = stage == Stage.ORDER && code == null &&
+            detail?.contains("market maker", ignoreCase = true) == true
+
     val needsFreshOrder: Boolean
         get() = code == CODE_QUOTE_EXPIRED || code == CODE_REJECTED_BY_MAKER
 
