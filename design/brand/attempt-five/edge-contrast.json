@@ -1,0 +1,23 @@
+{
+  "references": {
+    "the drawer as it is, PlainTicker's own slot": 1.0312994930201678,
+    "Photos, the brightest tile in the same row": 18.05823122121622
+  },
+  "candidates": {
+    "live-bar-as-proposed": 1.0119968311895848,
+    "live-bar-bleed-ground": 1.6187433078501372,
+    "live-bar-bleed-inverted": 6.606153668938937,
+    "live-bar-true-weight-ground": 1.392693352033462,
+    "live-bar-true-weight-inverted": 6.829585686737582,
+    "live-bar-wide-gutter-inverted": 6.844831469314878,
+    "live-bar-one-reading-inverted": 6.606153668938937,
+    "quote-as-proposed": 1.03364905941983,
+    "quote-square-pool-ground": 1.03364905941983,
+    "quote-square-pool-inverted": 7.272208635820323,
+    "quote-small-pool-inverted": 7.272208635820323,
+    "quote-tight-gulf-inverted": 7.272208635820323,
+    "quote-heavy-bracket-inverted": 7.272068674511671,
+    "quote-round-pool-ground": 1.03364905941983,
+    "as-shipped": 1.03364905941983
+  }
+}

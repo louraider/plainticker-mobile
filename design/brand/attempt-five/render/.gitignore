@@ -1,0 +1,7 @@
+# composite5.py rewrites every variant into the whole 1200x2670 drawer screenshot and crops a
+# two-row strip out of it, which is several MB of PNG that regenerates in one command. Kept: the
+# contact sheet, and the six per-variant layers that are small and that somebody may want to look
+# at without running anything. Everything the gallery needs is inside gallery.html as data URIs,
+# including the drawer strips.
+*-drawer.png
+*-crop.png

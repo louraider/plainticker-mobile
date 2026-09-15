@@ -266,7 +266,12 @@ def build_sheet(rows):
                             fill=hex_rgb(SHEET_MUTED), spacing=4 * DENSITY)
         x = name_width + gutter
         for (_, size, exponent, ground), cell in zip(COLUMNS, cells):
-            icon = launcher_icon(row["foreground"], size * DENSITY, exponent)
+            # The mark's own ground, not a hardcoded Canvas. Four rejected icons all put a Canvas
+            # tile on a near-black wallpaper, and a sheet that draws every candidate on Canvas
+            # cannot show that: the chosen mark is Canvas-coloured over an Ink tile and would come
+            # out of this renderer invisible.
+            icon = launcher_icon(row["foreground"], size * DENSITY, exponent,
+                                 background=row.get("ground", CANVAS))
             sheet.paste(on_ground(icon, ground, pad), (x, y + 10 * DENSITY))
             x += cell + gutter
         for background, foreground, ground in (
@@ -298,10 +303,10 @@ def write_candidates():
         note = NL.join([
             "x {} to {}".format(M.number(x0), M.number(x1)),
             "y {} to {}".format(M.number(y0), M.number(y1)),
-            "r {:.2f} of 33".format(mark.radius()),
+            "r {:.2f}, mask {:+.2f}".format(mark.radius(), mark.mask_clearance()),
             "  ".join("{:g}x{:g}".format(r.width, r.height) for r in mark.rects),
         ])
-        rows.append(dict(title=mark.title, note=note, **files))
+        rows.append(dict(title=mark.title, note=note, ground=mark.ground, **files))
     return rows
 
 

@@ -1,19 +1,28 @@
 """
 Brand mark generator (DESIGN.md section 9).
 
-Writes the three vector drawables that carry the mark, from the geometry in design/brand/marks.py:
+Writes everything the launcher icon is made of, from the geometry in design/brand/marks.py:
 
-  app/src/main/res/drawable/ic_launcher_foreground.xml   108 viewport, Ink shapes, one Accent shape
+  app/src/main/res/drawable/ic_launcher_foreground.xml   108 viewport, the mark over the ground
   app/src/main/res/drawable/ic_launcher_monochrome.xml   the same paths in one color, themed icons
+  app/src/main/res/drawable/ic_brand_mark.xml            the same paths in Ink, for the splash
   app/src/main/res/drawable/ic_stat_plainticker.xml      24 viewport, white, notification small icon
+  app/src/main/res/values/ic_launcher_background.xml     the adaptive icon's background layer
 
-The mark is the tracking gauge of DESIGN.md section 1, not a letter: the scale, the reference
-graduation hanging under it at the center where the NYSE close sits, and the token tick standing
-over it in Accent. It replaces the JetBrains Mono P shipped in DT3, whose 2-unit accent tick
-measured 1.3dp at 48dp and was not there. marks.py holds the rectangles, the safe-zone assertion,
-the stroke floor and the symmetry rule that keeps the silhouette off a plus sign; this file only
-decides which mark ships (marks.CHOSEN) and where the files go. design/brand/render_icons.py draws
-every candidate at the sizes an icon is actually seen.
+The mark is "Two corners", cell 4a of the founder's own selection gallery: two registration
+corners on the 108 viewport, top-left and bottom-right, and an empty centre between them. It
+replaces the tracking gauge, which replaced the JetBrains Mono P shipped in DT3.
+
+The background layer is written here rather than kept beside the drawables, and that is the whole
+point of this round. Four icon attempts were rejected and all four put a Canvas tile on a
+near-black drawer wallpaper, where it measures 1.03 to 1 across its own edge and is not a tile at
+all. The ground is part of the mark now: marks.py carries it, this file writes it out, and the
+icon cannot be redrawn without the tile under it following.
+
+marks.py holds the rectangles, the mask assertion, the stroke floor and the symmetry rule that
+keeps the silhouette off a plus sign; this file only decides which mark ships (marks.CHOSEN) and
+where the files go. design/brand/two-corners/measure.py puts the mark in the real drawer and
+measures it; design/brand/render_icons.py draws every candidate at the sizes an icon is seen.
 
 Only absolute path commands are emitted, so BrandAssetsTest can walk the coordinates.
 
@@ -28,22 +37,29 @@ import marks  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 DRAWABLE = ROOT / "app/src/main/res/drawable"
+VALUES = ROOT / "app/src/main/res/values"
 
 
 def main():
     mark = marks.MARKS[marks.CHOSEN]
-    for name, text in (
-        ("ic_launcher_foreground.xml", mark.foreground()),
-        ("ic_launcher_monochrome.xml", mark.monochrome()),
-        ("ic_stat_plainticker.xml", mark.stat()),
+    for folder, name, text in (
+        (DRAWABLE, "ic_launcher_foreground.xml", mark.foreground()),
+        (DRAWABLE, "ic_launcher_monochrome.xml", mark.monochrome()),
+        (DRAWABLE, "ic_brand_mark.xml", mark.splash()),
+        (DRAWABLE, "ic_stat_plainticker.xml", mark.stat()),
+        (VALUES, "ic_launcher_background.xml", marks.background_resource(mark)),
     ):
-        (DRAWABLE / name).write_text(text, newline="\n")
+        (folder / name).write_text(text, newline="\n")
         print("wrote", name)
     x0, y0, x1, y1 = mark.bounds()
-    print('"{}": x {} to {}, y {} to {}, corner radius {:.2f} of the 33 safe zone'.format(
-        mark.title, marks.number(x0), marks.number(x1), marks.number(y0), marks.number(y1), mark.radius()))
+    print('"{}" on a {} ground: x {} to {}, y {} to {}'.format(
+        mark.title, mark.ground,
+        marks.number(x0), marks.number(x1), marks.number(y0), marks.number(y1)))
+    print("  furthest corner {:.2f} units, past the 33 the circle guarantee asked for and "
+          "{:+.2f} inside the superellipse of exponent {} a launcher cuts".format(
+              mark.radius(), mark.mask_clearance(), marks.number(marks.MASK_EXPONENT)))
     for rect in mark.rects:
-        print("  {:10} {:g} x {:g} units, {:.2f} x {:.2f} dp at 48dp".format(
+        print("  {:26} {:g} x {:g} units, {:.2f} x {:.2f} dp at 48dp".format(
             rect.name, rect.width, rect.height, rect.width * 48 / 72, rect.height * 48 / 72))
 
 

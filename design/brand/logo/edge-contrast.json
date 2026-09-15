@@ -1,0 +1,28 @@
+{
+  "references": {
+    "the drawer as it is, PlainTicker's own slot": 1.0312994930201678,
+    "Photos, the brightest tile in the same row": 18.05823122121622
+  },
+  "candidates": {
+    "overhang": 1.03364905941983,
+    "overhang-inverted": 7.272208635820323,
+    "overhang-paper": 16.890213062431698,
+    "overhang-flush": 1.03364905941983,
+    "overhang-flush-inverted": 7.272208635820323,
+    "overhang-flush-paper": 16.890213062431698,
+    "floor": 1.0140132082818845,
+    "floor-inverted": 7.245404518579916,
+    "floor-paper": 16.852002972574002,
+    "kept-place": 1.03364905941983,
+    "kept-place-inverted": 7.272208635820323,
+    "kept-place-paper": 16.890213062431698,
+    "short-measure": 1.03364905941983,
+    "short-measure-inverted": 7.272208635820323,
+    "short-measure-paper": 16.890213062431698,
+    "withheld-print": 7.272208635820323,
+    "short-measure-agy": 1.03364905941983,
+    "short-measure-agy-paper": 16.890213062431698,
+    "gauge-inverted": 7.272208635820323
+  },
+  "chosen": "kept-place-paper"
+}

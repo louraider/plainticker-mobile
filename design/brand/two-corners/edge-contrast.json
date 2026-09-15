@@ -1,0 +1,23 @@
+{
+  "references": {
+    "the drawer as it is, PlainTicker's own slot": 1.0312994930201678,
+    "Photos, the brightest tile in the same row": 18.05823122121622
+  },
+  "treatments": {
+    "two-corners": 1.0374502503216005,
+    "two-corners-inverted": 7.230353277269923,
+    "two-corners-paper": 16.7853744531847,
+    "two-corners-ink": 15.483625637011826
+  },
+  "chosen": "two-corners-ink",
+  "geometry": {
+    "furthest corner, units from centre": 39.6,
+    "circle-mask guarantee, units": 33.0,
+    "clearance inside the measured superellipse 3.05, units": 0.96,
+    "clearance inside the rounded-down superellipse 3.0, units": 0.81,
+    "clearance inside a true circle, units": -3.6,
+    "share of the mark a true circle clips": 0.0209,
+    "thinnest arm, units": 14.0,
+    "thinnest arm on the Seeker tile, dp": 11.8
+  }
+}

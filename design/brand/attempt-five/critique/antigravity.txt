@@ -1,0 +1,11 @@
+1. For family one, I would ship live-bar-true-weight-inverted. I would move the bar two units to the right, to x=36. This widens the field on the left side to 18 units, making it a deliberate margin instead of an accidental sliver. For family two, I would ship quote-square-pool-inverted. I would move the square six units to the right, to x=28. This reduces the gap between the square and the bracket arms to 14 units, tightening the connection between the two shapes.
+
+2. The hamburger misread is not solved. Bleeding the bar off the canvas breaks the menu shape, but the inverted variant turns the bar into a void. A void slicing vertically through the tile reads as a physical cut that separates the field into two distinct pieces. The family should be dropped because the geometry cannot survive the required inversion.
+
+3. The defence of the dot does not survive. At that scale and exposure time, a small isolated unit reads as a speck. Squaring the pool helps because it matches the bracket stroke width and removes the association with a system status light. It costs the contrast of the original concept. The original concept placed a round form against a rigid bracket. The square makes both shapes structural.
+
+4. I accept the contrast readings. The inverted variants are the only drawings that define the tile edge against the wallpaper. Inversion costs family one its identity. A live bar is a positive mark, and a void is an absence. Inversion costs family two its weight. The bracket was drawn to be a light measure, but knocking it out of a solid field makes it a heavy block.
+
+5. I would ship family two, the disconnected quote. I rank it first because a solid field with a distinct knockout creates a single recognizable mass that stops a person's eye. Family one fails this ranking. The vertical void cuts the tile into thin columns that do not register as a single object at a glance.
+
+6. Drawing six, live-bar-one-reading-inverted, misreads the original paragraph. The concept depends on multiple horizontal marks anchoring against the vertical bar to represent a list. Reducing the horizontal marks to one dash abandons the list concept entirely.
