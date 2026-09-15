@@ -10,6 +10,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
+import kotlin.math.pow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,30 +21,58 @@ import org.w3c.dom.Element
 
 /**
  * Brand assets, DESIGN.md section 9, read straight from disk like [ManifestTest]: the adaptive
- * launcher icon is Canvas behind the tracking gauge, an Ink scale with the reference graduation
- * hanging under it and the token tick standing over it in Accent, carries a monochrome layer with
- * the same shapes, keeps every coordinate inside the 66dp safe zone, and no template bitmap is
- * left in a mipmap folder. The splash theme paints Canvas behind the same vector with light system
- * bar icons and hands over to the app theme; the notification icon is the same mark in white.
- * Colors are compared with the Kotlin tokens, not with copied literals.
+ * launcher icon is the "Two corners" mark in Canvas over an Ink tile, carries a monochrome layer
+ * with the same shapes, keeps every coordinate inside the mask a launcher actually cuts, and no
+ * template bitmap is left in a mipmap folder. The splash theme paints Canvas behind the same
+ * rectangles in Ink with light system bar icons and hands over to the app theme; the notification
+ * icon is the same mark in white. Colors are compared with the Kotlin tokens, not with copied
+ * literals, so a change to [Canvas], [Ink] or [Accent] cannot leave the icon behind.
  *
- * The tests that matter here are the two about how the mark is seen, and both are lessons.
+ * Four lessons are pinned here and every one of them was learned by shipping the wrong thing.
  *
  * Size. An icon is read at 48dp, and a launcher shows the central 72 of the 108 viewport, so one
- * viewport unit is 0.667dp on a launcher grid. The mark this replaced carried its only
- * distinguishing detail in a 2 unit tick, 1.3dp at 48dp, which nobody ever saw. [MIN_STROKE] is
- * that lesson: no shape may be thinner than 4dp at 48dp.
+ * viewport unit is 0.667dp on a launcher grid. The first mark carried its only distinguishing
+ * detail in a 2 unit tick, 1.3dp at 48dp, which nobody ever saw. [MIN_STROKE] is that lesson: no
+ * shape may be thinner than 4dp at 48dp.
  *
- * Silhouette. The first construction of this gauge centred all three shapes on y 54. In colour the
+ * Silhouette. The first construction of the gauge centred all three shapes on y 54. In colour the
  * Accent tick pulled away and it read as the gauge; flattened for the themed icon and for the 24dp
  * notification silhouette it read as a plus sign. Colour can pull two shapes apart; a silhouette
  * can only be pulled apart by where its shapes point, so no layer may mirror itself top to bottom.
+ * Two corners passes that by being symmetric the other way: turned 180 degrees about the centre it
+ * is itself, flipped top to bottom it is not, and the test for the second is below.
+ *
+ * Ground. Four icon attempts were rejected and all four put a Canvas tile on a near-black drawer
+ * wallpaper, where it measures 1.03 to 1 across its own edge and is not a tile at all. The tile is
+ * Ink now and the mark on it is Canvas; that pair measures 15.48 to 1 in the same drawer. So the
+ * background layer is asserted against the [Ink] token and asserted to differ from the fill the
+ * mark is drawn in, because a figure the same colour as its ground is the failure this replaces.
+ *
+ * Mask. Every earlier mark was asserted inside the central 66 circle, radius 33, on the grounds
+ * that a launcher might cut a circle. This mark's corners sit 39.6 units out, so that rule would
+ * refuse it. The rule was a proxy: the mask on the phone this ships to was lifted off a
+ * neighbouring tile in a drawer screenshot and fits a superellipse of exponent 3.05, and
+ * [MASK_EXPONENT] is that rounded down to 3.0 because the smaller exponent is the tighter shape. A
+ * true circular mask would clip about 2% of this mark and would take the outer right-angle point
+ * off both corners; design/brand/two-corners/gallery.html draws that, and it is the cost of the
+ * arrangement the founder chose.
  */
 class BrandAssetsTest {
 
     private companion object {
         /** The thinnest a shape of the 108 viewport may be: 6 units is 4dp at 48dp. */
         const val MIN_STROKE = 6.0
+
+        /**
+         * The superellipse a launcher cuts out of the visible 72, as |x|^n + |y|^n = 1.
+         *
+         * 3.05 was measured off the Seeker's own drawer; 3.0 is the tighter shape, so a mark that
+         * clears this clears the phone. 2.0 would be a plain circle and this mark does not clear it.
+         */
+        const val MASK_EXPONENT = 3.0
+
+        /** A launcher shows only the central 72 of the 108 viewport, and masks that. */
+        const val VISIBLE_HALF = 36.0
     }
 
     private val androidNs = "http://schemas.android.com/apk/res/android"
@@ -88,9 +117,14 @@ class BrandAssetsTest {
     }
 
     @Test
-    fun `launcher background resolves to canvas`() {
-        assertEquals(hex(Canvas), color("ic_launcher_background"))
+    fun `launcher background is the ink token and the mark on it is not`() {
+        // The ground is the part four rejected attempts got wrong: a Canvas tile has no boundary
+        // at all against this phone's drawer wallpaper, 1.03 to 1 measured. The tile is Ink now.
+        assertEquals(hex(Ink), color("ic_launcher_background"))
+        assertEquals(hex(Ink), color("ink"))
         assertEquals(hex(Canvas), color("canvas"))
+        // And the mark has to be a figure on that ground rather than the same colour as it.
+        assertEquals(setOf(hex(Canvas)), vector("ic_launcher_foreground.xml").fills.toSet())
     }
 
     /** A color resource with `@color/` aliases followed. */
@@ -188,42 +222,79 @@ class BrandAssetsTest {
     private fun Vector.boxes(): List<Box> = data.map(::box)
 
     @Test
-    fun `foreground is the tracking gauge with the token tick in accent`() {
+    fun `foreground is two registration corners with an empty centre between them`() {
         val fg = vector("ic_launcher_foreground.xml")
         assertEquals(108, fg.size)
-        // Two Ink shapes and exactly one Accent shape: DESIGN.md section 2 allows one accent.
-        assertEquals(listOf(hex(Ink), hex(Ink), hex(Accent)), fg.fills)
+        // Four rectangles, all in Canvas over the Ink tile. DESIGN.md section 2 allows one accent
+        // and this mark uses none, so nothing here may be Accent.
+        assertEquals(4, fg.paths.size)
+        assertFalse("the mark carries an accent it was not drawn with", fg.fills.contains(hex(Accent)))
 
-        val (track, reference, token) = fg.boxes()
-        // The track carries the scale, the reference graduation hangs under its center where the
-        // NYSE close sits, and the token tick stands over the track off that center. That offset
-        // is the whole mark.
-        assertTrue("the track is not the widest shape", track.width > reference.width + token.width)
-        assertEquals("the reference is not on the center", 54.0, reference.centerX, 0.011)
-        assertTrue("the token does not sit off the reference", token.left > reference.right)
-        assertTrue("the token has left the track", token.left > track.left && token.right < track.right)
-        // The two ticks point opposite ways, which is what keeps the silhouette off a plus sign:
-        // the token crosses the track, the reference only hangs off its underside.
-        assertTrue("the token does not cross the track", token.top < track.top && token.bottom > track.bottom)
-        assertEquals("the reference is not joined to the track", track.bottom, reference.top, 0.011)
-        assertTrue("the reference does not hang under the track", reference.bottom > track.bottom)
-        assertTrue("the token does not read louder than the reference", token.height > reference.height)
+        val (topAcross, topDown, bottomAcross, bottomDown) = fg.boxes()
+        // Each corner is two arms meeting at one vertex: the top-left pair share (26, 26), the
+        // bottom-right pair share (82, 82). An L, twice, and nothing joining them.
+        assertEquals("the top-left arms do not share a vertex", topAcross.left, topDown.left, 0.011)
+        assertEquals("the top-left arms do not share a vertex", topAcross.top, topDown.top, 0.011)
+        assertEquals("the bottom-right arms do not share a vertex", bottomAcross.right, bottomDown.right, 0.011)
+        assertEquals("the bottom-right arms do not share a vertex", bottomAcross.bottom, bottomDown.bottom, 0.011)
+        // The two corners are opposite, not adjacent: one starts where the other ends.
+        assertTrue("the corners are not on opposite diagonals", topAcross.right < bottomDown.left)
+        assertTrue("the corners are not on opposite diagonals", topDown.bottom < bottomAcross.top)
+        // And the middle is empty. This is the mark: the place is kept and nothing is printed in
+        // it, which is what the app does below the liquidity floor of DESIGN.md section 1.1.
+        val middle = Box(topDown.right, topAcross.bottom, bottomDown.left, bottomAcross.top)
+        assertEquals("the empty centre is not centred", 54.0, middle.centerX, 0.011)
+        assertEquals("the empty centre is not centred", 54.0, middle.centerY, 0.011)
+        assertTrue("the centre is not empty enough to read as kept: $middle", middle.thinnest >= 24.0)
     }
 
     @Test
-    fun `every shape of the launcher mark survives being seen at 48dp`() {
+    fun `the mark turns onto itself but does not mirror, which is what holds the two corners together`() {
+        // Rotating 180 degrees about the centre maps the top-left corner onto the bottom-right
+        // one exactly. That is what makes the pair read as one object across an empty middle
+        // rather than as two unrelated brackets, and it is also why the mark is not a plus: a
+        // shape can be rotationally symmetric and still have nowhere a mirror line can go.
+        val boxes = vector("ic_launcher_foreground.xml").boxes()
+        val order = compareBy<Box>({ it.left }, { it.top }, { it.right }, { it.bottom })
+        val turned = boxes
+            .map { Box(108.0 - it.right, 108.0 - it.bottom, 108.0 - it.left, 108.0 - it.top) }
+            .sortedWith(order)
+        boxes.sortedWith(order).zip(turned).forEach { (a, b) ->
+            assertEquals("the mark is not the same turned 180 degrees", a.left, b.left, 0.011)
+            assertEquals("the mark is not the same turned 180 degrees", a.top, b.top, 0.011)
+            assertEquals("the mark is not the same turned 180 degrees", a.right, b.right, 0.011)
+            assertEquals("the mark is not the same turned 180 degrees", a.bottom, b.bottom, 0.011)
+        }
+    }
+
+    @Test
+    fun `every shape of the launcher mark survives being seen at 48dp and inside the mask`() {
         val fg = vector("ic_launcher_foreground.xml")
         val boxes = fg.boxes()
         boxes.forEach {
             val dp = it.thinnest * 48.0 / 72.0
             assertTrue("a $dp dp shape is not there at 48dp: $it", it.thinnest >= MIN_STROKE)
         }
-        // The mask can be a circle, a squircle or a rounded square, so only the central 66dp
-        // circle is guaranteed visible. Every corner is inside it.
+        // The mask, not the circle. Every earlier mark was asserted inside the central 66 circle;
+        // this one's corners are 39.6 units out, and the circle was only ever a proxy for the
+        // superellipse a launcher really cuts. 3.05 was measured off the phone and 3.0 is tighter.
         fg.data.flatMap(::points).forEach { (x, y) ->
-            val radius = hypot(x - 54.0, y - 54.0)
-            assertTrue("($x, $y) is $radius from the center, outside the 33 safe radius", radius <= 33.0)
+            val ax = abs(x - 54.0) / VISIBLE_HALF
+            val ay = abs(y - 54.0) / VISIBLE_HALF
+            val inside = ax.pow(MASK_EXPONENT) + ay.pow(MASK_EXPONENT)
+            assertTrue(
+                "($x, $y) is outside the superellipse of exponent $MASK_EXPONENT a launcher cuts: $inside",
+                inside <= 1.0 + 1e-9,
+            )
+            // And still inside the 72 a launcher shows at all, mask or no mask.
+            assertTrue("($x, $y) is outside the visible 72", ax <= 1.0 + 1e-9 && ay <= 1.0 + 1e-9)
         }
+        // The furthest corner is outside the 33 circle on purpose, and this pins how far: a
+        // launcher that cuts a true circle bevels the outer point of both corners, and that cost
+        // is accepted rather than discovered. Past 36 the corner would leave the visible 72.
+        val furthest = fg.data.flatMap(::points).maxOf { (x, y) -> hypot(x - 54.0, y - 54.0) }
+        assertTrue("the mark no longer reaches past the 33 circle: $furthest", furthest > 33.0)
+        assertTrue("the mark has been pushed out past the visible 72: $furthest", furthest <= 39.61)
         // And the block sits in the middle of the viewport, so no mask crops it unevenly.
         assertEquals(54.0, (boxes.minOf { it.left } + boxes.maxOf { it.right }) / 2, 0.011)
         assertEquals(54.0, (boxes.minOf { it.top } + boxes.maxOf { it.bottom }) / 2, 0.011)
@@ -231,12 +302,18 @@ class BrandAssetsTest {
 
     @Test
     fun `no layer of the mark is a plus sign once the color is gone`() {
-        // The first construction of this gauge put the track, the reference tick and the token tick
-        // all on y 54, so the silhouette was a perfect cross. In color the Accent tick separated and
-        // the mark read as the gauge; the monochrome layer and the notification icon have no color
-        // to separate with and both read as a plus. The rejected construction is kept for
-        // comparison in design/brand/candidates/crossed_*.xml.
-        listOf("ic_launcher_foreground.xml", "ic_launcher_monochrome.xml", "ic_stat_plainticker.xml").forEach { name ->
+        // The first construction of the gauge this replaced put the track, the reference tick and
+        // the token tick all on y 54, so the silhouette was a perfect cross. In color the Accent
+        // tick separated and the mark read as the gauge; the monochrome layer and the notification
+        // icon have no color to separate with and both read as a plus. The rejected construction is
+        // kept for comparison in design/brand/candidates/crossed_*.xml, and the rule outlives the
+        // mark that taught it.
+        listOf(
+            "ic_launcher_foreground.xml",
+            "ic_launcher_monochrome.xml",
+            "ic_brand_mark.xml",
+            "ic_stat_plainticker.xml",
+        ).forEach { name ->
             val layer = vector(name)
             val middle = layer.size / 2.0
             val order = compareBy<Box>({ it.left }, { it.top }, { it.right }, { it.bottom })
@@ -257,17 +334,31 @@ class BrandAssetsTest {
         val fg = vector("ic_launcher_foreground.xml")
         val mono = vector("ic_launcher_monochrome.xml")
         assertEquals(108, mono.size)
-        // A themed icon has no color to lean on, so the shapes have to be the same ones: the
-        // reference tick and the token tick differ by height and position, not by fill.
+        // A themed icon is one color on a plate the launcher supplies, so the only thing that can
+        // carry the mark is the mark: the same four rectangles, never the field they sit on. The
+        // founder's gallery draws exactly this as the flat variant of the cell they chose.
         assertEquals(fg.data, mono.data)
         assertEquals(1, mono.fills.toSet().size)
+    }
+
+    @Test
+    fun `the splash draws the same shapes in ink, because the foreground is drawn for a light tile`() {
+        // The splash paints Canvas and then this vector over it. It cannot be the adaptive icon's
+        // foreground layer any more: that layer is Canvas, for the Ink tile the launcher shows,
+        // and Canvas on Canvas is nothing. Same rectangles, different color, one generator.
+        val fg = vector("ic_launcher_foreground.xml")
+        val brand = vector("ic_brand_mark.xml")
+        assertEquals(108, brand.size)
+        assertEquals(fg.data, brand.data)
+        assertEquals(setOf(hex(Ink)), brand.fills.toSet())
+        assertEquals(hex(Canvas), color("canvas"))
     }
 
     @Test
     fun `notification small icon is the same mark in white inside the 20dp live area`() {
         val stat = vector("ic_stat_plainticker.xml")
         assertEquals(24, stat.size)
-        assertEquals(3, stat.paths.size)
+        assertEquals(4, stat.paths.size)
         assertEquals(setOf("#FFFFFF"), stat.fills.toSet())
         // A 24dp status bar icon keeps 2dp of padding on every side (the 20dp live area).
         stat.data.flatMap(::points).forEach { (x, y) ->
@@ -297,11 +388,11 @@ class BrandAssetsTest {
             .single { it.getAttribute("name") == name }.textContent.trim()
 
     @Test
-    fun `starting theme paints canvas behind the launcher glyph then hands over to the app theme`() {
+    fun `starting theme paints canvas behind the brand mark then hands over to the app theme`() {
         val starting = style("Theme.PlainTicker.Starting")
         assertEquals("Theme.SplashScreen", starting.getAttribute("parent"))
         assertEquals("@color/canvas", starting.item("windowSplashScreenBackground"))
-        assertEquals("@drawable/ic_launcher_foreground", starting.item("windowSplashScreenAnimatedIcon"))
+        assertEquals("@drawable/ic_brand_mark", starting.item("windowSplashScreenAnimatedIcon"))
         assertEquals("@style/Theme.PlainTicker", starting.item("postSplashScreenTheme"))
         assertEquals("@color/canvas", style("Theme.PlainTicker").item("android:windowBackground"))
     }

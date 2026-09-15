@@ -11,15 +11,19 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <!-- Splash, DESIGN.md section 9: Canvas behind the launcher glyph (the same foreground vector
-         the adaptive icon uses), no branding image. core-splashscreen draws it on every release the
-         app runs on; MainActivity.installSplashScreen then switches to Theme.PlainTicker.
+    <!-- Splash, DESIGN.md section 9: Canvas behind the brand mark, no branding image.
+         core-splashscreen draws it on every release the app runs on; MainActivity.installSplashScreen
+         then switches to Theme.PlainTicker.
+         The icon here is ic_brand_mark and not the adaptive icon's foreground layer. They are the
+         same four rectangles, but the foreground is drawn in Canvas for the Ink tile the launcher
+         shows, and Canvas on Canvas is nothing at all. glyph.py writes both from the same geometry
+         so they cannot drift apart.
          Theme.SplashScreen is a DayNight theme, so on a light system theme it would ask for dark
          status and navigation bar icons over the near-black Canvas; both flags are pinned to light
          icons here. windowLightNavigationBar exists from API 27 and is ignored on 26. -->
     <style name="Theme.PlainTicker.Starting" parent="Theme.SplashScreen" tools:targetApi="27">
         <item name="windowSplashScreenBackground">@color/canvas</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_brand_mark</item>
         <item name="postSplashScreenTheme">@style/Theme.PlainTicker</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>

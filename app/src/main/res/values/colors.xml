@@ -2,4 +2,8 @@
 <resources>
     <!-- DESIGN.md Canvas token; the window background before Compose draws its first frame. -->
     <color name="canvas">#0B0F14</color>
+    <!-- DESIGN.md Ink token; the launcher tile's ground, so the icon has an edge in the drawer.
+         A Canvas tile measured 1.03 to 1 against the Seeker's wallpaper and this one measures
+         15.48; see design/brand/two-corners/gallery.html. -->
+    <color name="ink">#E8ECF1</color>
 </resources>
