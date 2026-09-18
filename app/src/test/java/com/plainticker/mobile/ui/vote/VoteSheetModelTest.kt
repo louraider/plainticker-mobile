@@ -6,6 +6,7 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.ShippedCopy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -33,8 +34,8 @@ class VoteSheetModelTest {
         summary = VoteSummary(ticker = "NFLX", lamports = 5_000L, collector = collector),
     )
 
-    private fun ready(stakeRaw: Long = measuredStake) =
-        VoteState.Ready("NFLX", "NFLXx", collector, stakeRaw, build)
+    private fun ready(stakeRaw: Long = measuredStake, refreshed: Boolean = false) =
+        VoteState.Ready("NFLX", "NFLXx", collector, stakeRaw, build, refreshed = refreshed)
 
     private fun landed() = VoteState.Landed("NFLX", "NFLXx", measuredStake, signature)
 
@@ -56,6 +57,7 @@ class VoteSheetModelTest {
         VoteState.Opening("NFLX", "NFLXx", VotePhase.READING),
         VoteState.Building("NFLX", "NFLXx", collector, measuredStake),
         ready(),
+        ready(refreshed = true),
         VoteState.Signing("NFLX", "NFLXx", collector, measuredStake, build),
         landed(),
     ) + VoteRefusal.entries.map { VoteState.Refused("NFLX", "NFLXx", it) }
@@ -291,6 +293,28 @@ class VoteSheetModelTest {
             sentence,
         )
         assertTrue(sentence.contains("once per ticker"))
+    }
+
+    @Test
+    fun `a confirm step that replaced a stale transaction says so, and still offers to send`() {
+        val content = sheetOf(ready(refreshed = true))
+        assertEquals(
+            "The transaction went stale while this was open, so the server built a fresh one. " +
+                "Nothing was signed. Confirm again to send the vote.",
+            render(content.notice),
+        )
+        assertNotEquals(
+            "the lede is what a first confirm step says, and it is not read twice",
+            render(sheetOf(ready()).notice),
+            render(content.notice),
+        )
+        // Everything else about the step is what it was: the same three figures, the same button,
+        // and the weakness still stated where a person is about to act on it.
+        assertEquals(3, content.cells.size)
+        assertEquals("31,209.870777", ShippedCopy.render(content.cells[0].value))
+        assertEquals(VoteActionKind.Confirm, content.primary?.kind)
+        assertEquals("Vote to cover next", render(content.primary?.label))
+        assertNotNull(content.disclosure)
     }
 
     @Test

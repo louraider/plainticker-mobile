@@ -58,7 +58,8 @@ import java.time.LocalDate
  * Under "Without analysis" the "Next up" strip leads: the three uncovered tokens staked SKR has
  * voted to cover next, with the weight behind each (docs/skr-curation-spec-2026-09-13.md, step
  * 3, which waited on a server query that now exists). It is decided by [nextUpStrip] and drawn
- * here, and when there is nothing to draw it is not there: no banner, no empty heading.
+ * here, and when there is nothing to draw it is not there: no banner, no empty heading. A leader
+ * is lifted out of the rows below rather than drawn twice under one heading ([rowsBelowNextUp]).
  */
 @Composable
 fun ListScreen(
@@ -174,6 +175,7 @@ internal fun ListContent(
                         )
                     }
                     val leaders = state.nextUpStrip
+                    val uncovered = state.rowsBelowNextUp(leaders)
                     if (leaders.isNotEmpty()) {
                         item(key = "next-up-label") { NextUpLabel() }
                         itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
@@ -186,10 +188,10 @@ internal fun ListContent(
                         }
                         item(key = "next-up-gap") { Spacer(Modifier.height(NextUpGap)) }
                     }
-                    itemsIndexed(state.withoutAnalysis, key = { _, row -> "p:" + row.ticker }) { index, row ->
+                    itemsIndexed(uncovered, key = { _, row -> "p:" + row.ticker }) { index, row ->
                         PriceOnlyRow(
                             row = row,
-                            last = index == state.withoutAnalysis.lastIndex,
+                            last = index == uncovered.lastIndex,
                             onOpenDetail = onOpenDetail,
                             onVote = onVote,
                         )

@@ -83,7 +83,10 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         phase = null,
         bar = null,
         cells = readyCells(stakeRaw, build.summary),
-        notice = words(R.string.vote_lede, symbol),
+        // A confirm step that replaced a stale one leads with what happened to the tap that made
+        // it, because the reader asked to send and is looking at the same button again. The lede
+        // is what a first confirm step says, and it has been read by the time this one is drawn.
+        notice = if (refreshed) words(R.string.vote_refreshed) else words(R.string.vote_lede, symbol),
         disclosure = words(R.string.vote_gameable),
         primary = VoteAction(words(R.string.vote_action), VoteActionKind.Confirm),
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),

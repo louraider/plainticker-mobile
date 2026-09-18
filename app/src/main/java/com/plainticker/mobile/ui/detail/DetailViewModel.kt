@@ -15,6 +15,7 @@ import com.plainticker.mobile.repo.MintRepository
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SummaryRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -140,7 +141,16 @@ class DetailViewModel(
         // is the edge's five-minute cache, shared with the List through the repository, and a
         // failure states no standing rather than raising a banner.
         if (classified is AnalysisState.NotServed) {
-            val leaders = runCatching { nextUp.nextUp() }.getOrDefault(emptyList())
+            val leaders = try {
+                nextUp.nextUp()
+            } catch (cancelled: CancellationException) {
+                // Not an answer, and never written as one: a refresh that replaced this run owns
+                // the screen, and nothing from a cancelled one may reach it (ListViewModel keeps
+                // the same rule, and CachedNextUpRepository does not cache a cancellation either).
+                throw cancelled
+            } catch (failed: Exception) {
+                emptyList()
+            }
             _state.update { it.copy(nextUp = leaders) }
         }
     }

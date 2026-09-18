@@ -84,6 +84,13 @@ sealed interface VoteState {
         val voter: String,
         val stakeRaw: Long,
         val build: VoteBuild,
+        /**
+         * True when this confirm step replaced one whose transaction had gone stale: the reader
+         * tapped to send, the server built a fresh transaction instead of the wallet opening, and
+         * the sheet says so. Without it the machine would land back on the same step with the
+         * same button and nothing to show for the tap, which reads as the tap having been lost.
+         */
+        val refreshed: Boolean = false,
     ) : OnTicker
 
     /** The wallet is open: it signs the transaction and submits it, in one round-trip. */

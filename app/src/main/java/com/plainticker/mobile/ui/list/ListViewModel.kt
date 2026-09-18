@@ -405,7 +405,17 @@ class ListViewModel(
             // failure simply leaves the strip undrawn. It is a child of this refresh, so a retry
             // asks for it again and a cancelled refresh drops it with the rest.
             launch {
-                val leaders = runCatching { nextUp.nextUp() }.getOrDefault(emptyList())
+                val leaders = try {
+                    nextUp.nextUp()
+                } catch (cancelled: CancellationException) {
+                    // A cancelled call is not an answer, and this is the one exception that must
+                    // not become an empty list: a refresh that replaced this run owns the screen
+                    // now, and a cancelled child writing its own emptiness over the leaders the
+                    // newer run published would blank the strip under the reader.
+                    throw cancelled
+                } catch (failed: Exception) {
+                    emptyList()
+                }
                 _state.update { it.copy(nextUp = leaders) }
             }
             joinAll(summary, assets)

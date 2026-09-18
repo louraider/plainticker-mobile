@@ -337,11 +337,15 @@ class VoteViewModelTest {
         machine.state.test {
             awaitItem()
             machine.vote("NFLX", "NFLXx")
-            awaitUntil { it is VoteState.Ready }
+            val first = awaitUntil { it is VoteState.Ready } as VoteState.Ready
             assertEquals(1, mock.requests.size)
+            assertFalse("the first confirm step is not a replacement for anything", first.refreshed)
 
             machine.confirm()
-            awaitUntil { it is VoteState.Ready && mock.requests.size == 2 }
+            val again = awaitUntil { it is VoteState.Ready && mock.requests.size == 2 } as VoteState.Ready
+            // The tap produced a new transaction rather than a wallet, and the step it lands on
+            // says so; without this it is the same button again and the tap looks lost.
+            assertTrue("the rebuilt confirm step is marked as one", again.refreshed)
             cancelAndIgnoreRemainingEvents()
         }
 

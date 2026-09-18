@@ -45,6 +45,7 @@ import com.plainticker.mobile.repo.xStock
 import com.plainticker.mobile.repo.xStockTrading
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.repo.CatalogUpdate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -976,6 +977,40 @@ class ListViewModelTest {
             assertEquals("the rows stand as before", listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    /**
+     * A refresh that replaces a run cancels its children, and a leaders call cancelled where it
+     * was suspended resumes by throwing exactly this. It must not become an answer: a cancelled
+     * child writing its own empty list over the leaders the newer run published would blank the
+     * strip under the reader, which is the one thing this screen's refresh rule forbids (nothing
+     * already drawn is taken away until something better arrives).
+     */
+    @Test
+    fun `a cancelled leaders call is not an answer, and never blanks the strip on screen`() = runTest {
+        val leaders = listOf(NextUpRow("TSLA", "31209870777", 3))
+        val nextUp = FakeNextUpRepository(Result.success(leaders))
+        val vm = viewModel(nextUp = nextUp)
+        advanceUntilIdle()
+        assertEquals(listOf("TSLA"), vm.state.value.nextUp.map { it.ticker })
+
+        nextUp.result = Result.failure(CancellationException("a newer refresh replaced this run"))
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertEquals(
+            "a cancelled call wrote its own emptiness over the leaders on screen",
+            listOf("TSLA"),
+            vm.state.value.nextUp.map { it.ticker },
+        )
+        assertEquals("the strip is still there", listOf("TSLAx"), vm.state.value.nextUpStrip.map { it.display })
+        assertEquals(2, nextUp.calls)
+
+        // A call that failed is a different thing, and it does leave the strip undrawn.
+        nextUp.result = Result.failure(IOException("offline"))
+        vm.refresh()
+        advanceUntilIdle()
+        assertTrue(vm.state.value.nextUp.isEmpty())
     }
 
     // ---- The Today strip ---------------------------------------------------------------

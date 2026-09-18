@@ -117,6 +117,58 @@ class NextUpModelTest {
     }
 
     @Test
+    fun `one ticker is one leader, whatever the server sent twice`() {
+        // The list is keyed by this ticker, so a second row carrying it is not a repeated row,
+        // it is a LazyColumn throwing on a key it has already used.
+        val doubled = listOf(
+            NextUpRow("NFLX", "31209870777", 3),
+            NextUpRow(" nflx ", "12345678901", 2),
+            NextUpRow("TSM", "6719000000", 1),
+        )
+        val strip = state(nextUp = doubled).nextUpStrip
+        assertEquals(listOf("NFLX", "TSM"), strip.map { it.ticker })
+        assertEquals("the row the server served first wins, which is the heavier", "31,209.9 SKR", ShippedCopy.render(strip.first().weight))
+        assertEquals("no key is used twice", strip.map { it.ticker }.distinct(), strip.map { it.ticker })
+    }
+
+    @Test
+    fun `a duplicate never costs the strip one of its three places`() {
+        val doubled = listOf(
+            NextUpRow("NFLX", "9000000", 2),
+            NextUpRow("NFLX", "8000000", 1),
+            NextUpRow("TSM", "7000000", 1),
+            NextUpRow("AMD", "6000000", 1),
+            NextUpRow("UBER", "5000000", 1),
+        )
+        assertEquals(listOf("NFLX", "TSM", "AMD"), state(nextUp = doubled).nextUpStrip.map { it.ticker })
+    }
+
+    // ---- The rows under the strip ----------------------------------------------------------------
+
+    @Test
+    fun `a leader is drawn once, in the strip, and not again in the rows below it`() {
+        val drawn = state()
+        val leaders = drawn.nextUpStrip
+        val rows = drawn.rowsBelowNextUp(leaders)
+
+        assertEquals(listOf("NFLX", "TSM", "AMD"), leaders.map { it.ticker })
+        assertEquals("the section keeps everything the strip is not naming", listOf("ASML", "UBER"), rows.map { it.ticker })
+        assertTrue(
+            "the same ticker twice under one heading reads as a fault, not as emphasis",
+            rows.none { row -> leaders.any { it.ticker == row.ticker } },
+        )
+    }
+
+    @Test
+    fun `with no strip every uncovered row stands, and a strip naming them all leaves none`() {
+        assertEquals(uncovered, state(nextUp = emptyList()).rowsBelowNextUp(emptyList()))
+
+        val onlyLeaders = state(withoutAnalysis = uncovered.filter { it.ticker in setOf("NFLX", "TSM", "AMD") })
+        assertEquals(3, onlyLeaders.nextUpStrip.size)
+        assertTrue(onlyLeaders.rowsBelowNextUp(onlyLeaders.nextUpStrip).isEmpty())
+    }
+
+    @Test
     fun `the join is by ticker whatever the case, and fewer than three leaders is fewer rows`() {
         val strip = state(nextUp = listOf(NextUpRow(" nflx ", "1000000", 1))).nextUpStrip
         assertEquals(listOf("NFLXx"), strip.map { it.display })

@@ -60,7 +60,8 @@ fun interface VoteDebugLog {
  *
  * **A stale transaction is never signed.** The server promises its blockhash for 45 s. A confirm
  * past that goes back to the server for a fresh transaction and returns to the confirm step,
- * rather than spending a wallet approval on a hash the network will refuse.
+ * marked [VoteState.Ready.refreshed] so the sheet can say what happened, rather than spending a
+ * wallet approval on a hash the network will refuse.
  */
 class VoteViewModel(
     private val voteApi: VoteApi,
@@ -123,7 +124,7 @@ class VoteViewModel(
         job = viewModelScope.launch {
             if (ready.build.isExpiredAt(clock.nowMillis())) {
                 debugLog.raw("vote/build expired at ${ready.build.expiresAt}; asking again before anything is signed")
-                build(ready.ticker, ready.symbol, ready.voter, ready.stakeRaw)
+                build(ready.ticker, ready.symbol, ready.voter, ready.stakeRaw, refreshed = true)
             } else {
                 send(ready)
             }
@@ -178,9 +179,17 @@ class VoteViewModel(
      * The server step: ask for the transaction, then stop at [VoteState.Ready] with the figure on
      * the screen. Reached from [attempt] once the stake is bounded, and again from [confirm] when
      * the transaction it was about to sign has gone stale, so the machine returns to the confirm
-     * step with a fresh one rather than spending an approval on a dead blockhash.
+     * step with a fresh one rather than spending an approval on a dead blockhash. [refreshed]
+     * carries that second case onto the screen, so a tap that produced a new transaction instead
+     * of a wallet is not a tap that appeared to do nothing.
      */
-    private suspend fun build(ticker: String, symbol: String, voter: String, stakeRaw: Long) {
+    private suspend fun build(
+        ticker: String,
+        symbol: String,
+        voter: String,
+        stakeRaw: Long,
+        refreshed: Boolean = false,
+    ) {
         _state.value = VoteState.Building(ticker, symbol, voter, stakeRaw)
         val build = try {
             voteApi.build(ticker, voter)
@@ -204,7 +213,7 @@ class VoteViewModel(
             return refuse(ticker, symbol, VoteRefusal.UNAVAILABLE)
         }
 
-        _state.value = VoteState.Ready(ticker, symbol, voter, stakeRaw, build)
+        _state.value = VoteState.Ready(ticker, symbol, voter, stakeRaw, build, refreshed = refreshed)
     }
 
     private suspend fun send(ready: VoteState.Ready) {

@@ -325,6 +325,7 @@
     <string name="vote_fee_label">Signature fee</string>
     <string name="vote_fee">%1$s SOL</string>
     <string name="vote_collector_label">Sent to</string>
+    <string name="vote_refreshed">The transaction went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the vote.</string>
     <string name="vote_landed_label">Vote sent</string>
     <string name="vote_landed_note">The vote is on the chain. It is counted from the memos of that address, so anyone can count it the same way.</string>
 

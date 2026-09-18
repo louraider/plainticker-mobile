@@ -54,6 +54,12 @@ data class NextUpLeader(
  * a heading of tokens. A leader that has turned up under "Analyzed" has been covered since the
  * tally and is not next up any more, which is the loop closing rather than a fault. A weight that
  * is not a number drops its row rather than printing a guess, and the next leader takes its place.
+ *
+ * One ticker is one leader. Two rows that normalise onto the same token would be two rows under
+ * one key, and the list is keyed by that ticker, so a duplicated ticker is not a repeated row but
+ * a crash: `LazyColumn` throws on the second use of a key. The server groups by ticker and should
+ * never send two, exactly as `/summary` should never serve one ticker twice, and [ListViewModel]
+ * keeps its own guard against that for the same reason. This is that guard for the strip.
  */
 val ListUiState.nextUpStrip: List<NextUpLeader>
     get() {
@@ -69,5 +75,25 @@ val ListUiState.nextUpStrip: List<NextUpLeader>
                 weightRaw = raw,
                 voters = row.voters,
             )
-        }.take(NEXT_UP_STRIP_SIZE)
+        }.distinctBy { it.ticker }.take(NEXT_UP_STRIP_SIZE)
     }
+
+/**
+ * What the "Without analysis" section draws under the strip: everything in it the strip is not
+ * already naming.
+ *
+ * A leader is one row on the screen and not two. Drawn twice it is the same ticker, the same
+ * company and the same vote a few rows apart under one heading, which reads as a rendering fault
+ * rather than as emphasis, and the second row carries a price where the first carries a weight so
+ * a reader cannot even tell which is authoritative. The spec asks for a strip of leaders over the
+ * uncovered section (docs/skr-curation-spec-2026-09-13.md, step 3) and says nothing about
+ * repeating them, so they are lifted out of the list rather than duplicated into it.
+ *
+ * [leaders] is [nextUpStrip], passed in because the screen has already worked it out and this
+ * join runs over every uncovered token on every recomposition.
+ */
+fun ListUiState.rowsBelowNextUp(leaders: List<NextUpLeader>): List<ListRow> {
+    if (leaders.isEmpty()) return withoutAnalysis
+    val named = leaders.mapTo(HashSet(leaders.size)) { it.ticker }
+    return withoutAnalysis.filterNot { it.ticker in named }
+}
