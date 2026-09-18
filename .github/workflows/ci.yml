@@ -89,7 +89,10 @@ jobs:
   redaction-guard:
     name: Redaction guard
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The history pass walks every blob and took 4m34s of a 5-minute cap on
+    # 6bb2a81, then was killed mid-run on 92a8f7e. It grows with the tree, so
+    # the cap sits well above the measurement rather than just above it.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
