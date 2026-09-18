@@ -19,16 +19,21 @@ beside them. An extension the mint does not carry renders as absent; a mint that
 renders as unknown, never as no risk.
 
 **It withholds the number it cannot stand behind.** The signature element is the tracking gauge, the
-token price against the NYSE close, and it is drawn only where the pool behind it can carry one. The
-floor is $10,000 of pool, held in one pure function (`data/jupiter/TrackingQuality.kt`) that the
-list row, the stock page, Portfolio and the daily digest all read, so they cannot disagree.
+token price against the NYSE close, and it is drawn only where there is enough depth behind the
+price to carry one. The floor is **$4,000**, held in one pure function
+(`data/jupiter/TrackingQuality.kt`) that the list row, the stock page, Portfolio and the daily
+digest all read, so they cannot disagree.
 
 That floor is a fact about the market, not about this app. Joined live on 2026-09-12
-(`docs/data-map.md`): of the **157 analyzed xStocks** Jupiter priced 55, and of those only **19 held
-more than $10,000 of pool, 13 more than $100,000**. The 13 deepest tracked the NYSE close within 0.8
-percent; below $10,000 the quote stopped describing anything, APPx reading +89.34 percent on a pool
-of $34. So the app states the pool instead, "Pool holds $34, too thin to track", and leaves the
-gauge out. Nothing is filtered: disclosure, not curation.
+(`docs/data-map.md`): of the **157 analyzed xStocks** Jupiter priced 55, and out in the tail the
+quote stopped describing anything, APPx reading +89.34 percent on $34. The floor was then measured
+at four candidates on 2026-09-13: **$4,000 leaves 22 rows carrying a premium**, against 19 at
+$10,000, and it buys NFLXx at $9,370, PEPx at $5,351 and ORCLx at $4,444 without widening the
+widest premium the tracked set holds. One step lower is where it breaks, Vx printing +6.64 percent
+on $2,513. So the app states the figure instead, "$34 behind this price, too thin", and leaves the
+gauge out. That figure is Jupiter's own `liquidity` field, which runs 0.21 to 0.54 of what two
+independent aggregators count, so the app reports what Jupiter reports rather than calling it the
+pool. Nothing is filtered: disclosure, not curation.
 
 **It adds no verdict of its own.** The analysis is PlainTicker (SEC EDGAR XBRL filings classified
 against the sector), the engine behind www.plainticker.com. The app renders quality, valuation,
@@ -51,6 +56,40 @@ asked for, and the cost **actually paid**, which is the quote's all-in corrected
 chain returned. Where `/execute` reports no fill, the receipt draws a missing value rather than
 redrawing the estimate.
 
+## What staked SKR decides
+
+**Coverage is the scarce thing in this product, and staked SKR is what allocates it.** 832
+tokenized stocks have a Solana mint. 160 of them have an analysis, which leaves 672 the list can
+only draw as a name and a price, in their own section. One analysis costs about $0.025 of model
+spend and a place in a cron cycle, so the order they get produced in is a budget, and until now
+nobody allocated it. A Seeker owner votes for the uncovered xStock they want read, weighted by what
+they have staked, and the prewarm run covers the winner.
+
+**The vote is a transaction rather than a login.** `POST /api/v1/vote/build` returns an unsigned v0
+transaction: a 0-lamport transfer to one collector address, which puts the collector in the account
+keys so the votes can be found, and a memo reading `PT-VOTE:<TICKER>`. The wallet signs and sends it
+through Mobile Wallet Adapter on the same path as a swap, so the signer is the voter by
+construction and there is no nonce, no session and no token anywhere. The weight is the voter's
+staked principal, read on-chain by the server and never sent by the client: one `getProgramAccounts`
+on the SKR staking program, `memcmp` at byte 41 because the struct is packed, the principal a u64
+at byte 105, bounded at both ends because one account in that program decodes to more than
+everything staked. One wallet counts once per ticker, and a second vote is refused before a
+transaction is built, so it never costs a fee. A cron every ten minutes reads the memos and
+`/api/v1/vote/next-up` sums them, and anyone can count the same signatures and get the same figure.
+The weakness goes on the sheet where the vote is cast rather than in this file: a stake-weighted
+vote is decided by the largest stake, and 4,674 wallets stake more than 31,210 SKR.
+
+**No part of this takes custody.** The app holds no key, the server holds none and never signs, and
+the collector address exists to be read rather than spent from. A vote costs the voter one
+signature, 5,000 lamports.
+
+**It is not live yet.** Both halves are built and reviewed and both are open pull requests. Four
+gates stand between that and a working vote, and the go or no-go on them is the end of Saturday 26
+September: migration 0023 applied by hand, `VOTE_COLLECTOR_PUBKEY` set on Vercel for production and
+preview, both pull requests merged with the server first, and then a canary vote signed on the
+Seeker. That canary has not run. Until it does the route answers 404 and the app says, in those
+words, that voting is not open yet. `docs/skr-curation-spec-2026-09-13.md` is the specification.
+
 ## Run it
 
 Android Studio with the API 37 SDK (`compileSdk 37`, `minSdk 26`), JDK 17 or 21, and a phone with a
@@ -58,7 +97,7 @@ Mobile Wallet Adapter wallet. Developed and walked on a Solana Seeker, Android 1
 dpi.
 
 ```
-./gradlew :app:testDebugUnitTest    # 605 unit tests
+./gradlew :app:testDebugUnitTest    # 760 unit tests
 ./gradlew :app:assembleDebug        # debug: signs a swap, never submits it
 ./gradlew :app:assembleRelease      # release: env-driven signing, docs/release-signing.md
 scripts/device-smoke.sh             # 66 assertions against a connected phone
@@ -79,18 +118,18 @@ Seeker (Kotlin 2.4, Jetpack Compose, Mobile Wallet Adapter 2.2, Ktor, WorkManage
 |     /{TICKER}       classification payload v1.1
 |     /rpc            bounded JSON-RPC forwarder; the RPC key never leaves the server
 |-- xStocks public API   catalog (mints, trading calendar), proof of reserves, split multiplier
-|-- Jupiter              Price v3 (the NYSE reference price and the pool depth), Swap v2 order and execute
+|-- Jupiter              Price v3 (the NYSE reference price and the depth it reports), Swap v2 order and execute
 `-- Solana mainnet       Token-2022 mint extensions, token accounts and balances, through the forwarder
 ```
 
-Six screens are built: onboarding, the list, the stock page, the swap sheet, Portfolio, and the
-watchlist with its daily digest. Each data screen went through a cross-model review before it
-merged, which is the `fix(T8)` through `fix(T12): review findings` commits and the table of what
-each one changed in `docs/data-map.md`. No API key ships in the APK and
-Jupiter is used keyless. `server/rpc-proxy/README.md` is the forwarder's contract for anyone
+Seven surfaces are built: onboarding, the list, the stock page, the swap sheet, Portfolio, the
+watchlist with its daily digest, and the vote sheet. Each data screen went through a cross-model
+review before it merged, which is the `fix(T8)` through `fix(T12): review findings` commits and the
+table of what each one changed in `docs/data-map.md`. No API key ships in the APK and Jupiter is
+used keyless. `server/rpc-proxy/README.md` is the forwarder's contract for anyone
 integrating against it or auditing it, with a mirror of its source beside it. `DESIGN.md` is the
 design system: near-black canvas, one accent, Outfit for words and JetBrains Mono for every number,
-a launcher icon that is the tracking gauge rather than a letter.
+a launcher icon that is two registration corners around an empty centre rather than a letter.
 
 ## Measured, and when
 
@@ -100,10 +139,10 @@ Method for each of these is in `docs/data-map.md`.
 |---|---|---|
 | First row of the list | **2.75 s**, from 11.7 s, by painting a bundled snapshot before the network answers. Spread across runs fell from 1.6 s to 66 ms | Seeker, 2026-09-13, three runs each, `screenrecord` anchored to the system's `Displayed` time |
 | xStocks catalog | 4.31 MB of JSON but **0.34 MB on the wire**, gzipped. Cached on disk for 24 h, and a launch inside that window settles at 3.5 s rather than 12.4 s | `dumpsys netstats` either side of a cold run, 2026-09-13 |
-| Unit tests | **605**, green | `:app:testDebugUnitTest`, 2026-09-13 |
+| Unit tests | **760**, green | `:app:testDebugUnitTest`, 2026-09-18 |
 | Device smoke walk | **66 assertions**, 225 s, exit 0 twice, and proved to fail as well as to pass | `scripts/device-smoke.sh` on the Seeker, 2026-09-13 |
 | Release APK | 2.6 MB, against the debug build's 16.7 MB | tag `v0.2.0`, built and signed in CI, 2026-09-13 |
-| xStocks with a pool over $10,000 | 19 of 157 analyzed, 13 over $100,000. The market, not this app | live join, 2026-09-12 |
+| xStocks the gauge can describe | **22** at the $4,000 floor, against 19 at $10,000 and 29 at $1,000, where JPMx prints +37.98 percent. The market, not this app | four floors measured, 2026-09-13 |
 
 ## Security and threat model
 
