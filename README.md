@@ -51,6 +51,39 @@ asked for, and the cost **actually paid**, which is the quote's all-in corrected
 chain returned. Where `/execute` reports no fill, the receipt draws a missing value rather than
 redrawing the estimate.
 
+## What staked SKR decides
+
+**Coverage is the scarce thing in this product, and staked SKR is what allocates it.** 832
+tokenized stocks have a Solana mint. 160 of them have an analysis, which leaves 672 the list can
+only draw as a name and a price, in their own section. One analysis costs about $0.025 of model
+spend and a place in a cron cycle, so the order they get produced in is a budget, and until now
+nobody allocated it. A Seeker owner votes for the uncovered xStock they want read, weighted by what
+they have staked, and the prewarm run covers the winner.
+
+**The vote is a transaction rather than a login.** `POST /api/v1/vote/build` returns an unsigned v0
+transaction: a 0-lamport transfer to one collector address, which puts the collector in the account
+keys so the votes can be found, and a memo reading `PT-VOTE:<TICKER>`. The wallet signs and sends it
+through Mobile Wallet Adapter on the same path as a swap, so the signer is the voter by
+construction and there is no nonce, no session and no token anywhere. The weight is the voter's
+staked principal, read on-chain by the server and never sent by the client: one `getProgramAccounts`
+on the SKR staking program, `memcmp` at byte 41 because the struct is packed, the principal a u64
+at byte 105, bounded at both ends because one account in that program decodes to more than
+everything staked. One wallet counts once per ticker, and a second vote is refused before a
+transaction is built, so it never costs a fee. A cron every ten minutes reads the memos and
+`/api/v1/vote/next-up` sums them, and anyone can count the same signatures and get the same figure.
+The weakness goes on the sheet where the vote is cast rather than in this file: a stake-weighted
+vote is decided by the largest stake, and 4,674 wallets stake more than 31,210 SKR.
+
+**No part of this takes custody.** The app holds no key, the server holds none and never signs, and
+the collector address exists to be read rather than spent from. A vote costs the voter one
+signature, 5,000 lamports.
+
+**It is not live yet.** Both halves are built and reviewed and both are open pull requests. What is
+left is the operator's: migration 0023 applied to production, the collector address set as an
+environment variable on Vercel, and a live canary that has not run. Until then the route answers
+404 and the app says, in those words, that voting is not open yet.
+`docs/skr-curation-spec-2026-09-13.md` is the specification.
+
 ## Run it
 
 Android Studio with the API 37 SDK (`compileSdk 37`, `minSdk 26`), JDK 17 or 21, and a phone with a
