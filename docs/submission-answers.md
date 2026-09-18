@@ -18,7 +18,7 @@ deadline.
 | HAS THE TEAM AND/OR THE PROJECT RECEIVED ANY PRIOR FUNDING FROM A VENTURE CAPITAL FIRM OR ANGEL INVESTOR? | **No** | Solo founder, and no equity round, SAFE, SAFT, convertible instrument or token sale. Eligibility for a USDC prize rests on this line, so the founder confirms it before the agreement is completed. |
 | HAS YOUR PROJECT BEEN BUILT IN THE LAST 3 MONTHS? | **Yes** | First commit `2a92e98` on 10 September 2026, 171 commits by 18 September, against a window that opens about 8 June 2026. The analysis engine behind the app is older, which the porting answer states rather than leaving to be found. |
 | DECK URL | blank | Not written. |
-| DEMO VIDEO URL | blank | The script of record is `docs/video-script-2026-09-15.md`. Recording is 2 October on the release build, editing 3 October. The vote segment is cut entirely if the endpoint is not live by then, because a demo showing a feature failing is worse than one that does not mention it. |
+| DEMO VIDEO URL | blank | The script of record is `docs/video-script-2026-09-15.md`, and the recording date and the cut order live there. The SKR segment turns on the go or no-go at the end of Saturday 26 September; if that does not clear, the segment is cut entirely rather than filmed reaching the wallet and stopping. |
 | REPOSITORY URL | `https://github.com/louraider/plainticker-mobile` | Known, and private today. `docs/public-flip-checklist.md` runs before it goes public, or the judges are added to it. Commit history stays unsquashed. |
 | ANDROID APK URL | blank | The submission tag is not cut. The link will be the release asset that CI builds from that `v` tag, signed with the one keystore the assetlinks chain names. |
 
@@ -35,7 +35,7 @@ N/A. This project has not been entered in a previous hackathon and has not won o
 
 ## IF PORTING AN EXISTING APPLICATION OVER TO MOBILE, WHAT MAJOR FEATURES OR NEW SIGNIFICANT MOBILE DEVELOPMENT HAVE YOU DONE?
 
-**4487 characters**, against the 5,000 the field allows. This is the question this entry turns on. The hint on the form reads ANSWER THIS OR THE NEXT QUESTION, WHICHEVER APPLIES, and this is the one that applies.
+**4622 characters**, against the 5,000 the field allows. This is the question this entry turns on. The hint on the form reads ANSWER THIS OR THE NEXT QUESTION, WHICHEVER APPLIES, and this is the one that applies.
 
 ```text
 N/A is not the honest answer here. PlainTicker's analysis engine existed on the web before this hackathon. The Android app did not: every line of it was written after 10 September 2026, and its history is 171 commits in the repository the judges get.
@@ -64,7 +64,7 @@ What is new, all of it mobile, all of it in the repository:
 
 10. Release engineering. Signed releases only from a v tag in CI, never from a laptop; a device smoke walk of 66 assertions, proved to fail as well as to pass; and a guard that hashes every base58 candidate in the tree and in the whole history against a denylist.
 
-What is not finished, stated rather than implied. The vote endpoint's pull requests are open on both sides and wait on a production migration, one environment variable and a live canary that has not run, so today the route answers 404 and the app says voting is not open yet. The human half of the QA walk is 24 September. The app has never been seen against an open NYSE.
+What is not finished, stated rather than implied. The vote endpoint's pull requests are open on both sides and wait on four gates, decided on 26 September: migration 0023 applied by hand, the collector address set on Vercel, both pull requests merged with the server first, and a canary vote signed on the Seeker. That canary has not run, so today the route answers 404 and the app says voting is not open yet. The human half of the QA walk is 24 September. The app has never been seen against an open NYSE.
 ```
 
 ## IF NO, WHAT MAJOR FEATURES OR NEW SIGNIFICANT MOBILE DEVELOPMENT HAVE YOU DONE?
@@ -77,7 +77,7 @@ This entry is the porting case, so the previous question is the one that applies
 
 ## DOES YOUR APPLICATION HAVE AN SKR INTEGRATION? IF SO, HOW?
 
-**4134 characters**, against the 5,000 the field allows. The bonus track is judged from this field and the video.
+**4264 characters**, against the 5,000 the field allows. The bonus track is judged from this field and the video.
 
 ```text
 Yes. Staked SKR decides which tokenized stock PlainTicker analyses next.
@@ -94,7 +94,7 @@ No custody anywhere. The app holds no key, and the server holds none either: it 
 
 The weakness, stated where the vote is cast rather than in a footnote. A stake-weighted vote is decided by the largest stake: 4,674 wallets stake more than 31,210 SKR, and one of them outweighs thousands of smaller stakers. The sheet says exactly that before the wallet opens. The stored weight is kept raw and linear so that a square root or a per-wallet cap can be applied in the next-up query alone, and reversed.
 
-Where it stands on 18 September. Both halves are built and reviewed, and both are open pull requests: the server side with 2345 tests, the app side with 760. What is left is the operator's, not the code's: migration 0023 applied to production, the collector address set as an environment variable on Vercel, and a live canary that has not run. Until then the route answers 404 and the app says, in those words, that voting is not open yet.
+Where it stands on 18 September. Both halves are built and reviewed, and both are open pull requests: the server side with 2345 tests, the app side with 760. Four gates are left, none of them code, and they are decided at the end of Saturday 26 September: migration 0023 applied by hand, VOTE_COLLECTOR_PUBKEY set on Vercel for production and preview, both pull requests merged with the server first, and then a canary vote signed on the Seeker. That canary has not run. Until it does the route answers 404 and the app says, in those words, that voting is not open yet.
 
 The specification is docs/skr-curation-spec-2026-09-13.md in the app repository, and the endpoint contract is server/vote/README.md beside the code.
 ```
