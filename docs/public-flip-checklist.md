@@ -5,8 +5,11 @@ the repo root on a clean checkout of `main`. Nothing here is optional.
 
 **Walked end to end 2026-09-18 on `6bb2a81`.** Every step below carries the date it was last
 checked and the evidence that was checked. The steps that remain open are open because they are
-the founder's to do on flip day, not because nobody looked. The plan (section 6) schedules the
-flip for 5 October.
+the founder's, not because nobody looked. The plan (section 6) schedules the flip for 5 October.
+
+One of them does not wait for that date: the redaction guard job now runs past its own time limit
+in CI, so `main` is red on the one job this list exists to keep green. Step 2 has the measurement
+and the two ways out.
 
 ## 1. Denylist is complete
 
@@ -62,12 +65,23 @@ branches merged since carry `design/brand/*/gallery.html`, up to 3.9 MB each of 
 and every long base64 run is cut into every 32-44 character window before hashing. It is noise the
 guard is built to chew through, and it does.
 
-**Measured cost, worth watching.** The "Redaction guard" job took 4 min 34 s of its
-`timeout-minutes: 5` on 2026-09-18. Step 15 re-runs CI after the flip, so the next few megabytes of
-design assets would turn that job red on a timeout rather than on a finding. One line fixes it
-(`timeout-minutes: 15` in `.github/workflows/ci.yml`); excluding `design/brand/**/*.html` from the
-scan would be faster and would also narrow what the guard covers, which is a decision rather than a
-fix. Left for the founder either way.
+**The job now runs out of time, and this is the one open blocker on this list.** The "Redaction
+guard" job took 4 min 34 s of its `timeout-minutes: 5` on `6bb2a81`. On the next commit, `92a8f7e`,
+it ran out: run `35394936181` was killed inside the "History" step at 5 min 17 s and the log ends
+`##[error]The operation was canceled` with `awk` terminated as an orphan process. Unit tests and
+shell scripts passed in the same run. Nothing was found; the guard was stopped before it could
+finish looking, which is the worse of the two ways for this job to be red.
+
+It grows with the repository, so it does not recover on its own, and step 15 re-runs CI after the
+flip. Two ways out, and the choice is the founder's because one of them changes what the guard
+covers:
+
+- `timeout-minutes: 20` on the `redaction-guard` job in `.github/workflows/ci.yml`. One line, keeps
+  every byte in scope, and 20 leaves room as the design branches grow. This is the safe one.
+- Exclude `design/brand/**/*.html` from the scan. Faster, and it narrows what the guard reads,
+  which is a decision about coverage rather than a repair.
+
+Until one of them lands, `main` is red on the guard and step 11 cannot be ticked. Two minutes.
 
 Also grep for anything that is not base58 shaped and was ever secret. Re-run 2026-09-18 over every
 commit on every ref: 12 matches, and all of them are the same four things found on 2026-09-13.
@@ -248,9 +262,14 @@ All **three** jobs of `.github/workflows/ci.yml` green on the commit about to be
 tests; shell scripts (parse, shellcheck, device-smoke usage, coverage-health self-test); redaction
 guard including `--history`. The four release secrets are set (`gh secret list`).
 
-**Checked 2026-09-18.** Run `35393228344` on `6bb2a81`: all three jobs success. `gh secret list`
-returns `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`, all set 2026-09-13.
-Run this again on the actual flip-day commit; the line above proves the pipeline, not that commit.
+**Checked 2026-09-18, and this step is open.** Run `35393228344` on `6bb2a81`: all three jobs
+success. Run `35394936181` on `92a8f7e`, the next commit: unit tests and shell scripts success, the
+redaction guard killed by its own five-minute cap (step 2). `main` is red on that job until the cap
+is raised, so this step stays unticked. `gh secret list` returns `KEYSTORE_BASE64`,
+`KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`, all set 2026-09-13.
+
+Run this again on the actual flip-day commit; a green run on an earlier commit proves the pipeline,
+not the commit being exposed.
 
 ## 12. A licence for this repository
 
