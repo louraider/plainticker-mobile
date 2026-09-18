@@ -114,7 +114,7 @@ This is what makes Mobile Wallet Adapter able to tell a person that the app aski
    - Banner: 1024x500 was introduced in CLI v0.10.0 ("banner image functionality (1024x500 dimensions)", https://github.com/solana-mobile/dapp-publishing/releases); the portal form field size is not published. Prepare a 1024x500 PNG.
    - Category and age rating: not published in docs (checked listing-page-guidelines, submit-new-app, legacy example/config.yaml). Expect a dropdown in the portal form.
    - URLs the on-chain release metadata stores (SPEC.md): `license_url`, `copyright_url`, `privacy_policy_url`, publisher `name`, `website`, contact email, `support_email`. Have all of these live before submitting.
-   - The text of every field is written below in "Listing copy (written 2026-09-18)": name, short and long description, "What's new", the category and tag decisions, and the table of images that still have to be produced.
+   - The text of every field is written below in "Listing copy (written 2026-09-18)": name, short and long description, "What's new", the category and tag decisions, and the table of images, which records the two that are rendered and the screenshots that are not.
 
 9. Meet the legal content requirements inside the app and listing.
    - Privacy policy: the Publisher Policy requires you to "Disclose the dApp's or its Developer's practices with respect to the collection, use, and disclosure of User Data in a privacy policy or other statement that complies with Applicable Law." The Developer Agreement requires you to "make available in an easily accessible location within each Developer Application a link to the applicable privacy policy and EULA and the text of such privacy policy and EULA."
@@ -296,22 +296,28 @@ withholding rule a first-time reader would otherwise read as a missing feature.
   purchase, no gambling. The one flag that is honest to raise is that the app references financial
   instruments.
 
-### What still has to be produced
+### The images: two are rendered, the rest are still to be captured
 
-None of the images below exists yet. Every one has to be captured from the **release** build on the
-Seeker, because a screenshot that does not match the shipped app is the rejection reason the review
-criteria name in as many words, "Screenshots accurately represent the app".
+The two images that are drawings of the brand rather than pictures of the app are in the repo,
+rendered on 2026-09-19 and listed below with the function that wrote them. Every screenshot still
+has to be captured from the **release** build on the Seeker, because a screenshot that does not
+match the shipped app is the rejection reason the review criteria name in as many words,
+"Screenshots accurately represent the app".
 
-| Asset | Spec | What it shows |
-| --- | --- | --- |
-| Icon PNG | 512 x 512 | The shipped launcher icon flattened: the Ink tile with the Canvas two-corner mark (`DESIGN.md` section 9). The app carries it as an adaptive vector, so the PNG is rendered from `design/brand` rather than exported from the APK. |
-| Screenshot 1 | Portrait, 1200 x 2670 off the Seeker, at least 1080 px each side | The List with a tracked row and a sub-floor row in one frame: one gauge drawn, one row reading `$34 behind this price, too thin`. The product's argument in a single image. |
-| Screenshot 2 | Same device, same orientation, same aspect ratio | Backing and controls on a stock page with the live bar running: proof of reserves, permanent delegate Yes, transfers pausable Yes, the slot and its age. |
-| Screenshot 3 | Same | The analysis: the composite, the three tracks, the F-Score with its nine signals, and the age of the analysis. |
-| Screenshot 4 | Same | The swap sheet at the confirm step, with the all-in cost visible. |
-| Screenshot 5 | Same | A real receipt: the amount that reached the route and the signature in mono. Optional by the guidelines, and the one image a reviewer can check against the chain. |
-| Banner | 1024 x 500 PNG | Ink ground, the wordmark and the two-corner mark, and one real reading at a size that survives the card the store draws it in: a gauge with its premium in mono, or the "too thin" line. No phone mockup carrying an invented screen, no stock photography, no sentence that is not in the app. |
-| Video | `.mp4`, at least 720 px, 1080p recommended | Optional. The hackathon demo video can be reused only if the build being submitted carries everything the video shows. If the SKR segment survives into the video and the vote is not in that build, the video is re-cut before it goes on the listing. |
+| Asset | Spec | State | What it shows |
+| --- | --- | --- | --- |
+| Icon PNG | 512 x 512 | **Written.** `design/brand/store/icon-512.png`, rendered by `design/brand/render_icons.py` (`flat_tile`, then `write_store`) | The shipped launcher icon flattened: the Ink tile with the Canvas two-corner mark (`DESIGN.md` section 9). The app carries it as an adaptive vector, so the PNG is rasterized from the shipped `res/drawable/ic_launcher_foreground.xml` over the ground `res/values/ic_launcher_background.xml` resolves to (`@color/ink`, `#E8ECF1`), rather than exported from the APK or traced. Square, opaque, no radius: the store applies its own mask. |
+| Screenshot 1 | Portrait, 1200 x 2670 off the Seeker, at least 1080 px each side | To capture on the Seeker | The List with a tracked row and a sub-floor row in one frame: one gauge drawn, one row reading `$34 behind this price, too thin`. The product's argument in a single image. |
+| Screenshot 2 | Same device, same orientation, same aspect ratio | To capture on the Seeker | Backing and controls on a stock page with the live bar running: proof of reserves, permanent delegate Yes, transfers pausable Yes, the slot and its age. |
+| Screenshot 3 | Same | To capture on the Seeker | The analysis: the composite, the three tracks, the F-Score with its nine signals, and the age of the analysis. |
+| Screenshot 4 | Same | To capture on the Seeker | The swap sheet at the confirm step, with the all-in cost visible. |
+| Screenshot 5 | Same | To capture on the Seeker | A real receipt: the amount that reached the route and the signature in mono. Optional by the guidelines, and the one image a reviewer can check against the chain. |
+| Banner | 1024 x 500 PNG | **Written.** `design/brand/store/banner-1024x500.png`, rendered by `design/brand/render_icons.py` (`store_banner`) | The icon's own field, widened: the same Ink ground, the same Canvas mark out of the same drawable, the wordmark in Outfit 600 and one line under it, "Read the xStock, then swap", which is the short description this document already writes rather than a sentence invented for an image. No reading is drawn on it: at the size a listing card gives a banner a gauge and its premium are texture, and the one thing that has to survive being small is that this is the object whose icon sits beside it. No phone mockup, no stock photography, no gradient. |
+| Video | `.mp4`, at least 720 px, 1080p recommended | Optional, not cut | The hackathon demo video can be reused only if the build being submitted carries everything the video shows. If the SKR segment survives into the video and the vote is not in that build, the video is re-cut before it goes on the listing. |
+
+Both PNGs carry the generator in a PNG text chunk, the same "generated by, do not edit by hand"
+line the drawables carry, and `python design/brand/render_icons.py` rewrites them from the shipped
+drawable: change the mark and re-run it, never repaint the PNG.
 
 Four screenshots is the working target step 8 settles on and five are listed here, all in one
 orientation and one aspect ratio, which the guidelines require and which a mixed set of captures
