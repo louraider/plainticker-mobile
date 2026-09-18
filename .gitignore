@@ -25,3 +25,13 @@ resp.json
 
 # python bytecode from the design scripts
 __pycache__/
+
+# Secrets. Nothing here has ever been tracked (checked over every commit on every
+# ref, 2026-09-18); these lines are the guard rail, because the redaction guard can
+# only see what git already stored.
+.env
+.env.*
+keystore.properties
+signing.properties
+*.p12
+*.pem
