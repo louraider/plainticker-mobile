@@ -6,6 +6,7 @@ import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.jupiter.JupiterPriceApi
 import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.net.HttpClientFactory
+import com.plainticker.mobile.data.plainticker.NextUpApi
 import com.plainticker.mobile.data.plainticker.PlainTickerApi
 import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.receipts.FileReceiptStore
@@ -21,11 +22,13 @@ import com.plainticker.mobile.prefs.SharedPrefsOnboardingStore
 import com.plainticker.mobile.prefs.SharedPrefsWatchlistStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CachedCatalogRepository
+import com.plainticker.mobile.repo.CachedNextUpRepository
 import com.plainticker.mobile.repo.CachedPriceRepository
 import com.plainticker.mobile.repo.CatalogRepository
 import com.plainticker.mobile.repo.ForwarderMintRepository
 import com.plainticker.mobile.repo.ForwarderRpcRepository
 import com.plainticker.mobile.repo.MintRepository
+import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PlainTickerSummaryRepository
 import com.plainticker.mobile.repo.AssetSource
 import com.plainticker.mobile.repo.BundledSnapshotRepository
@@ -60,12 +63,18 @@ interface AppContainer {
 
     /** The one call SKR-weighted coverage curation makes; the app cannot build the transaction. */
     val voteApi: VoteApi
+
+    /** The read half of curation: which uncovered tickers staked SKR has chosen, and by how much. */
+    val nextUpApi: NextUpApi
     val xStocksApi: XStocksApi
     val jupiterPriceApi: JupiterPriceApi
     val jupiterSwapApi: JupiterSwapApi
     val rpcApi: SolanaRpcApi
 
     val summaryRepository: SummaryRepository
+
+    /** The leaders, held for the edge's five minutes so the List and a Detail share one answer. */
+    val nextUpRepository: NextUpRepository
     val catalogRepository: CatalogRepository
     val priceRepository: PriceRepository
     val rpcRepository: RpcRepository
@@ -109,12 +118,14 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val plainTickerApi: PlainTickerApi by lazy { PlainTickerApi(httpClient) }
     override val voteApi: VoteApi by lazy { VoteApi(httpClient) }
+    override val nextUpApi: NextUpApi by lazy { NextUpApi(httpClient) }
     override val xStocksApi: XStocksApi by lazy { XStocksApi(httpClient) }
     override val jupiterPriceApi: JupiterPriceApi by lazy { JupiterPriceApi(httpClient) }
     override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }
     override val rpcApi: SolanaRpcApi by lazy { SolanaRpcApi(httpClient) }
 
     override val summaryRepository: SummaryRepository by lazy { PlainTickerSummaryRepository(plainTickerApi) }
+    override val nextUpRepository: NextUpRepository by lazy { CachedNextUpRepository(nextUpApi, clock) }
     // cacheDir, not filesDir: the catalog is a copy of something the network can always serve
     // again, so the system is welcome to reclaim it. Losing it costs one refetch.
     private val catalogCache: CatalogCache by lazy {

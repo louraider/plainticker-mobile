@@ -10,6 +10,8 @@ import com.plainticker.mobile.data.xstocks.PriceLabel
 import com.plainticker.mobile.data.xstocks.Reserves
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.counted
+import com.plainticker.mobile.ui.list.skrWeight
 import com.plainticker.mobile.ui.raw
 import com.plainticker.mobile.ui.words
 import java.time.Instant
@@ -155,6 +157,17 @@ data class MethodContent(
 
 /** The one line that replaces the fundamentals when there are none, with its next step. */
 data class FundamentalsNotice(val text: Copy, val hint: Copy?)
+
+/**
+ * The ticker's standing in the next-up list of SKR-weighted coverage curation: where it ranks
+ * among the uncovered tickers staked SKR has voted for, and what stands behind it.
+ */
+data class NextUpLine(
+    /** "Next up: 2 of 20, by staked SKR" */
+    val rank: Copy,
+    /** "31,209.9 SKR from 3 voters", counted copy so one voter reads as one. */
+    val weight: Copy,
+)
 
 // ---- The rules ---------------------------------------------------------------------------------
 
@@ -549,6 +562,25 @@ val DetailUiState.fundamentalsNotice: FundamentalsNotice?
         is AnalysisState.Incomplete -> FundamentalsNotice(words(R.string.detail_analysis_incomplete), null)
 
         is AnalysisState.Unavailable -> FundamentalsNotice(words(R.string.detail_analysis_unavailable), null)
+    }
+
+/**
+ * The standing, drawn only where PlainTicker classifies nothing and the leaders name this ticker.
+ * A served ticker has no standing, a ticker nobody has voted for has nothing to state, and a
+ * weight that is not a number is not printed. The rank is a position in the server's own order,
+ * heaviest first, out of however many leaders it sent (at most twenty).
+ */
+val DetailUiState.nextUpLine: NextUpLine?
+    get() {
+        if (!analysisNotServed) return null
+        val index = nextUp.indexOfFirst { it.ticker.equals(ticker, ignoreCase = true) }
+        if (index < 0) return null
+        val row = nextUp[index]
+        val raw = row.weightRaw() ?: return null
+        return NextUpLine(
+            rank = words(R.string.next_up_detail_rank, Fmt.count(index + 1), Fmt.count(nextUp.size)), // lint-allow count: a position and a size, no noun follows either
+            weight = counted(R.plurals.next_up_detail_weight, row.voters, skrWeight(raw), Fmt.count(row.voters)),
+        )
     }
 
 /** "Swap USDC to TSLAx". Null until the catalog names the token, because the verb needs an object. */

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.plainticker.mobile.data.jupiter.PriceEntry
 import com.plainticker.mobile.data.jupiter.PriceFetch
 import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.SummaryRow
 import com.plainticker.mobile.data.plainticker.Tone
 import com.plainticker.mobile.data.snapshot.toSummaryRow
@@ -18,6 +19,7 @@ import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
 import com.plainticker.mobile.repo.CatalogUpdate
+import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SnapshotRepository
 import com.plainticker.mobile.repo.SummaryRepository
@@ -143,6 +145,14 @@ data class ListUiState(
     val analyzed: List<ListRow> = emptyList(),
     /** Catalog xStocks PlainTicker has not classified, symbol ascending. */
     val withoutAnalysis: List<ListRow> = emptyList(),
+    /**
+     * The leaders of SKR-weighted coverage curation as the server sent them, heaviest first:
+     * the uncovered tickers staked SKR has voted to cover next. Empty when the call failed or
+     * answered nothing, and the screen raises no banner for it either way; the strip that draws
+     * them ([nextUpStrip]) is simply not there. A quiet source, on purpose: the list stands
+     * without it.
+     */
+    val nextUp: List<NextUpRow> = emptyList(),
     /** How many tickers are watched, for the Today strip; the strip is hidden at zero. */
     val watched: Int = 0,
     /**
@@ -270,6 +280,7 @@ class ListViewModel(
     private val catalog: CatalogRepository,
     private val prices: PriceRepository,
     private val snapshots: SnapshotRepository,
+    private val nextUp: NextUpRepository,
     private val watchlist: WatchlistStore,
     private val digests: DigestStore,
     private val clock: Clock = WallClock,
@@ -388,6 +399,14 @@ class ListViewModel(
                 catalogSettled = true
                 republish()
                 schedulePrices()
+            }
+            // The leaders staked SKR chose (docs/skr-curation-spec-2026-09-13.md, step 3). A quiet
+            // source: it settles nothing about the list, is not waited for, raises no banner, and a
+            // failure simply leaves the strip undrawn. It is a child of this refresh, so a retry
+            // asks for it again and a cancelled refresh drops it with the rest.
+            launch {
+                val leaders = runCatching { nextUp.nextUp() }.getOrDefault(emptyList())
+                _state.update { it.copy(nextUp = leaders) }
             }
             joinAll(summary, assets)
             republish()

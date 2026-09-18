@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.funkatronics.encoders.Base58
 import com.plainticker.mobile.MainDispatcherRule
 import com.plainticker.mobile.awaitUntil
+import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.MockApi
 import com.plainticker.mobile.data.bodyText
 import com.plainticker.mobile.data.net.HttpClientFactory
@@ -34,6 +35,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.Instant
 
 /**
  * Every transition of the vote machine, asserted as a transition.
@@ -43,10 +45,11 @@ import org.junit.Test
  * [FakeRpcRepository]. Nothing here asserts a sentence: the copy is [VoteSheetModelTest]'s, and
  * what has to be right here is which state follows which.
  *
- * The state the whole feature is blocked on has its own case. `POST /api/v1/vote/build` answers
- * 404 today and will until the founder triggers the server work, and this file pins that the
- * answer is [VoteRefusal.NOT_OPEN] and not a failure, so the path the app takes the day the
- * route lands is the path it is already taking.
+ * Voting not being open has its own cases. A bare 404 was the answer for every ticker until the
+ * server half landed, and a 503 `vote_not_configured` is the answer until the operator sets the
+ * collector; this file pins that both are [VoteRefusal.NOT_OPEN] and not a failure, so the path
+ * the app takes the day the route builds is the path it is already taking. The clock is fixed,
+ * so an expiry in a body is before or after it by construction.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoteViewModelTest {
@@ -72,11 +75,15 @@ class VoteViewModelTest {
         stake = Result.success(SkrStake(listOf(SkrStakeAccount("s".padEnd(44, '1'), stakeRaw)))),
     )
 
+    /** A fixed instant, so an expiry in a body is before or after it by construction. */
+    private val now = 1_789_394_400_000L
+
     private fun machine(
         mock: MockApi = MockApi { respondJson(body) },
         wallet: FakeWalletSession = wallet(),
         rpc: FakeRpcRepository = staking(measuredStake),
-    ) = VoteViewModel(VoteApi(mock.client), wallet, rpc, debugLog = VoteDebugLog { })
+        clock: Clock = Clock { now },
+    ) = VoteViewModel(VoteApi(mock.client), wallet, rpc, clock = clock, debugLog = VoteDebugLog { })
 
     /**
      * Every state the machine passes through, not only the ones a conflating StateFlow keeps.
@@ -282,6 +289,104 @@ class VoteViewModelTest {
         assertTrue(operations.sendRequests.isEmpty())
     }
 
+    @Test
+    fun `a wallet that already voted is told so, and it is an answer rather than a retry`() = runTest {
+        val voted = MockApi {
+            respondJson("""{"error":"Already counted.","code":"already_voted"}""", HttpStatusCode.Conflict)
+        }
+        val machine = machine(voted)
+        assertEquals(VoteRefusal.ALREADY_VOTED, refusalOf(settle(machine)))
+        assertFalse("one wallet counts once per ticker, and a second tap cannot change that", VoteRefusal.ALREADY_VOTED.retryable)
+        machine.retry()
+        assertEquals(VoteRefusal.ALREADY_VOTED, refusalOf(machine.state.value))
+        assertEquals(1, voted.requests.size)
+    }
+
+    @Test
+    fun `a server taking votes more slowly than this is a state a later tap can end differently`() = runTest {
+        val limited = MockApi {
+            respondJson("""{"error":"Slow down.","code":"rate_limited"}""", HttpStatusCode.TooManyRequests)
+        }
+        assertEquals(VoteRefusal.RATE_LIMITED, refusalOf(settle(machine(limited))))
+        assertTrue(VoteRefusal.RATE_LIMITED.retryable)
+    }
+
+    @Test
+    fun `a published route the operator has not set up is voting not being open yet`() = runTest {
+        val unconfigured = MockApi {
+            respondJson("""{"error":"No collector.","code":"vote_not_configured"}""", HttpStatusCode.ServiceUnavailable)
+        }
+        assertEquals(VoteRefusal.NOT_OPEN, refusalOf(settle(machine(unconfigured))))
+    }
+
+    // ---- The expiry -----------------------------------------------------------------------------------
+
+    /** The published 200, with the server's own weight and an expiry at [at]. */
+    private fun bodyExpiring(at: Long) = """{"transaction":"UkVEQUNURUQ=","summary":""" +
+        """{"ticker":"NFLX","lamports":5000,"collector":"$collector","weight":123456000000,"alreadyVoted":false},""" +
+        """"expiresAt":"${Instant.ofEpochMilli(at)}"}"""
+
+    @Test
+    fun `a transaction that has expired is never signed, the server is asked again instead`() = runTest {
+        val mock = MockApi { respondJson(bodyExpiring(now - 1_000L)) }
+        val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64) { 1 }))
+        val session = wallet().apply { this.operations = operations }
+        val machine = machine(mock, session)
+        val trail = trail(machine)
+
+        machine.state.test {
+            awaitItem()
+            machine.vote("NFLX", "NFLXx")
+            awaitUntil { it is VoteState.Ready }
+            assertEquals(1, mock.requests.size)
+
+            machine.confirm()
+            awaitUntil { it is VoteState.Ready && mock.requests.size == 2 }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertTrue("nothing stale reaches the wallet", operations.sendRequests.isEmpty())
+        assertEquals("the server was asked for a fresh transaction", 2, mock.requests.size)
+        assertTrue("the machine went back through the server step", trail.count { it is VoteState.Building } >= 2)
+        assertFalse("without ever opening the wallet", trail.any { it is VoteState.Signing })
+    }
+
+    @Test
+    fun `a transaction inside its promise is signed, and lands with the figure the server stated`() = runTest {
+        val fresh = MockApi { respondJson(bodyExpiring(now + 45_000L)) }
+        val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64) { 2 }))
+        val session = wallet().apply { this.operations = operations }
+        val machine = machine(fresh, session)
+
+        machine.state.test {
+            awaitItem()
+            machine.vote("NFLX", "NFLXx")
+            awaitUntil { it is VoteState.Ready }
+            machine.confirm()
+            val landed = awaitUntil { it is VoteState.Landed } as VoteState.Landed
+            assertEquals("the figure that was signed for is the server's own", 123_456_000_000L, landed.stakeRaw)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(1, fresh.requests.size)
+        assertEquals(1, operations.sendRequests.size)
+    }
+
+    @Test
+    fun `a body with no expiry and no weight is signed and lands with the app's own bounded read`() = runTest {
+        val session = wallet().apply { operations = FakeAdapterOperations(signatures = listOf(ByteArray(64) { 3 })) }
+        val machine = machine(wallet = session)
+
+        machine.state.test {
+            awaitItem()
+            machine.vote("NFLX", "NFLXx")
+            awaitUntil { it is VoteState.Ready }
+            machine.confirm()
+            val landed = awaitUntil { it is VoteState.Landed } as VoteState.Landed
+            assertEquals("no server figure, so the app's own bounded read", measuredStake, landed.stakeRaw)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     // ---- The wallet, at the moment it signs ------------------------------------------------------------
 
     @Test
@@ -429,6 +534,12 @@ class VoteViewModelTest {
         reached += refusalOf(settle(machine(rpc = staking(-6_994_426_482_741_105_544L))))
         reached += refusalOf(settle(machine(MockApi { respondHtml("<html>404</html>", HttpStatusCode.NotFound) })))
         reached += refusalOf(settle(machine(MockApi { respondJson("{}", HttpStatusCode.InternalServerError) })))
+        reached += refusalOf(
+            settle(machine(MockApi { respondJson("""{"error":"Counted.","code":"already_voted"}""", HttpStatusCode.Conflict) })),
+        )
+        reached += refusalOf(
+            settle(machine(MockApi { respondJson("""{"error":"Slow.","code":"rate_limited"}""", HttpStatusCode.TooManyRequests) })),
+        )
 
         val declined = wallet()
         machine(wallet = declined).let { machine ->

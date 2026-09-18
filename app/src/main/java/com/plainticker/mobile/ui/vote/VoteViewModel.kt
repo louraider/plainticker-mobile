@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.funkatronics.encoders.Base58
 import com.plainticker.mobile.BuildConfig
+import com.plainticker.mobile.core.Clock
+import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteError
@@ -53,12 +55,18 @@ fun interface VoteDebugLog {
  * than everything that is staked. The bounded figure is on the screen before anything is signed,
  * because a person approving a transaction is owed the number it carries. What the vote is
  * actually counted at is the server's own read of the same accounts, so nothing sent from here
- * can inflate it.
+ * can inflate it; and since 2026-09-18 the server sends that figure back as `summary.weight`, so
+ * the confirm step shows the figure that counts wherever the server has stated one.
+ *
+ * **A stale transaction is never signed.** The server promises its blockhash for 45 s. A confirm
+ * past that goes back to the server for a fresh transaction and returns to the confirm step,
+ * rather than spending a wallet approval on a hash the network will refuse.
  */
 class VoteViewModel(
     private val voteApi: VoteApi,
     private val wallet: WalletSession,
     private val rpc: RpcRepository,
+    private val clock: Clock = WallClock,
     private val debugLog: VoteDebugLog = VoteDebugLog.ANDROID,
 ) : ViewModel() {
 
@@ -102,11 +110,24 @@ class VoteViewModel(
      * There is no second confirmation and no debug gate. The vote costs one signature fee, about
      * 5,000 lamports, and it is the whole of what this feature does; a build that could not vote
      * could not be walked on a device at all.
+     *
+     * One thing stands between the tap and the wallet: the transaction's own expiry. The server
+     * promises its blockhash for 45 s, and a reader who left the sheet open past that is not
+     * handed a stale transaction to approve, because the approval would be spent on a failure the
+     * network reports afterwards. The server is asked again instead and the machine returns to
+     * the confirm step with a fresh transaction, and a fresh figure, to approve.
      */
     fun confirm() {
         val ready = _state.value as? VoteState.Ready ?: return
         job?.cancel()
-        job = viewModelScope.launch { send(ready) }
+        job = viewModelScope.launch {
+            if (ready.build.isExpiredAt(clock.nowMillis())) {
+                debugLog.raw("vote/build expired at ${ready.build.expiresAt}; asking again before anything is signed")
+                build(ready.ticker, ready.symbol, ready.voter, ready.stakeRaw)
+            } else {
+                send(ready)
+            }
+        }
     }
 
     /** Dismiss from any state. A round-trip in flight is dropped with it. */
@@ -150,6 +171,16 @@ class VoteViewModel(
         // wallet has no weight to vote with, and that is what its sentence says.
         if (stakeRaw == 0L) return refuse(ticker, symbol, VoteRefusal.NO_STAKE)
 
+        build(ticker, symbol, voter, stakeRaw)
+    }
+
+    /**
+     * The server step: ask for the transaction, then stop at [VoteState.Ready] with the figure on
+     * the screen. Reached from [attempt] once the stake is bounded, and again from [confirm] when
+     * the transaction it was about to sign has gone stale, so the machine returns to the confirm
+     * step with a fresh one rather than spending an approval on a dead blockhash.
+     */
+    private suspend fun build(ticker: String, symbol: String, voter: String, stakeRaw: Long) {
         _state.value = VoteState.Building(ticker, symbol, voter, stakeRaw)
         val build = try {
             voteApi.build(ticker, voter)
@@ -157,9 +188,16 @@ class VoteViewModel(
             throw e
         } catch (e: VoteError) {
             debugLog.raw("vote/build refused: status=${e.status} code=${e.code} ${e.detail ?: e.message}")
-            // The route is not published yet, which is an answer and not a fault. Every other
-            // refusal, explained or not, is the server not having built the vote.
-            val reason = if (e is VoteError.NotOpen) VoteRefusal.NOT_OPEN else VoteRefusal.UNAVAILABLE
+            // Three refusals are answers with sentences of their own: voting not being open (a
+            // 404 from a route nobody has published, or a 503 from one not yet set up), a wallet
+            // that has already voted for this ticker, and a server taking votes more slowly than
+            // this. Every other refusal, explained or not, is the server not having built the vote.
+            val reason = when (e) {
+                is VoteError.NotOpen -> VoteRefusal.NOT_OPEN
+                is VoteError.AlreadyVoted -> VoteRefusal.ALREADY_VOTED
+                is VoteError.RateLimited -> VoteRefusal.RATE_LIMITED
+                else -> VoteRefusal.UNAVAILABLE
+            }
             return refuse(ticker, symbol, reason)
         } catch (e: Exception) {
             debugLog.raw("vote/build threw ${e::class.simpleName}: ${e.message}")
@@ -205,7 +243,9 @@ class VoteViewModel(
         _state.value = VoteState.Landed(
             ticker = ready.ticker,
             symbol = ready.symbol,
-            stakeRaw = ready.stakeRaw,
+            // The figure that was signed for: the server's own where it stated one, because that
+            // is the figure the vote is counted at, and the app's bounded read where it did not.
+            stakeRaw = build.summary.weight ?: ready.stakeRaw,
             signature = Base58.encodeToString(signature),
         )
     }

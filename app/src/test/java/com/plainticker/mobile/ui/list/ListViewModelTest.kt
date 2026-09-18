@@ -8,6 +8,7 @@ import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.net.ApiException
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.net.RateLimitedException
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.SummaryResponse
 import com.plainticker.mobile.data.plainticker.SummaryRow
 import com.plainticker.mobile.data.plainticker.Tone
@@ -17,6 +18,7 @@ import com.plainticker.mobile.data.snapshot.SnapshotAsset
 import com.plainticker.mobile.data.snapshot.SnapshotRow
 import com.plainticker.mobile.prefs.InMemoryWatchlistStore
 import com.plainticker.mobile.repo.FakeCatalogRepository
+import com.plainticker.mobile.repo.FakeNextUpRepository
 import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeSnapshotRepository
 import com.plainticker.mobile.repo.FakeSummaryRepository
@@ -25,6 +27,7 @@ import com.plainticker.mobile.repo.HeldCatalogRepository
 import com.plainticker.mobile.repo.HeldPriceRepository
 import com.plainticker.mobile.repo.HeldSummaryRepository
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SnapshotRepository
 import com.plainticker.mobile.repo.SummaryRepository
@@ -127,10 +130,11 @@ class ListViewModelTest {
         catalog: CatalogRepository = FakeCatalogRepository(Result.success(catalog())),
         prices: PriceRepository = FakePriceRepository(),
         snapshots: SnapshotRepository = FakeSnapshotRepository(),
+        nextUp: NextUpRepository = FakeNextUpRepository(),
         watchlist: WatchlistStore = InMemoryWatchlistStore(),
         digests: DigestStore = InMemoryDigestStore(),
         clock: Clock = marketOpen,
-    ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist, digests, clock)
+    ) = ListViewModel(summaries, catalog, prices, snapshots, nextUp, watchlist, digests, clock)
 
     /** The bundled snapshot as the assets carry it: a whole list, dated, and with no price. */
     private fun bundled() = snapshot(
@@ -942,6 +946,36 @@ class ListViewModelTest {
         assertEquals(ListBanner.PricesUnavailable, ListUiState(pricesUnavailable = true, pricesPartial = true).banner)
         assertEquals(ListBanner.PricesPartial, ListUiState(pricesPartial = true).banner)
         assertNull(ListUiState().banner)
+    }
+
+    // ---- The Next up strip -------------------------------------------------------------
+
+    @Test
+    fun `the next up strip carries the server's leaders and hides when the call fails`() = runTest {
+        val leaders = FakeNextUpRepository(Result.success(listOf(NextUpRow("TSLA", "31209870777", 3))))
+        val vm = viewModel(nextUp = leaders)
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.nextUp.isNotEmpty() }
+            assertEquals(1, leaders.calls)
+            assertEquals(listOf("TSLA"), state.nextUp.map { it.ticker })
+            val strip = state.nextUpStrip
+            assertEquals("the leader is named as the row under it is", listOf("TSLAx"), strip.map { it.display })
+            assertEquals(3, strip.single().voters)
+            assertNull("a quiet source raises no banner", state.banner)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val down = viewModel(nextUp = FakeNextUpRepository(Result.failure(IOException("offline"))))
+        down.state.test {
+            val state = awaitUntil { !it.refreshing }
+            assertTrue(state.nextUp.isEmpty())
+            assertTrue("nothing to draw, so the strip is not there", state.nextUpStrip.isEmpty())
+            assertNull("and the list is not told anything failed", state.banner)
+            assertFalse(state.failed)
+            assertEquals("the rows stand as before", listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // ---- The Today strip ---------------------------------------------------------------

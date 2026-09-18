@@ -75,6 +75,14 @@ class CountCopyTest {
             Case(1, listOf("1", "TSLAx", "Oct 22"), "Today: 1 stock watched, next report TSLAx on Oct 22"),
             Case(12, listOf("12", "TSLAx", "Oct 22"), "Today: 12 stocks watched, next report TSLAx on Oct 22"),
         ),
+        "next_up_voters" to listOf(
+            Case(1, listOf("1"), "1 voter"),
+            Case(3, listOf("3"), "3 voters"),
+        ),
+        "next_up_detail_weight" to listOf(
+            Case(1, listOf("31,209.9", "1"), "31,209.9 SKR from 1 voter"),
+            Case(3, listOf("31,209.9", "3"), "31,209.9 SKR from 3 voters"),
+        ),
         "detail_fscore_of" to listOf(
             Case(1, listOf("1"), "of 1 signal"),
             Case(9, listOf("9"), "of 9 signals"),

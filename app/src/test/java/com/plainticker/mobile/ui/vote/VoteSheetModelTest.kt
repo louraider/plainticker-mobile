@@ -208,8 +208,8 @@ class VoteSheetModelTest {
             assertNull("$it is an answer and must not be dressed as a retry", sheetOf(VoteState.Refused("NFLX", "NFLXx", it)).primary)
         }
         assertEquals(
-            "a device with no wallet, nothing staked and a route nobody has published are answers",
-            setOf(VoteRefusal.NO_WALLET, VoteRefusal.NO_STAKE, VoteRefusal.NOT_OPEN),
+            "a device with no wallet, nothing staked, voting not being open and a wallet that already voted are answers",
+            setOf(VoteRefusal.NO_WALLET, VoteRefusal.NO_STAKE, VoteRefusal.NOT_OPEN, VoteRefusal.ALREADY_VOTED),
             answers.toSet(),
         )
     }
@@ -267,5 +267,36 @@ class VoteSheetModelTest {
         val sentence = render(sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.NO_STAKE)).notice)!!
         assertTrue(sentence.contains("SKR staking program"))
         assertTrue("the reader is owed the rule, not only the refusal", sentence.contains("weighted by staked SKR"))
+    }
+
+    // ---- The published contract ------------------------------------------------------------------------
+
+    @Test
+    fun `the confirm step shows the server's figure where it stated one, because that is the figure that counts`() {
+        val counted = build.copy(summary = build.summary.copy(weight = 123_456_000_000L))
+        val ready = VoteState.Ready("NFLX", "NFLXx", collector, measuredStake, counted)
+        assertEquals("123,456", ShippedCopy.render(sheetOf(ready).cells[0].value))
+        val signing = VoteState.Signing("NFLX", "NFLXx", collector, measuredStake, counted)
+        assertEquals("123,456", ShippedCopy.render(sheetOf(signing).cells[0].value))
+        // A server that sent no figure leaves the app's own bounded read on the screen.
+        assertEquals("31,209.870777", ShippedCopy.render(sheetOf(ready()).cells[0].value))
+    }
+
+    @Test
+    fun `a wallet that already voted is told the rule, and that it cost nothing`() {
+        val sentence = render(sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.ALREADY_VOTED)).notice)!!
+        assertEquals(
+            "This wallet has already voted for this ticker. One wallet counts once per ticker, so nothing " +
+                "was signed and no fee was spent.",
+            sentence,
+        )
+        assertTrue(sentence.contains("once per ticker"))
+    }
+
+    @Test
+    fun `a server taking votes slowly says so and offers a later tap`() {
+        val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.RATE_LIMITED))
+        assertTrue(render(content.notice)!!.contains("Try again shortly."))
+        assertEquals(VoteActionKind.Retry, content.primary?.kind)
     }
 }

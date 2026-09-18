@@ -22,6 +22,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.catalogRepository,
             container.priceRepository,
             container.snapshotRepository,
+            container.nextUpRepository,
             container.watchlistStore,
             container.digestStore,
             container.clock,
@@ -37,6 +38,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.catalogRepository,
             container.priceRepository,
             container.mintRepository,
+            container.nextUpRepository,
             container.watchlistStore,
             container.notificationPromptStore,
             container.clock,
@@ -76,6 +78,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.voteApi,
             container.walletSession,
             container.rpcRepository,
+            container.clock,
         )
     }
     initializer {

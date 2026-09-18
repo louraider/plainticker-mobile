@@ -24,18 +24,36 @@ sealed class VoteError(
 ) : IOException(message) {
 
     /**
-     * HTTP 404, which today means the route does not exist yet.
+     * Voting is not open yet, in either of the two ways that is true.
      *
-     * The endpoint is blocked on the founder and on a migration only the operator applies
-     * (docs/skr-curation-spec-2026-09-13.md, "What needs the founder"), so a 404 is the answer
-     * this app gets every time until it lands. It is not hidden and it is not dressed as a
-     * failure: the surface says voting is not open yet, and the same code path lights up the
-     * moment the route answers.
+     * HTTP 404 is a route nobody has published, which was the answer for every ticker until the
+     * server half landed on 2026-09-18. HTTP 503 with `vote_not_configured` is that route,
+     * published, waiting on the operator to set the collector address and redeploy. To a reader
+     * they are one answer: nothing can be built, nothing was signed, and it is not a fault. It is
+     * not hidden and not dressed as a failure, and the same code path lights up the moment the
+     * route builds.
      */
-    class NotOpen(detail: String?) :
-        VoteError(404, null, detail, "vote/build is not published yet: ${detail ?: "-"}")
+    class NotOpen(status: Int, code: String?, detail: String?) :
+        VoteError(status, code, detail, "vote/build is not open ($status${code?.let { ", $it" } ?: ""}): ${detail ?: "-"}")
 
-    /** A 4xx the server explained: an unknown ticker, a ticker already covered, a refused voter. */
+    /**
+     * HTTP 409 `already_voted`: this wallet already has a counted vote for this ticker. One wallet
+     * counts once per ticker, and the server refuses before it builds anything, so a second tap
+     * never costs a signature fee. An answer, not a fault, and one the spec named as the state the
+     * first contract could not say (docs/skr-curation-spec-2026-09-13.md, gap 1).
+     */
+    class AlreadyVoted(detail: String?) :
+        VoteError(409, CODE_ALREADY_VOTED, detail, "vote/build refused, this wallet already voted: ${detail ?: "-"}")
+
+    /**
+     * HTTP 429: the per-IP bucket, the per-voter bucket or the shared RPC daily budget. Whatever the
+     * body says, a 429 is this, because an edge limiter answers it with a page and not the contract.
+     * A later tap can end differently, so the screen offers one.
+     */
+    class RateLimited(code: String?, detail: String?) :
+        VoteError(429, code, detail, "vote/build rate limited${code?.let { " ($it)" } ?: ""}: ${detail ?: "-"}")
+
+    /** A 4xx the server explained: an unknown ticker, a ticker already covered, a wallet with no stake. */
     class Refused(status: Int, code: String?, detail: String?) :
         VoteError(status, code, detail, "vote refused ($status${code?.let { ", $it" } ?: ""}): ${detail ?: "-"}")
 
@@ -52,19 +70,31 @@ sealed class VoteError(
          * `{"error": "<human sentence>", "code": "<slug>"}`, and anything else, HTML included,
          * becomes [Unreadable] with a short excerpt.
          *
-         * 404 is [NotOpen] whatever the body says, because a route that is not published answers
-         * it with whatever the host chose and never with the contract.
+         * `code` is the load-bearing field, as the contract says. The status alone decides only
+         * where the body cannot be trusted to be the contract: 404 is [NotOpen] whatever the body
+         * says, because a route that is not published answers it with whatever the host chose,
+         * and 429 is [RateLimited] whatever the body says, because an edge limiter answers with a
+         * page. 503 is [NotOpen] only with `vote_not_configured`; any other 503 is the server
+         * being down, which is [Unreadable].
          */
         fun fromErrorBody(status: Int, body: String?, json: Json): VoteError {
             val obj = body?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
             val detail = obj.str("error") ?: body?.trim()?.take(EXCERPT)?.takeIf { it.isNotEmpty() }
             val code = obj.str("code")
             return when {
-                status == 404 -> NotOpen(detail)
+                status == 404 -> NotOpen(status, code, detail)
+                status == 503 && code == CODE_VOTE_NOT_CONFIGURED -> NotOpen(status, code, detail)
+                status == 429 -> RateLimited(code, detail)
+                status == 409 && code == CODE_ALREADY_VOTED -> AlreadyVoted(detail)
                 status in 400..499 && obj != null -> Refused(status, code, detail)
                 else -> Unreadable(status, detail)
             }
         }
+
+        /** The slugs this app acts on. Every other slug is logged and reaches the screen as one sentence. */
+        const val CODE_ALREADY_VOTED = "already_voted"
+        const val CODE_VOTE_NOT_CONFIGURED = "vote_not_configured"
+        const val CODE_RATE_LIMITED = "rate_limited"
 
         private const val EXCERPT = 200
 

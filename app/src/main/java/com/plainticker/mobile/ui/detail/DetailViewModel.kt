@@ -12,6 +12,7 @@ import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
 import com.plainticker.mobile.repo.MintRepository
+import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SummaryRepository
 import kotlinx.coroutines.Job
@@ -48,6 +49,7 @@ class DetailViewModel(
     private val catalog: CatalogRepository,
     private val prices: PriceRepository,
     private val mints: MintRepository,
+    private val nextUp: NextUpRepository,
     private val watchlist: WatchlistStore,
     private val prompts: NotificationPromptStore,
     private val clock: Clock,
@@ -127,13 +129,19 @@ class DetailViewModel(
 
     private suspend fun loadAnalysis() {
         val analysis = runCatching { summaries.analysis(ticker) }
-        _state.update {
-            it.copy(
-                analysisState = analysis.fold(
-                    onSuccess = { payload -> AnalysisState.Served(payload) },
-                    onFailure = ::classify,
-                ),
-            )
+        val classified = analysis.fold(
+            onSuccess = { payload -> AnalysisState.Served(payload) },
+            onFailure = ::classify,
+        )
+        _state.update { it.copy(analysisState = classified) }
+
+        // Asked only where it could matter: a covered ticker has no standing among the uncovered
+        // ones, and a call that failed leaves it unknown whether it is covered at all. The answer
+        // is the edge's five-minute cache, shared with the List through the repository, and a
+        // failure states no standing rather than raising a banner.
+        if (classified is AnalysisState.NotServed) {
+            val leaders = runCatching { nextUp.nextUp() }.getOrDefault(emptyList())
+            _state.update { it.copy(nextUp = leaders) }
         }
     }
 

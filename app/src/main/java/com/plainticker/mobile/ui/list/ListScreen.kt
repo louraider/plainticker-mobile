@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.Field
@@ -35,7 +36,9 @@ import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TodayStrip
+import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.Ink2
+import com.plainticker.mobile.ui.theme.Muted
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import com.plainticker.mobile.ui.vote.VoteActions
 import com.plainticker.mobile.ui.vote.VoteSheet
@@ -51,6 +54,11 @@ import java.time.LocalDate
  * Every number goes through [Fmt]: the composite as an integer, the premium as a signed percent,
  * the age as "2 d old". The meta line carries at most one middle dot, and the Ukrainian headline
  * of `/summary` is not a field a row even has (see [ListViewModel]).
+ *
+ * Under "Without analysis" the "Next up" strip leads: the three uncovered tokens staked SKR has
+ * voted to cover next, with the weight behind each (docs/skr-curation-spec-2026-09-13.md, step
+ * 3, which waited on a server query that now exists). It is decided by [nextUpStrip] and drawn
+ * here, and when there is nothing to draw it is not there: no banner, no empty heading.
  */
 @Composable
 fun ListScreen(
@@ -72,7 +80,7 @@ fun ListScreen(
             onClearSearch = viewModel::clearSearch,
             onRetry = viewModel::refresh,
             onOpenDetail = onOpenDetail,
-            onVote = { row -> voteViewModel.vote(row.ticker, row.display) },
+            onVote = { ticker, symbol -> voteViewModel.vote(ticker, symbol) },
             header = header,
         )
         VoteSheet(
@@ -95,10 +103,12 @@ internal fun ListContent(
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
     /**
-     * The vote a row under "Without analysis" offers. Null in the previews and the gallery, where
-     * there is no wallet to take it anywhere; the rows then draw exactly as they did before.
+     * The vote a row under "Without analysis" offers, and a leader of the "Next up" strip too: the
+     * equity ticker the server joins on and the symbol a reader calls it. Null in the previews and
+     * the gallery, where there is no wallet to take it anywhere; the rows then draw exactly as they
+     * did before.
      */
-    onVote: ((ListRow) -> Unit)? = null,
+    onVote: ((ticker: String, symbol: String) -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val cold = state.isLoading && state.analyzed.isEmpty() && state.withoutAnalysis.isEmpty()
@@ -162,6 +172,19 @@ internal fun ListContent(
                             text = stringResource(R.string.list_heading_without_analysis),
                             topPadding = SectionTopGap,
                         )
+                    }
+                    val leaders = state.nextUpStrip
+                    if (leaders.isNotEmpty()) {
+                        item(key = "next-up-label") { NextUpLabel() }
+                        itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
+                            NextUpLeaderRow(
+                                leader = leader,
+                                last = index == leaders.lastIndex,
+                                onOpenDetail = onOpenDetail,
+                                onVote = onVote,
+                            )
+                        }
+                        item(key = "next-up-gap") { Spacer(Modifier.height(NextUpGap)) }
                     }
                     itemsIndexed(state.withoutAnalysis, key = { _, row -> "p:" + row.ticker }) { index, row ->
                         PriceOnlyRow(
@@ -260,7 +283,7 @@ private fun PriceOnlyRow(
     row: ListRow,
     last: Boolean,
     onOpenDetail: (String) -> Unit,
-    onVote: ((ListRow) -> Unit)?,
+    onVote: ((ticker: String, symbol: String) -> Unit)?,
 ) {
     InstrumentRow(
         ticker = row.display,
@@ -268,11 +291,54 @@ private fun PriceOnlyRow(
         meta = rowMeta(row),
         valueRight = row.priceUsd?.let { Fmt.price(it) },
         trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
-        onTrailingAction = if (onVote == null) null else ({ onVote(row) }),
+        onTrailingAction = if (onVote == null) null else ({ onVote(row.ticker, row.display) }),
         muted = true,
         divider = !last,
         onClick = { onOpenDetail(row.ticker) },
         onClickLabel = stringResource(R.string.action_open_ticker, row.display),
+    )
+}
+
+/**
+ * "Next up, by staked SKR": the label over the leaders, 13 Outfit 500 Muted, the face a fact
+ * grid labels its cells in. It sits under the section heading rather than being one, because
+ * the leaders are still tokens without analysis and the strip is the front of that section.
+ */
+@Composable
+private fun NextUpLabel() {
+    Text(
+        text = stringResource(R.string.next_up_label),
+        style = PlainTickerType.label,
+        color = Muted,
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = NextUpLabelGap),
+    )
+}
+
+/**
+ * One leader of the "Next up" strip: the token and its company left, how many wallets voted on
+ * the meta line, the staked SKR behind it as the value, and the same one-word vote the rows
+ * below it carry. Every figure is in the numeral face because it is a number. The row is not
+ * muted the way a price-only row is: the value on its right is a fact this app stands behind,
+ * where a price-only row's muting marks the absence of an analysis. Tapping it opens the same
+ * Detail the row further down would, so a leader is never a second way to reach a token.
+ */
+@Composable
+private fun NextUpLeaderRow(
+    leader: NextUpLeader,
+    last: Boolean,
+    onOpenDetail: (String) -> Unit,
+    onVote: ((ticker: String, symbol: String) -> Unit)?,
+) {
+    InstrumentRow(
+        ticker = leader.display,
+        company = leader.company,
+        meta = leader.votersCopy.text(),
+        valueRight = leader.weight.text(),
+        trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
+        onTrailingAction = if (onVote == null) null else ({ onVote(leader.ticker, leader.display) }),
+        divider = !last,
+        onClick = { onOpenDetail(leader.ticker) },
+        onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
     )
 }
 
@@ -375,6 +441,10 @@ internal val RowState.label: Int
 private val SearchTopGap = 22.dp
 private val HeadingTopGap = 30.dp
 private val SectionTopGap = 28.dp
+
+/** Under the strip's label, and under the strip itself before the rest of the section. */
+private val NextUpLabelGap = 6.dp
+private val NextUpGap = 16.dp
 private const val SkeletonRowCount = 6
 
 // ---- Previews ------------------------------------------------------------------------------
@@ -442,6 +512,8 @@ private val PreviewState = ListUiState(
         samplePriceOnlyRow("TSM", "TSMx", "Taiwan Semiconductor", 264.10, 263.97),
         samplePriceOnlyRow("ASML", "ASMLx", "ASML Holding", 1_059.61, 812.48, poolUsd = 61.0),
     ),
+    // The strip as the leaders would read: the measured stake of 2026-09-13 and the median stake.
+    nextUp = listOf(NextUpRow("TSM", "31209870777", 3), NextUpRow("ASML", "6719000000", 1)),
 )
 
 @InstrumentPreviews

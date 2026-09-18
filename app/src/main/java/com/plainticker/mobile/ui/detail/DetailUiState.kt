@@ -4,6 +4,7 @@ import com.plainticker.mobile.data.SplitMultiplier
 import com.plainticker.mobile.data.jupiter.PriceEntry
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.AnalysisPayload
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.rpc.MintFacts
 import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.PriceLabel
@@ -89,6 +90,12 @@ data class DetailUiState(
     /** [Piece.Absent] means xStocks publishes no reserves for this symbol. */
     val reserves: Piece<Reserves> = Piece.Loading,
     val split: Piece<SplitMultiplier> = Piece.Loading,
+    /**
+     * The leaders of SKR-weighted coverage curation, asked for only when PlainTicker classifies
+     * nothing for this ticker, because only then does its standing among them mean anything.
+     * Empty when the call failed or the list is empty; the screen then states no standing.
+     */
+    val nextUp: List<NextUpRow> = emptyList(),
     /** Where the venue is, from the asset's trading block or the local weekday schedule. */
     val market: MarketStatus? = null,
     val watched: Boolean = false,

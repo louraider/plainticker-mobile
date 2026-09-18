@@ -147,9 +147,14 @@ private fun VoteState.OnTicker.running(
  * The three figures a signer is owed: what weight the vote carries, what the signature costs, and
  * where it goes. The collector is on the screen because a vote is only auditable if the address
  * its memos are counted from is named.
+ *
+ * The weight is the server's own figure wherever the server stated one, because that is the
+ * figure the vote is counted at and the figure a person signs for has to be the one that counts
+ * (docs/skr-curation-spec-2026-09-13.md, gap 3). The app's own bounded read stands in only where
+ * the server has not spoken: the Building step, and a server that sent no `weight`.
  */
 private fun readyCells(stakeRaw: Long, summary: VoteSummary) = listOf(
-    weightCell(stakeRaw),
+    weightCell(summary.weight ?: stakeRaw),
     VoteCell(
         label = words(R.string.vote_fee_label),
         value = words(
