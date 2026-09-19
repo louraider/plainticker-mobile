@@ -602,3 +602,51 @@ fun DetailUiState.costLine(allInCostPct: Double?): Copy? {
         else -> null
     }
 }
+
+// ---- The read and What to check next (task A6) --------------------------------------------------
+
+/** "The read": [full] is true only when the payload itself said `pro` and carried the full text. */
+data class ReadNarrativeBlock(val full: Boolean, val text: Copy)
+
+/** One item of "What to check next": the title everyone sees, the full step text once entitled. */
+data class NextStepRow(val title: String, val detail: String?)
+
+data class NextStepsBlock(val full: Boolean, val items: List<NextStepRow>)
+
+/**
+ * "The read", or null when there is nothing to show: still loading, this ticker is not served,
+ * the route is not turned on by this server, or the call failed. None of those four is a locked
+ * door; they simply draw nothing, exactly the way a source [DetailUiState] carried before task A6
+ * draws nothing when it has not answered yet.
+ *
+ * `narrative.excerptEn` is the peek and is populated whenever the underlying analysis exists,
+ * whichever way [ReadState.Ready.payload]'s own `pro` reads; `fullEn` is null unless it is. So the
+ * excerpt is what a reader with no code, or a code that resolved to nothing entitled, is shown:
+ * the server's own honest short form, never a bare door (docs/plan-monetisation-2026-09-19.md,
+ * task A6).
+ */
+val DetailUiState.readNarrative: ReadNarrativeBlock?
+    get() {
+        val payload = (read as? ReadState.Ready)?.payload ?: return null
+        val narrative = payload.narrative ?: return null
+        val full = payload.pro && narrative.fullEn != null
+        val text = if (full) narrative.fullEn else narrative.excerptEn
+        return text?.let { ReadNarrativeBlock(full = full, text = raw(it)) }
+    }
+
+/**
+ * "What to check next": the three step titles for everyone, the full step text beside each title
+ * once entitled. A step past the titles the server sent carries no detail rather than an index
+ * error, because the two arrays are not contracted to be the same length.
+ */
+val DetailUiState.nextStepsBlock: NextStepsBlock?
+    get() {
+        val payload = (read as? ReadState.Ready)?.payload ?: return null
+        val steps = payload.nextSteps ?: return null
+        val titles = steps.titlesEn?.takeIf { it.isNotEmpty() } ?: return null
+        val full = payload.pro && steps.stepsEn != null
+        val items = titles.mapIndexed { index, title ->
+            NextStepRow(title = title, detail = if (full) steps.stepsEn.getOrNull(index) else null)
+        }
+        return NextStepsBlock(full = full, items = items)
+    }

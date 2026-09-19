@@ -5,6 +5,7 @@ import com.plainticker.mobile.data.jupiter.PriceEntry
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.AnalysisPayload
 import com.plainticker.mobile.data.plainticker.NextUpRow
+import com.plainticker.mobile.data.plainticker.TickerReadResponse
 import com.plainticker.mobile.data.rpc.MintFacts
 import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.PriceLabel
@@ -59,6 +60,29 @@ sealed interface AnalysisState {
     data object Unavailable : AnalysisState
 }
 
+/**
+ * Why "The read" and "What to check next" are or are not there (task A6, server/vote/README.md
+ * S3). Modelled apart from [Piece] because two of its outcomes are not "loading, ready, absent,
+ * failed": [Disabled] is a state a fresh, un-flagged server is in today and has to read calmly
+ * rather than as a fault, and [NotServed] is the same served/not-served distinction
+ * [AnalysisState.NotServed] already draws, reached independently because this call can answer
+ * before or after the base analysis call does.
+ *
+ * Every outcome that is not [Ready] draws nothing extra. That is the free-stays-free invariant
+ * for this screen: the six sources [DetailUiState] already carried before task A6 do not read
+ * this field at all, and this field's own failure modes never touch them either.
+ */
+sealed interface ReadState {
+    data object Loading : ReadState
+    data class Ready(val payload: TickerReadResponse) : ReadState
+    /** 422 `unsupported_ticker` or 503 `not_available`: nothing is served here to peek at yet. */
+    data object NotServed : ReadState
+    /** 503 `monetization_disabled`, or a 404: the route is not turned on by this server yet. */
+    data object Disabled : ReadState
+    /** The call failed for any other reason. */
+    data object Failed : ReadState
+}
+
 /** The mint read behind the trust rows and the live bar. */
 data class ChainRead(
     val facts: MintFacts,
@@ -101,6 +125,12 @@ data class DetailUiState(
     val watched: Boolean = false,
     /** Wall clock of the last refresh, so ages and countdowns are read against one instant. */
     val nowMillis: Long = 0L,
+    /**
+     * "The read" and "What to check next" (task A6). Loaded independently of every source above,
+     * and deliberately outside [isLoading]: a server this call cannot reach, or one not yet
+     * turned on for this feature, must never keep the rest of this screen on its skeleton.
+     */
+    val read: ReadState = ReadState.Loading,
 ) {
     val asset: XStockAsset? get() = catalogAsset.valueOrNull
     val symbol: String? get() = asset?.symbol

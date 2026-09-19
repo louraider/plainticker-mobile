@@ -166,6 +166,9 @@ fun DetailScreen(
                 )
             }
         },
+        // The peek's own way to Pro, beside the honest short form rather than in place of it
+        // (task A6): the same destination the swap receipt already leads to.
+        onViewPortfolio = onViewPortfolio,
         modifier = modifier,
     )
 }
@@ -182,6 +185,8 @@ internal fun DetailContent(
     voteActions: VoteActions = NoVoteActions,
     /** Null in the previews and the gallery, where no wallet can be reached. */
     onVote: (() -> Unit)? = null,
+    /** Null in the previews and the gallery; the peek's own way to Pro when it is not (task A6). */
+    onViewPortfolio: (() -> Unit)? = null,
 ) {
     // The only Box on Detail, and the only thing in it that does not scroll is the scrim: the
     // 64sp hero used to draw in the same pixels as the white system clock, because the content
@@ -224,6 +229,8 @@ internal fun DetailContent(
             }
 
             FundamentalsBlock(state)
+            ReadSection(state = state, onViewPortfolio = onViewPortfolio)
+            NextStepsSection(state)
             NextUpBlock(state)
             VoteBlock(state = state, onVote = onVote)
             SwapBlock(state = state, swap = swap, onSwap = onSwap)
@@ -541,6 +548,60 @@ private fun MethodBlock(method: MethodContent) {
         method.age?.let { Text(text = it.text(), style = PlainTickerType.small, color = Muted) }
         Text(text = method.statement.text(), style = PlainTickerType.body, color = Ink2)
         Text(text = method.sources.text(), style = PlainTickerType.small, color = Muted)
+    }
+}
+
+// ---- The read and What to check next (task A6) --------------------------------------------------
+
+/**
+ * "The read": the full narrative for an entitled wallet, the server's own honest excerpt
+ * otherwise. Drawn only where [DetailUiState.readNarrative] found something to say, so a server
+ * that has not turned this on, or has nothing cached yet, leaves the screen exactly as it drew
+ * before task A6 (the free-stays-free invariant this screen keeps).
+ */
+@Composable
+private fun ReadSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
+    val block = state.readNarrative ?: return
+    Heading(text = stringResource(R.string.detail_heading_read), topPadding = SectionGap)
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(text = block.text.text(), style = PlainTickerType.body, color = Ink2)
+        if (!block.full) {
+            Text(text = stringResource(R.string.detail_pro_peek_note), style = PlainTickerType.small, color = Muted)
+            if (onViewPortfolio != null) {
+                TextAction(label = stringResource(R.string.receipt_view_portfolio), onClick = onViewPortfolio)
+            }
+        }
+    }
+}
+
+/**
+ * "What to check next": the three step titles for everyone, the full step text beside each title
+ * once entitled. The same withholding rule as [ReadSection]: nothing to show draws nothing.
+ */
+@Composable
+private fun NextStepsSection(state: DetailUiState) {
+    val block = state.nextStepsBlock ?: return
+    Heading(
+        text = stringResource(R.string.detail_heading_next_steps),
+        meta = Fmt.count(block.items.size),
+        topPadding = SectionGap,
+    )
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        block.items.forEach { row ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = row.title, style = PlainTickerType.body, color = Ink2)
+                row.detail?.let { Text(text = it, style = PlainTickerType.small, color = Ink2) }
+            }
+        }
+        if (!block.full) {
+            Text(text = stringResource(R.string.detail_pro_peek_note), style = PlainTickerType.small, color = Muted)
+        }
     }
 }
 

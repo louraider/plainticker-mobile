@@ -1,6 +1,7 @@
 package com.plainticker.mobile.ui.portfolio
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -34,6 +35,10 @@ import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.spoken
+import com.plainticker.mobile.ui.pass.PassActions
+import com.plainticker.mobile.ui.pass.PassSheet
+import com.plainticker.mobile.ui.pass.PassViewModel
+import com.plainticker.mobile.ui.pass.ProUiState
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.Ink
 import com.plainticker.mobile.ui.theme.Ink2
@@ -59,22 +64,40 @@ import com.plainticker.mobile.wallet.WalletAccount
 @Composable
 fun PortfolioScreen(
     viewModel: PortfolioViewModel,
+    passViewModel: PassViewModel,
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
     onBrowseList: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    PortfolioContent(
-        state = state,
-        onConnect = viewModel::connect,
-        onDisconnect = viewModel::disconnect,
-        onRefresh = viewModel::refresh,
-        onOpenDetail = onOpenDetail,
-        onBrowseList = onBrowseList,
-        modifier = modifier,
-        header = header,
-    )
+    val pro by passViewModel.pro.collectAsStateWithLifecycle()
+    val pass by passViewModel.state.collectAsStateWithLifecycle()
+    // A sibling of the LazyColumn, exactly as the vote sheet sits beside the List's and the Vote
+    // tab's own content: the sheet is a modal surface and draws in its own window, so where it
+    // sits in this tree does not matter, only that it outlives the block that opened it.
+    Box(modifier.fillMaxSize()) {
+        PortfolioContent(
+            state = state,
+            onConnect = viewModel::connect,
+            onDisconnect = viewModel::disconnect,
+            onRefresh = viewModel::refresh,
+            onOpenDetail = onOpenDetail,
+            onBrowseList = onBrowseList,
+            pro = pro,
+            onPay = passViewModel::pay,
+            onRetryEntitlement = passViewModel::refreshEntitlement,
+            header = header,
+        )
+        PassSheet(
+            state = pass,
+            actions = PassActions(
+                onConfirm = passViewModel::confirm,
+                onRetry = passViewModel::retry,
+                onClose = passViewModel::close,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -87,6 +110,15 @@ internal fun PortfolioContent(
     onBrowseList: (() -> Unit)?,
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
+    /**
+     * The Pro block's own state (task A6), defaulted so every existing caller of this composable
+     * (previews, PortfolioScreenTest's source scan) is untouched by its addition: nothing above
+     * this parameter list changed shape, and the block itself is drawn last, after every section
+     * this screen already carried.
+     */
+    pro: ProUiState = ProUiState(),
+    onPay: (() -> Unit)? = null,
+    onRetryEntitlement: () -> Unit = {},
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -192,6 +224,17 @@ internal fun PortfolioContent(
                 Swap(receipt = receipt, last = index == state.receipts.lastIndex)
             }
             item(key = "swaps-note") { Footnote(stringResource(R.string.portfolio_receipts_note)) }
+        }
+
+        // The Pro block (task A6): the wallet's own staked SKR and this device's entitlement,
+        // appended after every section this screen already drew. Nothing above this line reads
+        // pro, onPay or onRetryEntitlement, which is the hard invariant by construction: a block
+        // that is free today keeps drawing exactly as it does whether or not this one is here.
+        item(key = "pro-heading") {
+            Heading(text = stringResource(R.string.pro_heading), topPadding = SectionTopGap)
+        }
+        item(key = "pro-block") {
+            ProBlock(state = pro, onPay = onPay, onRetryEntitlement = onRetryEntitlement)
         }
     }
 }

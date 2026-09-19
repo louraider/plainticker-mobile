@@ -372,6 +372,58 @@
     <string name="vote_tab_last_round_published">%1$s is covered</string>
     <string name="vote_tab_last_round_uncoverable">%1$s could not be covered</string>
 
+    <!-- Pro entitlement (task A6, docs/plan-monetisation-2026-09-19.md section 1.2): the
+         Portfolio's own block. The sentence names which of pass, stake or subscription carries
+         it and, for a pass or a subscription, when it ends; a stake carries no date because it
+         is re-evaluated continuously rather than granted once. -->
+    <string name="pro_heading">Pro</string>
+    <string name="pro_entitlement_loading">Reading this device\'s entitlement.</string>
+    <string name="pro_entitlement_disabled">Pro is not offered by this server yet.</string>
+    <string name="pro_entitlement_failed">Entitlement status unavailable.</string>
+    <string name="pro_entitlement_pass">This wallet is Pro through a pass.</string>
+    <string name="pro_entitlement_pass_until">This wallet is Pro through a pass, until %1$s.</string>
+    <string name="pro_entitlement_stake">This wallet is Pro through its staked SKR.</string>
+    <string name="pro_entitlement_subscription">This wallet is Pro through a subscription.</string>
+    <string name="pro_entitlement_subscription_until">This wallet is Pro through a subscription, until %1$s.</string>
+    <string name="pro_entitlement_active">This wallet is Pro.</string>
+    <string name="pro_entitlement_none">This wallet is not Pro.</string>
+    <!-- A figure, never a verdict: this screen states what a wallet has staked and stops there,
+         whether or not it clears the entitlement threshold the server alone judges it against. -->
+    <string name="pro_stake_disconnected">Connect a wallet to read what it has staked.</string>
+    <string name="pro_stake_unread">This wallet\'s staked SKR could not be read.</string>
+    <string name="pro_stake_read">This wallet has %1$s SKR staked.</string>
+
+    <!-- Paying for Pro from the app (task A6): the server builds the transfer like a vote, the
+         wallet signs it through Mobile Wallet Adapter, and the app confirms the signature rather
+         than waiting for the cron. -->
+    <string name="pass_title">Pay for Pro</string>
+    <string name="pass_action">Pay for Pro</string>
+    <string name="pass_lede">This pays for a 30 day pass. The wallet that signs it becomes Pro once the payment is confirmed.</string>
+    <string name="pass_refreshed">The transfer went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the payment.</string>
+    <string name="pass_amount_label">Amount</string>
+    <string name="pass_amount">%1$s %2$s</string>
+    <string name="pass_destination_label">Sent to</string>
+    <string name="pass_landed_label">Payment sent</string>
+    <string name="pass_landed_note">The payment is on the chain, and this device\'s entitlement now reflects it.</string>
+    <string name="pass_landed_pending_note">The payment is on the chain. Confirming it here did not finish in time, so the update will follow within about ten minutes.</string>
+    <string name="pass_phase_connecting">No wallet is connected, so the wallet is being asked to authorize.</string>
+    <string name="pass_phase_building">Asking the server to build the payment transfer.</string>
+    <string name="pass_phase_signing">Waiting for the wallet to sign the payment and send it.</string>
+    <string name="pass_phase_confirming">Asking the server to confirm the signature.</string>
+    <string name="pass_no_wallet">No wallet on this device answers the adapter, so there is nothing to pay with.</string>
+    <string name="pass_not_connected">No wallet was connected, so nothing was signed and nothing was sent.</string>
+    <string name="pass_not_open">Paying for Pro is not open yet. The server has nothing to build this payment with, so nothing was signed and nothing was sent.</string>
+    <string name="pass_rate_limited">The server is taking payments more slowly than this. Nothing was signed. Try again shortly.</string>
+    <string name="pass_unavailable">The server did not build this payment, so nothing was signed and nothing was sent.</string>
+    <string name="pass_not_approved">No signature came back, so no payment was sent.</string>
+    <string name="pass_failed">The wallet answered with a failure and no signature, so whether the payment was sent is not known.</string>
+
+    <!-- Detail gains The read and What to check next (task A6): the honest short form for every
+         reader, the full text once a device presents an entitled code. -->
+    <string name="detail_heading_read">The read</string>
+    <string name="detail_heading_next_steps">What to check next</string>
+    <string name="detail_pro_peek_note">The rest is available to a wallet with a pass, a qualifying stake, or a subscription.</string>
+
     <!-- Watchlist. The row meta is the list's, joined by list_row_meta_join -->
     <string name="watchlist_heading_watched">Watched</string>
     <string name="watchlist_row_reports">Reports %1$s</string>
