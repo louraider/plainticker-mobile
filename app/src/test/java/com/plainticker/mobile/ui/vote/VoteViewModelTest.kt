@@ -9,6 +9,7 @@ import com.plainticker.mobile.data.MockApi
 import com.plainticker.mobile.data.bodyText
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.VoteApi
+import com.plainticker.mobile.data.receipts.FakeVoteReceiptStore
 import com.plainticker.mobile.data.respondHtml
 import com.plainticker.mobile.data.respondJson
 import com.plainticker.mobile.data.rpc.SkrStake
@@ -83,7 +84,8 @@ class VoteViewModelTest {
         wallet: FakeWalletSession = wallet(),
         rpc: FakeRpcRepository = staking(measuredStake),
         clock: Clock = Clock { now },
-    ) = VoteViewModel(VoteApi(mock.client), wallet, rpc, clock = clock, debugLog = VoteDebugLog { })
+        receipts: FakeVoteReceiptStore = FakeVoteReceiptStore(),
+    ) = VoteViewModel(VoteApi(mock.client), wallet, rpc, receipts, clock = clock, debugLog = VoteDebugLog { })
 
     /**
      * Every state the machine passes through, not only the ones a conflating StateFlow keeps.
@@ -520,6 +522,86 @@ class VoteViewModelTest {
         settle(machine)
         machine.close()
         assertEquals(VoteState.Closed, machine.state.value)
+    }
+
+    // ---- Receipts (task A3) ---------------------------------------------------------------------
+
+    @Test
+    fun `a landed vote is recorded, with the figure and the voter it landed with`() = runTest {
+        val signature = ByteArray(64) { (it + 1).toByte() }
+        val operations = FakeAdapterOperations(signatures = listOf(signature))
+        val session = wallet().apply { this.operations = operations }
+        val receipts = FakeVoteReceiptStore()
+        val machine = machine(wallet = session, receipts = receipts)
+
+        machine.state.test {
+            awaitItem()
+            machine.vote("NFLX", "NFLXx", roundId = 3)
+            awaitUntil { it is VoteState.Ready }
+            machine.confirm()
+            awaitUntil { it is VoteState.Landed }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val recorded = receipts.receipts.value.single()
+        assertEquals(Base58.encodeToString(signature), recorded.signature)
+        assertEquals("NFLX", recorded.ticker)
+        assertEquals("NFLXx", recorded.symbol)
+        assertEquals(measuredStake, recorded.weightRaw)
+        assertEquals(voter.address, recorded.voter)
+        assertEquals(3, recorded.round)
+        assertEquals(now, recorded.landedAtMillis)
+    }
+
+    @Test
+    fun `a vote cast with no round to offer records a null round, not a guess`() = runTest {
+        val session = wallet().apply { operations = FakeAdapterOperations(signatures = listOf(ByteArray(64) { 9 })) }
+        val receipts = FakeVoteReceiptStore()
+        val machine = machine(wallet = session, receipts = receipts)
+
+        machine.state.test {
+            awaitItem()
+            machine.vote("NFLX", "NFLXx")
+            awaitUntil { it is VoteState.Ready }
+            machine.confirm()
+            awaitUntil { it is VoteState.Landed }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertNull(receipts.receipts.value.single().round)
+    }
+
+    @Test
+    fun `an attempt that never lands writes no receipt`() = runTest {
+        val receipts = FakeVoteReceiptStore()
+        val notPublished = MockApi { respondHtml("<html>404</html>", HttpStatusCode.NotFound) }
+        assertEquals(VoteRefusal.NOT_OPEN, refusalOf(settle(machine(notPublished, receipts = receipts))))
+        assertTrue("nothing landed, so nothing was recorded", receipts.receipts.value.isEmpty())
+    }
+
+    @Test
+    fun `retry after a refusal keeps the same round on the receipt it eventually writes`() = runTest {
+        val session = wallet()
+        val receipts = FakeVoteReceiptStore()
+        val machine = machine(wallet = session, receipts = receipts)
+
+        machine.state.test {
+            awaitItem()
+            machine.vote("NFLX", "NFLXx", roundId = 5)
+            awaitUntil { it is VoteState.Ready }
+            session.enqueue(WalletOutcome.Cancelled)
+            machine.confirm()
+            awaitUntil { it is VoteState.Refused }
+
+            session.operations = FakeAdapterOperations(signatures = listOf(ByteArray(64) { 4 }))
+            machine.retry()
+            awaitUntil { it is VoteState.Ready }
+            machine.confirm()
+            awaitUntil { it is VoteState.Landed }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(5, receipts.receipts.value.single().round)
     }
 
     // ---- Reachability -------------------------------------------------------------------------------------

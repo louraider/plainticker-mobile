@@ -10,6 +10,8 @@ import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteError
+import com.plainticker.mobile.data.receipts.VoteReceipt
+import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.wallet.WalletOutcome
@@ -63,17 +65,18 @@ fun interface VoteDebugLog {
  * marked [VoteState.Ready.refreshed] so the sheet can say what happened, rather than spending a
  * wallet approval on a hash the network will refuse.
  *
- * **The round a vote believes it is for.** [pendingRoundId] is the round the caller believed was
+ * **A landed vote is recorded.** Task A3: the moment [VoteState.Landed] is reached, [voteReceipts]
+ * gets a [VoteReceipt] built from the same figures the sheet is about to show, so "Your votes" and
+ * the landed sheet can never drift apart. [pendingRoundId] is the round the caller believed was
  * open when the tap that started this attempt was made (the Vote tab's ballot knows it; a row on
  * the List or on Detail does not, so it stays null there), carried as a plain field rather than as
- * a fifth [VoteState] because no state in that machine needs to draw it. Nothing in this class
- * reads it back yet; it exists so the tab can pass a round through the same [vote] call the List
- * and Detail already use, without a second entry point.
+ * a fifth [VoteState] because no state in that machine needs to draw it.
  */
 class VoteViewModel(
     private val voteApi: VoteApi,
     private val wallet: WalletSession,
     private val rpc: RpcRepository,
+    private val voteReceipts: VoteReceiptStore,
     private val clock: Clock = WallClock,
     private val debugLog: VoteDebugLog = VoteDebugLog.ANDROID,
 ) : ViewModel() {
@@ -83,13 +86,13 @@ class VoteViewModel(
 
     private var job: Job? = null
 
-    /** See the class doc: the round this attempt believes is open. */
+    /** See the class doc: the round this attempt believes is open, for the receipt alone. */
     private var pendingRoundId: Int? = null
 
     /**
      * The tap. [ticker] is the equity ticker the server joins on, [symbol] what a reader calls it.
-     * [roundId] is the round the caller currently believes is open; null when the caller has no
-     * round to offer.
+     * [roundId] is the round the caller currently believes is open, recorded on the receipt if
+     * this attempt lands; null when the caller has no round to offer.
      *
      * Connect if there is no session, read the stake, bound it, then ask the server to build. It
      * stops at [VoteState.Ready] with the figure on the screen; nothing is signed until [confirm].
@@ -262,13 +265,28 @@ class VoteViewModel(
             return refuse(ready.ticker, ready.symbol, VoteRefusal.FAILED)
         }
 
+        // The figure that was signed for: the server's own where it stated one, because that is
+        // the figure the vote is counted at, and the app's bounded read where it did not.
+        val weightRaw = build.summary.weight ?: ready.stakeRaw
+        val signatureText = Base58.encodeToString(signature)
         _state.value = VoteState.Landed(
             ticker = ready.ticker,
             symbol = ready.symbol,
-            // The figure that was signed for: the server's own where it stated one, because that
-            // is the figure the vote is counted at, and the app's bounded read where it did not.
-            stakeRaw = build.summary.weight ?: ready.stakeRaw,
-            signature = Base58.encodeToString(signature),
+            stakeRaw = weightRaw,
+            signature = signatureText,
+        )
+        // Recorded from exactly the figures the sheet just drew (task A3), so "Your votes" and
+        // the landed sheet can never say two different things about the same vote.
+        voteReceipts.record(
+            VoteReceipt(
+                signature = signatureText,
+                ticker = ready.ticker,
+                symbol = ready.symbol,
+                weightRaw = weightRaw,
+                landedAtMillis = clock.nowMillis(),
+                voter = ready.voter,
+                round = pendingRoundId,
+            ),
         )
     }
 

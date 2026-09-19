@@ -79,6 +79,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.voteApi,
             container.walletSession,
             container.rpcRepository,
+            container.voteReceiptStore,
             container.clock,
         )
     }
