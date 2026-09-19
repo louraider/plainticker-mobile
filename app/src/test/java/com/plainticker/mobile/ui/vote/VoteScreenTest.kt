@@ -33,6 +33,7 @@ class VoteScreenTest {
     private val listScreen by lazy { source("ui/list/ListScreen.kt") }
     private val detailScreen by lazy { source("ui/detail/DetailScreen.kt") }
     private val sheet by lazy { source("ui/vote/VoteSheet.kt") }
+    private val voteTabScreen by lazy { source("ui/vote/VoteScreen.kt") }
     private val viewModel by lazy { source("ui/vote/VoteViewModel.kt") }
     private val api by lazy { source("data/plainticker/VoteApi.kt") }
 
@@ -146,6 +147,7 @@ class VoteScreenTest {
             sheet,
             listScreen,
             detailScreen,
+            voteTabScreen,
         ).joinToString("\n")
 
         val used = Regex("""R\.string\.(vote_\w+)""").findAll(sources).map { it.groupValues[1] }.toSet()

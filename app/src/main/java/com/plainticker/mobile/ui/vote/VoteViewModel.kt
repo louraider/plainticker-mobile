@@ -62,6 +62,13 @@ fun interface VoteDebugLog {
  * past that goes back to the server for a fresh transaction and returns to the confirm step,
  * marked [VoteState.Ready.refreshed] so the sheet can say what happened, rather than spending a
  * wallet approval on a hash the network will refuse.
+ *
+ * **The round a vote believes it is for.** [pendingRoundId] is the round the caller believed was
+ * open when the tap that started this attempt was made (the Vote tab's ballot knows it; a row on
+ * the List or on Detail does not, so it stays null there), carried as a plain field rather than as
+ * a fifth [VoteState] because no state in that machine needs to draw it. Nothing in this class
+ * reads it back yet; it exists so the tab can pass a round through the same [vote] call the List
+ * and Detail already use, without a second entry point.
  */
 class VoteViewModel(
     private val voteApi: VoteApi,
@@ -76,14 +83,20 @@ class VoteViewModel(
 
     private var job: Job? = null
 
+    /** See the class doc: the round this attempt believes is open. */
+    private var pendingRoundId: Int? = null
+
     /**
      * The tap. [ticker] is the equity ticker the server joins on, [symbol] what a reader calls it.
+     * [roundId] is the round the caller currently believes is open; null when the caller has no
+     * round to offer.
      *
      * Connect if there is no session, read the stake, bound it, then ask the server to build. It
      * stops at [VoteState.Ready] with the figure on the screen; nothing is signed until [confirm].
      */
-    fun vote(ticker: String, symbol: String) {
+    fun vote(ticker: String, symbol: String, roundId: Int? = null) {
         if (_state.value.isBusy) return
+        pendingRoundId = roundId
         // Set here and not inside the coroutine, so the sheet is up on the frame the row was
         // tapped and so a second tap on a second row cannot start a second attempt in the gap
         // before the first one is scheduled.
@@ -97,12 +110,12 @@ class VoteViewModel(
         job = viewModelScope.launch { attempt(ticker, symbol, known) }
     }
 
-    /** Try the whole attempt again, from the state that offered it. */
+    /** Try the whole attempt again, from the state that offered it, with the same round. */
     fun retry() {
         val refused = _state.value as? VoteState.Refused ?: return
         if (!refused.reason.retryable) return
         _state.value = VoteState.Closed
-        vote(refused.ticker, refused.symbol)
+        vote(refused.ticker, refused.symbol, pendingRoundId)
     }
 
     /**

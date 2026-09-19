@@ -130,4 +130,64 @@ class NextUpApiTest {
         assertEquals(502, page.status)
         assertNull(page.errorCode)
     }
+
+    // ---- Rounds (docs/plan-monetisation-2026-09-19.md section 1.4, task A2) ------------------
+
+    @Test
+    fun `round and previous parse when the server sends them, and are null when it does not`() = runTest {
+        val withRounds = """{"schema":"v1.1","generated_at":"2026-09-18T12:34:56.000Z","rows":[],""" +
+            """"round":{"id":1,"opens_at":"2026-09-15T00:00:00.000Z","closes_at":"2026-09-22T00:00:00.000Z"},""" +
+            """"previous":{"id":0,"winner":"JEF","weight":"18500000000","voters":4,""" +
+            """"closed_at":"2026-09-15T00:00:00.000Z","status":"published"}}"""
+        val mock = MockApi { respondJson(withRounds) }
+        val answer = NextUpApi(mock.client).getNextUp()
+
+        val round = requireNotNull(answer.round)
+        assertEquals(1, round.id)
+        assertEquals("2026-09-22T00:00:00Z", round.closesAtInstant().toString())
+
+        val previous = requireNotNull(answer.previous)
+        assertEquals("JEF", previous.winner)
+        assertEquals(BigInteger("18500000000"), previous.weightRaw())
+        assertEquals(4, previous.voters)
+        assertEquals(PreviousRoundStatus.PUBLISHED, PreviousRoundStatus.of(previous.status))
+
+        assertTrue("round and previous are additive, not required", NextUpApi(MockApi { respondJson(golden) }.client).getNextUp().let { it.round == null && it.previous == null })
+    }
+
+    @Test
+    fun `an unrecognized status reads as none, so no sentence is built on a guess`() {
+        assertNull(PreviousRoundStatus.of("in_progress"))
+        assertNull(PreviousRoundStatus.of(null))
+        assertEquals(PreviousRoundStatus.PENDING, PreviousRoundStatus.of("pending"))
+        assertEquals(PreviousRoundStatus.UNCOVERABLE, PreviousRoundStatus.of("UNCOVERABLE"))
+    }
+
+    // ---- Voting not being open yet (task A2's not-open state) --------------------------------
+
+    @Test
+    fun `a bare 404 is not open, and not an ApiException`() = runTest {
+        val notPublished = MockApi { respondHtml("<html>404</html>", HttpStatusCode.NotFound) }
+        val e = expectThrows<NextUpNotOpenException> { NextUpApi(notPublished.client).getNextUp() }
+        assertEquals(404, e.status)
+    }
+
+    @Test
+    fun `a published route the operator has not configured is not open, not a failure`() = runTest {
+        val unconfigured = MockApi {
+            respondJson("""{"error":"vote_not_configured","code":503}""", HttpStatusCode.ServiceUnavailable)
+        }
+        val e = expectThrows<NextUpNotOpenException> { NextUpApi(unconfigured.client).getNextUp() }
+        assertEquals(503, e.status)
+    }
+
+    @Test
+    fun `a 503 for any other reason is a real failure, not the not-open state`() = runTest {
+        // ApiException and NextUpNotOpenException share no supertype but IOException, so the
+        // very fact this expects ApiException and not NextUpNotOpenException is the assertion:
+        // a 503 the not-open rule does not recognize is a failure, never a quiet state.
+        val down = MockApi { respondJson("""{"error":"internal","code":503}""", HttpStatusCode.ServiceUnavailable) }
+        val e = expectThrows<ApiException> { NextUpApi(down.client).getNextUp() }
+        assertEquals(503, e.status)
+    }
 }

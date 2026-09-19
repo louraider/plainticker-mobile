@@ -16,6 +16,7 @@
 
     <!-- Shared -->
     <string name="tab_list">List</string>
+    <string name="tab_vote">Vote</string>
     <string name="tab_portfolio">Portfolio</string>
     <string name="tab_watchlist">Watchlist</string>
     <string name="action_watch">Watch</string>
@@ -348,6 +349,26 @@
     <string name="vote_rate_limited">The server is taking votes more slowly than this. Nothing was signed. Try again shortly.</string>
     <string name="vote_not_approved">No signature came back, so no vote was sent.</string>
     <string name="vote_failed">The wallet answered with a failure and no signature, so whether the vote was sent is not known.</string>
+
+    <!-- The Vote tab (task A2, docs/plan-monetisation-2026-09-19.md section 1.5): the explainer,
+         the round header, the leaders, the wallet's own votes, the last round and the ballot. -->
+    <string name="vote_tab_explainer_what">This app covers only some of the tokenized stocks on Solana, and every analysis costs money to produce.</string>
+    <string name="vote_tab_explainer_decides">Staked SKR decides which uncovered token is analyzed next. The heaviest weight in a round wins.</string>
+    <string name="vote_tab_explainer_how">A vote is a transaction you sign, not a login: it names the token, reads your staked SKR from the chain, and counts once per wallet per token in a round.</string>
+    <!-- The not-open state: HTTP 404, or 503 vote_not_configured, replaces every section below
+         this one with the single honest line rather than an error banner. -->
+    <string name="vote_tab_not_open">Voting is not open yet.</string>
+    <string name="vote_tab_unavailable">Leaders and ballot unavailable</string>
+    <string name="vote_tab_round_heading">Round %1$s</string>
+    <string name="vote_tab_round_closes">Closes %1$s</string>
+    <string name="vote_tab_heading_leaders">Leaders</string>
+    <string name="vote_tab_heading_your_votes">Your votes</string>
+    <string name="vote_tab_your_votes_note">A vote can take up to about twenty minutes to reach the leaders above. The tally runs every ten minutes, and the leaders are cached for five more.</string>
+    <string name="vote_tab_your_vote_meta">Voted %1$s</string>
+    <string name="vote_tab_heading_last_round">Last round</string>
+    <string name="vote_tab_last_round_pending">%1$s is being covered</string>
+    <string name="vote_tab_last_round_published">%1$s is covered</string>
+    <string name="vote_tab_last_round_uncoverable">%1$s could not be covered</string>
 
     <!-- Watchlist. The row meta is the list's, joined by list_row_meta_join -->
     <string name="watchlist_heading_watched">Watched</string>

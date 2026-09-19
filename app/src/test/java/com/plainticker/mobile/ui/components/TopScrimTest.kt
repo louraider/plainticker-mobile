@@ -105,6 +105,7 @@ class TopScrimTest {
         }
         listOf(
             "ui/list/ListScreen.kt",
+            "ui/vote/VoteScreen.kt",
             "ui/portfolio/PortfolioScreen.kt",
             "ui/watchlist/WatchlistScreen.kt",
         ).forEach { path ->

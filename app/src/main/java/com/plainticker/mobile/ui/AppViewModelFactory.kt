@@ -11,6 +11,7 @@ import com.plainticker.mobile.ui.nav.Routes
 import com.plainticker.mobile.ui.onboarding.OnboardingViewModel
 import com.plainticker.mobile.ui.portfolio.PortfolioViewModel
 import com.plainticker.mobile.ui.swap.SwapViewModel
+import com.plainticker.mobile.ui.vote.VoteTabViewModel
 import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
 
@@ -79,6 +80,15 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.walletSession,
             container.rpcRepository,
             container.clock,
+        )
+    }
+    initializer {
+        VoteTabViewModel(
+            container.nextUpRepository,
+            container.catalogRepository,
+            container.summaryRepository,
+            container.voteReceiptStore,
+            container.walletSession,
         )
     }
     initializer {
