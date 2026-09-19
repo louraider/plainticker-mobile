@@ -59,3 +59,11 @@ fun stakeLine(state: ProUiState): Copy? = when {
 
 /** Whether the entitlement banner offers a way to ask again: only the failure carries one. */
 fun entitlementRetries(state: ProUiState): Boolean = state.entitlementFailed
+
+/**
+ * A payment this device has signed and sent but not yet seen the server confirm (task A6 review),
+ * or null when none is pending. Drawn in place of the Pay action, never beside it: offering a
+ * second payment while the first might still land would risk paying twice for one pass.
+ */
+fun pendingPaymentLine(state: ProUiState): Copy? =
+    if (state.pendingSignature != null) words(R.string.pro_payment_pending) else null

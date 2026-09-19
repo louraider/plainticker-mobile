@@ -13,18 +13,23 @@ import com.plainticker.mobile.data.plainticker.EntitlementResponse
 import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.data.plainticker.PassApi
 import com.plainticker.mobile.data.plainticker.PassError
+import com.plainticker.mobile.data.receipts.PassReceipt
+import com.plainticker.mobile.data.receipts.PassReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Where the raw upstream text goes, which is never to a screen (the same rule
@@ -58,6 +63,13 @@ data class ProUiState(
     val stakeRaw: Long? = null,
     /** The wallet is connected and a stake read was attempted, but the figure could not be read. */
     val stakeUnread: Boolean = false,
+    /**
+     * A landed pass signature this device has not seen the server confirm yet (task A6 review),
+     * or null when none is pending. Read from [PassReceiptStore] on init, so it survives process
+     * death, and while it is non-null the Pay action is withheld: a second payment is never
+     * offered for one that might still land through the chain or the ten-minute cron.
+     */
+    val pendingSignature: String? = null,
 )
 
 /**
@@ -80,7 +92,17 @@ data class ProUiState(
  * both signs and submits; once it returns a signature the payment is on the chain, and this app's
  * own early check is a convenience for not waiting for the cron, not the payment's proof. So
  * [PassState.Landed] is reached whether or not [PassApi.confirm] itself resolved, with
- * [PassState.Landed.entitlement] null when it did not.
+ * [PassState.Landed.entitlement] null when it did not, and the signature is written to
+ * [PassReceiptStore] before that call is even made, so a process death between the wallet
+ * answering and the confirm call resolving does not lose the record: [init] reads it back and
+ * retries the confirm, and [pay] refuses a second attempt while one is still pending.
+ *
+ * **Neither line of the Portfolio block may describe a different wallet than the other, even for
+ * one frame.** [ProUiState.pro] is resolved from this device's code, not from whichever wallet
+ * happens to be connected, but the sentence it renders as reads "this wallet"; so the instant the
+ * connected wallet changes, both halves drop to a loading state together before either is asked
+ * again, and the entitlement half is re-asked on every change alongside the stake half, never left
+ * standing on what the previous wallet answered.
  */
 class PassViewModel(
     private val passApi: PassApi,
@@ -88,35 +110,63 @@ class PassViewModel(
     private val wallet: WalletSession,
     private val rpc: RpcRepository,
     private val devicePassStore: DevicePassStore,
+    private val passReceiptStore: PassReceiptStore,
     private val clock: Clock = WallClock,
     private val debugLog: PassDebugLog = PassDebugLog.ANDROID,
+    /** Where a receipt is written. viewModelScope runs on Main, and a file write does not. */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
-    private val _pro = MutableStateFlow(ProUiState())
+    private val _pro = MutableStateFlow(ProUiState(pendingSignature = pendingReceipt()?.signature))
     val pro: StateFlow<ProUiState> = _pro.asStateFlow()
 
     private val _state = MutableStateFlow<PassState>(PassState.Closed)
     val state: StateFlow<PassState> = _state.asStateFlow()
 
     private var payJob: Job? = null
+    private var entitlementJob: Job? = null
 
     init {
-        refreshEntitlement()
+        // A payment this device saw land but never saw confirmed, from before this instance
+        // existed: the retry is silent, and its result is exactly what a fresh confirm's would be.
+        pendingReceipt()?.let { pending -> viewModelScope.launch { confirmLanded(pending) } }
+
         viewModelScope.launch {
             wallet.account.collect { account ->
-                if (account == null) {
-                    _pro.update { it.copy(walletConnected = false, stakeRaw = null, stakeUnread = false) }
-                } else {
-                    _pro.update { it.copy(walletConnected = true) }
-                    loadStake(account.address)
+                // The wallet changed (including to or from no wallet at all): both halves of the
+                // block are stale the instant this fires, so both drop to one honest loading
+                // state, in the SAME update, before either is asked again. Splitting this into two
+                // updates (or leaving entitlementLoading to refreshEntitlement's own first line)
+                // would let a fast stake read land while the entitlement line still showed the
+                // previous wallet's source and date, which is the contradiction this guards
+                // against: two "this wallet" sentences about two different real wallets.
+                _pro.update {
+                    it.copy(
+                        walletConnected = account != null,
+                        stakeRaw = null,
+                        stakeUnread = false,
+                        entitlementLoading = true,
+                        entitlementDisabled = false,
+                        entitlementFailed = false,
+                    )
                 }
+                refreshEntitlement()
+                if (account != null) loadStake(account.address)
             }
         }
     }
 
-    /** Reads this device's code and asks the server what it carries. Never costs a wallet call. */
+    /** The one pending receipt this device holds, or null. At most one exists by construction. */
+    private fun pendingReceipt(): PassReceipt? = passReceiptStore.receipts.value.firstOrNull { !it.confirmed }
+
+    /**
+     * Reads this device's code and asks the server what it carries. Never costs a wallet call.
+     * Cancels a refresh already in flight, so a wallet change that fires twice in quick succession
+     * cannot let the first answer land after the second and show a stale source or date.
+     */
     fun refreshEntitlement() {
-        viewModelScope.launch {
+        entitlementJob?.cancel()
+        entitlementJob = viewModelScope.launch {
             _pro.update { it.copy(entitlementLoading = true, entitlementDisabled = false, entitlementFailed = false) }
             val code = devicePassStore.code()
             try {
@@ -161,9 +211,14 @@ class PassViewModel(
 
     // ---- Paying -------------------------------------------------------------------------------
 
-    /** The tap: connect if there is no session, then ask the server to build the transfer. */
+    /**
+     * The tap: connect if there is no session, then ask the server to build the transfer.
+     * Refuses while [ProUiState.pendingSignature] is set: a payment already on the chain and not
+     * yet confirmed is not a reason to sign a second one, it is a reason to wait or retry confirm.
+     */
     fun pay(mint: String = PassApi.MINT_USDC) {
         if (_state.value.isBusy) return
+        if (_pro.value.pendingSignature != null) return
         val known = wallet.account.value?.address
         _state.value = if (known == null) PassState.Opening() else PassState.Building(known)
         payJob?.cancel()
@@ -257,20 +312,44 @@ class PassViewModel(
         }
 
         val signatureText = Base58.encodeToString(signature)
+        // Written before the confirm call is even made: signAndSendTransactions both signs and
+        // submits, so the payment is on the chain from this instant, and a process death on the
+        // next line must not lose the only record of it (task A6 review). The same rule and the
+        // same shape VoteViewModel already keeps for its own receipt, viewModelScope runs on
+        // Main, and a file write does not.
+        val receipt = PassReceipt(signature = signatureText, payer = ready.payer, landedAtMillis = clock.nowMillis())
+        withContext(ioDispatcher) { passReceiptStore.record(receipt) }
+        _pro.update { it.copy(pendingSignature = signatureText) }
+
         _state.value = PassState.Confirming(ready.payer, signatureText)
-        // The transfer is on the chain the moment the wallet answers; this call is only this
-        // app's own shortcut past the cron's up-to-ten-minute window, so a refusal here is logged
-        // and never turned into a state that claims the payment did not land.
+        val entitlement = confirmLanded(receipt)
+        _state.value = PassState.Landed(signatureText, entitlement)
+    }
+
+    /**
+     * Verifies one landed receipt with the server, on demand rather than waiting for the cron.
+     * Called from [send] the instant a signature comes back, and from [init] for a receipt this
+     * device saw land in an earlier process. The transfer is on the chain the moment the wallet
+     * answers; this call is only this app's own shortcut past the cron's up-to-ten-minute window,
+     * so a refusal here is logged and never turned into a claim that the payment did not land, and
+     * [pendingReceipt] simply stays non-null for the next attempt (another confirm, or the cron)
+     * to clear.
+     */
+    private suspend fun confirmLanded(receipt: PassReceipt): EntitlementResponse? {
         val entitlement = try {
-            passApi.confirm(signatureText)
+            passApi.confirm(receipt.signature)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             debugLog.raw("pass/confirm did not resolve: ${e::class.simpleName}: ${e.message}")
             null
         }
-        entitlement?.let(::applyEntitlement)
-        _state.value = PassState.Landed(signatureText, entitlement)
+        if (entitlement != null) {
+            withContext(ioDispatcher) { passReceiptStore.markConfirmed(receipt.signature) }
+            applyEntitlement(entitlement)
+            _pro.update { it.copy(pendingSignature = pendingReceipt()?.signature) }
+        }
+        return entitlement
     }
 
     private fun refuse(reason: PassRefusal) {

@@ -392,13 +392,17 @@
     <string name="pro_stake_disconnected">Connect a wallet to read what it has staked.</string>
     <string name="pro_stake_unread">This wallet\'s staked SKR could not be read.</string>
     <string name="pro_stake_read">This wallet has %1$s SKR staked.</string>
+    <!-- A landed pass signature this device has not yet seen confirmed (task A6 review): the Pay
+         action is withheld while this is shown, so a second payment is never offered for the one
+         the chain, or the ten-minute cron, might still be settling. -->
+    <string name="pro_payment_pending">A payment from this device has not been confirmed yet.</string>
 
     <!-- Paying for Pro from the app (task A6): the server builds the transfer like a vote, the
          wallet signs it through Mobile Wallet Adapter, and the app confirms the signature rather
          than waiting for the cron. -->
     <string name="pass_title">Pay for Pro</string>
     <string name="pass_action">Pay for Pro</string>
-    <string name="pass_lede">This pays for a 30 day pass. The wallet that signs it becomes Pro once the payment is confirmed.</string>
+    <string name="pass_lede">This pays for a thirty day pass. The wallet that signs it becomes Pro once the payment is confirmed.</string>
     <string name="pass_refreshed">The transfer went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the payment.</string>
     <string name="pass_amount_label">Amount</string>
     <string name="pass_amount">%1$s %2$s</string>

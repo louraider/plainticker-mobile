@@ -128,4 +128,17 @@ class ProModelTest {
         assertEquals(R.string.pro_stake_read, line.id)
         assertEquals(listOf("31,209.870777"), line.args)
     }
+
+    // ---- A pending payment (task A6 review) --------------------------------------------------
+
+    @Test
+    fun `no pending payment draws no sentence at all`() {
+        assertNull(pendingPaymentLine(ProUiState(pendingSignature = null)))
+    }
+
+    @Test
+    fun `a pending payment states so, in place of the Pay action rather than beside it`() {
+        val line = pendingPaymentLine(ProUiState(pendingSignature = "sig")) as Copy.Words
+        assertEquals(R.string.pro_payment_pending, line.id)
+    }
 }

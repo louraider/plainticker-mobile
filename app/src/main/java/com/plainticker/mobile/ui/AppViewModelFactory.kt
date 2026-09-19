@@ -102,6 +102,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.walletSession,
             container.rpcRepository,
             container.devicePassStore,
+            container.passReceiptStore,
             container.clock,
         )
     }

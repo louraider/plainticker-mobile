@@ -11,6 +11,8 @@ import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.EntitlementApi
 import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.data.plainticker.PassApi
+import com.plainticker.mobile.data.receipts.FakePassReceiptStore
+import com.plainticker.mobile.data.receipts.PassReceipt
 import com.plainticker.mobile.data.respondHtml
 import com.plainticker.mobile.data.respondJson
 import com.plainticker.mobile.data.rpc.SkrStake
@@ -85,6 +87,7 @@ class PassViewModelTest {
         wallet: FakeWalletSession = wallet(),
         rpc: FakeRpcRepository = staking(0L),
         store: InMemoryDevicePassStore = devicePassStore,
+        receipts: FakePassReceiptStore = FakePassReceiptStore(),
         clock: Clock = Clock { now },
     ) = PassViewModel(
         PassApi(pass.client),
@@ -92,13 +95,29 @@ class PassViewModelTest {
         wallet,
         rpc,
         store,
+        receipts,
         clock = clock,
         debugLog = PassDebugLog { },
+        // The same test dispatcher Main is pointed at, so a receipt's write is deterministic
+        // under runTest exactly the way VoteViewModelTest already keeps its own.
+        ioDispatcher = mainDispatcherRule.dispatcher,
     )
 
     private fun TestScope.trail(machine: PassViewModel): List<PassState> {
         val seen = mutableListOf<PassState>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { machine.state.toList(seen) }
+        return seen
+    }
+
+    /**
+     * Every [ProUiState], not only the ones a conflating StateFlow would keep for a collector
+     * that is not actively suspended: the collector is unconfined, so each assignment resumes it
+     * on the assigning thread and a short-lived reset between two settled states is seen rather
+     * than skipped (the same reasoning [trail] already carries for [PassState]).
+     */
+    private fun TestScope.proTrail(machine: PassViewModel): List<ProUiState> {
+        val seen = mutableListOf<ProUiState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { machine.pro.toList(seen) }
         return seen
     }
 
@@ -430,6 +449,120 @@ class PassViewModelTest {
             assertEquals(3_200_000_000L, loaded.stakeRaw)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ---- A wallet switch (task A6 review) ----------------------------------------------------
+
+    @Test
+    fun `a wallet switch refreshes both the entitlement and the stake line together`() = runTest {
+        val walletB = WalletAccount(ByteArray(32) { 9 }, "Wallet B")
+        val entitlement = entitlementMock("""{"pro":true,"source":"pass","until":"2026-10-19T00:00:00.000Z"}""")
+        val session = wallet()
+        val rpc = staking(1_000_000_000L)
+        val vm = machine(entitlement = entitlement, wallet = session, rpc = rpc)
+        val trail = proTrail(vm)
+
+        vm.pro.test {
+            awaitUntil { !it.entitlementLoading && it.stakeRaw == 1_000_000_000L }
+
+            // A different wallet connects mid-session, the way a swap or vote flow's own connect
+            // would leave this one finding a new account.
+            rpc.stake = Result.success(SkrStake(listOf(SkrStakeAccount("s".padEnd(44, '2'), 5_000_000_000L))))
+            session.connectedAs(walletB)
+
+            awaitUntil { !it.entitlementLoading && it.stakeRaw == 5_000_000_000L }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        // Entitlement was actually re-asked for the switch, not left standing on wallet A's answer.
+        assertEquals(2, entitlement.requests.size)
+
+        // The reset is one atomic update, not two: the entry right after wallet A's settled state
+        // already carries both halves reset together, so a fast stake read for wallet B can never
+        // land beside an entitlement sentence a reader would read as still being about wallet A.
+        val settledForA = trail.indexOfFirst { it.stakeRaw == 1_000_000_000L && !it.entitlementLoading }
+        assertTrue("wallet A's settled state must appear in the trail", settledForA >= 0)
+        val reset = trail[settledForA + 1]
+        assertTrue("the entitlement half resets the instant the stake half does", reset.entitlementLoading)
+        assertNull("the stake half resets in the same update, never a frame later", reset.stakeRaw)
+        assertFalse(reset.stakeUnread)
+    }
+
+    // ---- A pending payment (task A6 review) --------------------------------------------------
+
+    @Test
+    fun `a confirmed payment is marked confirmed, and no longer pending`() = runTest {
+        val signature = ByteArray(64) { 6 }
+        val operations = FakeAdapterOperations(signatures = listOf(signature))
+        val session = wallet().apply { this.operations = operations }
+        val receipts = FakePassReceiptStore()
+        val vm = machine(wallet = session, receipts = receipts)
+
+        vm.state.test {
+            awaitItem()
+            vm.pay()
+            awaitUntil { it is PassState.Ready }
+            assertNull("nothing is pending before anything has signed", vm.pro.value.pendingSignature)
+            vm.confirm()
+            awaitUntil { it is PassState.Landed }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val stored = receipts.receipts.value.single()
+        assertEquals(Base58.encodeToString(signature), stored.signature)
+        assertTrue("confirm succeeded, so this device no longer treats it as pending", stored.confirmed)
+        assertNull(vm.pro.value.pendingSignature)
+    }
+
+    @Test
+    fun `a signature written before process death is retried on the next launch, and clears once confirmed`() = runTest {
+        val pendingSignature = "4xQm7gZ1LdPqR8vWnJb3sT6yUeK2cHaX9fNmD5oVtHe"
+        val receipts = FakePassReceiptStore()
+        receipts.record(PassReceipt(signature = pendingSignature, payer = payer.address, landedAtMillis = now))
+        val pass = passMock()
+        // A fresh ViewModel, exactly as a cold start after process death builds one, over the
+        // same backing store: nothing about the pending payment survived in memory, only on disk.
+        val vm = machine(pass = pass, receipts = receipts)
+
+        assertEquals("the pending payment is surfaced immediately, before any network call answers", pendingSignature, vm.pro.value.pendingSignature)
+
+        vm.pro.test {
+            awaitUntil { it.pendingSignature == null }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertTrue(receipts.receipts.value.single().confirmed)
+        assertTrue(
+            "the confirm call actually ran again for the receipt this device already had",
+            pass.requests.any { it.url.encodedPath.endsWith(PassApi.CONFIRM_PATH) },
+        )
+    }
+
+    @Test
+    fun `a pending payment that still cannot be confirmed stays pending, and offers no second payment`() = runTest {
+        val receipts = FakePassReceiptStore()
+        receipts.record(PassReceipt(signature = "sig", payer = payer.address, landedAtMillis = now))
+        val pass = MockApi { request ->
+            if (request.url.encodedPath.endsWith(PassApi.CONFIRM_PATH)) {
+                respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError)
+            } else {
+                respondJson(buildBody)
+            }
+        }
+        val vm = machine(pass = pass, receipts = receipts)
+
+        vm.pro.test {
+            awaitUntil { !it.entitlementLoading }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals("sig", vm.pro.value.pendingSignature)
+
+        vm.pay()
+        assertEquals("pay refuses outright while a payment is pending", PassState.Closed, vm.state.value)
+        assertTrue(
+            "no second payment is ever asked for while one is pending",
+            pass.requests.none { it.url.encodedPath.endsWith(PassApi.BUILD_PATH) },
+        )
     }
 
     // ---- The machine's own rules -------------------------------------------------------------

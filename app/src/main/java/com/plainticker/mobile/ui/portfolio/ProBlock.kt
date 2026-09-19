@@ -27,6 +27,15 @@ import com.plainticker.mobile.ui.theme.PlainTickerType
  * this exists: the hard invariant task A6 names is that every block this screen already draws
  * keeps drawing exactly as it does, and this block is proof of that by construction, appended
  * after "Recent swaps" rather than woven into anything that came before it.
+ *
+ * [entitlementLine] and [stakeLine] both carry a numeral (a date, a token amount), so both are
+ * set in the mono `meta` style, the same one [com.plainticker.mobile.ui.detail.costLine] uses for
+ * its own numeral-bearing sentence: DESIGN.md section 3 keeps every number out of Outfit, and that
+ * rule does not relax for a number sitting inside a longer sentence.
+ *
+ * A pending payment (task A6 review: a landed signature this device has not seen confirmed yet,
+ * [PassReceiptStore]) replaces the Pay action with its own sentence rather than standing beside
+ * it: a second payment is never offered while one might still be waiting on the chain or the cron.
  */
 @Composable
 fun ProBlock(state: ProUiState, onPay: (() -> Unit)?, onRetryEntitlement: () -> Unit) {
@@ -34,15 +43,18 @@ fun ProBlock(state: ProUiState, onPay: (() -> Unit)?, onRetryEntitlement: () -> 
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = entitlementLine(state).text(), style = PlainTickerType.body, color = Ink)
+        Text(text = entitlementLine(state).text(), style = PlainTickerType.meta, color = Ink)
         stakeLine(state)?.let {
+            Text(text = it.text(), style = PlainTickerType.meta, color = Muted, modifier = Modifier.padding(top = 2.dp))
+        }
+        pendingPaymentLine(state)?.let {
             Text(text = it.text(), style = PlainTickerType.small, color = Muted, modifier = Modifier.padding(top = 2.dp))
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = ActionsTop), horizontalArrangement = Arrangement.End) {
             if (entitlementRetries(state)) {
                 TextAction(label = stringResource(R.string.action_retry), onClick = onRetryEntitlement)
             }
-            if (onPay != null) {
+            if (onPay != null && state.pendingSignature == null) {
                 TextAction(label = stringResource(R.string.pass_action), onClick = onPay)
             }
         }

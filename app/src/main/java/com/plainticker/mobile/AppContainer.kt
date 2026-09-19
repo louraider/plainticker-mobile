@@ -12,8 +12,10 @@ import com.plainticker.mobile.data.plainticker.PassApi
 import com.plainticker.mobile.data.plainticker.PlainTickerApi
 import com.plainticker.mobile.data.plainticker.ReadApi
 import com.plainticker.mobile.data.plainticker.VoteApi
+import com.plainticker.mobile.data.receipts.FilePassReceiptStore
 import com.plainticker.mobile.data.receipts.FileReceiptStore
 import com.plainticker.mobile.data.receipts.FileVoteReceiptStore
+import com.plainticker.mobile.data.receipts.PassReceiptStore
 import com.plainticker.mobile.data.receipts.ReceiptStore
 import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.data.rpc.SolanaRpcApi
@@ -115,6 +117,9 @@ interface AppContainer {
     /** This device's own code for Pro entitlement (task A6): generated once, kept on the device. */
     val devicePassStore: DevicePassStore
 
+    /** The app's own record of the pass payments it landed (task A6 review); survives process death. */
+    val passReceiptStore: PassReceiptStore
+
     /** The last digest the daily check produced: the Watchlist draws it, the check writes it. */
     val digestStore: DigestStore
 
@@ -194,6 +199,12 @@ class DefaultAppContainer(context: Context) : AppContainer {
     // reason to pay for a second file. See DevicePassStore for what surviving process death and
     // a wallet change each mean for the code it keeps.
     override val devicePassStore: DevicePassStore by lazy { SharedPrefsDevicePassStore(prefs) }
+
+    // filesDir, not cache: same reasoning as voteReceiptStore above, a pass receipt is the only
+    // record of a signature between the wallet answering and pass/confirm resolving.
+    override val passReceiptStore: PassReceiptStore by lazy {
+        FilePassReceiptStore(java.io.File(app.filesDir, FilePassReceiptStore.FILE_NAME))
+    }
 
     // The digest is a handful of fields written once a day, so it rides the same preferences
     // file as the watchlist it describes rather than paying for one of its own.
