@@ -48,18 +48,23 @@ import java.time.LocalDate
 /**
  * The List (T8, DT8; design/canvas/instrument.py screen_list). One scrolling column: the header
  * the host hands in (the TopBar and the tabs, so they scroll away and nothing is sticky), the
- * Today strip while something is watched, the one banner slot, the search field, "Analyzed" with
- * the classified xStocks and "Without analysis" with the muted price-only rows.
+ * Today strip while something is watched, the one banner slot, the search field, then the
+ * analyzed rows, chaptered by sector (task A1, docs/plan-monetisation-2026-09-19.md section 1.5).
+ *
+ * The roughly 672 uncovered rows no longer tail the list: they leave for a Vote tab in a later
+ * task, so nothing here draws them as a section of their own any more. Their data stays reachable
+ * two ways. Search spans both sets at once, as one flat list, unchaptered ([ListContent]'s search
+ * branch): typing a query narrows [ListUiState.analyzed] and [ListUiState.withoutAnalysis]
+ * together, and an uncovered hit opens the same Detail an analyzed one does. And the "Next up"
+ * strip still leads where "Without analysis" used to: the three uncovered tokens staked SKR has
+ * voted to cover next, with the weight behind each (docs/skr-curation-spec-2026-09-13.md, step 3).
+ * It is decided by [nextUpStrip] and drawn here, and when there is nothing to draw it is not
+ * there: no heading, no banner, no empty section.
  *
  * Every number goes through [Fmt]: the composite as an integer, the premium as a signed percent,
- * the age as "2 d old". The meta line carries at most one middle dot, and the Ukrainian headline
- * of `/summary` is not a field a row even has (see [ListViewModel]).
- *
- * Under "Without analysis" the "Next up" strip leads: the three uncovered tokens staked SKR has
- * voted to cover next, with the weight behind each (docs/skr-curation-spec-2026-09-13.md, step
- * 3, which waited on a server query that now exists). It is decided by [nextUpStrip] and drawn
- * here, and when there is nothing to draw it is not there: no banner, no empty heading. A leader
- * is lifted out of the rows below rather than drawn twice under one heading ([rowsBelowNextUp]).
+ * the age as "2 d old", a chapter's count as a plain integer. The meta line carries at most one
+ * middle dot, and the Ukrainian headline of `/summary` is not a field a row even has (see
+ * [ListViewModel]).
  */
 @Composable
 fun ListScreen(
@@ -154,48 +159,64 @@ internal fun ListContent(
             // a wordmark, a search field and nothing else, with no banner to explain it.
             state.emptyResult -> item(key = "empty") { EmptyLine(stringResource(R.string.list_empty)) }
 
-            else -> {
-                if (state.analyzed.isNotEmpty()) {
-                    item(key = "analyzed") {
-                        Heading(text = stringResource(R.string.list_heading_analyzed), topPadding = HeadingTopGap)
-                    }
-                    itemsIndexed(state.analyzed, key = { _, row -> "a:" + row.ticker }) { index, row ->
-                        AnalyzedRow(
-                            row = row,
-                            last = index == state.analyzed.lastIndex,
-                            onOpenDetail = onOpenDetail,
+            // Browsing: analyzed rows chaptered by sector, then the Next up strip. Search draws a
+            // different shape (see below), so this branch runs only while the query is blank.
+            state.query.isBlank() -> {
+                val chapters = state.analyzedChapters
+                chapters.forEachIndexed { chapterIndex, chapter ->
+                    item(key = "chapter:${chapter.sector ?: NoSectorKey}") {
+                        Heading(
+                            text = chapter.sector ?: stringResource(R.string.list_heading_no_sector),
+                            topPadding = if (chapterIndex == 0) HeadingTopGap else SectionTopGap,
+                            meta = Fmt.count(chapter.rows.size),
                         )
                     }
+                    itemsIndexed(chapter.rows, key = { _, row -> "a:" + row.ticker }) { index, row ->
+                        AnalyzedRow(row = row, last = index == chapter.rows.lastIndex, onOpenDetail = onOpenDetail)
+                    }
                 }
-                if (state.withoutAnalysis.isNotEmpty()) {
+
+                // The uncovered rows themselves no longer tail the list (task A1): the roughly 672
+                // of them leave for a Vote tab in a later task. Only the leaders staked SKR has
+                // voted to cover next still lead here, exactly where "Without analysis" used to.
+                val leaders = state.nextUpStrip
+                if (leaders.isNotEmpty()) {
                     item(key = "without") {
                         Heading(
                             text = stringResource(R.string.list_heading_without_analysis),
                             topPadding = SectionTopGap,
                         )
                     }
-                    val leaders = state.nextUpStrip
-                    val uncovered = state.rowsBelowNextUp(leaders)
-                    if (leaders.isNotEmpty()) {
-                        item(key = "next-up-label") { NextUpLabel() }
-                        itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
-                            NextUpLeaderRow(
-                                leader = leader,
-                                last = index == leaders.lastIndex,
-                                onOpenDetail = onOpenDetail,
-                                onVote = onVote,
-                            )
-                        }
-                        item(key = "next-up-gap") { Spacer(Modifier.height(NextUpGap)) }
-                    }
-                    itemsIndexed(uncovered, key = { _, row -> "p:" + row.ticker }) { index, row ->
-                        PriceOnlyRow(
-                            row = row,
-                            last = index == uncovered.lastIndex,
+                    item(key = "next-up-label") { NextUpLabel() }
+                    itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
+                        NextUpLeaderRow(
+                            leader = leader,
+                            last = index == leaders.lastIndex,
                             onOpenDetail = onOpenDetail,
                             onVote = onVote,
                         )
                     }
+                }
+            }
+
+            // Searching: one flat list across both sets, unchaptered. An uncovered hit draws
+            // exactly as it does under "Without analysis", price and vote action included, and
+            // opens the same Detail an analyzed hit does.
+            else -> {
+                itemsIndexed(state.analyzed, key = { _, row -> "a:" + row.ticker }) { index, row ->
+                    AnalyzedRow(
+                        row = row,
+                        last = index == state.analyzed.lastIndex && state.withoutAnalysis.isEmpty(),
+                        onOpenDetail = onOpenDetail,
+                    )
+                }
+                itemsIndexed(state.withoutAnalysis, key = { _, row -> "p:" + row.ticker }) { index, row ->
+                    PriceOnlyRow(
+                        row = row,
+                        last = index == state.withoutAnalysis.lastIndex,
+                        onOpenDetail = onOpenDetail,
+                        onVote = onVote,
+                    )
                 }
             }
         }
@@ -444,10 +465,12 @@ private val SearchTopGap = 22.dp
 private val HeadingTopGap = 30.dp
 private val SectionTopGap = 28.dp
 
-/** Under the strip's label, and under the strip itself before the rest of the section. */
+/** Under the strip's label. */
 private val NextUpLabelGap = 6.dp
-private val NextUpGap = 16.dp
 private const val SkeletonRowCount = 6
+
+/** LazyColumn item key for the trailing chapter of rows `/summary` sent no sector for. */
+private const val NoSectorKey = "no-sector-chapter"
 
 // ---- Previews ------------------------------------------------------------------------------
 
@@ -461,6 +484,7 @@ private fun sampleRow(
     reference: Double,
     ageDays: Int,
     poolUsd: Double? = 250_000.0,
+    sector: String? = null,
 ) = ListRow(
     ticker = ticker,
     symbol = symbol,
@@ -474,6 +498,7 @@ private fun sampleRow(
     referencePriceUsd = reference,
     poolUsd = poolUsd,
     analyzed = true,
+    sector = sector,
 )
 
 private fun samplePriceOnlyRow(
@@ -501,14 +526,22 @@ private fun samplePriceOnlyRow(
 private val PreviewState = ListUiState(
     watched = 3,
     analyzed = listOf(
-        sampleRow("TSLA", "TSLAx", "Tesla, Inc.", 71.0, RowState.STRONG, 366.17, 365.84, 2),
-        sampleRow("NVDA", "NVDAx", "NVIDIA Corp.", 68.0, RowState.STRONG, 182.11, 182.18, 1),
-        sampleRow("AAPL", "AAPLx", "Apple Inc.", 61.0, RowState.FAIR, 232.54, 232.52, 2),
+        sampleRow("TSLA", "TSLAx", "Tesla, Inc.", 71.0, RowState.STRONG, 366.17, 365.84, 2, sector = "Consumer Discretionary"),
+        sampleRow("NVDA", "NVDAx", "NVIDIA Corp.", 68.0, RowState.STRONG, 182.11, 182.18, 1, sector = "Information Technology"),
+        sampleRow("AAPL", "AAPLx", "Apple Inc.", 61.0, RowState.FAIR, 232.54, 232.52, 2, sector = "Information Technology"),
         // Below the floor, as APPx read live on 2026-09-12: +89.34% quoted off a pool of $34.
-        sampleRow("APP", "APPx", "AppLovin Corp.", 58.0, RowState.FAIR, 1_158.76, 612.00, 2, poolUsd = 34.0),
+        sampleRow(
+            "APP", "APPx", "AppLovin Corp.", 58.0, RowState.FAIR, 1_158.76, 612.00, 2,
+            poolUsd = 34.0, sector = "Communication Services",
+        ),
         // Priced, with no depth reported: unknown, which is not the same as deep.
-        sampleRow("UNH", "UNHx", "UnitedHealth Group", 52.0, RowState.FAIR, 331.20, 338.38, 1, poolUsd = null),
-        sampleRow("COIN", "COINx", "Coinbase Global", 47.0, RowState.WEAK, 301.08, 300.84, 3),
+        sampleRow(
+            "UNH", "UNHx", "UnitedHealth Group", 52.0, RowState.FAIR, 331.20, 338.38, 1,
+            poolUsd = null, sector = "Health Care",
+        ),
+        sampleRow("COIN", "COINx", "Coinbase Global", 47.0, RowState.WEAK, 301.08, 300.84, 3, sector = "Financials"),
+        // /summary sent no sector for this one: the trailing chapter, not a dropped row.
+        sampleRow("XOM", "XOMx", "Exxon Mobil Corp.", 44.0, RowState.WEAK, 118.20, 117.90, 3, sector = null),
     ),
     withoutAnalysis = listOf(
         samplePriceOnlyRow("TSM", "TSMx", "Taiwan Semiconductor", 264.10, 263.97),

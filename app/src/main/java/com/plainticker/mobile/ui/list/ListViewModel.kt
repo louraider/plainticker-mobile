@@ -59,6 +59,13 @@ data class ListRow(
     /** The pool behind the quote in USD, from Price v3 `liquidity`. Jupiter may omit it. */
     val poolUsd: Double?,
     val analyzed: Boolean,
+    /**
+     * `/summary.sector` (PlainTickerModels.kt), read only for an analyzed row: the classification
+     * is against a sector, and this is what chapters the List by one (task A1, `analyzedChapters`
+     * in this package). Null for every price-only row, and for an analyzed row `/summary` sent no
+     * sector for, which is grouped under a trailing chapter rather than dropped.
+     */
+    val sector: String? = null,
 ) {
     /** What the row shows left: the token symbol once the catalog is known, else the ticker. */
     val display: String get() = symbol ?: ticker
@@ -741,6 +748,7 @@ class ListViewModel(
         referencePriceUsd = null,
         poolUsd = null,
         analyzed = true,
+        sector = sector,
     )
 
     private fun XStockAsset.toPriceOnlyRow() = ListRow(
@@ -756,6 +764,7 @@ class ListViewModel(
         referencePriceUsd = null,
         poolUsd = null,
         analyzed = false,
+        sector = null,
     )
 
     companion object {
