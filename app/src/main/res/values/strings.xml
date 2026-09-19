@@ -62,6 +62,8 @@
     <string name="list_search_placeholder">Ticker or company</string>
     <string name="list_heading_analyzed">Analyzed</string>
     <string name="list_heading_without_analysis">Without analysis</string>
+    <!-- The trailing chapter for an analyzed row /summary sent no sector for (task A1). -->
+    <string name="list_heading_no_sector">No sector</string>
     <!-- The row meta halves and the source banners below are shared with the Portfolio -->
     <string name="list_row_meta_premium">%1$s vs NYSE close</string>
     <string name="list_row_meta_thin">%1$s behind this price, too thin</string>

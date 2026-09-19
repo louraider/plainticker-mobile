@@ -1,12 +1,24 @@
 {
- "captured_at": "2026-09-12",
+ "captured_at": "2026-09-19",
  "source": "https://api.xstocks.fi/api/v2/public/assets?network=Solana",
  "assets": [
+  {
+   "symbol": "AAFx",
+   "ticker": "AAFL",
+   "name": "Airtel Africa xStock",
+   "mint": "XskX5tputmVo1uUb7uSg27iuEpyQ1SFn53y9YR3Y6WX"
+  },
   {
    "symbol": "AAOIx",
    "ticker": "AAOI",
    "name": "Applied Optoelectronics xStock",
    "mint": "XsGHwSbPaUJu6r5dtJLHXkXenPgCQf4Sx2hb4e2sbCZ"
+  },
+  {
+   "symbol": "AAONx",
+   "ticker": "AAON",
+   "name": "AAON xStock",
+   "mint": "XsvFzSYaLgkoB2iHQiSMhf6e5bVcRThJZvRPiySbhjq"
   },
   {
    "symbol": "AAPLx",
@@ -25,6 +37,18 @@
    "ticker": "ABBV",
    "name": "AbbVie xStock",
    "mint": "XswbinNKyPmzTa5CskMbCPvMW6G5CMnZXZEeQSSQoie"
+  },
+  {
+   "symbol": "ABDNx",
+   "ticker": "ABDNL",
+   "name": "Aberdeen xStock",
+   "mint": "XsubSc7YfpRsK6PbLVnK3XCZRJkQEkkiRhvG9f2JQan"
+  },
+  {
+   "symbol": "ABFx",
+   "ticker": "ABFL",
+   "name": "Associated British Foods xStock",
+   "mint": "XsWsRPQPNCtZj5G5k8bWRdAfd1x55Ct7qkHUiSzXZNH"
   },
   {
    "symbol": "ABNBx",
@@ -151,6 +175,12 @@
    "ticker": "AIZ",
    "name": "Assurant xStock",
    "mint": "Xs7U7QD6amUpjuEZ1VM3rx5TSrKtJ3r7xU1aRcTHhw8"
+  },
+  {
+   "symbol": "AJBx",
+   "ticker": "AJBL",
+   "name": "AJ Bell xStock",
+   "mint": "XsKU1nPbnBTpVegUrMaapscL7thNmQTq365eLYidPZa"
   },
   {
    "symbol": "AJGx",
@@ -285,6 +315,12 @@
    "mint": "XsdP2Pc9F6UsUujiydSsBGZGNYpDMivEjNfQ1ytHD1P"
   },
   {
+   "symbol": "ANTOx",
+   "ticker": "ANTOL",
+   "name": "Antofagasta xStock",
+   "mint": "Xs1HiAY2BitDiQVebt2EJ6TFueRLia5ujSGqnh3vp3w"
+  },
+  {
    "symbol": "APAx",
    "ticker": "APA",
    "name": "APA xStock",
@@ -405,6 +441,18 @@
    "mint": "Xs7x2HYEazWDXpYQYPBiRYh6o2AbkYrdrFwaBfBxyaU"
   },
   {
+   "symbol": "AUTO.GBx",
+   "ticker": "AUTOL",
+   "name": "Auto Trader xStock",
+   "mint": "Xsuq2i3pPWHHM8o8i2jgvD9uAU6Kkzosi335iKRa1my"
+  },
+  {
+   "symbol": "AV.GBx",
+   "ticker": "AVL",
+   "name": "Aviva xStock",
+   "mint": "XsRUVKNpti3iMz5pU7nUTrfGHLVuLUKuh3qxXSsE9wZ"
+  },
+  {
    "symbol": "AVGOx",
    "ticker": "AVGO",
    "name": "Broadcom xStock",
@@ -459,6 +507,18 @@
    "mint": "XsfLtqmidw4ouMrdWvH5usSs3r77Usm6rXGygxhRTjz"
   },
   {
+   "symbol": "BA.GBx",
+   "ticker": "BAL",
+   "name": "BAE Systems xStock",
+   "mint": "XsnpBvWb5ZUcVb9MhDUt8Jir8RyaFADjVujpF3REcME"
+  },
+  {
+   "symbol": "BAB.GBx",
+   "ticker": "BABL",
+   "name": "Babcock International xStock",
+   "mint": "XsPJ7qgHgLGn78JVNuoMGsCXQsThJQmxcp3yGK86X5X"
+  },
+  {
    "symbol": "BACx",
    "ticker": "BAC",
    "name": "Bank of America xStock",
@@ -483,6 +543,18 @@
    "mint": "Xs3uhDYpQGfkeZ7rrzQgmozWQHC5uDLUa6iAN65qHM1"
   },
   {
+   "symbol": "BARCx",
+   "ticker": "BARCL",
+   "name": "Barclays xStock",
+   "mint": "Xsj83vfdGZqBQ6pTHJ7PRqWQBnm9UgUzWqT2fUztwme"
+  },
+  {
+   "symbol": "BATSx",
+   "ticker": "BATSL",
+   "name": "British American Tobacco xStock",
+   "mint": "XsnHFPDQiWVbmZobbRvneRpvY5BL7AGKcJ9kMJGvUgk"
+  },
+  {
    "symbol": "BAx",
    "ticker": "BA",
    "name": "Boeing xStock",
@@ -499,6 +571,12 @@
    "ticker": "BBIO",
    "name": "BridgeBio Pharma xStock",
    "mint": "XsbJzb2V963yBoCKjRJqSLbNUeBsqy6uV4dVnCnNp4q"
+  },
+  {
+   "symbol": "BBY.GBx",
+   "ticker": "BBYL",
+   "name": "Balfour Beatty xStock",
+   "mint": "Xs6aBbsUaqRPpA1dCW5VTr3nytceSMFqf126ZixvFPk"
   },
   {
    "symbol": "BBYx",
@@ -537,6 +615,18 @@
    "mint": "XsmGSEqT6VXpVis3aVBDxaNwPgHNXbkjkVUCncsLkNB"
   },
   {
+   "symbol": "BEZ.GBx",
+   "ticker": "BEZL",
+   "name": "Beazley xStock",
+   "mint": "Xs4gTbX4XBcHxQq5qFSn56zhuoe6NKwsSqKk3LoX226"
+  },
+  {
+   "symbol": "BGEOx",
+   "ticker": "BGEOL",
+   "name": "Lion Finance xStock",
+   "mint": "XsbAuLnxt5JVLzcLC3nCo4h3jnRiFqxXzauVe4bHvDp"
+  },
+  {
    "symbol": "BIIBx",
    "ticker": "BIIB",
    "name": "Biogen xStock",
@@ -553,6 +643,12 @@
    "ticker": "BJ",
    "name": "BJ's Wholesale Club xStock",
    "mint": "XsAGAMqiAySqkUDf5ZXCTR4v6hSgcBj7mQQy7w3Nja7"
+  },
+  {
+   "symbol": "BKG.GBx",
+   "ticker": "BKGL",
+   "name": "Berkeley xStock",
+   "mint": "XseXMu35TstUhDHfyQZJjt8Gk3k1Ki7sNgJ7zyr5CNA"
   },
   {
    "symbol": "BKRx",
@@ -585,6 +681,12 @@
    "mint": "Xs2hXX5B6aYUn1Nf8RkspKQbBTjbsa1Co9SjpwgZbNr"
   },
   {
+   "symbol": "BNZLx",
+   "ticker": "BNZLL",
+   "name": "Bunzl xStock",
+   "mint": "XsV7rBpwfAQVkKK1NmNTCMzJQvsVwXYxFciVYXeA9nV"
+  },
+  {
    "symbol": "BOCHKx",
    "ticker": "2388",
    "name": "BOC Hong Kong xStock",
@@ -607,6 +709,18 @@
    "ticker": "BPOP",
    "name": "Popular xStock",
    "mint": "Xs75Z8HFGHFnTubABp1CZSLvzCPepWsYhtHYLAFYEa7"
+  },
+  {
+   "symbol": "BPx",
+   "ticker": "BPL",
+   "name": "BP xStock",
+   "mint": "Xsdj6kUSZo4jUq1bpJ5bh9z4deR1fVY6Fn8e2ySvrkJ"
+  },
+  {
+   "symbol": "BRBYx",
+   "ticker": "BRBYL",
+   "name": "Burberry xStock",
+   "mint": "XsijAxbQkBewsynCHDdEgHWavY3pwuRkJfGi8jNdAnL"
   },
   {
    "symbol": "BRK.Bx",
@@ -645,6 +759,12 @@
    "mint": "XsMJnAApxALiWrwPBkAqm2FebHRmMLQVyjv9xVckzyk"
   },
   {
+   "symbol": "BT.Ax",
+   "ticker": "BTL",
+   "name": "BT xStock",
+   "mint": "XskY8Q5ZHvhVJuBBor4iVjCbztSfBV4hsmEtoa9vPnT"
+  },
+  {
    "symbol": "BTBTx",
    "ticker": "BTBT",
    "name": "Bit Digital xStock",
@@ -655,6 +775,12 @@
    "ticker": "BTGO",
    "name": "Bitgo xStock",
    "mint": "XsvHMmbDcd14DHHW16PkxPGW7ks77ehxUv1E9Zmxgj4"
+  },
+  {
+   "symbol": "BTRWx",
+   "ticker": "BTRWL",
+   "name": "Barratt Redrow xStock",
+   "mint": "Xs7Lv15gA3Rjf5W7jVjcLAnjce7LKHSknMRHBVAyNzT"
   },
   {
    "symbol": "BURLx",
@@ -673,6 +799,12 @@
    "ticker": "BWXT",
    "name": "BWX Technologies xStock",
    "mint": "XsVpsBVdjW8SWAu4jAjqJ9qnGYzBmUzNDRcG6uiZ9xo"
+  },
+  {
+   "symbol": "BWYx",
+   "ticker": "BWYL",
+   "name": "Bellway xStock",
+   "mint": "Xs8NtGgTwwHAjdDvdhjcDBDYbEoF39ggi5QKKAwWu97"
   },
   {
    "symbol": "BXPx",
@@ -733,6 +865,12 @@
    "ticker": "CBRS",
    "name": "Cerebras Systems xStock",
    "mint": "Xstq9oUsBPd8LSyivHhnt8P8t9xK5RYoM9P6izLczvm"
+  },
+  {
+   "symbol": "CCC.GBx",
+   "ticker": "CCCL",
+   "name": "Computacenter xStock",
+   "mint": "Xsox8WPr1nuUYChxKKzXbwAdAUdtD3B62RBQHrwB2ws"
   },
   {
    "symbol": "CCIx",
@@ -945,6 +1083,12 @@
    "mint": "Xs6Udev3M1atxRjjXCjAg24BdjYuLs6Qj7eTh7XjEjW"
   },
   {
+   "symbol": "CNA.GBx",
+   "ticker": "CNAL",
+   "name": "Centrica xStock",
+   "mint": "XsNZhxqPhitSup6kZr8NUZZnhGzZy4JiYsPwJUCwuCu"
+  },
+  {
    "symbol": "CNAx",
    "ticker": "CNA",
    "name": "CNA Financial xStock",
@@ -1077,6 +1221,12 @@
    "mint": "XsueG8BtpquVJX9LVLLEGuViXUungE6WmK5YZ3p3bd1"
   },
   {
+   "symbol": "CRDAx",
+   "ticker": "CRDAL",
+   "name": "Croda International xStock",
+   "mint": "XshoX6qy11Q4HHcaJKU6h7JVmVqXiAXPLACiGLqLTxZ"
+  },
+  {
    "symbol": "CRESBx",
    "ticker": "291",
    "name": "China Resources Beer Holdings xStock",
@@ -1173,6 +1323,12 @@
    "mint": "XszBTLtg8oMmEWsZHbJJwViiB6unNh2ei1e6miArqps"
   },
   {
+   "symbol": "CTEC.GBx",
+   "ticker": "CTECL",
+   "name": "ConvaTec xStock",
+   "mint": "Xsftt2xCow4ZccztK3ai3tV8qjfNvMbiUMYmQUknLNV"
+  },
+  {
    "symbol": "CTFJWx",
    "ticker": "1929",
    "name": "Chow Tai Fook Jewellery xStock",
@@ -1203,6 +1359,12 @@
    "mint": "XsJXYLby91CWhGhTXds9oxjoc8EdsLy2iuxmq55U1Y3"
   },
   {
+   "symbol": "CURYx",
+   "ticker": "CURYL",
+   "name": "Currys xStock",
+   "mint": "XsmG4XcqGRyjuk6j6mAwT7QeVPom76GbXipBZ5TkirK"
+  },
+  {
    "symbol": "CVNAx",
    "ticker": "CVNA",
    "name": "Carvana xStock",
@@ -1219,6 +1381,12 @@
    "ticker": "CVX",
    "name": "Chevron xStock",
    "mint": "XsNNMt7WTNA2sV3jrb1NNfNgapxRF5i4i6GcnTRRHts"
+  },
+  {
+   "symbol": "CWK.GBx",
+   "ticker": "CWKL",
+   "name": "Cranswick xStock",
+   "mint": "XsESJA8L13skRorjkG6pMxKk2cPLthCeXoDsThiLhzc"
   },
   {
    "symbol": "CWx",
@@ -1285,6 +1453,12 @@
    "ticker": "DFDV",
    "name": "DFDV xStock",
    "mint": "Xs2yquAgsHByNzx68WJC55WHjHBvG9JsMB7CWjTLyPy"
+  },
+  {
+   "symbol": "DGEx",
+   "ticker": "DGEL",
+   "name": "Diageo xStock",
+   "mint": "Xskk9MXXX59dgwbj8hSZZUCc6RCyVVE2jLk7AsAQhyw"
   },
   {
    "symbol": "DGx",
@@ -1383,6 +1557,12 @@
    "mint": "XsKWMeTN8wmhrkoWKy6tXAj6476Guj8zonzQu7jivqP"
   },
   {
+   "symbol": "DPLMx",
+   "ticker": "DPLML",
+   "name": "Diploma xStock",
+   "mint": "XsF4YQ8jUR5rRPoGdwSCEmJ9xrfJ2vorWoMxyzFCJp2"
+  },
+  {
    "symbol": "DPZx",
    "ticker": "DPZ",
    "name": "Domino's Pizza xStock",
@@ -1405,6 +1585,12 @@
    "ticker": "DRS",
    "name": "Leonardo DRS xStock",
    "mint": "Xsf3NfLggzL9WXy4yaxJB3866ehq7y7sQxohwAkNiEu"
+  },
+  {
+   "symbol": "DRXx",
+   "ticker": "DRXL",
+   "name": "Drax xStock",
+   "mint": "XsTf4WyqGhigiQC8mg3RHresyrwT5M9hmWKnvrnZ7wm"
   },
   {
    "symbol": "DTEx",
@@ -1459,6 +1645,12 @@
    "ticker": "ECL",
    "name": "Ecolab xStock",
    "mint": "XsPPAW5wuUa1ALN1NstEkUAajbwycXTRxtWoLfFriy4"
+  },
+  {
+   "symbol": "EDV.GBx",
+   "ticker": "EDVL",
+   "name": "Endeavour Mining xStock",
+   "mint": "Xs3qTSWcLp9WP4BH8ihLcFsRLzv8CRw2tWHymhEfyTx"
   },
   {
    "symbol": "EDx",
@@ -1527,6 +1719,12 @@
    "mint": "XsHsi7FvQo4T7AkmtyszYkhNdKDCVgrJFS7CWGeaeM8"
   },
   {
+   "symbol": "EMGx",
+   "ticker": "EMGL",
+   "name": "Man xStock",
+   "mint": "XshcRvneh6GUWeFNREY6bKRGHZvPK7C44TQyykaoaTf"
+  },
+  {
    "symbol": "EMRx",
    "ticker": "EMR",
    "name": "Emerson Electric xStock",
@@ -1549,6 +1747,12 @@
    "ticker": "ENTG",
    "name": "Entegris xStock",
    "mint": "XsD6kFBZCYumf4awQ9tgFFh8m2HGJBtTFdLYt7HcwRr"
+  },
+  {
+   "symbol": "ENTx",
+   "ticker": "ENTL",
+   "name": "Entain xStock",
+   "mint": "XsSZgwA3SCj5n6TEtkpfUweKXUuZWFgAJtn7SmkBBMV"
   },
   {
    "symbol": "EOGx",
@@ -1669,6 +1873,12 @@
    "ticker": "EXPD",
    "name": "Expeditors International of Washington xStock",
    "mint": "XsJB61YjcXkEf114fDGMMnWhhFf8a1x12Z6hARUUeAM"
+  },
+  {
+   "symbol": "EXPNx",
+   "ticker": "EXPNL",
+   "name": "Experian xStock",
+   "mint": "XscBXwj1Xq7g5ayDwJCFUGF3UDxxsVVCnZuwpxMxSQ6"
   },
   {
    "symbol": "EXRx",
@@ -1827,6 +2037,12 @@
    "mint": "XsJ6W21MaWMQCqhRLbLTD82427vcMVzxULkomGRg4gJ"
   },
   {
+   "symbol": "FRESx",
+   "ticker": "FRESL",
+   "name": "Fresnillo xStock",
+   "mint": "XsLQMGy9R2u9nHvh3G7qbtRyREEXvXpUfjjmdLaxGcd"
+  },
+  {
    "symbol": "FRHCx",
    "ticker": "FRHC",
    "name": "Freedom xStock",
@@ -1873,6 +2089,12 @@
    "ticker": "F",
    "name": "Ford Motor xStock",
    "mint": "XsBNJXGu68cBH5hgFxdqZkeh8cMQv32jeEtZtYTYvfS"
+  },
+  {
+   "symbol": "GAWx",
+   "ticker": "GAWL",
+   "name": "Games Workshop xStock",
+   "mint": "XsmZTCZ66HMRvK87zwbicJ9sthjqvu5GVbRV57mgTpc"
   },
   {
    "symbol": "GDDYx",
@@ -1971,6 +2193,12 @@
    "mint": "Xsv9hRk1z5ystj9MhnA7Lq4vjSsLwzL2nxrwmwtD3re"
   },
   {
+   "symbol": "GLENx",
+   "ticker": "GLENL",
+   "name": "Glencore xStock",
+   "mint": "Xsz31C1hLJRXCxcaw84pMhkUHdF54B5MSFdTWYLZ4Rh"
+  },
+  {
    "symbol": "GLPIx",
    "ticker": "GLPI",
    "name": "Gaming and Leisure Properties xStock",
@@ -2019,6 +2247,12 @@
    "mint": "XsAiJ9xc1eBoVEz4npaJqySHLrpCoyo1oFfJJpYSXPW"
   },
   {
+   "symbol": "GNS.GBx",
+   "ticker": "GNSL",
+   "name": "Genus xStock",
+   "mint": "XsXXe4iwbJv1PkEgKzGL1oSrVtWT6QDD1qtuahFTfs7"
+  },
+  {
    "symbol": "GOOGLx",
    "ticker": "GOOGL",
    "name": "Alphabet xStock",
@@ -2035,6 +2269,12 @@
    "ticker": "GPN",
    "name": "Global Payments xStock",
    "mint": "XsKbuY5Wyzz7Zzz6uxi69hHdxhrE53d746Sb1jBZyD1"
+  },
+  {
+   "symbol": "GRG.GBx",
+   "ticker": "GRGL",
+   "name": "Greggs xStock",
+   "mint": "Xs1D8Yx8LY1gvRSXQZgyoapZDE6Yt8uM5QZDtunbQ4F"
   },
   {
    "symbol": "GSATx",
@@ -2097,6 +2337,12 @@
    "mint": "XsuFbhEyBaWikFEfA3QM92rr9VVYm79Lip4cC5rnSp5"
   },
   {
+   "symbol": "HBR.GBx",
+   "ticker": "HBRL",
+   "name": "Harbour Energy xStock",
+   "mint": "XsCb3TJrQb5f84KcDPsJSFf27aXfZkjK13J7v2T5zXG"
+  },
+  {
    "symbol": "HCAx",
    "ticker": "HCA",
    "name": "HCA Healthcare xStock",
@@ -2127,6 +2373,18 @@
    "mint": "XsqxvS2n4fRh41imCC68Z6NmDHk2SPXkGXrekg9o9kd"
   },
   {
+   "symbol": "HIK.GBx",
+   "ticker": "HIKL",
+   "name": "Hikma Pharmaceuticals xStock",
+   "mint": "XsFWXQ48hsQxeYdoJg1tGsfANfFHPs8kbJZL8kkFgj6"
+  },
+  {
+   "symbol": "HILSx",
+   "ticker": "HILSL",
+   "name": "Hill & Smith xStock",
+   "mint": "XsNdESrkPBsGBunmPxvjkwfxLmBHn2yFukbLQpNzDBx"
+  },
+  {
    "symbol": "HIMSx",
    "ticker": "HIMS",
    "name": "Hims & Hers xStock",
@@ -2143,6 +2401,12 @@
    "ticker": "388",
    "name": "Hong Kong Exchanges and Clearing xStock",
    "mint": "XsZQt7qW9vH5SWXZPsn1ZAybCSkq5MW2r6HGo891u1X"
+  },
+  {
+   "symbol": "HLMAx",
+   "ticker": "HLMAL",
+   "name": "Halma xStock",
+   "mint": "XsaX2uNTuVMLS9suc8XfPmUqgjtatcJKgdfRtnXJ4pf"
   },
   {
    "symbol": "HLTx",
@@ -2199,10 +2463,22 @@
    "mint": "XskaoJotEKofUeTnxQfvoQuW2kbL53uvnDJqVXj7Gf7"
   },
   {
+   "symbol": "HSBAx",
+   "ticker": "HSBAL",
+   "name": "HSBC xStock",
+   "mint": "XsiABbf6PQ8oPyZhqWg9LFTh8K3xMbZWp3ybjhyhE9d"
+  },
+  {
    "symbol": "HSTx",
    "ticker": "HST",
    "name": "Host Hotels & Resorts xStock",
    "mint": "XsYbh3CsZ4qCMcfPKEtHAYbePTywhwCkFvdN7Hx3bHA"
+  },
+  {
+   "symbol": "HSXx",
+   "ticker": "HSXL",
+   "name": "Hiscox xStock",
+   "mint": "XspeLbZhQF4oGcAPPJXhtfAToSMh273TBFSh77B47dv"
   },
   {
    "symbol": "HSYx",
@@ -2235,6 +2511,12 @@
    "mint": "XsG5QyZTQnVSpsXRpD92K5ZGoxXjsmfTyx7fW7r18DV"
   },
   {
+   "symbol": "HWDNx",
+   "ticker": "HWDNL",
+   "name": "Howden Joinery xStock",
+   "mint": "XsderJhLTce957LZDcv8xkuRmjSU3AoaSbAWmf8BYHw"
+  },
+  {
    "symbol": "HWMx",
    "ticker": "HWM",
    "name": "Howmet Aerospace xStock",
@@ -2245,6 +2527,12 @@
    "ticker": "H",
    "name": "Hyatt Hotels xStock",
    "mint": "Xs5d6SH8HCeyBRkXNfoLWVnqgBT6tz8HnBoyJES3Fi4"
+  },
+  {
+   "symbol": "IAG.GBx",
+   "ticker": "IAGL",
+   "name": "International Consolidated Airlines xStock",
+   "mint": "Xs1Y89cAPbtcPfkwmKY5E4EaET1SsLxwQ63pa6MR2YZ"
   },
   {
    "symbol": "IBKRx",
@@ -2269,6 +2557,12 @@
    "ticker": "ICE",
    "name": "Intercontinental Exchange xStock",
    "mint": "XsG6o69zE7mQCeFf6utyMx9Q89cJjGV4vTwi3wFHrkN"
+  },
+  {
+   "symbol": "ICG.GBx",
+   "ticker": "ICGL",
+   "name": "ICG xStock",
+   "mint": "XsWbh78UsRczCGeJz2xAojo918D13ks9dst83AbscyS"
   },
   {
    "symbol": "IDXXx",
@@ -2301,6 +2595,12 @@
    "mint": "XsXhUW1Mcpff3vCZWb7v3USU5Zpg1nvFPyfzF3XD6NP"
   },
   {
+   "symbol": "IGGx",
+   "ticker": "IGGL",
+   "name": "IG xStock",
+   "mint": "Xs5Fz9gcBsdz4NnLeTfcMNtE3qgFeXWugY1NctAmEGh"
+  },
+  {
    "symbol": "IJRx",
    "ticker": "IJR",
    "name": "S&P Small Cap xStock",
@@ -2313,6 +2613,24 @@
    "mint": "XsahzH43C2rZpZmYX6eCm2avkeYCzntC168xPdqrDzi"
   },
   {
+   "symbol": "IMBx",
+   "ticker": "IMBL",
+   "name": "Imperial Brands xStock",
+   "mint": "XsQCHobH4od9Yx67dDShF2YG34XYqApCeHVuvj9kchM"
+  },
+  {
+   "symbol": "IMIx",
+   "ticker": "IMIL",
+   "name": "IMI xStock",
+   "mint": "Xsyi8wDoaaArbZKnyFAVz9LJhed9iLeNxT586QwPwR6"
+  },
+  {
+   "symbol": "INCHx",
+   "ticker": "INCHL",
+   "name": "Inchcape xStock",
+   "mint": "XsdWpVSHxm4AZShvAkLBRa5PCaJq3LCdaamJGxgJLrd"
+  },
+  {
    "symbol": "INCYx",
    "ticker": "INCY",
    "name": "Incyte xStock",
@@ -2323,6 +2641,12 @@
    "ticker": "INDI",
    "name": "Indie Semiconductor xStock",
    "mint": "XsHYm9cRdEJoogpxDSZVDa4g19fKqUFXWxKisLpEuVm"
+  },
+  {
+   "symbol": "INF.GBx",
+   "ticker": "INFL",
+   "name": "Informa xStock",
+   "mint": "XsM8Hrm1jMh4yAH3DpoVR66YNDV1a4xf5k2mmHv6Wqk"
   },
   {
    "symbol": "INSMx",
@@ -2353,6 +2677,12 @@
    "ticker": "INVH",
    "name": "Invitation Homes xStock",
    "mint": "XsQFmCYjvPGgqYYAth5zNhW8NSCabdamgM1kXMorJs7"
+  },
+  {
+   "symbol": "INVPx",
+   "ticker": "INVPL",
+   "name": "Investec xStock",
+   "mint": "Xs2Ejy1fMZtHrC4yb9nM4XzsVHVKnJEENi9PZmPqo1L"
   },
   {
    "symbol": "IONQx",
@@ -2463,6 +2793,12 @@
    "mint": "XsnZQ49Abxr3RJgRSxYd4azhUg4MQVT3amiyaq84oA1"
   },
   {
+   "symbol": "JD.GBx",
+   "ticker": "JDL",
+   "name": "JD Sports Fashion xStock",
+   "mint": "Xsm81A6dr8mgCUBWPXSV47M2m8BkzFkkcq81vTMGqCL"
+  },
+  {
    "symbol": "JDHLTx",
    "ticker": "6618",
    "name": "JD Health International xStock",
@@ -2545,6 +2881,12 @@
    "ticker": "KEY",
    "name": "KeyCorp xStock",
    "mint": "Xs5GgkWgze4XgU7NC5iXJqvbGufxQBJKH5JRN2MSPWQ"
+  },
+  {
+   "symbol": "KGFx",
+   "ticker": "KGFL",
+   "name": "Kingfisher xStock",
+   "mint": "XsN6LCaYcQq8Gn1awaCdMge96gHyGaqFBmHmv8Zj2FW"
   },
   {
    "symbol": "KHCx",
@@ -2667,6 +3009,12 @@
    "mint": "XsHjfVcciZyPmujpSYXKGyQZ3k4yyzxnUXE6CYdZ3AD"
   },
   {
+   "symbol": "LGENx",
+   "ticker": "LGENL",
+   "name": "Legal & General xStock",
+   "mint": "Xs15uYmUhCJzemqtBvfVEfMW5KTPsuKMZg2MDL1rwxm"
+  },
+  {
    "symbol": "LHXx",
    "ticker": "LHX",
    "name": "L3Harris Technologies xStock",
@@ -2689,6 +3037,12 @@
    "ticker": "LITE",
    "name": "Lumentum Holdings Inc. xStock",
    "mint": "XsexQ9qqNbDkLE6XwCN9ceVhLo8Lxc7UheVR6eBkKyo"
+  },
+  {
+   "symbol": "LLOYx",
+   "ticker": "LLOYL",
+   "name": "Lloyds Banking xStock",
+   "mint": "XskhwomYHra5YRCmeH3PtiCZY9Lx9QprrxvREdk1YEQ"
   },
   {
    "symbol": "LLYx",
@@ -2737,6 +3091,18 @@
    "ticker": "LSCC",
    "name": "Lattice Semiconductor xStock",
    "mint": "XsjaZAWtPNA1ZWqbPZxaDWtx1h9L23ucmRquwuSHQuf"
+  },
+  {
+   "symbol": "LSEGx",
+   "ticker": "LSEGL",
+   "name": "London Stock Exchange xStock",
+   "mint": "Xsgqwc7TpDNsYD8j4MLTzwqJuECdAcvW4jB9S62FDfX"
+  },
+  {
+   "symbol": "LULUx",
+   "ticker": "LULU",
+   "name": "lululemon xStock",
+   "mint": "XsDmtC5EpfzJoCzDN2SJP98xpCsSR2CqdZauJSvHNXT"
   },
   {
    "symbol": "LUVx",
@@ -2907,6 +3273,12 @@
    "mint": "XsE44zHnRJVdk5vRpy2YvUPbbg4caoxihL8EKDatiCn"
   },
   {
+   "symbol": "MKS.GBx",
+   "ticker": "MKSL",
+   "name": "Marks & Spencer xStock",
+   "mint": "XsGy52e7g5whVEwDxXoN7JNxyfffh4Rr8QYvsXRgyNU"
+  },
+  {
    "symbol": "MKSIx",
    "ticker": "MKSI",
    "name": "MKS xStock",
@@ -2935,6 +3307,18 @@
    "ticker": "MMM",
    "name": "3M xStock",
    "mint": "XsTEo8W2L8JprN57bmJgatDT84z57ReJYizr5f32BfP"
+  },
+  {
+   "symbol": "MNDIx",
+   "ticker": "MNDIL",
+   "name": "Mondi xStock",
+   "mint": "XswrDgJ2NABYfT7TZzvkVG3XqSFRDkq2weMxeCURFxh"
+  },
+  {
+   "symbol": "MNGx",
+   "ticker": "MNGL",
+   "name": "M&G xStock",
+   "mint": "XsBdWEWbrhQn3JUJA9UtmfatyQfWHtsczb6kaCFbPAF"
   },
   {
    "symbol": "MOOx",
@@ -2977,6 +3361,12 @@
    "ticker": "MRNA",
    "name": "Moderna xStock",
    "mint": "XsViHjyRbiSBskjizb1gszGTmZqtAH8TuqwJ7sB5AcP"
+  },
+  {
+   "symbol": "MROx",
+   "ticker": "MROL",
+   "name": "Melrose Industries xStock",
+   "mint": "Xs8gEF9vKesfaRWz47hTQdiwi6DP55cQwbmZhmF5mYa"
   },
   {
    "symbol": "MRSHx",
@@ -3117,6 +3507,12 @@
    "mint": "XsEH7wWfJJu2ZT3UCFeVfALnVA6CP5ur7Ee11KmzVpL"
   },
   {
+   "symbol": "NG.GBx",
+   "ticker": "NGL",
+   "name": "National Grid xStock",
+   "mint": "Xsa4x5GF2utijLC8uY1DmPYKRpeHk9BT2QXkQD2ZRyz"
+  },
+  {
    "symbol": "NIx",
    "ticker": "NI",
    "name": "NiSource xStock",
@@ -3235,6 +3631,12 @@
    "ticker": "NWS",
    "name": "News xStock",
    "mint": "XsbsXGj6Y3jVNh4MYH7khsonL14iYBUHukSReovZoQP"
+  },
+  {
+   "symbol": "NXT.GBx",
+   "ticker": "NXTL",
+   "name": "Next xStock",
+   "mint": "Xs6MKSza8obeoELdtqLfdr68QerhhQsYkEaqe56Wzez"
   },
   {
    "symbol": "NYTx",
@@ -3567,6 +3969,18 @@
    "mint": "XsZDpnjZWLY4yN5FMgTg2GZSdH7ZpWuHPYsooTKXH6u"
   },
   {
+   "symbol": "PSN.GBx",
+   "ticker": "PSNL",
+   "name": "Persimmon xStock",
+   "mint": "XsJJviVjnT7MjnkPierCHLBTUHrhG7yj8Drscvb5x4Z"
+  },
+  {
+   "symbol": "PSONx",
+   "ticker": "PSONL",
+   "name": "Pearson xStock",
+   "mint": "Xsama45PWCDWjND9x92h7C7uNLbqX76VubnyvYBvku1"
+  },
+  {
    "symbol": "PSXx",
    "ticker": "PSX",
    "name": "Phillips 66 xStock",
@@ -3607,6 +4021,12 @@
    "ticker": "QCOM",
    "name": "Qualcomm xStock",
    "mint": "XsUUG8bjFN2KvzLTpzavvEKdAjMAeLTZiTeAQJ9uhvB"
+  },
+  {
+   "symbol": "QQ.GBx",
+   "ticker": "QQL",
+   "name": "QinetiQ xStock",
+   "mint": "XsTzDSVHNfFRcbXY8LVnkDgg54FGrpDGzgR1exVf9Cu"
   },
   {
    "symbol": "QQQx",
@@ -3681,6 +4101,12 @@
    "mint": "XsJzAzVt6H498zDafSaWj3htVDYQPmh23jUAM2Rt2qn"
   },
   {
+   "symbol": "REL.GBx",
+   "ticker": "RELL",
+   "name": "Relx xStock",
+   "mint": "XsBs8gVk5onjugkDigC45ixK3FadqH5kAxjGHEvfSdE"
+  },
+  {
    "symbol": "RFx",
    "ticker": "RF",
    "name": "Regions Financial xStock",
@@ -3735,6 +4161,12 @@
    "mint": "XsjsQvjH8BEXCjrgNiVhmhFiYPcNRXGj262fDupfV1A"
   },
   {
+   "symbol": "RMVx",
+   "ticker": "RMVL",
+   "name": "Rightmove xStock",
+   "mint": "Xsm7Xcc4TtVQKdgEs7KBUVMimkWpMhqMwjaJ24G2sdn"
+  },
+  {
    "symbol": "RNRx",
    "ticker": "RNR",
    "name": "RenaissanceRe xStock",
@@ -3783,10 +4215,22 @@
    "mint": "XsBGGtLnNqa87iTENkgtBV4itt6LNxz7osKS1nmnqTD"
   },
   {
+   "symbol": "RR.GBx",
+   "ticker": "RRL",
+   "name": "Rolls-Royce xStock",
+   "mint": "XsAUxvbWEvvdgVnXs1LRbk17Bgjfv2Y6cskPTGu6zrU"
+  },
+  {
    "symbol": "RRXx",
    "ticker": "RRX",
    "name": "Regal Rexnord xStock",
    "mint": "XszxuQCqE72vU4ABTFDFwhs28AeSUHqzbWWVWDkhfYZ"
+  },
+  {
+   "symbol": "RS1.GBx",
+   "ticker": "RS1L",
+   "name": "RS xStock",
+   "mint": "XsTkvkzwuaCi712NQXeHB2xMQYwVTX8F7bFPVD2ZEcA"
   },
   {
    "symbol": "RSGx",
@@ -3799,6 +4243,12 @@
    "ticker": "RS",
    "name": "Reliance xStock",
    "mint": "XskVwPpXzyc9Fc4vqvHJ5v4ojMDWyjzcdPYTK8vFrUy"
+  },
+  {
+   "symbol": "RTOx",
+   "ticker": "RTOL",
+   "name": "Rentokil Initial xStock",
+   "mint": "XswGtwn9kLnkHMih5HCmDg1Z2yYEfdP3YbFzwNKNY1Y"
   },
   {
    "symbol": "RTXx",
@@ -3855,6 +4305,12 @@
    "mint": "XsEoih2x6nZuUjFwzGoba6MFmtzCkzW2c4YAm6baQbq"
   },
   {
+   "symbol": "SBRYx",
+   "ticker": "SBRYL",
+   "name": "Sainsbury xStock",
+   "mint": "Xsy7nzWTjrfA9NBHBBPL6Hs3mQfKWXX6fk2mUPQEjpR"
+  },
+  {
    "symbol": "SBUXx",
    "ticker": "SBUX",
    "name": "Starbucks xStock",
@@ -3885,6 +4341,12 @@
    "mint": "XsC3icNzi6x7cRA6hodAZQT5GAsxwGrTxWL5awu4gsn"
   },
   {
+   "symbol": "SCT.GBx",
+   "ticker": "SCTL",
+   "name": "Softcat xStock",
+   "mint": "Xsb8yBrDit2zkPSgWQtddBZPJz5Mzi4fWqjd1k6Vhq5"
+  },
+  {
    "symbol": "SEICx",
    "ticker": "SEIC",
    "name": "SEI Investments xStock",
@@ -3895,6 +4357,12 @@
    "ticker": "SF",
    "name": "Stifel Financial xStock",
    "mint": "XsHfvLEUbto797whYCNiqoEGWSpWaRYoZWXJEBGgmsm"
+  },
+  {
+   "symbol": "SGE.GBx",
+   "ticker": "SGEL",
+   "name": "Sage xStock",
+   "mint": "XsnVJZpyWBoxhzVAqNgXdaqDuyBCUffdoPrUgrfaT9S"
   },
   {
    "symbol": "SGIx",
@@ -3919,6 +4387,12 @@
    "ticker": "625",
    "name": "SHEIN xStock",
    "mint": "Xs8w8HvDjT1DxYeHzhSkRT8wYUahJB9kRC7Fuiic2Hf"
+  },
+  {
+   "symbol": "SHELx",
+   "ticker": "SHELL",
+   "name": "Shell xStock",
+   "mint": "XsZY1Ta5ubY2ohQT94HNDNADiHUvyeSQX1RkTV8omx8"
   },
   {
    "symbol": "SHWx",
@@ -3981,6 +4455,12 @@
    "mint": "XstuBvLo7soZzj3beCCPonHpR3eUfPNSeQzw35Swons"
   },
   {
+   "symbol": "SMIN.GBx",
+   "ticker": "SMINL",
+   "name": "Smiths xStock",
+   "mint": "XspAgeHZ7DAtDP9Y3t56sTpuhCFY1GafqstYjcu13f7"
+  },
+  {
    "symbol": "SMOIHx",
    "ticker": "6969",
    "name": "Smoore International xStock",
@@ -3997,6 +4477,12 @@
    "ticker": "SMTC",
    "name": "Semtech xStock",
    "mint": "Xs9bdUnLdSWjQWeEsy8cde6t2L7d3adDRKcH8H51Uwr"
+  },
+  {
+   "symbol": "SN.GBx",
+   "ticker": "SNL",
+   "name": "Smith & Nephew xStock",
+   "mint": "XsWYNagePVR7FDVei6E5xirRMKnRCxhUvKzDYwVzPzM"
   },
   {
    "symbol": "SNAx",
@@ -4101,6 +4587,12 @@
    "mint": "XsUXFEjcDYrp7NuzHtC88JLyirmnLpA8nde1e8eRxEn"
   },
   {
+   "symbol": "SPX.GBx",
+   "ticker": "SPXL",
+   "name": "Spirax xStock",
+   "mint": "XsiMJ43LZ4dLS1G6SSdeW7aDQnoECuKBQkobnheRrdV"
+  },
+  {
    "symbol": "SPYx",
    "ticker": "SPY",
    "name": "SP500 xStock",
@@ -4113,10 +4605,28 @@
    "mint": "XsbicvsCUHE9ja8gTsjzruDxQTKeyij94i3phx3NuNf"
   },
   {
+   "symbol": "SSEx",
+   "ticker": "SSEL",
+   "name": "SSE xStock",
+   "mint": "XshHCWPTRVkNuNc7bqfdw9PzBZzrted9u8YQwdkw49e"
+  },
+  {
    "symbol": "SSNCx",
    "ticker": "SSNC",
    "name": "SS&C Technologies xStock",
    "mint": "Xsq4wQVyggsJXzrjQK51M8bxK3duFaRegcX5Vxdbfcx"
+  },
+  {
+   "symbol": "STANx",
+   "ticker": "STANL",
+   "name": "Standard Chartered xStock",
+   "mint": "Xs48goZtbChFs5wZtcypPZQHh9WmTRqzkqante4qSB5"
+  },
+  {
+   "symbol": "STJ.GBx",
+   "ticker": "STJL",
+   "name": "St. James's Place xStock",
+   "mint": "XsfTAA7bScmYWJS3eCJ7exrDqUNtD9TjtZkKXWWSyZK"
   },
   {
    "symbol": "STLDx",
@@ -4167,6 +4677,12 @@
    "mint": "XsVpajrhXA4CffEm652abYSS2iDiKnLnarPYxaokYis"
   },
   {
+   "symbol": "SVTx",
+   "ticker": "SVTL",
+   "name": "Severn Trent xStock",
+   "mint": "Xs1V7BHojsDUQiNhsSm8TKpEyYrmox2gCzFUJ7b4t4q"
+  },
+  {
    "symbol": "SWKx",
    "ticker": "SWK",
    "name": "Stanley Black & Decker xStock",
@@ -4209,6 +4725,12 @@
    "mint": "XsqBC5tcVQLYt8wqGCHRnAUUecbRYXoJCReD6w7QEKp"
   },
   {
+   "symbol": "TCAPx",
+   "ticker": "TCAPL",
+   "name": "TP Icap xStock",
+   "mint": "XsreDw9sQZQzvMUbgAkdGvk9JD1A4q8Sbfb1pq8Zxcr"
+  },
+  {
    "symbol": "TCENTx",
    "ticker": "700",
    "name": "Tencent xStock",
@@ -4231,6 +4753,12 @@
    "ticker": "TEAM",
    "name": "Atlassian xStock",
    "mint": "XsLhefHBtc8r9nStXgXtu9tHeEWYRXxSXrpbnfwTJ7v"
+  },
+  {
+   "symbol": "TEFx",
+   "ticker": "TEFE",
+   "name": "Telefonica xStock",
+   "mint": "XsUShG8vjDVvpduyiY3jDbVif8ivGeAu3dB6RtmXJZ3"
   },
   {
    "symbol": "TERx",
@@ -4389,6 +4917,12 @@
    "mint": "XssvmC28hqLgtT5kf8R8eAv3mejy4XftJ6MXB8QywTa"
   },
   {
+   "symbol": "TW.GBx",
+   "ticker": "TWL",
+   "name": "Taylor Wimpey xStock",
+   "mint": "XsJAv8xheV7udiAeM8DNduVAe4bg1s1SLp3uzJsCCvG"
+  },
+  {
    "symbol": "TWLOx",
    "ticker": "TWLO",
    "name": "Twilio xStock",
@@ -4473,6 +5007,12 @@
    "mint": "Xse5GAs99zAj5bzMAbwjooLn4AHn1Ny6nUcN6vt5vrR"
   },
   {
+   "symbol": "ULVRx",
+   "ticker": "ULVRL",
+   "name": "Unilever xStock",
+   "mint": "XsNrNxXBab5oRAUnN9u2YzJzhJjLCo6YeJVcCEttL7V"
+  },
+  {
    "symbol": "UNHx",
    "ticker": "UNH",
    "name": "UnitedHealth xStock",
@@ -4537,6 +5077,12 @@
    "ticker": "UTHR",
    "name": "United Therapeutics xStock",
    "mint": "XsrazTRfp2iGrUcZkkoB8PpM9qApe77RbohmknHh9XJ"
+  },
+  {
+   "symbol": "UU.GBx",
+   "ticker": "UUL",
+   "name": "United Utilities xStock",
+   "mint": "XsSZEaqC9B6ac1aAYnNSXWUS1moV2MCYQMTFo6Cv7s9"
   },
   {
    "symbol": "UUUUx",
@@ -4611,10 +5157,22 @@
    "mint": "XsW8ts3iGPo8pxif5eFMv1Rnx6xE5Yw57Zhz2xYdhYL"
   },
   {
+   "symbol": "VODx",
+   "ticker": "VODL",
+   "name": "Vodafone xStock",
+   "mint": "XsPfiLnSyYwDLytKxdp5N8PsEPV3jV6GCPuhacgz5it"
+  },
+  {
    "symbol": "VOOx",
    "ticker": "VOO",
    "name": "Vanguard S&P 500 xStock",
    "mint": "Xsd7TduTbjuYCFL7Uoujb8SbkZLmUsuYNLn7KdvX21x"
+  },
+  {
+   "symbol": "VOW3x",
+   "ticker": "VOW3D",
+   "name": "Volkswagen xStock",
+   "mint": "XsLuVRftATQL3DgdBDYLqTAym468XKgrn27KUQdjbwT"
   },
   {
    "symbol": "VRSKx",
@@ -4731,6 +5289,12 @@
    "mint": "Xsxq7WqXpiNFrdWSd6CA27LXmCsCrGyC9C3uaebmaqU"
   },
   {
+   "symbol": "WEIRx",
+   "ticker": "WEIRL",
+   "name": "Weir xStock",
+   "mint": "XsGWxUfzgE1Qq7eXjpeQwHC2TsgKzTXo5tXcsg9KRRd"
+  },
+  {
    "symbol": "WELLx",
    "ticker": "WELL",
    "name": "Welltower xStock",
@@ -4797,6 +5361,12 @@
    "mint": "Xs3jL3WdD8YSqLeiy7Tt7dGEeBZziFMYboyUMSr38AE"
   },
   {
+   "symbol": "WPPx",
+   "ticker": "WPPL",
+   "name": "WPP xStock",
+   "mint": "Xs2ZYqqYG6xgBsRBw8Rhn9rCVggLitQMnW8KFKgxAVB"
+  },
+  {
    "symbol": "WRBx",
    "ticker": "WRB",
    "name": "W.R. Berkley xStock",
@@ -4831,6 +5401,12 @@
    "ticker": "WST",
    "name": "West Pharmaceutical Services xStock",
    "mint": "XsptQPquxvzKZ7pZTXNhvtXRxFP8vvC6BmS6QL1PALe"
+  },
+  {
+   "symbol": "WTBx",
+   "ticker": "WTBL",
+   "name": "Whitbread xStock",
+   "mint": "XsPrcE2hM5cZP97YfxxEbtwHSyFGNtA8QmDCoiYsBNL"
   },
   {
    "symbol": "WTRGx",

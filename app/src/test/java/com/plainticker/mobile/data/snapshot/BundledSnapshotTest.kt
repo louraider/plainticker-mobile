@@ -77,10 +77,13 @@ class BundledSnapshotTest {
         assertFalse("the snapshot captured Cyrillic text", cyrillic.containsMatchIn(summary))
         assertFalse(cyrillic.containsMatchIn(catalog))
 
-        // Fields the list has no use for, dropped to keep the assets small.
-        listOf("fscore", "setup_score", "computed_at", "sector").forEach {
+        // Fields the list has no use for, dropped to keep the assets small. `sector` is kept
+        // (task A1 follow-up): the List chapters by it, and a cold start is the first thing a
+        // reader, or a judge, ever sees.
+        listOf("fscore", "setup_score", "computed_at").forEach {
             assertFalse("the summary snapshot still carries $it", summary.contains("\"$it\""))
         }
+        assertTrue("the snapshot is chaptered from the first frame, so it must carry sector", summary.contains("\"sector\""))
         listOf("deployments", "isin", "logo", "description", "stablecoins").forEach {
             assertFalse("the catalog snapshot still carries $it", catalog.contains("\"$it\""))
         }

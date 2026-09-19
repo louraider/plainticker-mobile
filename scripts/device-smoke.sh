@@ -388,6 +388,12 @@ CYRILLIC=$'[\xd0-\xd3]'
 EM_DASH=$'\xe2\x80\x94'
 ISO_STAMP='[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}'
 
+# Task A1: the List carries analyzed rows only, chaptered by sector, so "Analyzed" as one heading
+# over every row is gone. The eleven GICS sectors /summary classifies against (verified live in
+# app/src/test/resources/plainticker/summary.json, e.g. "Financials", "Information Technology"),
+# plus the trailing chapter for a row /summary sent no sector for.
+SECTOR_HEADINGS='Energy|Materials|Industrials|Consumer Discretionary|Consumer Staples|Health Care|Financials|Information Technology|Communication Services|Utilities|Real Estate|No sector'
+
 assert_lint() {
   _n="$1"
   # Every copy rule below is an absence, and an absence is free on a screen that drew nothing. This
@@ -510,6 +516,24 @@ assert_row_shape() {
   [ -z "$_hit" ] || fail "each analyzed row draws one ticker, one integer composite (0-100) and one state word" \
                          "$(printf '%s' "$_hit" | tr '\n' ';')"
   pass "every analyzed row is ticker plus integer composite plus state word"
+}
+
+# Task A1: the List's analyzed rows are chaptered by sector rather than drawn under one "Analyzed"
+# heading. At least two distinct sector headings prove the list is actually chaptered rather than
+# one heading renamed, and each carries a plain integer count as its mono meta (Heading, DESIGN.md
+# section 4). This does not require a scroll: production runs about eleven sectors over 157 rows,
+# so more than one heading is on the first screenful.
+assert_sector_chapters() {
+  _n="$1"
+  _headings="$(screen_text "$_n" | grep -E "^($SECTOR_HEADINGS)\$" | sort -u || true)"
+  _count="$(printf '%s\n' "$_headings" | grep -c . || true)"
+  [ "$_count" -ge 2 ] || fail \
+    "at least two distinct sector chapter headings (one of: ${SECTOR_HEADINGS//|/, })" \
+    "$_count found$([ "$_count" -eq 0 ] || printf ': %s' "$(printf '%s' "$_headings" | tr '\n' ';')")"
+  ! screen_has "$_n" '^Analyzed$' || fail \
+    "no single 'Analyzed' heading over every row: task A1 chaptered the list by sector" \
+    "'Analyzed' is still drawn"
+  pass "chaptered by sector: $_count headings ($(printf '%s' "$_headings" | tr '\n' ';'))"
 }
 
 # Detail's section order is fixed (DESIGN.md section 5): the trust layer leads, the method closes.
@@ -785,13 +809,14 @@ tap_center onboarding 11 'Read the list'
 sleep 2
 
 step "list"
-dump_until list '^Analyzed$' || lost "the list never drew its 'Analyzed' heading"
+dump_until list "^($SECTOR_HEADINGS)\$" || lost "the list never drew a sector chapter heading"
 wait_quiet 20
 dump_screen list
 assert_lint list
 assert_labels list
 assert_geometry list
 assert_row_shape list
+assert_sector_chapters list
 for _tab in List Portfolio Watchlist; do
   screen_has list "^$_tab\$" || fail "the three tabs" "no tab named $_tab"
 done
@@ -971,7 +996,7 @@ sh_ am force-stop "$PKG" >/dev/null || true
 sh_ am start -W -n "$PKG/$ACTIVITY" >/dev/null
 sleep 2
 wait_quiet 20
-dump_until big-list '^Analyzed$' || lost "the list never came back at font scale ${FONT_SCALE_PCT}%"
+dump_until big-list "^($SECTOR_HEADINGS)\$" || lost "the list never came back at font scale ${FONT_SCALE_PCT}%"
 assert_lint big-list
 assert_labels big-list
 assert_geometry big-list
@@ -1011,7 +1036,7 @@ sh_ am force-stop "$PKG" >/dev/null || true
 sh_ am start -W -n "$PKG/$ACTIVITY" >/dev/null
 sleep 2
 wait_quiet 20
-dump_until still-list '^Analyzed$' || lost "the list never came back at animator scale 0"
+dump_until still-list "^($SECTOR_HEADINGS)\$" || lost "the list never came back at animator scale 0"
 open_detail still-list "$DEEP_X" still
 assert_lint still-top
 assert_geometry still-top

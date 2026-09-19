@@ -529,6 +529,46 @@ class ListViewModelTest {
         }
     }
 
+    /**
+     * The bundled snapshot now carries `sector` (task A1 follow-up), so a cold start chapters
+     * correctly from the first frame. This is what happens the rare time PlainTicker reclassifies
+     * a company between the day the snapshot was captured and the moment `/summary` answers: the
+     * live value wins outright, the same full swap composite and tone already get (`republish`
+     * reads `liveRows ?: snapshotRows`, never a merge of the two). Nothing here is animated, so a
+     * row moving chapter looks exactly like a row moving position on a composite change already
+     * does: an instant re-layout, not a cross-fade.
+     */
+    @Test
+    fun `a row's sector comes from whichever source is on screen, live winning once it lands`() = runTest {
+        val network = Gate()
+        val summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary())))
+        val assets = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(catalog())))
+        // The snapshot's own day-old guess, deliberately not what /summary answers with today, so
+        // the swap is visible rather than a coincidence.
+        val staleSector = bundled().let { snap ->
+            snap.copy(rows = snap.rows.map { if (it.ticker == "AAPL") it.copy(sector = "Health Care") else it })
+        }
+        val vm = viewModel(
+            summaries = summaries,
+            catalog = assets,
+            prices = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
+            snapshots = FakeSnapshotRepository(staleSector),
+        )
+
+        vm.state.test {
+            val painted = awaitUntil { it.fromSnapshot }
+            assertEquals("Health Care", painted.analyzed.single { it.ticker == "AAPL" }.sector)
+
+            network.release()
+            val live = awaitUntil { !it.fromSnapshot && !it.refreshing }
+
+            // plainticker/summary.json: AAPL is "Information Technology". The live row replaces
+            // the snapshot's row outright, sector included.
+            assertEquals("Information Technology", live.analyzed.single { it.ticker == "AAPL" }.sector)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `a failed network keeps the snapshot on screen and offers the retry`() = runTest {
         val vm = viewModel(

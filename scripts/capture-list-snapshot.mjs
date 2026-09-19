@@ -52,6 +52,7 @@ async function captureSummary() {
     .map((row) => {
       const out = { ticker: row.ticker };
       if (row.company) out.company = row.company;
+      if (row.sector) out.sector = row.sector;
       const composite = round(row.composite);
       if (composite !== null) out.composite = composite;
       if (row.tone) out.tone = row.tone;

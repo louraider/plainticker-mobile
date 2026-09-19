@@ -27,8 +27,9 @@ import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * The List against the real payloads, not against hand-built rows: the bundled snapshot is a
- * capture of production (179 classified rows and 832 Solana xStocks on 2026-09-12), so running
- * the ViewModel over it exercises the join at production size and shape.
+ * capture of production (179 classified rows, each carrying its sector since task A1's follow-up,
+ * and 928 Solana xStocks, captured 2026-09-19), so running the ViewModel over it exercises the
+ * join at production size and shape.
  *
  * This is what the first device pass had to catch by eye. It cannot replace a device pass (no
  * layout, no Jupiter, no scrolling), but the four data rules it broke are checked here against
@@ -90,6 +91,34 @@ class ListAgainstProductionTest {
         // Composite descending, the way the leaderboard reads.
         val composites = state.analyzed.mapNotNull { it.composite }
         assertEquals(composites.sortedDescending(), composites)
+    }
+
+    /**
+     * The bundled snapshot now carries `sector` (task A1 follow-up, capture-list-snapshot.mjs),
+     * so chaptering is correct from the very first frame rather than falling back to one "No
+     * sector" chapter until the network answers. Run over the real capture rather than hand-built
+     * rows, the way the rest of this file exercises the join at production size and shape.
+     */
+    @Test
+    fun `the bundled snapshot itself chapters correctly, before any network answer`() = runTest {
+        val vm = viewModel()
+        advanceUntilIdle()
+        val chapters = vm.state.value.analyzedChapters
+
+        assertTrue("more than one chapter, or this is not chaptering", chapters.size > 1)
+        // Alphabetical among the named sectors; a trailing chapter, if any, is the null one.
+        val named = chapters.mapNotNull { it.sector }
+        assertEquals(named.sorted(), named)
+        assertTrue("at most the trailing chapter has no sector", chapters.dropLast(1).all { it.sector != null })
+
+        // No row is lost or duplicated by grouping, and every row sits under its own sector.
+        assertEquals(vm.state.value.analyzed.map { it.ticker }.toSet(), chapters.flatMap { it.rows }.map { it.ticker }.toSet())
+        chapters.forEach { chapter -> assertTrue(chapter.rows.all { it.sector == chapter.sector }) }
+
+        // The capture taken for this task classified every row, so there is no trailing "no
+        // sector" chapter today; the path is still exercised by SectorChaptersTest's synthetic
+        // rows, since a future capture can carry a row /summary sent no sector for.
+        assertTrue("today's capture has a sector for every analyzed row", chapters.none { it.sector == null })
     }
 
     @Test
