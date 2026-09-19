@@ -8,6 +8,7 @@ import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.net.ApiException
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.net.RateLimitedException
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.SummaryResponse
 import com.plainticker.mobile.data.plainticker.SummaryRow
 import com.plainticker.mobile.data.plainticker.Tone
@@ -17,6 +18,7 @@ import com.plainticker.mobile.data.snapshot.SnapshotAsset
 import com.plainticker.mobile.data.snapshot.SnapshotRow
 import com.plainticker.mobile.prefs.InMemoryWatchlistStore
 import com.plainticker.mobile.repo.FakeCatalogRepository
+import com.plainticker.mobile.repo.FakeNextUpRepository
 import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeSnapshotRepository
 import com.plainticker.mobile.repo.FakeSummaryRepository
@@ -25,6 +27,7 @@ import com.plainticker.mobile.repo.HeldCatalogRepository
 import com.plainticker.mobile.repo.HeldPriceRepository
 import com.plainticker.mobile.repo.HeldSummaryRepository
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SnapshotRepository
 import com.plainticker.mobile.repo.SummaryRepository
@@ -42,6 +45,7 @@ import com.plainticker.mobile.repo.xStock
 import com.plainticker.mobile.repo.xStockTrading
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.repo.CatalogUpdate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -127,10 +131,11 @@ class ListViewModelTest {
         catalog: CatalogRepository = FakeCatalogRepository(Result.success(catalog())),
         prices: PriceRepository = FakePriceRepository(),
         snapshots: SnapshotRepository = FakeSnapshotRepository(),
+        nextUp: NextUpRepository = FakeNextUpRepository(),
         watchlist: WatchlistStore = InMemoryWatchlistStore(),
         digests: DigestStore = InMemoryDigestStore(),
         clock: Clock = marketOpen,
-    ) = ListViewModel(summaries, catalog, prices, snapshots, watchlist, digests, clock)
+    ) = ListViewModel(summaries, catalog, prices, snapshots, nextUp, watchlist, digests, clock)
 
     /** The bundled snapshot as the assets carry it: a whole list, dated, and with no price. */
     private fun bundled() = snapshot(
@@ -942,6 +947,70 @@ class ListViewModelTest {
         assertEquals(ListBanner.PricesUnavailable, ListUiState(pricesUnavailable = true, pricesPartial = true).banner)
         assertEquals(ListBanner.PricesPartial, ListUiState(pricesPartial = true).banner)
         assertNull(ListUiState().banner)
+    }
+
+    // ---- The Next up strip -------------------------------------------------------------
+
+    @Test
+    fun `the next up strip carries the server's leaders and hides when the call fails`() = runTest {
+        val leaders = FakeNextUpRepository(Result.success(listOf(NextUpRow("TSLA", "31209870777", 3))))
+        val vm = viewModel(nextUp = leaders)
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.nextUp.isNotEmpty() }
+            assertEquals(1, leaders.calls)
+            assertEquals(listOf("TSLA"), state.nextUp.map { it.ticker })
+            val strip = state.nextUpStrip
+            assertEquals("the leader is named as the row under it is", listOf("TSLAx"), strip.map { it.display })
+            assertEquals(3, strip.single().voters)
+            assertNull("a quiet source raises no banner", state.banner)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val down = viewModel(nextUp = FakeNextUpRepository(Result.failure(IOException("offline"))))
+        down.state.test {
+            val state = awaitUntil { !it.refreshing }
+            assertTrue(state.nextUp.isEmpty())
+            assertTrue("nothing to draw, so the strip is not there", state.nextUpStrip.isEmpty())
+            assertNull("and the list is not told anything failed", state.banner)
+            assertFalse(state.failed)
+            assertEquals("the rows stand as before", listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * A refresh that replaces a run cancels its children, and a leaders call cancelled where it
+     * was suspended resumes by throwing exactly this. It must not become an answer: a cancelled
+     * child writing its own empty list over the leaders the newer run published would blank the
+     * strip under the reader, which is the one thing this screen's refresh rule forbids (nothing
+     * already drawn is taken away until something better arrives).
+     */
+    @Test
+    fun `a cancelled leaders call is not an answer, and never blanks the strip on screen`() = runTest {
+        val leaders = listOf(NextUpRow("TSLA", "31209870777", 3))
+        val nextUp = FakeNextUpRepository(Result.success(leaders))
+        val vm = viewModel(nextUp = nextUp)
+        advanceUntilIdle()
+        assertEquals(listOf("TSLA"), vm.state.value.nextUp.map { it.ticker })
+
+        nextUp.result = Result.failure(CancellationException("a newer refresh replaced this run"))
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertEquals(
+            "a cancelled call wrote its own emptiness over the leaders on screen",
+            listOf("TSLA"),
+            vm.state.value.nextUp.map { it.ticker },
+        )
+        assertEquals("the strip is still there", listOf("TSLAx"), vm.state.value.nextUpStrip.map { it.display })
+        assertEquals(2, nextUp.calls)
+
+        // A call that failed is a different thing, and it does leave the strip undrawn.
+        nextUp.result = Result.failure(IOException("offline"))
+        vm.refresh()
+        advanceUntilIdle()
+        assertTrue(vm.state.value.nextUp.isEmpty())
     }
 
     // ---- The Today strip ---------------------------------------------------------------

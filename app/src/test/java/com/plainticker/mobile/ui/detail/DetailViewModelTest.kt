@@ -11,6 +11,7 @@ import com.plainticker.mobile.data.MultiplierSource
 import com.plainticker.mobile.data.net.ApiException
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.AnalysisPayload
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.rpc.DefaultAccountState
 import com.plainticker.mobile.data.rpc.PausableConfig
 import com.plainticker.mobile.data.rpc.PermanentDelegate
@@ -26,6 +27,7 @@ import com.plainticker.mobile.prefs.InMemoryNotificationPromptStore
 import com.plainticker.mobile.prefs.InMemoryWatchlistStore
 import com.plainticker.mobile.repo.FakeCatalogRepository
 import com.plainticker.mobile.repo.FakeMintRepository
+import com.plainticker.mobile.repo.FakeNextUpRepository
 import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeSummaryRepository
 import com.plainticker.mobile.repo.MintReading
@@ -124,9 +126,10 @@ class DetailViewModelTest {
         catalog: FakeCatalogRepository = catalog(),
         prices: FakePriceRepository = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
         mints: FakeMintRepository = readableMint(),
+        nextUp: FakeNextUpRepository = FakeNextUpRepository(),
         watchlist: InMemoryWatchlistStore = InMemoryWatchlistStore(),
         prompts: InMemoryNotificationPromptStore = InMemoryNotificationPromptStore(),
-    ) = DetailViewModel(ticker, summaries, catalog, prices, mints, watchlist, prompts, clock)
+    ) = DetailViewModel(ticker, summaries, catalog, prices, mints, nextUp, watchlist, prompts, clock)
 
     // ---- Everything present ------------------------------------------------------------------
 
@@ -272,6 +275,43 @@ class DetailViewModelTest {
             assertTrue(state.reserves is Piece.Ready)
             assertEquals(MultiplierSource.MINT, (state.split as Piece.Ready).value.source)
             assertNotNull(state.price)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a ticker PlainTicker does not serve asks where it stands, and a served one does not`() = runTest {
+        val leaders = FakeNextUpRepository(
+            Result.success(listOf(NextUpRow("NFLX", "123456000000", 3), NextUpRow("AAPL", "31209870777", 2))),
+        )
+        val unserved = viewModel(summaries = FakeSummaryRepository(), nextUp = leaders)
+        unserved.state.test {
+            val state = awaitUntil { !it.isLoading && it.nextUp.isNotEmpty() }
+            assertEquals(1, leaders.calls)
+            assertEquals(listOf("NFLX", "AAPL"), state.nextUp.map { it.ticker })
+            assertEquals("second of two", listOf("2", "2"), (state.nextUpLine!!.rank as Copy.Words).args)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val served = FakeNextUpRepository(Result.success(listOf(NextUpRow("AAPL", "31209870777", 2))))
+        val covered = viewModel(nextUp = served)
+        covered.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals("a covered ticker has no standing to ask about", 0, served.calls)
+            assertTrue(state.nextUp.isEmpty())
+            assertNull(state.nextUpLine)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val down = viewModel(
+            summaries = FakeSummaryRepository(),
+            nextUp = FakeNextUpRepository(Result.failure(IOException("offline"))),
+        )
+        down.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertTrue("a failed call states no standing", state.nextUp.isEmpty())
+            assertNull(state.nextUpLine)
+            assertTrue("and the rest of the not-served screen stands", state.analysisNotServed)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -569,6 +609,7 @@ class DetailViewModelTest {
             catalog(),
             FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
             readableMint(),
+            FakeNextUpRepository(),
             InMemoryWatchlistStore(),
             InMemoryNotificationPromptStore(),
             { moment },

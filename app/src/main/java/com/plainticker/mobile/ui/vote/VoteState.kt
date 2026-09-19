@@ -14,16 +14,17 @@ import com.plainticker.mobile.data.plainticker.VoteBuild
  *     vote(ticker)
  *     Closed ......> Opening(CONNECTING) ....> Opening(READING) ....> Building ....> Ready
  *                         :                          :                    :            :
- *                         : no wallet on the         : nothing staked,    : 404,       : confirm()
- *                         : device, or nothing       : or a principal     : or the     v
- *                         : connected                : outside the bound  : server   Signing
- *                         v                          v                    : did not    :
- *                      Refused                    Refused                 : answer     : a signature
+ *                         : no wallet on the         : nothing staked,    : not open,  : confirm()
+ *                         : device, or nothing       : or a principal     : already    v
+ *                         : connected                : outside the bound  : voted,   Signing
+ *                         v                          v                    : 429, or    :
+ *                      Refused                    Refused                 : no answer  : a signature
  *                                                                         v            v
  *                                                                      Refused       Landed
  *
- *     Refused <- no signature came back, or the wallet answered with a failure, from Signing.
- *     Closed  <- close(), from any state.
+ *     Building <- confirm() on a Ready whose transaction has expired: asked again, never signed.
+ *     Refused  <- no signature came back, or the wallet answered with a failure, from Signing.
+ *     Closed   <- close(), from any state.
  *
  * Three rules live in the machine and nowhere else.
  *
@@ -83,6 +84,13 @@ sealed interface VoteState {
         val voter: String,
         val stakeRaw: Long,
         val build: VoteBuild,
+        /**
+         * True when this confirm step replaced one whose transaction had gone stale: the reader
+         * tapped to send, the server built a fresh transaction instead of the wallet opening, and
+         * the sheet says so. Without it the machine would land back on the same step with the
+         * same button and nothing to show for the tap, which reads as the tap having been lost.
+         */
+        val refreshed: Boolean = false,
     ) : OnTicker
 
     /** The wallet is open: it signs the transaction and submits it, in one round-trip. */
@@ -161,8 +169,21 @@ enum class VoteRefusal(@StringRes val text: Int, val retryable: Boolean = false)
      */
     STAKE_UNREAD(R.string.vote_stake_unread, retryable = true),
 
-    /** HTTP 404 from `vote/build`: the route is not published yet. Not an error, a state. */
+    /**
+     * Voting is not open yet: HTTP 404 from a route nobody has published, or 503
+     * `vote_not_configured` from one the operator has not set up. Not an error, a state.
+     */
     NOT_OPEN(R.string.vote_not_open),
+
+    /**
+     * HTTP 409 `already_voted`: one wallet counts once per ticker, and this one already has. The
+     * server refuses before it builds, so no fee was spent. An answer and not a retry: tapping
+     * again cannot make a wallet count twice. The spec's third state of five.
+     */
+    ALREADY_VOTED(R.string.vote_already_voted),
+
+    /** HTTP 429: the server is taking votes more slowly than this. A later tap can end differently. */
+    RATE_LIMITED(R.string.vote_rate_limited, retryable = true),
 
     /** The server did not build the vote: a refusal it explained, a 5xx, or no answer at all. */
     UNAVAILABLE(R.string.vote_unavailable, retryable = true),

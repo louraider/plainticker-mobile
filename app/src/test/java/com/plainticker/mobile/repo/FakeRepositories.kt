@@ -5,6 +5,7 @@ import com.plainticker.mobile.data.jupiter.PriceFetch
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.net.ApiException
 import com.plainticker.mobile.data.plainticker.AnalysisPayload
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.SummaryResponse
 import com.plainticker.mobile.data.snapshot.ListSnapshot
 import com.plainticker.mobile.data.snapshot.SnapshotAsset
@@ -174,6 +175,19 @@ class FakeRpcRepository(
     override suspend fun accounts(pubkeys: List<String>, encoding: RpcEncoding): List<RpcAccount?> = pubkeys.map { null }
 
     override suspend fun skrStake(wallet: String): SkrStake = stake.getOrThrow()
+}
+
+/** The leaders of coverage curation, or a call that failed; [calls] says whether a screen asked. */
+class FakeNextUpRepository(
+    var result: Result<List<NextUpRow>> = Result.success(emptyList()),
+) : NextUpRepository {
+    var calls = 0
+        private set
+
+    override suspend fun nextUp(): List<NextUpRow> {
+        calls++
+        return result.getOrThrow()
+    }
 }
 
 /** An xStock catalog entry with one Solana deployment. */

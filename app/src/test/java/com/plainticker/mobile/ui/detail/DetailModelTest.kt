@@ -11,6 +11,7 @@ import com.plainticker.mobile.data.plainticker.Axes
 import com.plainticker.mobile.data.plainticker.Axis
 import com.plainticker.mobile.data.plainticker.FScore
 import com.plainticker.mobile.data.plainticker.Method
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.rpc.DefaultAccountState
 import com.plainticker.mobile.data.rpc.PausableConfig
 import com.plainticker.mobile.data.rpc.PermanentDelegate
@@ -21,6 +22,7 @@ import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.Reserves
 import com.plainticker.mobile.repo.mintFacts
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.ShippedCopy
 import com.plainticker.mobile.repo.scaled
 import com.plainticker.mobile.repo.xStock
 import org.junit.Assert.assertEquals
@@ -687,6 +689,55 @@ class DetailModelTest {
             assertEquals(period.name, DetailBanner.CLOSED, state.banner)
             assertEquals(period.name, R.string.detail_nyse_close, label(state.priceRow.referenceLabel))
         }
+    }
+
+    // ---- The next-up standing --------------------------------------------------------------------------
+
+    /** Three leaders in the server's order, heaviest first, with TSLA second. */
+    private val leaders = listOf(
+        NextUpRow("NFLX", "123456000000", 5),
+        NextUpRow("TSLA", "31209870777", 3),
+        NextUpRow("AMD", "6719000000", 1),
+    )
+
+    @Test
+    fun `not served and among the leaders - the standing names the rank and the figure behind it`() {
+        val line = served(analysis = AnalysisState.NotServed).copy(nextUp = leaders).nextUpLine!!
+        assertEquals(R.string.next_up_detail_rank, label(line.rank))
+        assertEquals(listOf("2", "3"), args(line.rank))
+        val weight = line.weight as Copy.Counted
+        assertEquals(R.plurals.next_up_detail_weight, weight.id)
+        assertEquals("the voters select the form", 3, weight.quantity)
+        assertEquals(listOf("31,209.9", "3"), weight.args)
+        assertEquals("Next up: 2 of 3, by staked SKR", ShippedCopy.render(line.rank))
+        assertEquals("31,209.9 SKR from 3 voters", ShippedCopy.render(line.weight))
+    }
+
+    @Test
+    fun `one voter reads as one, and the last leader is the last of however many there are`() {
+        val line = DetailUiState(ticker = "AMD", analysisState = AnalysisState.NotServed, nextUp = leaders, nowMillis = now)
+            .nextUpLine!!
+        assertEquals("6,719 SKR from 1 voter", ShippedCopy.render(line.weight))
+        assertEquals("Next up: 3 of 3, by staked SKR", ShippedCopy.render(line.rank))
+    }
+
+    @Test
+    fun `a served ticker, a ticker nobody voted for, and a weight that is not a number have no standing`() {
+        assertNull("covered, so no standing among the uncovered", served().copy(nextUp = leaders).nextUpLine)
+        assertNull(
+            "nobody has voted for it",
+            served(analysis = AnalysisState.NotServed).copy(nextUp = leaders.filter { it.ticker != "TSLA" }).nextUpLine,
+        )
+        assertNull("no leaders at all", served(analysis = AnalysisState.NotServed).nextUpLine)
+        val garbled = leaders.map { if (it.ticker == "TSLA") it.copy(weight = "n/a") else it }
+        assertNull(
+            "a figure this app cannot read is not printed",
+            served(analysis = AnalysisState.NotServed).copy(nextUp = garbled).nextUpLine,
+        )
+        assertNull(
+            "unknown whether it is covered, so nothing is claimed",
+            served(analysis = AnalysisState.Unavailable).copy(nextUp = leaders).nextUpLine,
+        )
     }
 
     // ---- The swap footer -------------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import com.plainticker.mobile.watchlist.InMemoryDigestStore
 import com.plainticker.mobile.repo.AssetSource
 import com.plainticker.mobile.repo.BundledSnapshotRepository
 import com.plainticker.mobile.repo.FakeCatalogRepository
+import com.plainticker.mobile.repo.FakeNextUpRepository
 import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeSummaryRepository
 import com.plainticker.mobile.repo.SnapshotRepository
@@ -56,6 +57,7 @@ class ListAgainstProductionTest {
         FakeCatalogRepository(Result.failure(IOException("offline"))),
         prices,
         snapshots,
+        FakeNextUpRepository(),
         InMemoryWatchlistStore(),
         InMemoryDigestStore(),
     )

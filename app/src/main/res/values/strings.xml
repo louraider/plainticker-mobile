@@ -89,6 +89,20 @@
     <string name="list_state_fair">fair</string>
     <string name="list_state_weak">weak</string>
 
+    <!-- The "Next up" strip and the Detail standing: the uncovered tickers staked SKR has chosen,
+         from GET /api/v1/vote/next-up (docs/skr-curation-spec-2026-09-13.md, app work step 3). -->
+    <string name="next_up_label">Next up, by staked SKR</string>
+    <string name="next_up_weight">%1$s SKR</string>
+    <plurals name="next_up_voters">
+        <item quantity="one">%1$s voter</item>
+        <item quantity="other">%1$s voters</item>
+    </plurals>
+    <string name="next_up_detail_rank">Next up: %1$s of %2$s, by staked SKR</string>
+    <plurals name="next_up_detail_weight">
+        <item quantity="one">%1$s SKR from %2$s voter</item>
+        <item quantity="other">%1$s SKR from %2$s voters</item>
+    </plurals>
+
     <!-- Detail -->
     <string name="detail_token_price">Token price</string>
     <!-- What the token's own figure is called below the liquidity floor, where the quote is a
@@ -311,6 +325,7 @@
     <string name="vote_fee_label">Signature fee</string>
     <string name="vote_fee">%1$s SOL</string>
     <string name="vote_collector_label">Sent to</string>
+    <string name="vote_refreshed">The transaction went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the vote.</string>
     <string name="vote_landed_label">Vote sent</string>
     <string name="vote_landed_note">The vote is on the chain. It is counted from the memos of that address, so anyone can count it the same way.</string>
 
@@ -327,6 +342,8 @@
     <string name="vote_stake_unread">The stake of this wallet did not read as a figure this app can stand behind, so no figure is shown and no vote was built.</string>
     <string name="vote_not_open">Voting is not open yet. The server has nothing to build this vote with, so nothing was signed and nothing was sent.</string>
     <string name="vote_unavailable">The server did not build this vote, so nothing was signed and nothing was sent.</string>
+    <string name="vote_already_voted">This wallet has already voted for this ticker. One wallet counts once per ticker, so nothing was signed and no fee was spent.</string>
+    <string name="vote_rate_limited">The server is taking votes more slowly than this. Nothing was signed. Try again shortly.</string>
     <string name="vote_not_approved">No signature came back, so no vote was sent.</string>
     <string name="vote_failed">The wallet answered with a failure and no signature, so whether the vote was sent is not known.</string>
 

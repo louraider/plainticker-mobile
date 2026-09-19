@@ -14,10 +14,12 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 
 /**
  * The vote build contract, against [MockApi] exactly as [
@@ -26,9 +28,9 @@ import org.junit.Test
  * Two things are pinned here that nothing else can pin. The first is that a body which is not the
  * contract is an error and never a crash: this call hands its answer to a wallet, and a
  * serialization exception thrown out of a ViewModel would take a screen with it. The second is
- * that today's answer, a bare 404 from a route nobody has published, arrives as
- * [VoteError.NotOpen] rather than as a failure, so the app can say voting is not open yet and the
- * same path lights up unchanged the day the route answers.
+ * that a bare 404 from a route nobody has published, and a 503 `vote_not_configured` from one the
+ * operator has not set up, both arrive as [VoteError.NotOpen] rather than as a failure, so the app
+ * can say voting is not open yet and the same path lights up unchanged the day the route builds.
  */
 class VoteApiTest {
 
@@ -81,7 +83,7 @@ class VoteApiTest {
     @Test
     fun `an answer carrying keys this app does not know still parses`() = runTest {
         val extra = """{"transaction":"$transaction","summary":{"ticker":"NFLX","lamports":5000,""" +
-            """"collector":"$collector","memo":"PT-VOTE:NFLX"},"expiresAt":123}"""
+            """"collector":"$collector","memo":"PT-VOTE:NFLX"},"nonce":123}"""
         val mock = MockApi { respondJson(extra) }
         val build = VoteApi(mock.client).build("NFLX", voter)
         assertEquals(5_000L, build.summary.lamports)
@@ -187,15 +189,87 @@ class VoteApiTest {
     }
 
     @Test
-    fun `the golden body is exactly the contract in the specification`() = runTest {
-        // The shape docs/skr-curation-spec-2026-09-13.md and the founder's contract name, written
-        // out field for field, so a later edit to either is caught here rather than on a device.
-        val golden = """{"transaction":"$transaction","summary":{"ticker":"NFLX","lamports":5000,"collector":"$collector"}}"""
+    fun `the golden body is exactly the contract in the README`() = runTest {
+        // The published 200 (server/vote/README.md, 2026-09-18), written out field for field, so a
+        // later edit to either side is caught here rather than on a device.
+        val golden = """{"transaction":"$transaction","summary":{"ticker":"NFLX","lamports":5000,""" +
+            """"collector":"$collector","weight":123456000000,"alreadyVoted":false},"expiresAt":"2026-09-18T12:34:56.000Z"}"""
         val parsed = (HttpClientFactory.json.parseToJsonElement(golden) as JsonObject)
-        assertEquals(setOf("transaction", "summary"), parsed.keys)
-        assertEquals(setOf("ticker", "lamports", "collector"), parsed["summary"]!!.jsonObject.keys)
+        assertEquals(setOf("transaction", "summary", "expiresAt"), parsed.keys)
+        assertEquals(setOf("ticker", "lamports", "collector", "weight", "alreadyVoted"), parsed["summary"]!!.jsonObject.keys)
 
-        val mock = MockApi { respondJson(golden) }
-        assertEquals(5_000L, VoteApi(mock.client).build("NFLX", voter).summary.lamports)
+        val build = VoteApi(MockApi { respondJson(golden) }.client).build("NFLX", voter)
+        assertEquals(5_000L, build.summary.lamports)
+        assertEquals("the figure the vote is counted at", 123_456_000_000L, build.summary.weight)
+        assertEquals(false, build.summary.alreadyVoted)
+        assertEquals("2026-09-18T12:34:56.000Z", build.expiresAt)
+        assertEquals(Instant.parse("2026-09-18T12:34:56.000Z").toEpochMilli(), build.expiresAtMillis())
+    }
+
+    @Test
+    fun `a body from before the weight and the expiry still parses, and promises no expiry`() = runTest {
+        val build = VoteApi(MockApi { respondJson(body()) }.client).build("NFLX", voter)
+        assertNull(build.summary.weight)
+        assertFalse(build.summary.alreadyVoted)
+        assertNull(build.expiresAt)
+        assertNull(build.expiresAtMillis())
+        assertFalse("an unknown expiry is not an expired one", build.isExpiredAt(Long.MAX_VALUE))
+    }
+
+    @Test
+    fun `expiry is judged against the clock it is handed, to the millisecond`() {
+        val at = Instant.parse("2026-09-18T12:34:56.000Z").toEpochMilli()
+        val build = VoteBuild(transaction, VoteSummary("NFLX", 5_000L, collector), expiresAt = "2026-09-18T12:34:56.000Z")
+        assertFalse(build.isExpiredAt(at - 1L))
+        assertTrue(build.isExpiredAt(at))
+        assertTrue(build.isExpiredAt(at + 45_000L))
+        val garbled = build.copy(expiresAt = "soon")
+        assertNull(garbled.expiresAtMillis())
+        assertFalse("a promise this app cannot read is no promise", garbled.isExpiredAt(Long.MAX_VALUE))
+    }
+
+    // ---- The error table, row by row --------------------------------------------------------
+
+    @Test
+    fun `every error the contract names maps onto its own state`() = runTest {
+        suspend fun answer(status: HttpStatusCode, code: String): VoteError {
+            val mock = MockApi { respondJson("""{"error":"A sentence for the log.","code":"$code"}""", status) }
+            return expectThrows<VoteError> { VoteApi(mock.client).build("NFLX", voter) }
+        }
+        fun refused(e: VoteError, status: Int, code: String) {
+            assertTrue("$code is a refusal the server explained", e is VoteError.Refused)
+            assertEquals(status, e.status)
+            assertEquals(code, e.code)
+        }
+
+        refused(answer(HttpStatusCode.BadRequest, "bad_json"), 400, "bad_json")
+        refused(answer(HttpStatusCode.BadRequest, "invalid_input"), 400, "invalid_input")
+        refused(answer(HttpStatusCode.UnprocessableEntity, "unknown_ticker"), 422, "unknown_ticker")
+        refused(answer(HttpStatusCode.Conflict, "ticker_covered"), 409, "ticker_covered")
+        refused(answer(HttpStatusCode.UnprocessableEntity, "no_stake"), 422, "no_stake")
+
+        val voted = answer(HttpStatusCode.Conflict, "already_voted")
+        assertTrue(voted is VoteError.AlreadyVoted)
+        assertEquals(409, voted.status)
+        assertEquals(VoteError.CODE_ALREADY_VOTED, voted.code)
+        assertEquals("A sentence for the log.", voted.detail)
+
+        val limited = answer(HttpStatusCode.TooManyRequests, "rate_limited")
+        assertTrue(limited is VoteError.RateLimited)
+        assertEquals(429, limited.status)
+        assertEquals(VoteError.CODE_RATE_LIMITED, limited.code)
+        // An edge limiter answers 429 with a page and not the contract; it is the same state.
+        val page = MockApi { respondHtml("<html>429 Too Many Requests</html>", HttpStatusCode.TooManyRequests) }
+        assertTrue(expectThrows<VoteError> { VoteApi(page.client).build("NFLX", voter) } is VoteError.RateLimited)
+
+        val notConfigured = answer(HttpStatusCode.ServiceUnavailable, "vote_not_configured")
+        assertTrue("a published route the operator has not set up is voting not being open", notConfigured is VoteError.NotOpen)
+        assertEquals(503, notConfigured.status)
+        assertEquals(VoteError.CODE_VOTE_NOT_CONFIGURED, notConfigured.code)
+
+        assertTrue("any other 503 is the server being down", answer(HttpStatusCode.ServiceUnavailable, "maintenance") is VoteError.Unreadable)
+        assertTrue(answer(HttpStatusCode.BadGateway, "stake_unreadable") is VoteError.Unreadable)
+        assertTrue(answer(HttpStatusCode.BadGateway, "upstream_unavailable") is VoteError.Unreadable)
+        assertTrue(answer(HttpStatusCode.InternalServerError, "internal") is VoteError.Unreadable)
     }
 }

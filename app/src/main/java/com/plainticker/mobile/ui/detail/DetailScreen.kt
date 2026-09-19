@@ -43,6 +43,7 @@ import com.plainticker.mobile.data.plainticker.Axes
 import com.plainticker.mobile.data.plainticker.Axis
 import com.plainticker.mobile.data.plainticker.FScore
 import com.plainticker.mobile.data.plainticker.Method
+import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.rpc.MintFacts
 import com.plainticker.mobile.data.rpc.PausableConfig
 import com.plainticker.mobile.data.rpc.PermanentDelegate
@@ -223,6 +224,7 @@ internal fun DetailContent(
             }
 
             FundamentalsBlock(state)
+            NextUpBlock(state)
             VoteBlock(state = state, onVote = onVote)
             SwapBlock(state = state, swap = swap, onSwap = onSwap)
             Spacer(Modifier.height(TailGap))
@@ -589,6 +591,28 @@ private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?) {
     }
 }
 
+/**
+ * Where this ticker stands in the next-up list, under the line that says there is no analysis
+ * yet and above the action that votes for one (docs/skr-curation-spec-2026-09-13.md, step 3).
+ * Two lines: the rank in the body face, the figure behind it in the numeral face, the way the
+ * cost line sits under the swap button. Drawn only where [DetailModel] has a standing to state,
+ * which is never for a covered ticker and never for one nobody has voted for.
+ */
+@Composable
+private fun NextUpBlock(state: DetailUiState) {
+    val line = state.nextUpLine ?: return
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = Side, end = Side, top = NextUpTop)
+            .semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(text = line.rank.text(), style = PlainTickerType.body, color = Ink2)
+        Text(text = line.weight.text(), style = PlainTickerType.meta, color = Muted)
+    }
+}
+
 // ---- Shared pieces -----------------------------------------------------------------------------
 
 /** One sentence where a block would be, so no state of this screen is a blank column. */
@@ -641,6 +665,9 @@ private val SectionGap = 28.dp
 private val FScoreGap = 6.dp
 private val FScoreCounterLift = 4.dp
 private val SwapGap = 32.dp
+
+/** Under the sentence that says nothing is classified here, and above the vote it leads to. */
+private val NextUpTop = 16.dp
 
 /** Close under the sentence that says nothing is classified here, which is what it answers. */
 private val VoteGap = 10.dp
@@ -759,6 +786,7 @@ private fun DetailDegradedPreview() {
         DetailContent(
             PreviewState.copy(
                 analysisState = AnalysisState.NotServed,
+                nextUp = listOf(NextUpRow("AAPL", "12345678901", 2), NextUpRow("TSLA", "31209870777", 3)),
                 quote = Piece.Ready(PriceEntry(usdPrice = 366.17, liquidity = 1_300_000.0)),
                 chain = Piece.Failed,
                 reserves = Piece.Absent,

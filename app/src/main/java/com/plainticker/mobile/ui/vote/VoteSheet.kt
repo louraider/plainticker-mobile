@@ -251,6 +251,7 @@ private val PreviewBuild = VoteBuild(
 private val PreviewStates: List<VoteState> = listOf(
     VoteState.Opening("NFLX", "NFLXx", VotePhase.CONNECTING),
     VoteState.Ready("NFLX", "NFLXx", PreviewCollector, PreviewStakeRaw, PreviewBuild),
+    VoteState.Ready("NFLX", "NFLXx", PreviewCollector, PreviewStakeRaw, PreviewBuild, refreshed = true),
     VoteState.Landed("NFLX", "NFLXx", PreviewStakeRaw, "4xQm7gZ1LdPqR8vWnJb3sT6yUeK2cHaX9fNmD5oVtHe"),
     VoteState.Refused("NFLX", "NFLXx", VoteRefusal.NOT_OPEN),
 )

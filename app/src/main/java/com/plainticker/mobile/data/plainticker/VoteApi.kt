@@ -18,7 +18,9 @@ import kotlinx.serialization.json.Json
  * POST https://www.plainticker.com/api/v1/vote/build
  *   body { "ticker": "NFLX", "voter": "<base58 wallet>" }
  *   200  { "transaction": "<base64 v0 transaction>",
- *          "summary": { "ticker": "NFLX", "lamports": 5000, "collector": "<base58>" } }
+ *          "summary": { "ticker": "NFLX", "lamports": 5000, "collector": "<base58>",
+ *                       "weight": 123456000000, "alreadyVoted": false },
+ *          "expiresAt": "<ISO-8601, about 45 s out>" }
  *   4xx  { "error": "<human sentence>", "code": "<slug>" }
  * ```
  *
@@ -27,10 +29,10 @@ import kotlinx.serialization.json.Json
  * a transaction. The server builds it, the app signs and submits it through Mobile Wallet
  * Adapter, which is the same shape as the swap.
  *
- * **The route is not published yet.** It is blocked on the founder's trigger and on a migration
- * only the operator applies, so today every call here ends in [VoteError.NotOpen]. That is a
- * state and not a crash: the surface says voting is not open yet, and nothing else has to change
- * when the route starts answering.
+ * **The route is published, and it answers with `code`.** Until the operator sets the collector
+ * address it answers 503 `vote_not_configured`, and until the xStock universe file is filled it
+ * answers 422 `unknown_ticker` for every ticker; both are states and not crashes. `code` is the
+ * field this app acts on, and `error` goes to the debug log and nowhere else.
  */
 class VoteApi(
     private val client: HttpClient,
@@ -42,8 +44,10 @@ class VoteApi(
      * the rest of the app joins on; [voter] is the connected wallet, and the server reads its
      * weight itself rather than believing anything sent from here.
      *
-     * @throws VoteError.NotOpen on 404, which is today's answer for every ticker
-     * @throws VoteError.Refused on a 4xx the server explained
+     * @throws VoteError.NotOpen on 404, and on 503 `vote_not_configured`
+     * @throws VoteError.AlreadyVoted on 409 `already_voted`
+     * @throws VoteError.RateLimited on 429
+     * @throws VoteError.Refused on any other 4xx the server explained
      * @throws VoteError.Unreadable on anything else, a 200 this app cannot parse included
      * @throws IllegalArgumentException when [ticker] or [voter] is not the shape it must be
      */
