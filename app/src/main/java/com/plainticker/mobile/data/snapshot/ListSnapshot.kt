@@ -33,6 +33,12 @@ data class SnapshotSummary(
 data class SnapshotRow(
     val ticker: String,
     val company: String? = null,
+    /**
+     * `/summary.sector` (task A1, PlainTickerModels.kt), kept since the List chapters by it and a
+     * cold start is the first thing a reader, or a judge, ever sees. Null for a row `/summary`
+     * itself sent no sector for, which the List groups under a trailing chapter rather than drops.
+     */
+    val sector: String? = null,
     /** Percentile 0 to 100, as `/summary` serves it. */
     val composite: Double? = null,
     val tone: Tone? = null,
@@ -74,6 +80,7 @@ data class ListSnapshot(
 fun SnapshotRow.toSummaryRow(): SummaryRow = SummaryRow(
     ticker = ticker,
     company = company,
+    sector = sector,
     tone = tone,
     composite = composite,
     stale = stale,

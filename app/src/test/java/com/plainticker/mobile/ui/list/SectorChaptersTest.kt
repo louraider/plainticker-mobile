@@ -7,9 +7,11 @@ import org.junit.Test
 
 /**
  * The List's analyzed section chaptered by sector (task A1, docs/plan-monetisation-2026-09-19.md
- * section 1.5): "a heading per sector with its count, sectors ordered by count, rows by composite
- * within". Asserted on [ListRow]/[ListUiState] the way [NextUpModelTest] asserts the strip, so
- * every rule here is a JVM test and not a device walk.
+ * section 1.5). The plan reads "sectors ordered by count"; this reads them alphabetically instead,
+ * because the weekly vote (section 1.4) keeps growing coverage, and a count-ordered heading would
+ * reshuffle release over release for no reason a reader caused, where an alphabetical one is the
+ * same list forever. Asserted on [ListRow]/[ListUiState] the way [NextUpModelTest] asserts the
+ * strip, so every rule here is a JVM test and not a device walk.
  */
 class SectorChaptersTest {
 
@@ -49,26 +51,32 @@ class SectorChaptersTest {
         )
         val chapters = state(rows).analyzedChapters
 
-        // Three tickers to Information Technology's two, so it leads.
-        assertEquals(listOf("Information Technology", "Financials"), chapters.map { it.sector })
-        assertEquals(listOf(3, 2), chapters.map { it.rows.size })
+        // Alphabetical, not by count: Financials has two rows to Information Technology's three
+        // and still leads, because count is not what orders a chapter here.
+        assertEquals(listOf("Financials", "Information Technology"), chapters.map { it.sector })
+        assertEquals(listOf(2, 3), chapters.map { it.rows.size })
 
         // Within a chapter the rows are exactly the order they arrived in: composite descending.
-        assertEquals(listOf("NVDA", "AAPL", "MSFT"), chapters[0].rows.map { it.ticker })
-        assertEquals(listOf("JPM", "BAC"), chapters[1].rows.map { it.ticker })
+        assertEquals(listOf("JPM", "BAC"), chapters[0].rows.map { it.ticker })
+        assertEquals(listOf("NVDA", "AAPL", "MSFT"), chapters[1].rows.map { it.ticker })
     }
 
     @Test
-    fun `a tie in count is broken by the sector's own name, not by arrival order`() {
-        val rows = listOf(
-            row("XOM", "Energy", 50.0),
-            row("JPM", "Financials", 90.0),
-            row("CVX", "Energy", 40.0),
-            row("BAC", "Financials", 30.0),
+    fun `sector order does not move as coverage grows, unlike a count order would`() {
+        // Round one: two sectors, one row each.
+        val roundOne = listOf(row("XOM", "Energy", 50.0), row("JPM", "Financials", 90.0))
+        assertEquals(listOf("Energy", "Financials"), state(roundOne).analyzedChapters.map { it.sector })
+
+        // Round two: the weekly vote covers three more Financials tickers. A count order would
+        // now put Financials first; alphabetical order does not move at all.
+        val roundTwo = roundOne + listOf(
+            row("BAC", "Financials", 40.0),
+            row("GS", "Financials", 30.0),
+            row("C", "Financials", 20.0),
         )
-        val chapters = state(rows).analyzedChapters
-        assertEquals(listOf(2, 2), chapters.map { it.rows.size })
-        assertEquals("Energy sorts before Financials, whichever sector was served first", listOf("Energy", "Financials"), chapters.map { it.sector })
+        val chapters = state(roundTwo).analyzedChapters
+        assertEquals(listOf("Energy", "Financials"), chapters.map { it.sector })
+        assertEquals(listOf(1, 4), chapters.map { it.rows.size })
     }
 
     @Test
