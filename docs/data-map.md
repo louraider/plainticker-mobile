@@ -1155,3 +1155,46 @@ unreachable now and is gone. `WALLET_REFUSED` ("The wallet did not return a sign
 described a failed *connect* once the approval path stopped using it, so it is `CONNECT_REFUSED`
 and says `The wallet did not answer, so nothing was connected`. `The swap did not land. Nothing was
 swapped.` stays, and now belongs to exactly one thing: an `/execute` that refused.
+
+---
+
+## 2026-09-19 · The vote track walked on the Seeker, and the one gate left
+
+The server half merged (`investor24-analyst#112`) and migration 0023 was applied to the production
+Neon database. `vote_tally_cursor` is present in the live schema, and `GET /api/v1/vote/next-up`
+answers `200` with `{"schema":"v1.1","rows":[]}`, which is the table being read rather than the
+route merely existing.
+
+`POST /api/v1/vote/build` answers `503 {"code":"vote_not_configured"}` because
+`VOTE_COLLECTOR_PUBKEY` is not set on Vercel. That is the only thing between this and a working
+vote, and it is one environment variable.
+
+**The demo wallet can actually vote, which was not known until today.** Read straight from mainnet
+with the same pinned call the server uses (`getProgramAccounts`, `memcmp` at 41, `dataSlice`
+{105, 8}): one stake account `ChDMVMo2ntvmzFwQJW7pizf5xn3rcmRKhW8pcN69vM9y`, raw `878980647`, which
+at SKR's six decimals is **878.980647 SKR**, inside the plausible bound. The wallet also holds
+0.094846531 SOL, so the signature fee is covered. Had this been zero, `/vote/build` would answer
+`422 no_stake` and the video's SKR segment could not be filmed at all.
+
+**Walked on the device**, `v0.5.0`, `versionCode` 500, installed with `adb install -r` over the
+`v0.3.0` already there. `firstInstallTime` held at 2026-09-13 10:48:55, so it upgraded in place and
+the receipt of the real mainnet swap survived. The certificate digest
+`66ce92eafa2f819b9a2f6e4eeddc33ac51be46644c295a02750231b1229a49af` equals the fingerprint published
+in `assetlinks.json`, checked before installing.
+
+What the phone did, in order: the List drew, the uncovered section drew a `Vote` control on every
+row, tapping one opened Seed Vault, and the wallet's own sheet named the application
+`www.plainticker…` with the verification mark, which is Digital Asset Links working in the live
+flow. After connecting, the sheet said:
+
+```
+Vote to cover JEFx
+Voting is not open yet. The server has nothing to build this vote with, so nothing was signed and
+nothing was sent.
+```
+
+That is the `503` mapping to the not-open state, on a real Compose surface, with the scrim over the
+list and the heading in JetBrains Mono. **Nothing was signed and no fee was spent.** The Next up
+strip did not draw, which is correct while `rows` is empty: it hides rather than raising a banner.
+
+Still unwalked: the positive path. It needs the environment variable, and then a signature.
