@@ -2,6 +2,28 @@
 
 Written 2026-09-19, ten days before the feature freeze (end of 29 September). Nothing below is built unless section 0 says so.
 
+## Status, updated 2026-09-19 evening
+
+| task | state |
+|---|---|
+| S1 weekly rounds | **Done and live.** Merged as `investor24-analyst#113`, migration 0024 applied to production. `next-up` answers `round {id:1, opens_at:2026-09-14, closes_at:2026-09-21}` |
+| O1 operator steps | **Partly done.** 0024 applied. `VOTE_PREWARM_WINNER` not set yet, and the round 1 winner still needs its line in `TICKER_TO_CIK` after 21 September |
+| A1 list chaptered | **Done.** Merged as `plainticker-mobile#18` |
+| A2 vote tab | **Done.** Merged as `plainticker-mobile#19` |
+| A3 vote receipts | **Done.** Same pull request |
+| A4 video and README re-blocked | Not started. Needs the Vote tab's real screens, which now exist |
+| A5 device pass | **Partly done.** `v0.6.0` installed on the Seeker, four tabs checked at font scale 1.3, three cold starts clean. The ten-cold-start row and the round 2 vote remain |
+| W and S premium tasks | Not started, and by decision they do not start until 9 October |
+
+Shipped in `v0.6.0`: 823 unit tests, the List drawing 160 analyzed rows in sector chapters instead of
+a tail of 669, the Vote tab carrying the explainer, the round, the leaders and a ballot of 768, and
+vote receipts that survive process death.
+
+One defect worth carrying forward as a rule: the round header passed 823 tests, two reviews and the
+copy lint, and was broken on the phone, drawing its title one letter per line. This project has no
+Robolectric and no instrumentation, so no test can express a Compose layout at a large font scale.
+Any screen that will be filmed gets looked at on the device.
+
 ## 0. What is true today
 
 - The web paywall is page-level and off. Flag on, uncovered tickers go to `PaywallBlock` instead of `CoverageScreen`, and served tickers outside five free ones to the same Ukrainian-only $3 block (`lib/billing/gate.ts`, `PaywallBlock.tsx`, `[ticker]/page.tsx` 456 to 476).
