@@ -85,7 +85,17 @@ class VoteViewModelTest {
         rpc: FakeRpcRepository = staking(measuredStake),
         clock: Clock = Clock { now },
         receipts: FakeVoteReceiptStore = FakeVoteReceiptStore(),
-    ) = VoteViewModel(VoteApi(mock.client), wallet, rpc, receipts, clock = clock, debugLog = VoteDebugLog { })
+    ) = VoteViewModel(
+        VoteApi(mock.client),
+        wallet,
+        rpc,
+        receipts,
+        clock = clock,
+        debugLog = VoteDebugLog { },
+        // The same test dispatcher Main is pointed at, so the receipt's write is deterministic
+        // under runTest exactly the way SwapViewModelTest already keeps its own.
+        ioDispatcher = mainDispatcherRule.dispatcher,
+    )
 
     /**
      * Every state the machine passes through, not only the ones a conflating StateFlow keeps.

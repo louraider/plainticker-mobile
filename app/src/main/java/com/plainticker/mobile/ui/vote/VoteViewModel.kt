@@ -17,11 +17,14 @@ import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Where the raw upstream text goes, which is never to a screen. The server's `error` sentence and
@@ -65,12 +68,14 @@ fun interface VoteDebugLog {
  * marked [VoteState.Ready.refreshed] so the sheet can say what happened, rather than spending a
  * wallet approval on a hash the network will refuse.
  *
- * **A landed vote is recorded.** Task A3: the moment [VoteState.Landed] is reached, [voteReceipts]
- * gets a [VoteReceipt] built from the same figures the sheet is about to show, so "Your votes" and
- * the landed sheet can never drift apart. [pendingRoundId] is the round the caller believed was
- * open when the tap that started this attempt was made (the Vote tab's ballot knows it; a row on
- * the List or on Detail does not, so it stays null there), carried as a plain field rather than as
- * a fifth [VoteState] because no state in that machine needs to draw it.
+ * **A landed vote is recorded before the state says it landed.** Task A3: [voteReceipts] gets a
+ * [VoteReceipt] built from the same figures the sheet is about to show, written on [ioDispatcher]
+ * rather than the Main dispatcher this class otherwise runs on, so "Your votes" and the landed
+ * sheet can never drift apart and the file write never blocks a frame. [pendingRoundId] is the
+ * round the caller believed was open when the tap that started this attempt was made (the Vote
+ * tab's ballot knows it; a row on the List or on Detail does not, so it stays null there), carried
+ * as a plain field rather than as a fifth [VoteState] because no state in that machine needs to
+ * draw it.
  */
 class VoteViewModel(
     private val voteApi: VoteApi,
@@ -79,6 +84,8 @@ class VoteViewModel(
     private val voteReceipts: VoteReceiptStore,
     private val clock: Clock = WallClock,
     private val debugLog: VoteDebugLog = VoteDebugLog.ANDROID,
+    /** Where the receipt is written. viewModelScope runs on Main, and a file write does not. */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<VoteState>(VoteState.Closed)
@@ -269,24 +276,25 @@ class VoteViewModel(
         // the figure the vote is counted at, and the app's bounded read where it did not.
         val weightRaw = build.summary.weight ?: ready.stakeRaw
         val signatureText = Base58.encodeToString(signature)
+        // The record is written before the state says it landed, so "Your votes" and the landed
+        // sheet can never disagree about whether this vote happened, the same rule and the same
+        // shape SwapViewModel already keeps for its own receipt: viewModelScope runs on Main, and
+        // a temp-file write and rename does not belong there.
+        val receipt = VoteReceipt(
+            signature = signatureText,
+            ticker = ready.ticker,
+            symbol = ready.symbol,
+            weightRaw = weightRaw,
+            landedAtMillis = clock.nowMillis(),
+            voter = ready.voter,
+            round = pendingRoundId,
+        )
+        withContext(ioDispatcher) { voteReceipts.record(receipt) }
         _state.value = VoteState.Landed(
             ticker = ready.ticker,
             symbol = ready.symbol,
             stakeRaw = weightRaw,
             signature = signatureText,
-        )
-        // Recorded from exactly the figures the sheet just drew (task A3), so "Your votes" and
-        // the landed sheet can never say two different things about the same vote.
-        voteReceipts.record(
-            VoteReceipt(
-                signature = signatureText,
-                ticker = ready.ticker,
-                symbol = ready.symbol,
-                weightRaw = weightRaw,
-                landedAtMillis = clock.nowMillis(),
-                voter = ready.voter,
-                round = pendingRoundId,
-            ),
         )
     }
 

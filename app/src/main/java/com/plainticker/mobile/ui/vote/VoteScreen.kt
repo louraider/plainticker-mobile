@@ -174,6 +174,18 @@ internal fun VoteTabContent(
                 }
 
                 when {
+                    // A join that has never once succeeded is a source outage, not a screen with
+                    // nothing to show yet: it gets its own banner and its own Retry rather than
+                    // sitting on its skeleton forever with no way back (VoteTabViewModel.refresh
+                    // retries this alongside next-up).
+                    state.ballotFailed -> item(key = "ballot-failed") {
+                        Banner(
+                            text = stringResource(R.string.vote_tab_ballot_unavailable),
+                            action = stringResource(R.string.action_retry),
+                            onAction = onRetry,
+                        )
+                    }
+
                     !state.ballotLoaded -> item(key = "ballot-skeleton") { SkeletonRows(count = SkeletonRowCount) }
 
                     state.searchMiss -> item(key = "ballot-miss") {
@@ -204,11 +216,19 @@ private fun Explainer() {
     }
 }
 
+/**
+ * "Round", in Outfit like every other heading, with the round's own number folded into the mono
+ * meta slot beside "Closes ...": DESIGN.md section 3 keeps every numeral in the mono face and
+ * never in Outfit, and a digit interpolated into the heading's own text would sit in Outfit like
+ * every other word there. This screen is read on camera, so the one number on it is not the one
+ * this app draws in the wrong face.
+ */
 @Composable
 private fun RoundHeader(round: VoteRound) {
-    val roundLabel = Fmt.count(round.id)
+    val roundId = Fmt.count(round.id)
     val closesText = round.closesAtInstant()?.let { stringResource(R.string.vote_tab_round_closes, Fmt.utc(it)) }
-    Heading(text = stringResource(R.string.vote_tab_round_heading, roundLabel), meta = closesText, topPadding = HeadingTopGap)
+    val meta = closesText?.let { stringResource(R.string.list_row_meta_join, roundId, it) } ?: roundId
+    Heading(text = stringResource(R.string.vote_tab_round_heading), meta = meta, topPadding = HeadingTopGap)
 }
 
 /** One leader: the token and its company left, the voters on the meta line, the weight right. */

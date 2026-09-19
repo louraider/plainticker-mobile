@@ -131,6 +131,13 @@ data class VoteTabUiState(
     /** Already filtered by [query]; the unfiltered set is not this screen's concern. */
     val ballot: List<BallotEntry> = emptyList(),
     val ballotLoaded: Boolean = false,
+    /**
+     * The catalog-and-summary join that builds the ballot threw, and it has never once
+     * succeeded. [VoteTabViewModel.refresh] retries it exactly as it retries `next-up`, so the
+     * screen's one Retry banner covers both rather than leaving the ballot on its skeleton
+     * forever with nothing offering a second attempt.
+     */
+    val ballotFailed: Boolean = false,
 ) {
     /** The explainer is the one thing every state shows; everything below it needs this to be true. */
     val showsRoundFurniture: Boolean get() = !isLoading && !failed && !notOpen

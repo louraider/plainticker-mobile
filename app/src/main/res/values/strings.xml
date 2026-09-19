@@ -359,7 +359,10 @@
          this one with the single honest line rather than an error banner. -->
     <string name="vote_tab_not_open">Voting is not open yet.</string>
     <string name="vote_tab_unavailable">Leaders and ballot unavailable</string>
-    <string name="vote_tab_round_heading">Round %1$s</string>
+    <!-- The ballot's own catalog-and-summary join failing is a source outage separate from
+         next-up, so it carries its own banner and its own Retry (VoteTabViewModel.refresh). -->
+    <string name="vote_tab_ballot_unavailable">Ballot unavailable</string>
+    <string name="vote_tab_round_heading">Round</string>
     <string name="vote_tab_round_closes">Closes %1$s</string>
     <string name="vote_tab_heading_leaders">Leaders</string>
     <string name="vote_tab_heading_your_votes">Your votes</string>

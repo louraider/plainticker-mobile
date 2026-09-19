@@ -35,7 +35,10 @@ import kotlinx.coroutines.launch
  * **A first failure is the only failure this screen shows.** Once [nextUp] has answered once,
  * open or not, a later refresh that throws changes nothing: the reader keeps whatever last loaded,
  * the same rule [com.plainticker.mobile.repo.CachedNextUpRepository] already keeps at the cache
- * layer and this class keeps again at its own.
+ * layer and this class keeps again at its own. The ballot keeps the same rule independently: it
+ * has its own [VoteTabUiState.ballotFailed] and [refresh] retries it too, whenever it has not
+ * yet loaded once, so a transient hiccup in the catalog or the summary call is never the one
+ * failure this screen cannot recover from.
  */
 class VoteTabViewModel(
     private val nextUp: NextUpRepository,
@@ -61,12 +64,18 @@ class VoteTabViewModel(
         // what a wallet change means for this record): a reconnect or a disconnect narrows or
         // widens the section without a manual refresh.
         viewModelScope.launch { wallet.account.collect { republishVotes() } }
-        viewModelScope.launch { loadBallot() }
+        // refresh() itself starts the ballot's first load (it has not loaded, so its own check
+        // fires), so there is one call here rather than two racing to be the first.
         refresh()
     }
 
-    /** Asks `next-up` again. Called on init, and offered as Retry from the failed banner. */
+    /**
+     * Asks `next-up` again, and the ballot too when it has never once loaded. Called on init,
+     * and offered as Retry from both the failed banner and the ballot's own: one tap for the
+     * reader, whichever half of the screen actually needs it.
+     */
     fun refresh() {
+        if (!_state.value.ballotLoaded) viewModelScope.launch { loadBallot() }
         viewModelScope.launch {
             try {
                 when (val answer = nextUp.current()) {
@@ -127,14 +136,27 @@ class VoteTabViewModel(
      * snapshot machinery that rule also carries. The catalog alone (independent of coverage) is
      * kept too, so a previous round's winner, no longer uncovered once published, can still be
      * named.
+     *
+     * A throw from either call used to return silently here, which left the ballot on its
+     * skeleton forever: nothing else ever asked again, because [refresh] only re-hit `next-up`.
+     * Now a failure before the first success sets [VoteTabUiState.ballotFailed], which draws a
+     * banner [refresh] is wired to retry, exactly like the next-up banner already is.
      */
     private suspend fun loadBallot() {
-        val assets = runCatching { catalog.catalog() }.getOrNull() ?: return
+        val assets = runCatching { catalog.catalog() }.getOrNull()
+        if (assets == null) {
+            if (!_state.value.ballotLoaded) _state.update { it.copy(ballotFailed = true) }
+            return
+        }
         catalogByTicker = assets.associateBy { it.underlyingTicker.trim().uppercase() } // lint-allow uppercase: map key
         // The previous winner may now be resolvable even if the summary call below never answers.
         _state.update { it.copy(previous = previousDisplay(lastPrevious, catalogByTicker)) }
 
-        val summary = runCatching { summaries.summary() }.getOrNull() ?: return
+        val summary = runCatching { summaries.summary() }.getOrNull()
+        if (summary == null) {
+            if (!_state.value.ballotLoaded) _state.update { it.copy(ballotFailed = true) }
+            return
+        }
         val classified = summary.rows.map { it.ticker.trim().uppercase() }.toSet() // lint-allow uppercase: map key
         allBallot = assets
             .filter { it.solanaMint != null && it.underlyingTicker.trim().uppercase() !in classified } // lint-allow uppercase: map key
@@ -143,6 +165,7 @@ class VoteTabViewModel(
         _state.update {
             it.copy(
                 ballotLoaded = true,
+                ballotFailed = false,
                 ballot = allBallot.matchingBallot(it.query),
                 leaders = leadersFor(lastRows, allBallot),
             )

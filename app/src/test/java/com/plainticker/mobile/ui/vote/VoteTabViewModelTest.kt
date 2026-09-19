@@ -140,6 +140,28 @@ class VoteTabViewModelTest {
         assertFalse(model.state.value.failed)
     }
 
+    @Test
+    fun `a ballot that threw on its first load recovers when refresh is called again`() = runTest {
+        val flaky = FakeCatalogRepository(assets = Result.failure(IOException("down")))
+        val model = viewModel(catalog = flaky)
+
+        model.state.test {
+            awaitUntil { it.ballotFailed }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertFalse("nothing succeeded yet", model.state.value.ballotLoaded)
+
+        // The same source recovers, and the same Retry the failed banner offers asks for it again.
+        flaky.assets = Result.success(listOf(xStock("TSMx", "TSM", mint = "TSM-mint", name = "Taiwan Semiconductor")))
+        model.refresh()
+        advanceUntilIdle()
+
+        val settled = model.state.value
+        assertTrue(settled.ballotLoaded)
+        assertFalse(settled.ballotFailed)
+        assertEquals(listOf("TSM"), settled.ballot.map { it.ticker })
+    }
+
     // ---- The ballot's search ------------------------------------------------------------------
 
     @Test
