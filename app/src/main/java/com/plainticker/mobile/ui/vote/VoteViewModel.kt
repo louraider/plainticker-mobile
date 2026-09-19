@@ -10,16 +10,21 @@ import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteError
+import com.plainticker.mobile.data.receipts.VoteReceipt
+import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Where the raw upstream text goes, which is never to a screen. The server's `error` sentence and
@@ -62,13 +67,25 @@ fun interface VoteDebugLog {
  * past that goes back to the server for a fresh transaction and returns to the confirm step,
  * marked [VoteState.Ready.refreshed] so the sheet can say what happened, rather than spending a
  * wallet approval on a hash the network will refuse.
+ *
+ * **A landed vote is recorded before the state says it landed.** Task A3: [voteReceipts] gets a
+ * [VoteReceipt] built from the same figures the sheet is about to show, written on [ioDispatcher]
+ * rather than the Main dispatcher this class otherwise runs on, so "Your votes" and the landed
+ * sheet can never drift apart and the file write never blocks a frame. [pendingRoundId] is the
+ * round the caller believed was open when the tap that started this attempt was made (the Vote
+ * tab's ballot knows it; a row on the List or on Detail does not, so it stays null there), carried
+ * as a plain field rather than as a fifth [VoteState] because no state in that machine needs to
+ * draw it.
  */
 class VoteViewModel(
     private val voteApi: VoteApi,
     private val wallet: WalletSession,
     private val rpc: RpcRepository,
+    private val voteReceipts: VoteReceiptStore,
     private val clock: Clock = WallClock,
     private val debugLog: VoteDebugLog = VoteDebugLog.ANDROID,
+    /** Where the receipt is written. viewModelScope runs on Main, and a file write does not. */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<VoteState>(VoteState.Closed)
@@ -76,14 +93,20 @@ class VoteViewModel(
 
     private var job: Job? = null
 
+    /** See the class doc: the round this attempt believes is open, for the receipt alone. */
+    private var pendingRoundId: Int? = null
+
     /**
      * The tap. [ticker] is the equity ticker the server joins on, [symbol] what a reader calls it.
+     * [roundId] is the round the caller currently believes is open, recorded on the receipt if
+     * this attempt lands; null when the caller has no round to offer.
      *
      * Connect if there is no session, read the stake, bound it, then ask the server to build. It
      * stops at [VoteState.Ready] with the figure on the screen; nothing is signed until [confirm].
      */
-    fun vote(ticker: String, symbol: String) {
+    fun vote(ticker: String, symbol: String, roundId: Int? = null) {
         if (_state.value.isBusy) return
+        pendingRoundId = roundId
         // Set here and not inside the coroutine, so the sheet is up on the frame the row was
         // tapped and so a second tap on a second row cannot start a second attempt in the gap
         // before the first one is scheduled.
@@ -97,12 +120,12 @@ class VoteViewModel(
         job = viewModelScope.launch { attempt(ticker, symbol, known) }
     }
 
-    /** Try the whole attempt again, from the state that offered it. */
+    /** Try the whole attempt again, from the state that offered it, with the same round. */
     fun retry() {
         val refused = _state.value as? VoteState.Refused ?: return
         if (!refused.reason.retryable) return
         _state.value = VoteState.Closed
-        vote(refused.ticker, refused.symbol)
+        vote(refused.ticker, refused.symbol, pendingRoundId)
     }
 
     /**
@@ -249,13 +272,29 @@ class VoteViewModel(
             return refuse(ready.ticker, ready.symbol, VoteRefusal.FAILED)
         }
 
+        // The figure that was signed for: the server's own where it stated one, because that is
+        // the figure the vote is counted at, and the app's bounded read where it did not.
+        val weightRaw = build.summary.weight ?: ready.stakeRaw
+        val signatureText = Base58.encodeToString(signature)
+        // The record is written before the state says it landed, so "Your votes" and the landed
+        // sheet can never disagree about whether this vote happened, the same rule and the same
+        // shape SwapViewModel already keeps for its own receipt: viewModelScope runs on Main, and
+        // a temp-file write and rename does not belong there.
+        val receipt = VoteReceipt(
+            signature = signatureText,
+            ticker = ready.ticker,
+            symbol = ready.symbol,
+            weightRaw = weightRaw,
+            landedAtMillis = clock.nowMillis(),
+            voter = ready.voter,
+            round = pendingRoundId,
+        )
+        withContext(ioDispatcher) { voteReceipts.record(receipt) }
         _state.value = VoteState.Landed(
             ticker = ready.ticker,
             symbol = ready.symbol,
-            // The figure that was signed for: the server's own where it stated one, because that
-            // is the figure the vote is counted at, and the app's bounded read where it did not.
-            stakeRaw = build.summary.weight ?: ready.stakeRaw,
-            signature = Base58.encodeToString(signature),
+            stakeRaw = weightRaw,
+            signature = signatureText,
         )
     }
 

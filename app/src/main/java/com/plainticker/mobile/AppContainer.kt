@@ -10,7 +10,9 @@ import com.plainticker.mobile.data.plainticker.NextUpApi
 import com.plainticker.mobile.data.plainticker.PlainTickerApi
 import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.receipts.FileReceiptStore
+import com.plainticker.mobile.data.receipts.FileVoteReceiptStore
 import com.plainticker.mobile.data.receipts.ReceiptStore
+import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.data.rpc.SolanaRpcApi
 import com.plainticker.mobile.data.xstocks.CatalogCache
 import com.plainticker.mobile.data.xstocks.FileCatalogCache
@@ -93,6 +95,9 @@ interface AppContainer {
     /** The app's own record of the swaps it landed; Portfolio (T11) reads it. */
     val receiptStore: ReceiptStore
 
+    /** The app's own record of the votes it landed (task A3); the Vote tab's "Your votes" reads it. */
+    val voteReceiptStore: VoteReceiptStore
+
     /** The last digest the daily check produced: the Watchlist draws it, the check writes it. */
     val digestStore: DigestStore
 
@@ -157,6 +162,12 @@ class DefaultAppContainer(context: Context) : AppContainer {
     // the system reclaiming space.
     override val receiptStore: ReceiptStore by lazy {
         FileReceiptStore(java.io.File(app.filesDir, FileReceiptStore.FILE_NAME))
+    }
+
+    // filesDir, not cache: same reasoning as receiptStore above, a vote receipt is the only
+    // record of what a wallet signed and must survive the system reclaiming space.
+    override val voteReceiptStore: VoteReceiptStore by lazy {
+        FileVoteReceiptStore(java.io.File(app.filesDir, FileVoteReceiptStore.FILE_NAME))
     }
 
     // The digest is a handful of fields written once a day, so it rides the same preferences

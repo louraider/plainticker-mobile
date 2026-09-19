@@ -125,3 +125,24 @@ written to `/sdcard`: every read went through `uiautomator dump /dev/tty`.
 |---|---|---|---|---|---|---|
 | 2026-09-13 | debug | 605 green | OK, 66 assertions, 24 dumps, 225 s | not run | machine | sections 1 to 4 wait on a wallet on this device that holds USDC |
 | 2026-09-13 | release v0.3.0 | 644 green | not re-run on this build | 5.9, 5.7 and 5.5 pass; 1 to 4 and 5.1 to 5.4, 5.6, 5.8, 5.10 still wait | machine | installed with `adb install -r` over v0.2.0, receipt intact; ten cold starts clean, portrait lock held, offline states all name what is missing |
+
+## 2026-09-19 · The Vote tab walked on the Seeker at 1.3x
+
+Release candidates `v0.6.0-rc1` and `v0.6.0-rc2`, installed over the build already on SM02E4072810430
+with `adb install -r`. The certificate digest matched the fingerprint published in `assetlinks.json`
+before each install, and `firstInstallTime` held at 2026-09-13 10:48:55 throughout, so the receipt of
+the real mainnet swap survived both.
+
+| row | result |
+|---|---|
+| Four tabs at `font_scale 1.3` | Pass. List, Vote, Portfolio, Watchlist all draw; the last ends at x 936 of 1200, so nothing clips and the row never needs to scroll |
+| List chaptered by sector | Pass. Cold start draws "Communication Services · 11" and the rest from the bundled snapshot, not one "No sector" heap |
+| Vote tab, explainer | Pass after a second pass. Four paragraphs filled more than a screen at 1.3x and pushed the leaders below the fold; two paragraphs plus the disclosure now sit above them |
+| Round header | **Failed on rc1, fixed in rc2.** The round id in the shared `Heading`'s meta slot took the row and starved the title to a one-character column, so "Round" rendered vertically, one letter per line. `RoundHeader` is now its own anatomy: the word and the mono number share an unweighted row, the closing time sits beneath |
+| Leaders | Pass. `JEFx · Jefferies Financi… · 879 SKR · Vote`, with "1 voter" singular |
+| Ballot | Pass. "Without analysis · 768" with its own search beneath |
+
+**What this row is worth recording.** The round header defect passed 823 unit tests, two code reviews
+and a copy lint, and was visible in the first second of looking at the phone. Nothing in the test
+suite can express a 1.3x Compose layout, because the project has no Robolectric or instrumentation,
+so a screen that is about to be filmed has to be looked at.

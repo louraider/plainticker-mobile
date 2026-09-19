@@ -26,17 +26,22 @@ import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.components.TopTabs
 import com.plainticker.mobile.ui.list.ListScreen
 import com.plainticker.mobile.ui.portfolio.PortfolioScreen
+import com.plainticker.mobile.ui.vote.VoteScreen
+import com.plainticker.mobile.ui.vote.VoteTabViewModel
+import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistScreen
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
 
+/** List, Vote, Portfolio, Watchlist, the order docs/plan-monetisation-2026-09-19.md section 1.5 settles. */
 enum class HomeTab(@StringRes val label: Int) {
     LIST(R.string.tab_list),
+    VOTE(R.string.tab_vote),
     PORTFOLIO(R.string.tab_portfolio),
     WATCHLIST(R.string.tab_watchlist),
 }
 
 /**
- * The three tab screens under one wordmark: the real TopBar and TopTabs (Muted inactive labels
+ * The four tab screens under one wordmark: the real TopBar and TopTabs (Muted inactive labels
  * and a 2dp Accent indicator, not the Material TabRow the placeholder carried), handed to the
  * selected screen as a header it draws at the top of its own scroll. That is what makes the
  * header scroll away instead of sitting sticky over the content (DESIGN.md sections 4 and 5).
@@ -75,6 +80,15 @@ fun HomeScreen(
                 header = header,
             )
 
+            HomeTab.VOTE -> VoteScreen(
+                viewModel = viewModel(factory = factory),
+                // The same sheet the List's rows and Detail's action open: scoped to this home
+                // entry like every ViewModel here, so a vote mid-flight survives a tab switch.
+                voteViewModel = viewModel(factory = factory),
+                onOpenDetail = onOpenDetail,
+                header = header,
+            )
+
             HomeTab.PORTFOLIO -> PortfolioScreen(
                 viewModel = viewModel(factory = factory),
                 onOpenDetail = onOpenDetail,
@@ -99,7 +113,7 @@ fun HomeScreen(
             }
         }
 
-        // The one thing on these three screens that does not scroll, and it is not content: the
+        // The one thing on these four screens that does not scroll, and it is not content: the
         // band the system clock sits in, so the hero and the tabs dissolve under it instead of
         // colliding with it (Insets.kt). Last in the Box, so it draws over whichever tab is up.
         TopScrim(Modifier.align(Alignment.TopCenter))

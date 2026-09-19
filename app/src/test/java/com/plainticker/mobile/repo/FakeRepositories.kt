@@ -180,13 +180,22 @@ class FakeRpcRepository(
 /** The leaders of coverage curation, or a call that failed; [calls] says whether a screen asked. */
 class FakeNextUpRepository(
     var result: Result<List<NextUpRow>> = Result.success(emptyList()),
+    /** [current]'s own answer, configured independently of [result] so a test can set round and previous. */
+    var answer: Result<NextUpAnswer> = Result.success(NextUpAnswer.Open(rows = emptyList(), round = null, previous = null)),
 ) : NextUpRepository {
     var calls = 0
+        private set
+    var currentCalls = 0
         private set
 
     override suspend fun nextUp(): List<NextUpRow> {
         calls++
         return result.getOrThrow()
+    }
+
+    override suspend fun current(): NextUpAnswer {
+        currentCalls++
+        return answer.getOrThrow()
     }
 }
 
