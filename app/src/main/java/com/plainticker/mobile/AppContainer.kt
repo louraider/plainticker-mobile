@@ -6,19 +6,26 @@ import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.jupiter.JupiterPriceApi
 import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.net.HttpClientFactory
+import com.plainticker.mobile.data.plainticker.EntitlementApi
 import com.plainticker.mobile.data.plainticker.NextUpApi
+import com.plainticker.mobile.data.plainticker.PassApi
 import com.plainticker.mobile.data.plainticker.PlainTickerApi
+import com.plainticker.mobile.data.plainticker.ReadApi
 import com.plainticker.mobile.data.plainticker.VoteApi
+import com.plainticker.mobile.data.receipts.FilePassReceiptStore
 import com.plainticker.mobile.data.receipts.FileReceiptStore
 import com.plainticker.mobile.data.receipts.FileVoteReceiptStore
+import com.plainticker.mobile.data.receipts.PassReceiptStore
 import com.plainticker.mobile.data.receipts.ReceiptStore
 import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.data.rpc.SolanaRpcApi
 import com.plainticker.mobile.data.xstocks.CatalogCache
 import com.plainticker.mobile.data.xstocks.FileCatalogCache
 import com.plainticker.mobile.data.xstocks.XStocksApi
+import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.OnboardingStore
+import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import com.plainticker.mobile.prefs.SharedPrefsNotificationPromptStore
 import com.plainticker.mobile.prefs.SharedPrefsOnboardingStore
 import com.plainticker.mobile.prefs.SharedPrefsWatchlistStore
@@ -68,6 +75,15 @@ interface AppContainer {
 
     /** The read half of curation: which uncovered tickers staked SKR has chosen, and by how much. */
     val nextUpApi: NextUpApi
+
+    /** Whether this device's own code is entitled, and which of the three sources carries it. */
+    val entitlementApi: EntitlementApi
+
+    /** The peek for everyone, the full read for an entitled device code (task A6). */
+    val readApi: ReadApi
+
+    /** Paying for Pro from the app: the server builds the transfer, this app signs it (task A6). */
+    val passApi: PassApi
     val xStocksApi: XStocksApi
     val jupiterPriceApi: JupiterPriceApi
     val jupiterSwapApi: JupiterSwapApi
@@ -98,6 +114,12 @@ interface AppContainer {
     /** The app's own record of the votes it landed (task A3); the Vote tab's "Your votes" reads it. */
     val voteReceiptStore: VoteReceiptStore
 
+    /** This device's own code for Pro entitlement (task A6): generated once, kept on the device. */
+    val devicePassStore: DevicePassStore
+
+    /** The app's own record of the pass payments it landed (task A6 review); survives process death. */
+    val passReceiptStore: PassReceiptStore
+
     /** The last digest the daily check produced: the Watchlist draws it, the check writes it. */
     val digestStore: DigestStore
 
@@ -124,6 +146,9 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val plainTickerApi: PlainTickerApi by lazy { PlainTickerApi(httpClient) }
     override val voteApi: VoteApi by lazy { VoteApi(httpClient) }
     override val nextUpApi: NextUpApi by lazy { NextUpApi(httpClient) }
+    override val entitlementApi: EntitlementApi by lazy { EntitlementApi(httpClient) }
+    override val readApi: ReadApi by lazy { ReadApi(httpClient) }
+    override val passApi: PassApi by lazy { PassApi(httpClient) }
     override val xStocksApi: XStocksApi by lazy { XStocksApi(httpClient) }
     override val jupiterPriceApi: JupiterPriceApi by lazy { JupiterPriceApi(httpClient) }
     override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }
@@ -168,6 +193,17 @@ class DefaultAppContainer(context: Context) : AppContainer {
     // record of what a wallet signed and must survive the system reclaiming space.
     override val voteReceiptStore: VoteReceiptStore by lazy {
         FileVoteReceiptStore(java.io.File(app.filesDir, FileVoteReceiptStore.FILE_NAME))
+    }
+
+    // The same shared preferences file as the watchlist and the digest: a handful of fields, no
+    // reason to pay for a second file. See DevicePassStore for what surviving process death and
+    // a wallet change each mean for the code it keeps.
+    override val devicePassStore: DevicePassStore by lazy { SharedPrefsDevicePassStore(prefs) }
+
+    // filesDir, not cache: same reasoning as voteReceiptStore above, a pass receipt is the only
+    // record of a signature between the wallet answering and pass/confirm resolving.
+    override val passReceiptStore: PassReceiptStore by lazy {
+        FilePassReceiptStore(java.io.File(app.filesDir, FilePassReceiptStore.FILE_NAME))
     }
 
     // The digest is a handful of fields written once a day, so it rides the same preferences

@@ -91,6 +91,9 @@ fun HomeScreen(
 
             HomeTab.PORTFOLIO -> PortfolioScreen(
                 viewModel = viewModel(factory = factory),
+                // Scoped to the home entry like every other ViewModel here, so a payment mid
+                // flight and this device's entitlement survive a tab switch.
+                passViewModel = viewModel(factory = factory),
                 onOpenDetail = onOpenDetail,
                 // A wallet holding no xStock is offered the list rather than a dead end; the tab
                 // is the host's to select, so the screen asks for it rather than navigating.

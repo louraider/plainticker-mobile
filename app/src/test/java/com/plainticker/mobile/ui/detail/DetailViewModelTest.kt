@@ -10,8 +10,12 @@ import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.MultiplierSource
 import com.plainticker.mobile.data.net.ApiException
 import com.plainticker.mobile.data.net.HttpClientFactory
+import com.plainticker.mobile.data.MockApi
 import com.plainticker.mobile.data.plainticker.AnalysisPayload
+import com.plainticker.mobile.data.plainticker.EntitlementApi
 import com.plainticker.mobile.data.plainticker.NextUpRow
+import com.plainticker.mobile.data.plainticker.ReadApi
+import com.plainticker.mobile.data.respondJson
 import com.plainticker.mobile.data.rpc.DefaultAccountState
 import com.plainticker.mobile.data.rpc.PausableConfig
 import com.plainticker.mobile.data.rpc.PermanentDelegate
@@ -23,6 +27,7 @@ import com.plainticker.mobile.data.xstocks.Multiplier
 import com.plainticker.mobile.data.xstocks.PriceLabel
 import com.plainticker.mobile.data.xstocks.Trading
 import com.plainticker.mobile.data.xstocks.TradingPeriod
+import com.plainticker.mobile.prefs.InMemoryDevicePassStore
 import com.plainticker.mobile.prefs.InMemoryNotificationPromptStore
 import com.plainticker.mobile.prefs.InMemoryWatchlistStore
 import com.plainticker.mobile.repo.FakeCatalogRepository
@@ -38,6 +43,7 @@ import com.plainticker.mobile.repo.scaled
 import com.plainticker.mobile.repo.xStock
 import com.plainticker.mobile.repo.xStockTrading
 import com.plainticker.mobile.ui.Copy
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -129,7 +135,9 @@ class DetailViewModelTest {
         nextUp: FakeNextUpRepository = FakeNextUpRepository(),
         watchlist: InMemoryWatchlistStore = InMemoryWatchlistStore(),
         prompts: InMemoryNotificationPromptStore = InMemoryNotificationPromptStore(),
-    ) = DetailViewModel(ticker, summaries, catalog, prices, mints, nextUp, watchlist, prompts, clock)
+        readApi: ReadApi? = null,
+        devicePassStore: InMemoryDevicePassStore = InMemoryDevicePassStore(),
+    ) = DetailViewModel(ticker, summaries, catalog, prices, mints, nextUp, watchlist, prompts, clock, readApi, devicePassStore)
 
     // ---- Everything present ------------------------------------------------------------------
 
@@ -625,6 +633,55 @@ class DetailViewModelTest {
 
             assertEquals(moment, later.nowMillis)
             assertFalse("past the forwarder's cache window the bar stops breathing", later.liveLine!!.live)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ---- The read and What to check next (task A6) ---------------------------------------
+
+    @Test
+    fun `the read call carries the ticker and this device's own code, in the clear`() = runTest {
+        val mock = MockApi {
+            respondJson(
+                """{"ticker":"AAPL","pro":false,"narrative":{"excerptEn":"First sentence."}}""",
+            )
+        }
+        val store = InMemoryDevicePassStore("ABCDE12345")
+        val vm = viewModel(readApi = ReadApi(mock.client), devicePassStore = store)
+
+        vm.state.test {
+            val state = awaitUntil { it.read is ReadState.Ready }
+            assertEquals("First sentence.", (state.readNarrative!!.text as Copy.Raw).text)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertTrue(mock.lastRequest.url.encodedPath.endsWith("/AAPL/read"))
+        assertEquals("ABCDE12345", mock.lastRequest.headers[EntitlementApi.HEADER_CODE])
+    }
+
+    @Test
+    fun `no read api wired leaves the read at loading, and never blocks the rest of the screen`() = runTest {
+        val vm = viewModel(readApi = null)
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals(ReadState.Loading, state.read)
+            assertNotNull("the free sources are unaffected", state.analysis)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `503 monetization disabled settles the read to disabled, drawing neither new block`() = runTest {
+        val mock = MockApi {
+            respondJson(
+                """{"error":"This endpoint is not enabled on this server.","code":"monetization_disabled"}""",
+                HttpStatusCode.ServiceUnavailable,
+            )
+        }
+        val vm = viewModel(readApi = ReadApi(mock.client))
+        vm.state.test {
+            val state = awaitUntil { it.read is ReadState.Disabled }
+            assertNull(state.readNarrative)
+            assertNull(state.nextStepsBlock)
             cancelAndIgnoreRemainingEvents()
         }
     }

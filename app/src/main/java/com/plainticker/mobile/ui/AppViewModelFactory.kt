@@ -9,6 +9,7 @@ import com.plainticker.mobile.ui.detail.DetailViewModel
 import com.plainticker.mobile.ui.list.ListViewModel
 import com.plainticker.mobile.ui.nav.Routes
 import com.plainticker.mobile.ui.onboarding.OnboardingViewModel
+import com.plainticker.mobile.ui.pass.PassViewModel
 import com.plainticker.mobile.ui.portfolio.PortfolioViewModel
 import com.plainticker.mobile.ui.swap.SwapViewModel
 import com.plainticker.mobile.ui.vote.VoteTabViewModel
@@ -43,6 +44,8 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.watchlistStore,
             container.notificationPromptStore,
             container.clock,
+            container.readApi,
+            container.devicePassStore,
         )
     }
     initializer {
@@ -90,6 +93,17 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.summaryRepository,
             container.voteReceiptStore,
             container.walletSession,
+        )
+    }
+    initializer {
+        PassViewModel(
+            container.passApi,
+            container.entitlementApi,
+            container.walletSession,
+            container.rpcRepository,
+            container.devicePassStore,
+            container.passReceiptStore,
+            container.clock,
         )
     }
     initializer {

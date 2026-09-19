@@ -37,3 +37,9 @@ class InMemoryWatchlistStore(initial: Set<String> = emptySet()) : WatchlistStore
 
     override fun remove(ticker: String) = _tickers.update { it - ticker.trim().uppercase() }
 }
+
+/** A fixed device code, so a test's expected memo hash never depends on [java.security.SecureRandom]. */
+class InMemoryDevicePassStore(private val fixedCode: String = "ABCDE12345") : DevicePassStore {
+    override fun code(): String = fixedCode
+    override fun codeHash(): String = SharedPrefsDevicePassStore.sha256Hex(fixedCode)
+}

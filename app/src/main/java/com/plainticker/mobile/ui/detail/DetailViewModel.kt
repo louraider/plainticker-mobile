@@ -5,9 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.SplitMultiplier
 import com.plainticker.mobile.data.net.ApiException
+import com.plainticker.mobile.data.plainticker.ReadApi
+import com.plainticker.mobile.data.plainticker.ReadError
 import com.plainticker.mobile.data.xstocks.MarketHours
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.data.xstocks.toReserves
+import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
@@ -54,6 +57,14 @@ class DetailViewModel(
     private val watchlist: WatchlistStore,
     private val prompts: NotificationPromptStore,
     private val clock: Clock,
+    /**
+     * "The read" and "What to check next" (task A6). Nullable and defaulted so every existing
+     * caller of this constructor is untouched by the addition: a null [readApi] simply never
+     * asks, and [DetailUiState.read] stays [ReadState.Loading], which draws nothing extra and
+     * never gates anything the six sources above it already carried.
+     */
+    private val readApi: ReadApi? = null,
+    private val devicePassStore: DevicePassStore? = null,
 ) : ViewModel() {
 
     private val ticker = ticker.trim().uppercase() // lint-allow uppercase: API ticker key
@@ -123,7 +134,28 @@ class DetailViewModel(
             // analysis: a ticker PlainTicker has never classified still gets its whole trust layer.
             launch { loadAnalysis() }
             launch { loadTokenSide(now) }
+            // Independent of both: a server that cannot answer this call, or has not turned the
+            // route on yet, must never delay a single block this screen drew before task A6.
+            launch { loadRead() }
         }
+    }
+
+    // ---- The read and What to check next (task A6) ---------------------------------------
+
+    private suspend fun loadRead() {
+        val api = readApi ?: return
+        val read = try {
+            ReadState.Ready(api.get(ticker, devicePassStore?.code()))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ReadError.Disabled) {
+            ReadState.Disabled
+        } catch (e: ReadError.NotServed) {
+            ReadState.NotServed
+        } catch (e: Exception) {
+            ReadState.Failed
+        }
+        _state.update { it.copy(read = read) }
     }
 
     // ---- PlainTicker --------------------------------------------------------------------
