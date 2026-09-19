@@ -161,6 +161,39 @@ class VoteScreenTest {
         assertEquals("Vote to cover %1\$s", ShippedCopy.strings["vote_title"])
     }
 
+    // ---- The round header does not starve, found on-device at 1.3x on v0.6.0-rc1 ------------------------
+
+    /**
+     * [Heading] gives its title `weight(1f)` and its meta the rest of the row at the meta's own
+     * width. A short count (Leaders, Your votes, the ballot) never asks for more than a few
+     * digits, so the title barely notices; the round's meta was a whole clause, "1, closes 21 Sep
+     * 2026 00:00 UTC", which starved "Round" to one letter per line on the Seeker. There is no
+     * layout test on a plain JVM that can measure this again, so what is pinned is the fix: the
+     * round no longer routes through [Heading] at all, and its number still renders in the mono
+     * face rather than back inside the Outfit title.
+     */
+    @Test
+    fun `the round header does not hand its title to Heading's weighted column`() {
+        val block = body(voteTabScreen, "private fun RoundHeader(")
+        assertFalse("a clause-length meta in Heading is what starved the title on-device", "Heading(" in block)
+        assertTrue("the round number stays in the mono face", "PlainTickerType.trackValue" in block)
+    }
+
+    // ---- The explainer is short enough that nobody scrolls past it, tightened on review -----------------
+
+    @Test
+    fun `the explainer is two paragraphs and the disclosure, not three paragraphs and the disclosure`() {
+        val block = body(voteTabScreen, "private fun Explainer(")
+        val ids = Regex("""R\.string\.(vote_tab_explainer_\w+)""").findAll(block).map { it.groupValues[1] }.toSet()
+        assertEquals(
+            "a fourth paragraph is what pushed Leaders below the fold at 1.3x on the Seeker",
+            setOf("vote_tab_explainer_what", "vote_tab_explainer_how"),
+            ids,
+        )
+        // The disclosure is still said, just not counted as one of the two paragraphs above.
+        assertTrue("the gameability disclosure is not dropped, only kept out of the pitch", "vote_gameable" in block)
+    }
+
     /** Everything from [function] to the line that closes it at column zero. */
     private fun body(source: String, function: String): String {
         val start = source.indexOf(function)

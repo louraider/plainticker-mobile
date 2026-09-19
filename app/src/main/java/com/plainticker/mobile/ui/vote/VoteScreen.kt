@@ -1,6 +1,7 @@
 package com.plainticker.mobile.ui.vote
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
@@ -202,33 +205,61 @@ internal fun VoteTabContent(
 }
 
 /**
- * What this is, what it decides and how it works, in that order (section 1.5). Drawn above every
- * other state, including the not-open one: a reader who has never heard of this is owed the
- * explanation whether or not a round happens to be open right now.
+ * Two short paragraphs, then the disclosure as its own quieter line (section 1.5, tightened on
+ * review): coverage is finite and costs money, and staked SKR decides what is read next, in the
+ * first; a vote is a signed transaction rather than a login and counts once per wallet per token
+ * per round, in the second. All four facts the plan asks for, none dropped, in two paragraphs
+ * rather than the three this screen shipped with, because a third one at 1.3x font scale pushed
+ * Leaders below the fold, and the thing this tab is for should not be the thing nobody scrolls
+ * to. Drawn above every other state, including the not-open one: a reader who has never heard of
+ * this is owed the explanation whether or not a round happens to be open right now.
  */
 @Composable
 private fun Explainer() {
     Column(Modifier.fillMaxWidth().padding(horizontal = Side, vertical = 2.dp)) {
         Text(text = stringResource(R.string.vote_tab_explainer_what), style = PlainTickerType.body, color = Ink, modifier = Modifier.padding(top = 12.dp))
-        Text(text = stringResource(R.string.vote_tab_explainer_decides), style = PlainTickerType.body, color = Ink, modifier = Modifier.padding(top = 10.dp))
         Text(text = stringResource(R.string.vote_tab_explainer_how), style = PlainTickerType.body, color = Ink, modifier = Modifier.padding(top = 10.dp))
         Text(text = stringResource(R.string.vote_gameable), style = PlainTickerType.small, color = Muted, modifier = Modifier.padding(top = 10.dp))
     }
 }
 
 /**
- * "Round", in Outfit like every other heading, with the round's own number folded into the mono
- * meta slot beside "Closes ...": DESIGN.md section 3 keeps every numeral in the mono face and
- * never in Outfit, and a digit interpolated into the heading's own text would sit in Outfit like
- * every other word there. This screen is read on camera, so the one number on it is not the one
- * this app draws in the wrong face.
+ * "Round" and its number on one line, the close time on its own beneath: its own small anatomy
+ * rather than [Heading], because [Heading] gives its title a `weight(1f)` and its meta the rest
+ * of the row at the meta's own natural width. A short count in that meta slot (Leaders, Your
+ * votes, the ballot) never asks for more than a few digits, so the title barely notices; a full
+ * clause like "1, closes 21 Sep 2026 00:00 UTC" asked for nearly the whole row's width instead,
+ * which starved the title down to one letter of "Round" per line, R-o-u-n-d, top to bottom,
+ * about a fifth of the screen tall. This is not that division: the round's number sits beside the
+ * word at the word's own size, in the mono face DESIGN.md section 3 keeps for every numeral, and
+ * the close time is a second, quieter line with no row to starve.
  */
 @Composable
 private fun RoundHeader(round: VoteRound) {
     val roundId = Fmt.count(round.id)
     val closesText = round.closesAtInstant()?.let { stringResource(R.string.vote_tab_round_closes, Fmt.utc(it)) }
-    val meta = closesText?.let { stringResource(R.string.list_row_meta_join, roundId, it) } ?: roundId
-    Heading(text = stringResource(R.string.vote_tab_round_heading), meta = meta, topPadding = HeadingTopGap)
+    Column(Modifier.fillMaxWidth().padding(start = Side, end = Side, top = HeadingTopGap, bottom = 14.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.semantics(mergeDescendants = true) { heading() },
+        ) {
+            Text(
+                text = stringResource(R.string.vote_tab_round_heading),
+                style = PlainTickerType.heading,
+                color = Ink,
+                modifier = Modifier.alignByBaseline(),
+            )
+            Text(
+                text = roundId,
+                style = PlainTickerType.trackValue,
+                color = Ink,
+                modifier = Modifier.alignByBaseline(),
+            )
+        }
+        if (closesText != null) {
+            Text(text = closesText, style = PlainTickerType.monoSmall, color = Muted, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
 }
 
 /** One leader: the token and its company left, the voters on the meta line, the weight right. */

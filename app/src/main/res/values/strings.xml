@@ -352,9 +352,8 @@
 
     <!-- The Vote tab (task A2, docs/plan-monetisation-2026-09-19.md section 1.5): the explainer,
          the round header, the leaders, the wallet's own votes, the last round and the ballot. -->
-    <string name="vote_tab_explainer_what">This app covers only some of the tokenized stocks on Solana, and every analysis costs money to produce.</string>
-    <string name="vote_tab_explainer_decides">Staked SKR decides which uncovered token is analyzed next. The heaviest weight in a round wins.</string>
-    <string name="vote_tab_explainer_how">A vote is a transaction you sign, not a login: it names the token, reads your staked SKR from the chain, and counts once per wallet per token in a round.</string>
+    <string name="vote_tab_explainer_what">This app covers only some of the tokenized stocks on Solana, and every analysis costs money. Staked SKR decides which uncovered token is analyzed next.</string>
+    <string name="vote_tab_explainer_how">A vote is a transaction you sign, not a login. It counts once per wallet per token in a round.</string>
     <!-- The not-open state: HTTP 404, or 503 vote_not_configured, replaces every section below
          this one with the single honest line rather than an error banner. -->
     <string name="vote_tab_not_open">Voting is not open yet.</string>
