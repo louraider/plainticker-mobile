@@ -1198,3 +1198,28 @@ list and the heading in JetBrains Mono. **Nothing was signed and no fee was spen
 strip did not draw, which is correct while `rows` is empty: it hides rather than raising a banner.
 
 Still unwalked: the positive path. It needs the environment variable, and then a signature.
+
+### The loop closed, 2026-09-19 10:02 UTC
+
+The whole vote path ran end to end on the Seeker, with the release build `v0.5.0` and the demo
+wallet.
+
+| step | evidence |
+|---|---|
+| build | `POST /api/v1/vote/build` → 200, unsigned v0 transaction, `weight` 878980647 matching the chain read exactly, `expiresAt` 45 s out |
+| shape | fee payer is the voter, signature slot all zeros, ix0 `SystemProgram.transfer` of 0 lamports putting the collector in the account keys, ix1 Memo with `PT-VOTE:JEF` and no keys |
+| sign | signed in Seed Vault from the app, sheet reported `Vote sent` with `3RZh…9yVG` |
+| chain | signature `3RZhaQtAySu4CNLdPQjfEKm7y7NZqcukEFLAFJzZLUsLuPpsPadbTb6ZFYmSRXTg2SsqhhHuN1EUjsUnPmV19yVG`, slot 448,374,697, `err` null, memo read back as `[11] PT-VOTE:JEF` |
+| tally | `scanned 1, recorded 1`, every skip counter zero, cursor advanced to that signature, 887 ms |
+| read | `GET /api/v1/vote/next-up` → `{"ticker":"JEF","weight":"878980647","voters":1}` |
+
+One caveat worth keeping: `next-up` is edge-cached for 300 s, so the row does not appear to a client
+that asks again inside that window. The app's own cache is 5 minutes on top of it, so a vote can take
+up to ten minutes to become visible. That is fine for a leaderboard and wrong for a receipt, and the
+video should not cut from the signature straight to the strip as though it were immediate.
+
+**A production incident happened on the way and is worth recording.** `vercel --prod` was run from a
+local checkout four commits behind `origin/main`, which deployed a build with no vote routes and no
+`assetlinks.json`, and that alias went live. Production 404'd on both for roughly fifteen minutes.
+The fix was to fast-forward the checkout and deploy again. The lesson is that `vercel --prod` builds
+from the working directory, not from the branch, so the checkout has to be verified current first.
