@@ -36,6 +36,11 @@ import com.plainticker.mobile.ui.theme.PlainTickerType
  * A pending payment (task A6 review: a landed signature this device has not seen confirmed yet,
  * [PassReceiptStore]) replaces the Pay action with its own sentence rather than standing beside
  * it: a second payment is never offered while one might still be waiting on the chain or the cron.
+ *
+ * **Pay is never offered from a state the server has already refused.** [payOffered] withholds it
+ * the instant [ProUiState.entitlementDisabled] is true, so the entitlement line's own sentence is
+ * never contradicted by an action underneath it that can only end the same way, after first
+ * spending a wallet approval on a connect the server was always going to refuse the payment for.
  */
 @Composable
 fun ProBlock(state: ProUiState, onPay: (() -> Unit)?, onRetryEntitlement: () -> Unit) {
@@ -54,7 +59,7 @@ fun ProBlock(state: ProUiState, onPay: (() -> Unit)?, onRetryEntitlement: () -> 
             if (entitlementRetries(state)) {
                 TextAction(label = stringResource(R.string.action_retry), onClick = onRetryEntitlement)
             }
-            if (onPay != null && state.pendingSignature == null) {
+            if (onPay != null && payOffered(state)) {
                 TextAction(label = stringResource(R.string.pass_action), onClick = onPay)
             }
         }

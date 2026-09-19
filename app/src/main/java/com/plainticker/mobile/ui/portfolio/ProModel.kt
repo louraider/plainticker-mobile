@@ -57,8 +57,34 @@ fun stakeLine(state: ProUiState): Copy? = when {
     else -> words(R.string.pro_stake_read, Fmt.tokenAmount(state.stakeRaw, SkrStakeBound.SKR_DECIMALS))
 }
 
-/** Whether the entitlement banner offers a way to ask again: only the failure carries one. */
+/**
+ * Whether the entitlement banner offers a way to ask again.
+ *
+ * Only [ProUiState.entitlementFailed] carries one: a failed *read* is a call that did not answer
+ * and a later tap could plausibly end differently, but [ProUiState.entitlementDisabled] is the
+ * server itself saying the route is not turned on, and asking it again returns the same answer.
+ * The two are kept apart on purpose (see [payOffered]): a failure and a refusal are different
+ * facts and must not both suppress the same things.
+ */
 fun entitlementRetries(state: ProUiState): Boolean = state.entitlementFailed
+
+/**
+ * Whether the Pay action may be offered at all.
+ *
+ * False exactly where paying is known, in advance, to end in a refusal: [ProUiState.entitlementDisabled]
+ * means the server has already said `503 monetization_disabled` for this exact feature, and
+ * `POST /api/v1/pass/build` is gated on the same flag, so a payment attempt here could only ever
+ * be refused too, after first sending the reader through the wallet's own connect sheet for
+ * nothing (a review finding on a v0.7.0 release build: the entitlement line already said "Pro is
+ * not offered by this server yet" while Pay stood directly under it). A pending payment is the
+ * other reason, unrelated to this one: never a second payment while the first might still land.
+ *
+ * An entitlement read that merely *failed* (`entitlementFailed`) is not the same fact and does not
+ * belong on this list: `/pass/build` is its own call with its own success or failure, so a reader
+ * whose entitlement check timed out is still owed the chance to try paying, and a refusal there
+ * surfaces through the pay sheet's own states exactly as it always has.
+ */
+fun payOffered(state: ProUiState): Boolean = !state.entitlementDisabled && state.pendingSignature == null
 
 /**
  * A payment this device has signed and sent but not yet seen the server confirm (task A6 review),

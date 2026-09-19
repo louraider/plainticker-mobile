@@ -382,6 +382,41 @@ class PassViewModelTest {
         }
     }
 
+    /**
+     * v0.7.0 review, found on the Seeker against production with `MONETIZATION_ENABLED` unset:
+     * the Portfolio block still offered Pay under "Pro is not offered by this server yet.", and
+     * tapping it opened Seed Vault's connect sheet for a payment the server had already refused.
+     * [com.plainticker.mobile.ui.portfolio.payOffered] withholds the action itself; this pins the
+     * belt-and-brace guard inside [pay] that keeps the wallet sheet from ever opening even if
+     * something upstream of that predicate ever regresses.
+     */
+    @Test
+    fun `pay refuses outright once entitlement reads as disabled, before any wallet call`() = runTest {
+        val entitlement = MockApi {
+            respondJson(
+                """{"error":"This endpoint is not enabled on this server.","code":"monetization_disabled"}""",
+                HttpStatusCode.ServiceUnavailable,
+            )
+        }
+        val session = wallet(connected = false)
+        val pass = passMock()
+        val vm = machine(pass = pass, entitlement = entitlement, wallet = session)
+
+        vm.pro.test {
+            awaitUntil { it.entitlementDisabled }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        vm.pay()
+        assertEquals(
+            "no wallet sheet opens from a state the server has already refused",
+            PassState.Closed,
+            vm.state.value,
+        )
+        assertEquals(0, session.connectCount)
+        assertTrue("pass/build is never asked for either", pass.requests.isEmpty())
+    }
+
     @Test
     fun `any other entitlement failure is retryable and distinct from disabled`() = runTest {
         val entitlement = MockApi { respondHtml("<html>down</html>", HttpStatusCode.BadGateway) }
