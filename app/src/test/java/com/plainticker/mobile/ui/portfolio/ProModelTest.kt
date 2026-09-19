@@ -141,4 +141,63 @@ class ProModelTest {
         val line = pendingPaymentLine(ProUiState(pendingSignature = "sig")) as Copy.Words
         assertEquals(R.string.pro_payment_pending, line.id)
     }
+
+    // ---- The action matrix (v0.7.0 review: Pay must never be reachable from a refused state) ----
+
+    /**
+     * Which of the two actions the block offers, for every state that matters: refused by the
+     * server, a read that merely failed, no wallet, a wallet with nothing, a wallet already Pro,
+     * and a pending payment. Pinned as one table so the next line added to either predicate has
+     * to answer for all six at once, rather than for whichever one prompted the change.
+     */
+    private data class Offered(val pay: Boolean, val retry: Boolean)
+
+    private fun offered(state: ProUiState) = Offered(payOffered(state), entitlementRetries(state))
+
+    @Test
+    fun `refused by the server offers neither action`() {
+        // 503 monetization_disabled (or the entitlement route's own 404): pass-build is gated on
+        // the same flag, so Pay could only end in the same refusal, after first spending a wallet
+        // approval on a connect for nothing (the v0.7.0 finding this matrix exists to pin).
+        val state = ProUiState(entitlementLoading = false, entitlementDisabled = true)
+        assertEquals(Offered(pay = false, retry = false), offered(state))
+    }
+
+    @Test
+    fun `an entitlement read that merely failed still offers Pay, because pass-build is its own call`() {
+        // A failure is not a refusal: retrying entitlement can plausibly answer differently, and
+        // paying was never told no by anyone, so neither action is withheld for this reason.
+        val state = ProUiState(entitlementLoading = false, entitlementFailed = true)
+        assertEquals(Offered(pay = true, retry = true), offered(state))
+    }
+
+    @Test
+    fun `no wallet connected still offers Pay, since paying is what connects one`() {
+        val state = ProUiState(entitlementLoading = false, walletConnected = false, pro = false)
+        assertEquals(Offered(pay = true, retry = false), offered(state))
+    }
+
+    @Test
+    fun `a connected wallet with no entitlement offers Pay`() {
+        val state = ProUiState(entitlementLoading = false, walletConnected = true, pro = false, stakeRaw = 0L)
+        assertEquals(Offered(pay = true, retry = false), offered(state))
+    }
+
+    @Test
+    fun `a connected wallet already Pro still offers Pay, since a later payment replaces the pass`() {
+        val state = ProUiState(
+            entitlementLoading = false,
+            walletConnected = true,
+            pro = true,
+            source = EntitlementSource.PASS,
+            untilMillis = 1_792_368_000_000L,
+        )
+        assertEquals(Offered(pay = true, retry = false), offered(state))
+    }
+
+    @Test
+    fun `a payment already pending offers neither action, so a second payment is never asked for`() {
+        val state = ProUiState(entitlementLoading = false, walletConnected = true, pro = false, pendingSignature = "sig")
+        assertEquals(Offered(pay = false, retry = false), offered(state))
+    }
 }

@@ -215,10 +215,17 @@ class PassViewModel(
      * The tap: connect if there is no session, then ask the server to build the transfer.
      * Refuses while [ProUiState.pendingSignature] is set: a payment already on the chain and not
      * yet confirmed is not a reason to sign a second one, it is a reason to wait or retry confirm.
+     *
+     * Also refuses outright while [ProUiState.entitlementDisabled] is true: the Portfolio block
+     * already withholds the Pay action for that state ([com.plainticker.mobile.ui.portfolio.payOffered]),
+     * and this guard is the belt to that brace, so a stale composition or a caller other than the
+     * block can never send a wallet through its own connect sheet for a payment the server has
+     * already said it will refuse (a review finding on a v0.7.0 release build).
      */
     fun pay(mint: String = PassApi.MINT_USDC) {
         if (_state.value.isBusy) return
         if (_pro.value.pendingSignature != null) return
+        if (_pro.value.entitlementDisabled) return
         val known = wallet.account.value?.address
         _state.value = if (known == null) PassState.Opening() else PassState.Building(known)
         payJob?.cancel()
