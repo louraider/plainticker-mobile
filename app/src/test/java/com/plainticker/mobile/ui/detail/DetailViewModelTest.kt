@@ -694,6 +694,37 @@ class DetailViewModelTest {
     }
 
     /**
+     * The shape a phone holding a paid device pass actually receives, never exercised by
+     * [`the live AAPL response...`][com.plainticker.mobile.ui.detail.DetailViewModelTest] above:
+     * that fixture is `pro: false` because it was captured with no code presented. This is the v1
+     * "no read section at all" regression on a release build (`ReadState.Failed` behind a 200):
+     * `nextSteps.stepsEn` on the wire is a list of `{title, body}` objects, and a model that
+     * declared it `List<String>` threw on exactly this shape while decoding the peek fine, so the
+     * defect only ever showed up once a device sent `X-PT-Code` for real.
+     */
+    @Test
+    fun `the entitled AAPL response lands as a Ready read with the full text, end to end`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/read-aapl-entitled.json")) }
+        val store = InMemoryDevicePassStore("ABCDE12345")
+        val vm = viewModel(readApi = ReadApi(mock.client), devicePassStore = store)
+
+        vm.state.test {
+            val state = awaitUntil { it.read is ReadState.Ready }
+            val narrative = state.readNarrative
+            assertNotNull("an entitled reader must still get a read block, not ReadState.Failed", narrative)
+            assertTrue("the full text must be used, not the excerpt", narrative!!.full)
+            val payload = (state.read as ReadState.Ready).payload
+            assertEquals(payload.narrative!!.fullEn, (narrative.text as Copy.Raw).text)
+
+            val steps = state.nextStepsBlock
+            assertNotNull(steps)
+            assertTrue(steps!!.full)
+            assertEquals(payload.nextSteps!!.stepsEn!!.map { it.body }, steps.items.map { it.detail })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
      * Considered and ruled out: [DevicePassStore.code] is called inside [DetailViewModel]'s own
      * try block (`ReadState.Ready(api.get(ticker, devicePassStore?.code()))`), so a store that
      * throws must settle the read to [ReadState.Failed] exactly like a failed network call, and

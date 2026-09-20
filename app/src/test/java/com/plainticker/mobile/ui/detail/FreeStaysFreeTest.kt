@@ -123,7 +123,7 @@ class FreeStaysFreeTest {
     private val fullBody = """
         {"ticker":"AAPL","pro":true,
          "narrative":{"excerptEn":"First sentence.","fullEn":"First sentence. Second one."},
-         "nextSteps":{"titlesEn":["Check margins"],"stepsEn":["Margins rose again."]}}
+         "nextSteps":{"titlesEn":["Check margins"],"stepsEn":[{"title":"Check margins","body":"Margins rose again."}]}}
     """.trimIndent()
 
     /** One way task A6's call can resolve, and what [DetailUiState.read] must settle to for it. */
