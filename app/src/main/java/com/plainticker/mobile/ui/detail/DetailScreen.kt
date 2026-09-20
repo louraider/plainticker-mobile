@@ -207,6 +207,7 @@ internal fun DetailContent(
             state.banner?.let { Banner(text = stringResource(it.text)) }
 
             Hero(state)
+            VerdictSection(state = state, onViewPortfolio = onViewPortfolio)
 
             val tokenNotice = state.tokenNotice
             if (tokenNotice != null) {
@@ -245,6 +246,49 @@ internal fun DetailContent(
             VoteSheet(state = vote, actions = voteActions)
         }
         TopScrim(Modifier.align(Alignment.TopCenter))
+    }
+}
+
+// ---- The verdict (task app-verdict) -------------------------------------------------------------
+
+/**
+ * Directly under the hero and above the gauge, the slot the web gives its verdict band
+ * (components/ticker/VerdictBand.tsx in the FinanceAnalyst repo). This app draws it its own way
+ * rather than copying the web's boxed, tone-coloured band: a caption over a value, the same shape
+ * [PriceBlock] already uses for the token's own figure, because DESIGN.md section 2 keeps colour
+ * for direction and risk, never for a classification.
+ *
+ * [DetailUiState.verdictBlock] is null in every state this screen already drew nothing extra in: no
+ * analysis served, or a served payload with no `verdict` block at all. [VerdictBlock.Loading] draws
+ * a skeleton the way [Hero]'s own company line does. [VerdictBlock.Locked] draws a placeholder
+ * shape with no text behind it, because the real word never reached this app to blur, plus the one
+ * sentence this screen already uses lower down for the same reason, pointing at the same place.
+ */
+@Composable
+private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
+    val block = state.verdictBlock ?: return
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = Side, end = Side, top = VerdictTop)
+            .semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(text = stringResource(R.string.detail_verdict_label), style = PlainTickerType.label, color = Muted)
+        when (block) {
+            VerdictBlock.Loading -> SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
+
+            is VerdictBlock.Unlocked ->
+                Text(text = block.label.text(), style = PlainTickerType.heading, color = Ink)
+
+            VerdictBlock.Locked -> {
+                SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
+                Text(text = stringResource(R.string.detail_pro_peek_note), style = PlainTickerType.small, color = Muted)
+                if (onViewPortfolio != null) {
+                    TextAction(label = stringResource(R.string.receipt_view_portfolio), onClick = onViewPortfolio)
+                }
+            }
+        }
     }
 }
 
@@ -716,6 +760,11 @@ private fun AbsentRow(label: String) {
 private val Side = 20.dp
 private val HeroTop = 12.dp
 private val HeroCompanyGap = 6.dp
+/** Between the verdict block and the hero above it, the same gap [PriceTop] used before it moved down. */
+private val VerdictTop = 28.dp
+/** The placeholder that stands in for a locked or not-yet-loaded classification, never real text. */
+private val VerdictPlaceholderWidth = 120.dp
+private val VerdictPlaceholderHeight = 22.dp
 private val PriceTop = 28.dp
 /** Between the floor's sentence and the pair it governs: close enough to read as one block. */
 private val LeadGap = 14.dp

@@ -43,14 +43,20 @@ class FakeSummaryRepository(
     var summaryCalls = 0
         private set
 
+    /** The code the most recent [analysis] call carried, so a test can assert it was sent at all. */
+    var lastAnalysisCode: String? = null
+        private set
+
     override suspend fun summary(): SummaryResponse {
         summaryCalls++
         return summaryResult.getOrThrow()
     }
 
-    override suspend fun analysis(ticker: String): AnalysisPayload =
-        analyses[ticker.uppercase()]?.getOrThrow()
+    override suspend fun analysis(ticker: String, code: String?): AnalysisPayload {
+        lastAnalysisCode = code
+        return analyses[ticker.uppercase()]?.getOrThrow()
             ?: throw ApiException(404, "www.plainticker.com/api/v1/$ticker", "not_available", null)
+    }
 }
 
 class FakeCatalogRepository(

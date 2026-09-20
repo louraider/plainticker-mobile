@@ -12,6 +12,8 @@ import com.plainticker.mobile.data.plainticker.Axis
 import com.plainticker.mobile.data.plainticker.FScore
 import com.plainticker.mobile.data.plainticker.Method
 import com.plainticker.mobile.data.plainticker.NextUpRow
+import com.plainticker.mobile.data.plainticker.Tone
+import com.plainticker.mobile.data.plainticker.Verdict
 import com.plainticker.mobile.data.rpc.DefaultAccountState
 import com.plainticker.mobile.data.rpc.PausableConfig
 import com.plainticker.mobile.data.rpc.PermanentDelegate
@@ -79,6 +81,7 @@ class DetailModelTest {
         asOf: String? = "2026-09-12T20:00:00Z",
         statement: String? = "Rule-based classification of fundamentals against the sector.",
         composite: Double? = 71.0,
+        verdict: Verdict? = null,
     ) = AnalysisPayload(
         ticker = "TSLA",
         company = "Tesla, Inc.",
@@ -88,6 +91,7 @@ class DetailModelTest {
         fscore = fscore,
         compositePercentile = composite,
         method = Method(statementEn = statement, schemaVersion = "v1.1"),
+        verdict = verdict,
     )
 
     /** Everything landed: the shape the video opens on. */
@@ -147,6 +151,52 @@ class DetailModelTest {
         // The catalog answered first and PlainTicker has not: the xStock name carries the row.
         val catalogOnly = loading.copy(catalogAsset = Piece.Ready(asset), analysisState = AnalysisState.NotServed)
         assertEquals("Tesla xStock", catalogOnly.heroCompany)
+    }
+
+    // ---- The verdict (task app-verdict) --------------------------------------------------------
+
+    @Test
+    fun `the verdict is loading while the analysis itself has not resolved`() {
+        val loading = DetailUiState(ticker = "TSLA", nowMillis = now)
+        assertEquals(VerdictBlock.Loading, loading.verdictBlock)
+    }
+
+    @Test
+    fun `a server that predates the verdict, or one with monetization off, draws nothing extra`() {
+        // served()'s own payload() default carries no verdict at all, the shape
+        // plainticker/analysis-aapl.json already exercises.
+        assertNull(served().verdictBlock)
+    }
+
+    @Test
+    fun `an unlocked verdict carries the payload's own label, raw and untranslated`() {
+        val verdict = Verdict(code = "quality_compounder", labelUk = "Компаундер якості", labelEn = "Quality compounder", tone = Tone.POSITIVE)
+        val state = served(analysis = AnalysisState.Served(payload(verdict = verdict)))
+        val block = state.verdictBlock
+        assertTrue(block is VerdictBlock.Unlocked)
+        assertEquals("Quality compounder", raw((block as VerdictBlock.Unlocked).label))
+    }
+
+    @Test
+    fun `a locked verdict reads as locked, never as the code or a label the server also sent`() {
+        // Never sent this way by the real server (a locked verdict's other fields come back
+        // null), but the model must trust `locked` over a label regardless.
+        val verdict = Verdict(code = "quality_compounder", labelEn = "Quality compounder", locked = true)
+        val state = served(analysis = AnalysisState.Served(payload(verdict = verdict)))
+        assertEquals(VerdictBlock.Locked, state.verdictBlock)
+    }
+
+    @Test
+    fun `an unlocked verdict with a blank label draws nothing, rather than an empty value`() {
+        val state = served(analysis = AnalysisState.Served(payload(verdict = Verdict(labelEn = ""))))
+        assertNull(state.verdictBlock)
+    }
+
+    @Test
+    fun `a ticker with no analysis at all draws no verdict block, served, incomplete or unavailable`() {
+        assertNull(served(analysis = AnalysisState.NotServed).verdictBlock)
+        assertNull(served(analysis = AnalysisState.Incomplete).verdictBlock)
+        assertNull(served(analysis = AnalysisState.Unavailable).verdictBlock)
     }
 
     // ---- The price row -----------------------------------------------------------------------

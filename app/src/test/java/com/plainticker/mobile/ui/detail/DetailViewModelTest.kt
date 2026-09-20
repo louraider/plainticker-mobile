@@ -14,7 +14,10 @@ import com.plainticker.mobile.data.MockApi
 import com.plainticker.mobile.data.plainticker.AnalysisPayload
 import com.plainticker.mobile.data.plainticker.EntitlementApi
 import com.plainticker.mobile.data.plainticker.NextUpRow
+import com.plainticker.mobile.data.plainticker.PlainTickerApi
 import com.plainticker.mobile.data.plainticker.ReadApi
+import com.plainticker.mobile.data.plainticker.Tone
+import com.plainticker.mobile.data.plainticker.Verdict
 import com.plainticker.mobile.data.respondJson
 import com.plainticker.mobile.data.rpc.DefaultAccountState
 import com.plainticker.mobile.data.rpc.PausableConfig
@@ -37,6 +40,7 @@ import com.plainticker.mobile.repo.FakeNextUpRepository
 import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeSummaryRepository
 import com.plainticker.mobile.repo.MintReading
+import com.plainticker.mobile.repo.PlainTickerSummaryRepository
 import com.plainticker.mobile.repo.mintFacts
 import com.plainticker.mobile.repo.price
 import com.plainticker.mobile.repo.proofOfReserves
@@ -375,6 +379,82 @@ class DetailViewModelTest {
 
     private fun summaryAsOf(asOf: String) =
         FakeSummaryRepository(analyses = mapOf("AAPL" to Result.success(analysis().copy(asOf = asOf))))
+
+    // ---- The verdict (task app-verdict) --------------------------------------------------------
+
+    @Test
+    fun `the ticker call carries this device's own code, the same header the read call sends`() = runTest {
+        val store = InMemoryDevicePassStore("ABCDE12345")
+        val repo = FakeSummaryRepository(analyses = mapOf("AAPL" to Result.success(analysis())))
+        val vm = viewModel(summaries = repo, devicePassStore = store)
+
+        vm.state.test {
+            awaitUntil { !it.isLoading }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals("ABCDE12345", repo.lastAnalysisCode)
+    }
+
+    /**
+     * The same header, this time through the real repository and the real client rather than the
+     * fake, so a defect in the wiring between [DetailViewModel], [PlainTickerSummaryRepository]
+     * and [PlainTickerApi] cannot hide behind a fake that never touches the wire. [FakeSummaryRepository]
+     * cannot stand in for [PlainTickerSummaryRepository] here, so this one builds the view model
+     * directly rather than through this file's [viewModel] helper.
+     */
+    @Test
+    fun `the code reaches the wire, end to end, through the real client`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/analysis-aapl.json")) }
+        val vm = DetailViewModel(
+            "AAPL",
+            PlainTickerSummaryRepository(PlainTickerApi(mock.client)),
+            catalog(),
+            FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
+            readableMint(),
+            FakeNextUpRepository(),
+            InMemoryWatchlistStore(),
+            InMemoryNotificationPromptStore(),
+            clock,
+            null,
+            InMemoryDevicePassStore("ABCDE12345"),
+        )
+
+        vm.state.test {
+            awaitUntil { !it.isLoading }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals("ABCDE12345", mock.lastRequest.headers[EntitlementApi.HEADER_CODE])
+    }
+
+    @Test
+    fun `an unlocked verdict lands as the payload's own label`() = runTest {
+        val verdict = Verdict(code = "quality_compounder", labelEn = "Quality compounder", tone = Tone.POSITIVE)
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(analyses = mapOf("AAPL" to Result.success(analysis().copy(verdict = verdict)))),
+        )
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            val block = state.verdictBlock
+            assertTrue(block is VerdictBlock.Unlocked)
+            assertEquals("Quality compounder", ((block as VerdictBlock.Unlocked).label as Copy.Raw).text)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a locked verdict lands as locked, and the rest of the screen is unaffected`() = runTest {
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(
+                analyses = mapOf("AAPL" to Result.success(analysis().copy(verdict = Verdict(locked = true)))),
+            ),
+        )
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals(VerdictBlock.Locked, state.verdictBlock)
+            assertNotNull("the trust layer is unaffected by a locked verdict", state.chain.valueOrNull)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     // ---- The price ---------------------------------------------------------------------------
 
@@ -726,12 +806,21 @@ class DetailViewModelTest {
 
     /**
      * Considered and ruled out: [DevicePassStore.code] is called inside [DetailViewModel]'s own
-     * try block (`ReadState.Ready(api.get(ticker, devicePassStore?.code()))`), so a store that
-     * throws must settle the read to [ReadState.Failed] exactly like a failed network call, and
-     * never take the other five sources down with it.
+     * try block for both the read call (`ReadState.Ready(api.get(ticker, devicePassStore?.code()))`)
+     * and, since task app-verdict, the ticker call itself
+     * (`summaries.analysis(ticker, devicePassStore?.code())`), so a store that throws must settle
+     * each to its own failure state exactly like a failed network call, and never crash or leave
+     * either stuck at Loading.
+     *
+     * Updated for task app-verdict: before it, the analysis call never touched the device pass
+     * store, so this test asserted `state.analysis` stood unaffected. Now the verdict needs the
+     * same code the read call needs, so a throwing store is a transport failure for the analysis
+     * too and it settles to [AnalysisState.Unavailable], the same outcome an offline analysis call
+     * already reads as ([DetailModelTest]'s `classify`). What stays true, and is asserted here
+     * instead, is that the trust layer, which never reads the device pass store, is unaffected.
      */
     @Test
-    fun `a device pass store that throws settles the read to failed, and never blocks the rest of the screen`() = runTest {
+    fun `a device pass store that throws settles the read and the analysis to their own failure, never the trust layer`() = runTest {
         val throwingStore = object : DevicePassStore {
             override fun code(): String = throw IllegalStateException("prefs unavailable")
             override fun codeHash(): String = throw IllegalStateException("prefs unavailable")
@@ -753,7 +842,14 @@ class DetailViewModelTest {
         vm.state.test {
             val state = awaitUntil { !it.isLoading }
             assertEquals("a throwing store must not crash the read into staying Loading", ReadState.Failed, state.read)
-            assertNotNull("the free sources are unaffected by a device pass store that throws", state.analysis)
+            assertEquals(
+                "the ticker call needs the same code the read call needs (task app-verdict)",
+                AnalysisState.Unavailable,
+                state.analysisState,
+            )
+            assertNotNull("the trust layer never reads the device pass store, so it is unaffected", state.chain.valueOrNull)
+            assertTrue(state.reserves is Piece.Ready)
+            assertNotNull(state.price)
             cancelAndIgnoreRemainingEvents()
         }
     }
