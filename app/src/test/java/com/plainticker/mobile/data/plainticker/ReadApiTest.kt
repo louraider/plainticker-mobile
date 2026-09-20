@@ -1,5 +1,6 @@
 package com.plainticker.mobile.data.plainticker
 
+import com.plainticker.mobile.data.Fixtures
 import com.plainticker.mobile.data.MockApi
 import com.plainticker.mobile.data.expectThrows
 import com.plainticker.mobile.data.respondJson
@@ -82,6 +83,38 @@ class ReadApiTest {
 
         val notReady = MockApi { respondJson("""{"error":"x","code":"not_available"}""", HttpStatusCode.ServiceUnavailable) }
         expectThrows<ReadError.NotServed> { ReadApi(notReady.client).get("AAPL") }
+    }
+
+    /**
+     * A 404 predates the route existing at all, exactly the state a fresh deployment (or one
+     * still propagating across edges) answers with before task A6's route is live — the same
+     * "predates the monetization flag" case [EntitlementError.fromErrorBody] already reads as
+     * [EntitlementError.Disabled]. [ReadError.fromErrorBody] must read it the same way, matching
+     * [ReadState.Disabled]'s own KDoc ("503 `monetization_disabled`, or a 404"): a state this
+     * screen draws nothing extra for, never [ReadError.Unavailable] (which reads as a genuine
+     * failure rather than a route that simply is not live here yet).
+     */
+    @Test
+    fun `a 404 reads as disabled, the same pre-monetization state entitlement already reads`() = runTest {
+        val mock = MockApi { respondJson("""{"error":"not found"}""", HttpStatusCode.NotFound) }
+        expectThrows<ReadError.Disabled> { ReadApi(mock.client).get("AAPL") }
+    }
+
+    /**
+     * The byte-exact live response (see [ReadFixtureDecodeTest]), through [ReadApi.get] itself
+     * rather than a bare [kotlinx.serialization.json.Json] call: status 200, `Content-Type:
+     * application/json` with no charset and no code header sent, exactly what a curl by hand and
+     * an unentitled device both see against production.
+     */
+    @Test
+    fun `the live AAPL peek response, byte for byte, is a Ready read through the real client`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/read-aapl.json")) }
+        val read = ReadApi(mock.client).get("AAPL")
+
+        assertEquals("AAPL", read.ticker)
+        assertEquals(false, read.pro)
+        assertTrue(read.narrative!!.excerptEn!!.startsWith("Capital efficiency runs well ahead"))
+        assertEquals(3, read.nextSteps!!.titlesEn!!.size)
     }
 
     @Test
