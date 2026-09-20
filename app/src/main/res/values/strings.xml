@@ -48,8 +48,8 @@
     <!-- Onboarding -->
     <string name="onboarding_headline">Tokenized stocks, read before you swap.</string>
     <string name="onboarding_body_chain">Every xStock page starts with what the token itself says: reserves, issuer controls and the split multiplier, read live from the Solana mint.</string>
-    <string name="onboarding_body_fundamentals">Then the company against its sector: quality, valuation, momentum and F-Score, from SEC filings.</string>
-    <string name="onboarding_body_disclaimer">Not a price forecast. Not investment advice.</string>
+    <string name="onboarding_body_fundamentals">Then the page turns to the company against its sector: quality, valuation, momentum and F-Score, from SEC filings.</string>
+    <string name="onboarding_body_disclaimer">This is not a price forecast or investment advice.</string>
     <string name="onboarding_certify">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</string>
     <string name="onboarding_continue">Read the list</string>
 
@@ -191,7 +191,7 @@
     <string name="signal_gross_margin_improving">Gross margin improving</string>
     <string name="signal_asset_turnover_improving">Asset turnover improving</string>
     <string name="detail_heading_method">Method</string>
-    <string name="detail_method_body">Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice.</string>
+    <string name="detail_method_body">We classify the company against its sector by a fixed rule. This is not a price forecast or investment advice.</string>
     <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close.</string>
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
     <string name="detail_cost_line">est. all-in cost %1$s · depth %2$s</string>
@@ -395,7 +395,7 @@
     <!-- A landed pass signature this device has not yet seen confirmed (task A6 review): the Pay
          action is withheld while this is shown, so a second payment is never offered for the one
          the chain, or the ten-minute cron, might still be settling. -->
-    <string name="pro_payment_pending">A payment from this device has not been confirmed yet.</string>
+    <string name="pro_payment_pending">The server has not confirmed a payment from this device yet.</string>
 
     <!-- Paying for Pro from the app (task A6): the server builds the transfer like a vote, the
          wallet signs it through Mobile Wallet Adapter, and the app confirms the signature rather
