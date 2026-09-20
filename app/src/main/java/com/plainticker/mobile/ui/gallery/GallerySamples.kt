@@ -50,7 +50,7 @@ object GallerySamples {
     const val MINT = "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
     const val DIGEST_TIME = "Today 08:00"
     const val DIGEST = "3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days."
-    const val METHOD = "Rule-based classification of fundamentals against the sector. Not a price forecast and not investment advice."
+    const val METHOD = "We classify the company against its sector by a fixed rule. This is not a price forecast or investment advice."
     const val SOURCES = "Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close."
 
     val tabs = listOf("List", "Portfolio", "Watchlist")
