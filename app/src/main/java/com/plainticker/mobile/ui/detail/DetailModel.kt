@@ -650,3 +650,17 @@ val DetailUiState.nextStepsBlock: NextStepsBlock?
         }
         return NextStepsBlock(full = full, items = items)
     }
+
+/**
+ * The one line that stands where "The read" and "What to check next" would be, drawn only for
+ * [ReadState.Failed]. [ReadState.Loading], [ReadState.NotServed] and [ReadState.Disabled] all
+ * still draw nothing, the same withholding [readNarrative] and [nextStepsBlock] already keep: a
+ * server that has not answered yet, does not cover this ticker, or has not turned the route on is
+ * not a fault. A call that reached the server and got back a 200 this app could not read is: that
+ * failure used to draw nothing at all, indistinguishable from the three calm states beside it,
+ * which is why finding it once took a device walk and a server log rather than a look at the
+ * screen. This line is the fix, and it is a notice in Ink2, not a banner (the repo keeps exactly
+ * one banner slot on this screen, [DetailBanner], and a failed read is not what it is for).
+ */
+val DetailUiState.readNotice: Copy?
+    get() = if (read is ReadState.Failed) words(R.string.detail_read_unavailable) else null

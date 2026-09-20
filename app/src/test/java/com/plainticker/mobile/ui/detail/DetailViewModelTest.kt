@@ -27,6 +27,7 @@ import com.plainticker.mobile.data.xstocks.Multiplier
 import com.plainticker.mobile.data.xstocks.PriceLabel
 import com.plainticker.mobile.data.xstocks.Trading
 import com.plainticker.mobile.data.xstocks.TradingPeriod
+import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.InMemoryDevicePassStore
 import com.plainticker.mobile.prefs.InMemoryNotificationPromptStore
 import com.plainticker.mobile.prefs.InMemoryWatchlistStore
@@ -665,6 +666,63 @@ class DetailViewModelTest {
             val state = awaitUntil { !it.isLoading }
             assertEquals(ReadState.Loading, state.read)
             assertNotNull("the free sources are unaffected", state.analysis)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * The byte-exact live production response (`plainticker/read-aapl.json`, see
+     * [com.plainticker.mobile.data.plainticker.ReadFixtureDecodeTest]), through the whole path a
+     * phone actually takes: [ReadApi] over a mock engine standing in for the real client, and
+     * [DetailViewModel.refresh] driving [DetailViewModel.loadRead] the same way it does on device.
+     * This is the test the v0.8.0 "no read section at all" regression needed and did not have:
+     * every other read-related test hand-writes its own body that already matches the model
+     * exactly, so none of them could have caught a defect that only the real payload triggers.
+     */
+    @Test
+    fun `the live AAPL response lands as a Ready read with a non-null readNarrative, end to end`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/read-aapl.json")) }
+        val vm = viewModel(readApi = ReadApi(mock.client))
+
+        vm.state.test {
+            val state = awaitUntil { it.read is ReadState.Ready }
+            assertNotNull("the peek must render for an unentitled reader against the live shape", state.readNarrative)
+            assertFalse(state.readNarrative!!.full)
+            assertNotNull(state.nextStepsBlock)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Considered and ruled out: [DevicePassStore.code] is called inside [DetailViewModel]'s own
+     * try block (`ReadState.Ready(api.get(ticker, devicePassStore?.code()))`), so a store that
+     * throws must settle the read to [ReadState.Failed] exactly like a failed network call, and
+     * never take the other five sources down with it.
+     */
+    @Test
+    fun `a device pass store that throws settles the read to failed, and never blocks the rest of the screen`() = runTest {
+        val throwingStore = object : DevicePassStore {
+            override fun code(): String = throw IllegalStateException("prefs unavailable")
+            override fun codeHash(): String = throw IllegalStateException("prefs unavailable")
+        }
+        val vm = DetailViewModel(
+            "AAPL",
+            served(),
+            catalog(),
+            FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4)))),
+            readableMint(),
+            FakeNextUpRepository(),
+            InMemoryWatchlistStore(),
+            InMemoryNotificationPromptStore(),
+            clock,
+            ReadApi(MockApi { respondJson("""{"ticker":"AAPL","pro":false}""") }.client),
+            throwingStore,
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals("a throwing store must not crash the read into staying Loading", ReadState.Failed, state.read)
+            assertNotNull("the free sources are unaffected by a device pass store that throws", state.analysis)
             cancelAndIgnoreRemainingEvents()
         }
     }

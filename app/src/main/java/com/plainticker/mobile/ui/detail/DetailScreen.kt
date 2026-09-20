@@ -231,6 +231,7 @@ internal fun DetailContent(
             FundamentalsBlock(state)
             ReadSection(state = state, onViewPortfolio = onViewPortfolio)
             NextStepsSection(state)
+            state.readNotice?.let { NoticeLine(it) }
             NextUpBlock(state)
             VoteBlock(state = state, onVote = onVote)
             SwapBlock(state = state, swap = swap, onSwap = onSwap)

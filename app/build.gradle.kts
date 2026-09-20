@@ -133,3 +133,81 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+// ---- R8 serialization audit -----------------------------------------------------------------
+// A JVM unit test compiles and runs unminified, so it cannot see what R8 did to a generated
+// kotlinx.serialization serializer; the release-only break on Detail's "the read" section (a 200
+// already logged server-side, nothing rendered on the device) is exactly the class of bug no
+// existing unit test could have caught. This task is what can: it reads
+// app/build/outputs/mapping/release/mapping.txt, the same file the audit for that bug read by
+// hand, and confirms each listed model's `$$serializer` still carries a working
+// deserialize(Decoder)/serialize(Encoder, T) pair and its companion still carries `serializer()`.
+// It does not run the serializer against a live body (that needs a full classpath and a real
+// device, which is what the original bug needed to be found at all) — it confirms R8 left the
+// scaffolding a working release needs in place, which is the layer this task's own investigation
+// had to establish by hand from mapping.txt, usage.txt and configuration.txt.
+val auditReleaseSerializers = tasks.register("auditReleaseSerializers") {
+    group = "verification"
+    description = "Fails the release build if R8 stripped a wire model's kotlinx.serialization " +
+        "companion or \$\$serializer (see app/proguard-rules.pro)."
+    dependsOn("minifyReleaseWithR8")
+
+    val mappingFile = layout.buildDirectory.file("outputs/mapping/release/mapping.txt")
+    inputs.file(mappingFile)
+    val reportFile = layout.buildDirectory.file("outputs/mapping/release/serializer-audit.txt")
+    outputs.file(reportFile)
+
+    // Every model this app decodes straight from a live server response into a screen a reader
+    // can see nothing else for if the decode silently fails: task A6's read payload and its two
+    // children, alongside the summary and next-up rows the audit compared them against because
+    // those are confirmed working on a device today.
+    val mustDecode = listOf(
+        "com.plainticker.mobile.data.plainticker.TickerReadResponse",
+        "com.plainticker.mobile.data.plainticker.NarrativeRead",
+        "com.plainticker.mobile.data.plainticker.NextStepsRead",
+        "com.plainticker.mobile.data.plainticker.SummaryResponse",
+        "com.plainticker.mobile.data.plainticker.SummaryRow",
+        "com.plainticker.mobile.data.plainticker.NextUpRow",
+    )
+
+    doLast {
+        // mapping.txt lists one unindented "original.Name -> obfuscated:" line per class,
+        // followed by its indented member lines; group members under the top-level name that
+        // most recently preceded them so each fully-qualified name below can be checked in
+        // isolation from every other class's identically-shaped member lines.
+        val blocks = LinkedHashMap<String, StringBuilder>()
+        var current: StringBuilder? = null
+        mappingFile.get().asFile.forEachLine { line ->
+            current = if (line.isNotEmpty() && !line[0].isWhitespace() && " -> " in line) {
+                StringBuilder().also { blocks[line.substringBefore(" -> ")] = it }
+            } else {
+                current?.apply { appendLine(line) }
+            }
+        }
+
+        val failures = mustDecode.filterNot { fqcn ->
+            val serializer = blocks["$fqcn\$\$serializer"]?.toString().orEmpty()
+            val companion = blocks["$fqcn\$Companion"]?.toString().orEmpty()
+            val quoted = Regex.escape(fqcn)
+            Regex("""$quoted deserialize\(kotlinx\.serialization\.encoding\.Decoder\)""").containsMatchIn(serializer) &&
+                Regex("""serialize\(kotlinx\.serialization\.encoding\.Encoder,$quoted\)""").containsMatchIn(serializer) &&
+                "serializer():" in companion
+        }
+
+        val report = reportFile.get().asFile
+        report.parentFile.mkdirs()
+        if (failures.isNotEmpty()) {
+            report.writeText("FAILED: ${failures.joinToString(", ")}\n")
+            throw GradleException(
+                "R8 stripped the kotlinx.serialization scaffolding release needs to decode: " +
+                    failures.joinToString(", ") + ". Compare mapping.txt for one of these " +
+                    "against a class still known to work, and check app/proguard-rules.pro.",
+            )
+        }
+        report.writeText("OK: ${mustDecode.joinToString(", ")}\n")
+    }
+}
+
+// AGP registers `assembleRelease` lazily, after this script's top-level statements run, so the
+// hook has to wait for it rather than look it up by name directly.
+tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(auditReleaseSerializers) }

@@ -427,6 +427,9 @@
     <string name="detail_heading_read">The read</string>
     <string name="detail_heading_next_steps">What to check next</string>
     <string name="detail_pro_peek_note">The rest is available to a wallet with a pass, a qualifying stake, or a subscription.</string>
+    <!-- The call reached the server and got back something this app could not read (ReadState.Failed).
+         Never shown for Loading, NotServed or Disabled: those are not a fault to report. -->
+    <string name="detail_read_unavailable">The read is unavailable</string>
 
     <!-- Watchlist. The row meta is the list's, joined by list_row_meta_join -->
     <string name="watchlist_heading_watched">Watched</string>
