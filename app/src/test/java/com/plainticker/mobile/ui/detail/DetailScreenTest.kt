@@ -78,6 +78,7 @@ class DetailScreenTest {
                 "TopBar(",
                 "Banner(",
                 "Hero(state)",
+                "VerdictSection(",
                 "PriceBlock(state)",
                 "Gauge(",
                 "LiveBlock(state)",

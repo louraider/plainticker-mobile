@@ -161,7 +161,9 @@ class DetailViewModel(
     // ---- PlainTicker --------------------------------------------------------------------
 
     private suspend fun loadAnalysis() {
-        val analysis = runCatching { summaries.analysis(ticker) }
+        // The same device code the read call already presents (task A6), so an entitled wallet
+        // gets the real verdict rather than the locked shape (task app-verdict).
+        val analysis = runCatching { summaries.analysis(ticker, devicePassStore?.code()) }
         val classified = analysis.fold(
             onSuccess = { payload -> AnalysisState.Served(payload) },
             onFailure = ::classify,

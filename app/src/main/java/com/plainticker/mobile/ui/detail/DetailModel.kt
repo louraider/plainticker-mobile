@@ -209,6 +209,45 @@ val DetailUiState.heroTicker: String get() = symbol ?: ticker
 /** The company, from the analysis first because it is the registrant's own name. */
 val DetailUiState.heroCompany: String? get() = analysis?.company ?: asset?.name
 
+// ---- The verdict (task app-verdict) ------------------------------------------------------------
+
+/**
+ * Directly under the hero and above the gauge, the slot the web gives its verdict band
+ * (components/ticker/VerdictBand.tsx). The founder's decision made this word a paid element, and
+ * the server enforces it: the real classification never reaches an unentitled client, so this type
+ * has nothing to filter or blur on its own, only [Locked] to read off the payload's own flag.
+ *
+ * Null, drawing nothing, in every state this repository already drew nothing in before this task:
+ * the analysis not served, incomplete or unavailable, and a served payload that carries no
+ * `verdict` block at all (a server that predates it, or one with monetization off).
+ */
+sealed interface VerdictBlock {
+    /** The analysis itself has not resolved yet, so whether a verdict exists is not known either. */
+    data object Loading : VerdictBlock
+
+    /** [label] is the payload's own text, raw: never translated here, never invented. */
+    data class Unlocked(val label: Copy) : VerdictBlock
+
+    /** The server withheld the word. Nothing behind this state stands in for it. */
+    data object Locked : VerdictBlock
+}
+
+val DetailUiState.verdictBlock: VerdictBlock?
+    get() = when (val state = analysisState) {
+        AnalysisState.Loading -> VerdictBlock.Loading
+        is AnalysisState.Served -> {
+            val verdict = state.payload.verdict ?: return null
+            if (verdict.locked) {
+                VerdictBlock.Locked
+            } else {
+                val label = verdict.labelEn?.takeIf { it.isNotBlank() } ?: return null
+                VerdictBlock.Unlocked(raw(label))
+            }
+        }
+
+        AnalysisState.NotServed, AnalysisState.Incomplete, AnalysisState.Unavailable -> null
+    }
+
 /** The token's own facts can only be drawn once the catalog names a mint for this ticker. */
 val DetailUiState.hasToken: Boolean get() = catalogAsset.valueOrNull?.solanaMint != null
 

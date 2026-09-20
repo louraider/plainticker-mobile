@@ -167,6 +167,55 @@ class PlainTickerApiTest {
         assertTrue(method.statementEn.contains("not investment advice"))
     }
 
+    // ---- The verdict (task app-verdict) ----------------------------------------------------
+
+    @Test
+    fun `getAnalysis carries this device's own code, in the clear, the same header the read call sends`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/analysis-aapl.json")) }
+        api(mock).getAnalysis("AAPL", code = "ABCDE12345")
+        assertEquals("ABCDE12345", mock.lastRequest.headers[EntitlementApi.HEADER_CODE])
+    }
+
+    @Test
+    fun `no code asks unauthenticated, and carries no header`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/analysis-aapl.json")) }
+        api(mock).getAnalysis("AAPL")
+        assertNull(mock.lastRequest.headers[EntitlementApi.HEADER_CODE])
+    }
+
+    @Test
+    fun `the shipped fixture carries no verdict block at all, the shape a server before this task always sent`() = runTest {
+        val payload = api(MockApi { respondJson(Fixtures.read("plainticker/analysis-aapl.json")) }).getAnalysis("AAPL")
+        assertNull(payload.verdict)
+    }
+
+    @Test
+    fun `a locked verdict decodes with every other field null`() {
+        val payload = HttpClientFactory.json.decodeFromString(
+            AnalysisPayload.serializer(),
+            """{"ticker":"AAPL","verdict":{"code":null,"label_uk":null,"label_en":null,"tone":null,"locked":true}}""",
+        )
+        val verdict = payload.verdict!!
+        assertTrue(verdict.locked)
+        assertNull(verdict.code)
+        assertNull(verdict.labelUk)
+        assertNull(verdict.labelEn)
+        assertNull(verdict.tone)
+    }
+
+    @Test
+    fun `an unlocked verdict decodes the classification, and locked defaults to false with no key on the wire`() {
+        val payload = HttpClientFactory.json.decodeFromString(
+            AnalysisPayload.serializer(),
+            """{"ticker":"AAPL","verdict":{"code":"quality_compounder","label_uk":"Компаундер якості","label_en":"Quality compounder","tone":"positive"}}""",
+        )
+        val verdict = payload.verdict!!
+        assertFalse(verdict.locked)
+        assertEquals("quality_compounder", verdict.code)
+        assertEquals("Quality compounder", verdict.labelEn)
+        assertEquals(Tone.POSITIVE, verdict.tone)
+    }
+
     @Test
     fun `ageDays counts whole days since as_of`() {
         val payload = AnalysisPayload(ticker = "T", asOf = "2026-09-08T13:25:30.278Z")

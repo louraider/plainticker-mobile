@@ -57,6 +57,13 @@ data class AnalysisPayload(
     val setup: Setup? = null,
     val forward: Forward? = null,
     val method: Method? = null,
+    /**
+     * The classification verdict, a paid element (docs/plan-monetisation-2026-09-19.md): every
+     * field is nullable and [Verdict.locked] defaults to false, so this whole block is absent
+     * without breaking anything for a server that predates it, or one with monetization off. See
+     * [Verdict] for what an unentitled caller receives instead of the word itself.
+     */
+    val verdict: Verdict? = null,
 ) {
     /** Epoch millis of `as_of`, or null when missing or not ISO-8601. */
     fun asOfEpochMillis(): Long? =
@@ -162,4 +169,27 @@ data class Method(
     val kind: String? = null,
     @SerialName("statement_en") val statementEn: String? = null,
     @SerialName("schema_version") val schemaVersion: String? = null,
+)
+
+/**
+ * The classification verdict on `GET /api/v1/{ticker}` (docs/plan-monetisation-2026-09-19.md): the
+ * founder's decision that this word is a paid element, blurred until a caller presents a pass.
+ *
+ * With a valid `X-PT-Code` header, or a Pro session, the server answers exactly as it always did:
+ * [code], [labelUk], [labelEn] and [tone] carry the classification and [locked] is absent from the
+ * wire, which decodes to false. Without one, while monetization is on, every field but [locked]
+ * comes back null and [locked] comes back true; the real word never reaches this app, so there is
+ * nothing here to filter or withhold on the client, only a fact to read off [locked].
+ *
+ * Every field is nullable and [locked] defaults to false, so a server that predates this block, or
+ * one with monetization off, sends no `verdict` key at all and this whole class is never
+ * constructed; [AnalysisPayload.verdict] stays null and the screen draws nothing extra.
+ */
+@Serializable
+data class Verdict(
+    val code: String? = null,
+    @SerialName("label_uk") val labelUk: String? = null,
+    @SerialName("label_en") val labelEn: String? = null,
+    val tone: Tone? = null,
+    val locked: Boolean = false,
 )

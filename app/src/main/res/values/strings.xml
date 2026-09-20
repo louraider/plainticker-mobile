@@ -107,6 +107,11 @@
     </plurals>
 
     <!-- Detail -->
+    <!-- The verdict (task app-verdict): directly under the hero and above the gauge, the same slot
+         the web gives it. The label above it names what the value is; the value itself is either
+         the payload's own text (never here) or, while monetization withholds it, a placeholder
+         shape with no text standing in for the word, plus detail_pro_peek_note below it. -->
+    <string name="detail_verdict_label">Classification</string>
     <string name="detail_token_price">Token price</string>
     <!-- What the token's own figure is called below the liquidity floor, where the quote is a
          reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->

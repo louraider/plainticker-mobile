@@ -3,6 +3,7 @@ package com.plainticker.mobile.data.plainticker
 import com.plainticker.mobile.data.net.bodyOrThrow
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 
 /**
  * PlainTicker public API v1.
@@ -18,11 +19,18 @@ class PlainTickerApi(
     /** The whole leaderboard in one call. Cached 5 min at the edge, stale rows included. */
     suspend fun getSummary(): SummaryResponse = client.get("$baseUrl/summary").bodyOrThrow()
 
-    /** Full classification for one ticker. */
-    suspend fun getAnalysis(ticker: String): AnalysisPayload {
+    /**
+     * Full classification for one ticker. [code] is this device's own code, in the clear, the same
+     * header [ReadApi] and [EntitlementApi] already send, and it is what turns [Verdict.locked]
+     * off: this route is entitlement-aware for the verdict block alone, and every field before it
+     * in the payload is unchanged whether or not a code is presented.
+     */
+    suspend fun getAnalysis(ticker: String, code: String? = null): AnalysisPayload {
         val symbol = ticker.trim().uppercase()
         require(TICKER.matches(symbol)) { "not a ticker: '$ticker'" }
-        return client.get("$baseUrl/$symbol").bodyOrThrow()
+        return client.get("$baseUrl/$symbol") {
+            if (!code.isNullOrBlank()) header(EntitlementApi.HEADER_CODE, code)
+        }.bodyOrThrow()
     }
 
     companion object {

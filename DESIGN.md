@@ -87,7 +87,7 @@ Shape lock: radius 0 on everything. Touch targets 48dp minimum; list rows 64dp; 
 
 - Portrait, single column, side padding 20dp, content width 360dp on the Seeker. The device was measured on 2026-09-12: 1200x2670 physical at 480dpi, which is 400dp wide and 890dp tall. Everything here was drawn against a 412dp frame before that, so a layout tuned to the old 372dp content width has 12dp less room than its mockup. Previews at 360 and 412 bracket the real width.
 - Sections are separated by headings and space (32dp above, 14dp below), not by rules; hairlines live inside grids and lists only.
-- Detail order is fixed: header, hero (ticker, company), price row with the NYSE close, gauge, live bar, Backing and controls (FactGrid), Against the sector (three Tracks + FactGrid), F-Score (numeral + SignalRows), Method (body), then the single Swap button with a mono cost line. Nothing is sticky.
+- Detail order is fixed: header, hero (ticker, company), the verdict (a caption and its classification, blurred to a placeholder until a pass is held), price row with the NYSE close, gauge, live bar, Backing and controls (FactGrid), Against the sector (three Tracks + FactGrid), F-Score (numeral + SignalRows), Method (body), then the single Swap button with a mono cost line. Nothing is sticky.
 - First viewport of Detail ends inside "Against the sector" so the frame is full; never a blank bottom on a phone-height frame.
 - One layout family per section: hero, gauge, grid, tracks, signal list, prose. No section repeats its neighbour's layout.
 

@@ -10,6 +10,8 @@ import com.plainticker.mobile.data.plainticker.Axes
 import com.plainticker.mobile.data.plainticker.Axis
 import com.plainticker.mobile.data.plainticker.FScore
 import com.plainticker.mobile.data.plainticker.ReadApi
+import com.plainticker.mobile.data.plainticker.Tone
+import com.plainticker.mobile.data.plainticker.Verdict
 import com.plainticker.mobile.data.rpc.PausableConfig
 import com.plainticker.mobile.data.rpc.PermanentDelegate
 import com.plainticker.mobile.data.rpc.TransferHookConfig
@@ -100,9 +102,9 @@ class FreeStaysFreeTest {
 
     private fun prices() = FakePriceRepository(Result.success(mapOf(mint to price(232.5, reference = 232.4))))
 
-    private fun viewModel(readApi: ReadApi?) = DetailViewModel(
+    private fun viewModel(readApi: ReadApi?, summaryRepo: FakeSummaryRepository = summaries()) = DetailViewModel(
         "AAPL",
-        summaries(),
+        summaryRepo,
         catalog(),
         prices(),
         readableMint(),
@@ -196,5 +198,54 @@ class FreeStaysFreeTest {
         assertTrue(proof.reserves is Piece.Ready)
         assertNotNull(proof.price)
         assertEquals(71.0, proof.analysis!!.compositePercentile!!, 0.0)
+    }
+
+    /**
+     * The verdict is new, so nothing that was free before it existed loses anything just by
+     * carrying one: the invariant is exactly the one this file already proves for the read call,
+     * applied to the field task app-verdict added. [Verdict] lives inside [AnalysisPayload] rather
+     * than behind its own call, so the erasure targets that one field inside the served payload
+     * instead of the whole [DetailUiState.read], the same structural technique this file's own
+     * doc comment names: erase only the field under test, compare the rest with plain `equals`.
+     */
+    @Test
+    fun `the verdict never moves a field this screen carried before it existed, absent, unlocked or locked`() = runTest {
+        var reference: DetailUiState? = null
+
+        val shapes: List<Pair<String, Verdict?>> = listOf(
+            "no verdict at all, a server that predates task app-verdict" to null,
+            "unlocked, an entitled caller or monetization off" to
+                Verdict(code = "quality_compounder", labelUk = "Компаундер якості", labelEn = "Quality compounder", tone = Tone.POSITIVE),
+            "locked, monetization on and no code presented" to Verdict(locked = true),
+        )
+
+        shapes.forEach { (label, verdict) ->
+            val payload = analysis().copy(verdict = verdict)
+            val repo = FakeSummaryRepository(analyses = mapOf("AAPL" to Result.success(payload)))
+            val vm = viewModel(readApi = null, summaryRepo = repo)
+
+            vm.state.test {
+                val settled = awaitUntil { !it.isLoading }
+                val served = settled.analysisState as AnalysisState.Served
+
+                // The one field task app-verdict added, erased, so the comparison below is
+                // exactly the fields this screen carried before the verdict existed.
+                val snapshot = settled.copy(analysisState = served.copy(payload = served.payload.copy(verdict = null)))
+                val expected = reference
+                if (expected == null) {
+                    reference = snapshot
+                } else {
+                    assertEquals("$label: a field that used to be free moved because of the verdict", expected, snapshot)
+                }
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+        // Not a vacuous pass: the fixture actually carries an analysis, so the comparison above
+        // ran over the six sources this invariant is about, not over three empty states.
+        val proof = checkNotNull(reference)
+        assertEquals("AAPL", proof.ticker)
+        assertTrue(proof.analysisState is AnalysisState.Served)
+        assertEquals(8.0, proof.analysis!!.axes.quality!!.value!!, 0.0)
     }
 }
