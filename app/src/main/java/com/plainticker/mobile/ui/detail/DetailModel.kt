@@ -646,7 +646,7 @@ val DetailUiState.nextStepsBlock: NextStepsBlock?
         val titles = steps.titlesEn?.takeIf { it.isNotEmpty() } ?: return null
         val full = payload.pro && steps.stepsEn != null
         val items = titles.mapIndexed { index, title ->
-            NextStepRow(title = title, detail = if (full) steps.stepsEn.getOrNull(index) else null)
+            NextStepRow(title = title, detail = if (full) steps.stepsEn.getOrNull(index)?.body else null)
         }
         return NextStepsBlock(full = full, items = items)
     }

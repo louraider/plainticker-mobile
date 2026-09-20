@@ -7,6 +7,7 @@ import com.plainticker.mobile.data.respondJson
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,13 +50,31 @@ class ReadApiTest {
         val full = """
             {"ticker":"AAPL","pro":true,
              "narrative":{"excerptEn":"First sentence.","fullEn":"First sentence. Second one."},
-             "nextSteps":{"titlesEn":["Check margins"],"stepsEn":["Margins rose."]}}
+             "nextSteps":{"titlesEn":["Check margins"],"stepsEn":[{"title":"Check margins","body":"Margins rose."}]}}
         """.trimIndent()
         val read = ReadApi(MockApi { respondJson(full) }.client).get("AAPL", "code")
 
         assertTrue(read.pro)
         assertEquals("First sentence. Second one.", read.narrative!!.fullEn)
-        assertEquals(listOf("Margins rose."), read.nextSteps!!.stepsEn)
+        assertEquals(listOf(NextStepDetail("Check margins", "Margins rose.")), read.nextSteps!!.stepsEn)
+    }
+
+    /**
+     * The byte-exact entitled shape (see [ReadFixtureDecodeTest.entitledFixture]), through
+     * [ReadApi.get] itself: `nextSteps.stepsEn` on the wire is a list of `{title, body}` objects
+     * (`lib/api/read-payload.ts`'s `ReadNextStep`), which is what a model declared as
+     * `List<String>` could decode against the peek (`stepsEn: null`) but never against a real
+     * entitled response.
+     */
+    @Test
+    fun `the entitled AAPL response, byte for byte, decodes through the real client`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/read-aapl-entitled.json")) }
+        val read = ReadApi(mock.client).get("AAPL", code = "ABCDE12345")
+
+        assertTrue(read.pro)
+        assertNotNull("the full narrative must decode once entitled", read.narrative!!.fullEn)
+        assertEquals(3, read.nextSteps!!.stepsEn!!.size)
+        assertTrue(read.nextSteps.stepsEn.all { it.body.isNotBlank() })
     }
 
     @Test

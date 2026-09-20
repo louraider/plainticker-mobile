@@ -1,6 +1,9 @@
 package com.plainticker.mobile.ui.detail
 
+import com.plainticker.mobile.data.Fixtures
+import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.NarrativeRead
+import com.plainticker.mobile.data.plainticker.NextStepDetail
 import com.plainticker.mobile.data.plainticker.NextStepsRead
 import com.plainticker.mobile.data.plainticker.TickerReadResponse
 import com.plainticker.mobile.ui.Copy
@@ -107,7 +110,10 @@ class DetailReadModelTest {
             narrative = NarrativeRead(excerptEn = "First sentence.", fullEn = "First sentence. Second one."),
             nextSteps = NextStepsRead(
                 titlesEn = listOf("Check margins", "Review filing"),
-                stepsEn = listOf("Margins rose again.", "The filing added detail."),
+                stepsEn = listOf(
+                    NextStepDetail("Check margins", "Margins rose again."),
+                    NextStepDetail("Review filing", "The filing added detail."),
+                ),
             ),
         )
         val s = state(ReadState.Ready(payload))
@@ -141,7 +147,7 @@ class DetailReadModelTest {
             pro = true,
             nextSteps = NextStepsRead(
                 titlesEn = listOf("Check margins", "Review filing", "Watch guidance"),
-                stepsEn = listOf("Margins rose again."),
+                stepsEn = listOf(NextStepDetail("Check margins", "Margins rose again.")),
             ),
         )
         val steps = state(ReadState.Ready(payload)).nextStepsBlock!!
@@ -164,5 +170,29 @@ class DetailReadModelTest {
     fun `empty titles draws nothing, rather than an empty heading`() {
         val payload = TickerReadResponse(ticker = "AAPL", nextSteps = NextStepsRead(titlesEn = emptyList()))
         assertNull(state(ReadState.Ready(payload)).nextStepsBlock)
+    }
+
+    /**
+     * The entitled shape (see [com.plainticker.mobile.data.plainticker.ReadFixtureDecodeTest]),
+     * decoded and carried all the way to the two model properties this screen draws from. This is
+     * the case every other test in this file skipped: they all hand-write `pro: true` payloads
+     * that already agree with [NextStepsRead]'s Kotlin shape, so none of them could have caught
+     * `stepsUk`/`stepsEn` being modelled as `List<String>` when the wire sends `{title, body}`.
+     */
+    @Test
+    fun `the entitled fixture decodes into a full readNarrative and a full nextStepsBlock`() {
+        val payload = HttpClientFactory.json.decodeFromString(
+            TickerReadResponse.serializer(),
+            Fixtures.read("plainticker/read-aapl-entitled.json"),
+        )
+        val s = state(ReadState.Ready(payload))
+
+        val narrative = s.readNarrative!!
+        assertTrue("an entitled reader gets the full text, not the excerpt", narrative.full)
+        assertEquals(payload.narrative!!.fullEn, (narrative.text as Copy.Raw).text)
+
+        val steps = s.nextStepsBlock!!
+        assertTrue(steps.full)
+        assertEquals(payload.nextSteps!!.stepsEn!!.map { it.body }, steps.items.map { it.detail })
     }
 }

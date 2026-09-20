@@ -34,11 +34,20 @@ data class NarrativeRead(
     val fullEn: String? = null,
 )
 
+/**
+ * One entry of the full "What to check next" text, once entitled (`lib/api/read-payload.ts`'s
+ * `ReadNextStep`: `{title, body}`, not a bare string). [title] repeats the titles array's own
+ * text for this index; the screen draws [NextStepsRead.titlesEn] for the heading and only reads
+ * [body] from here.
+ */
+@Serializable
+data class NextStepDetail(val title: String, val body: String)
+
 /** The three step titles for everyone, the full step text once entitled. */
 @Serializable
 data class NextStepsRead(
     val titlesUk: List<String>? = null,
     val titlesEn: List<String>? = null,
-    val stepsUk: List<String>? = null,
-    val stepsEn: List<String>? = null,
+    val stepsUk: List<NextStepDetail>? = null,
+    val stepsEn: List<NextStepDetail>? = null,
 )
