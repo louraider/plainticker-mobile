@@ -33,8 +33,8 @@ next two minutes and a wordmark spends them on nothing.
 ## 0:18 — 0:50 · The same token, read
 *69 words · 30 s speech · 32 s slot*
 
-**Screen:** PlainTicker opens on the List. Scroll to APPx, whose meta line reads `$34 behind this
-price, too thin`. Tap through to Detail: where a premium would be drawn there is a sentence
+**Screen:** PlainTicker opens on the List. Scroll to APPx, whose meta line reads `$34 behind, too
+thin`. Tap through to Detail: where a premium would be drawn there is a sentence
 instead. Then one cutaway to NFLXx, where the gauge does draw, `-1.95% vs NYSE close`.
 
 > This is the same token in PlainTicker. The price is real. What stands behind it is thirty-four

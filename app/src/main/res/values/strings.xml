@@ -67,7 +67,7 @@
     <string name="list_heading_no_sector">No sector</string>
     <!-- The row meta halves and the source banners below are shared with the Portfolio -->
     <string name="list_row_meta_premium">%1$s vs NYSE close</string>
-    <string name="list_row_meta_thin">%1$s behind this price, too thin</string>
+    <string name="list_row_meta_thin">%1$s behind, too thin</string>
     <string name="list_row_meta_pool_unknown">Depth not reported</string>
     <string name="list_row_meta_join">%1$s · %2$s</string>
     <string name="list_search_empty">No xStock matches \'%1$s\'</string>
