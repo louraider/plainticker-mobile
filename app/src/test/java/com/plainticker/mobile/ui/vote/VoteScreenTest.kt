@@ -194,6 +194,36 @@ class VoteScreenTest {
         assertTrue("the gameability disclosure is not dropped, only kept out of the pitch", "vote_gameable" in block)
     }
 
+    // ---- A round with nothing voted on yet does not leave its heading over nothing --------------
+
+    /**
+     * A round is open, but the tally has nobody in it yet: the round header used to be followed
+     * by whatever the next present section was (Your votes, Last round, the ballot heading),
+     * which could be nothing at all this device has ever loaded. One line names the state
+     * instead, gated the same way the Leaders section itself is, on [VoteTabUiState.round] and
+     * [VoteTabUiState.leaders], so it can never draw alongside the leaders it stands in for.
+     */
+    @Test
+    fun `an open round with no leaders draws one line instead of leaving the round header over nothing`() {
+        val block = voteTabScreen.substringAfter("if (state.leaders.isNotEmpty())").substringBefore("if (state.myVotes.isNotEmpty())")
+        assertTrue("gated on the round actually being present", "else if (state.round != null)" in block)
+        assertTrue("the one line this state draws", "R.string.vote_tab_no_votes_yet" in block)
+        assertTrue("still a Footnote, the anatomy every other single-line state here uses", "Footnote(" in block)
+    }
+
+    /**
+     * The not-open state (task section, HTTP 404 or vote_not_configured) already says its own
+     * piece, `vote_tab_not_open`, and replaces the round furniture entirely (`showsRoundFurniture`
+     * is false there). The empty-round line belongs to a different state and must not double up
+     * with it.
+     */
+    @Test
+    fun `the empty-round line never draws in the not-open branch, which already says its own piece`() {
+        val notOpenBlock = voteTabScreen.substringAfter("state.notOpen ->").substringBefore("state.failed ->")
+        assertTrue("the not-open line itself is unchanged", "vote_tab_not_open" in notOpenBlock)
+        assertFalse("the two states must not say the same thing twice", "vote_tab_no_votes_yet" in notOpenBlock)
+    }
+
     /** Everything from [function] to the line that closes it at column zero. */
     private fun body(source: String, function: String): String {
         val start = source.indexOf(function)

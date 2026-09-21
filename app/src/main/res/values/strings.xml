@@ -369,6 +369,9 @@
     <string name="vote_tab_round_heading">Round</string>
     <string name="vote_tab_round_closes">Closes %1$s</string>
     <string name="vote_tab_heading_leaders">Leaders</string>
+    <!-- A round present with nothing voted yet: one line under the round header, drawn only in
+         that state and never in vote_tab_not_open, which is a different thing already said. -->
+    <string name="vote_tab_no_votes_yet">No votes in this round yet. The first vote leads.</string>
     <string name="vote_tab_heading_your_votes">Your votes</string>
     <string name="vote_tab_your_votes_note">A vote can take up to about twenty minutes to reach the leaders above. The tally runs every ten minutes, and the leaders are cached for five more.</string>
     <string name="vote_tab_your_vote_meta">Voted %1$s</string>
