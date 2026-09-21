@@ -51,12 +51,34 @@ private fun proFactSourced(state: ProUiState): ProFact {
     }
 }
 
-/** The wallet's own staked SKR, as a figure or the reason there is none, never a verdict. */
-fun stakeFact(state: ProUiState): Copy = when {
-    !state.walletConnected -> words(R.string.you_stake_none_wallet)
-    state.stakeUnread -> words(R.string.you_pro_unread)
-    state.stakeRaw == null -> words(R.string.state_loading)
-    else -> raw(Fmt.tokenAmount(state.stakeRaw, SkrStakeBound.SKR_DECIMALS))
+/** The Staked SKR fact: a short value word, and the figure or the reason as its sub line. */
+data class StakeFact(val value: Copy, val sub: Copy?)
+
+/**
+ * The wallet's own staked SKR, never a verdict.
+ *
+ * The value is always a short word, never the figure itself, for the same reason [proFact]'s
+ * value always is: FactCellView draws a cell's value `maxLines = 1, softWrap = false` (FactGrid.kt),
+ * so anything the mono glyphs do not fit is clipped mid-character rather than wrapped. A plausible
+ * stake can run to 20 characters near [SkrStakeBound.STAKED_SUPPLY_RAW]'s own worst case, well past
+ * the roughly 10 characters a half-width cell fits at the default 24sp value size (v0.12.0, on the
+ * Seeker at default font scale: "no wallet connected" clipped to "no wallet c"), so the figure, and
+ * the reason when there is none, are the sub line instead, which wraps and is never clipped.
+ *
+ * "No wallet" is deliberately not the same word as a zero: a wallet that stakes nothing and a
+ * wallet this screen never read are different facts, the same distinction
+ * [SkrStakeBound.isPlausible] draws for a principal outside its own bound, so the value names the
+ * missing subject rather than reading as a reading of zero.
+ */
+fun stakeFact(state: ProUiState): StakeFact = when {
+    !state.walletConnected ->
+        StakeFact(words(R.string.you_stake_no_wallet), words(R.string.you_stake_none_wallet))
+    state.stakeUnread -> StakeFact(words(R.string.you_pro_unread), null)
+    state.stakeRaw == null -> StakeFact(words(R.string.state_loading), null)
+    else -> StakeFact(
+        words(R.string.you_stake_read),
+        raw(Fmt.tokenAmount(state.stakeRaw, SkrStakeBound.SKR_DECIMALS)),
+    )
 }
 
 /** Which action a button in the Action section performs, so the label never has to be parsed. */

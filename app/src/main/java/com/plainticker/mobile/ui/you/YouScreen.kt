@@ -209,12 +209,20 @@ private fun proCell(pro: ProUiState): FactCell {
     )
 }
 
-/** The stake cell: a figure or the reason there is none, never a verdict about the wallet. */
+/**
+ * The stake cell: a short value word (never a verdict about the wallet), the figure or the reason
+ * there is none as the mono sub line beneath it, the same shape [proCell] already uses.
+ */
 @Composable
-private fun stakeCell(pro: ProUiState): FactCell = FactCell(
-    label = stringResource(R.string.you_stake_label),
-    value = stakeFact(pro).text(),
-)
+private fun stakeCell(pro: ProUiState): FactCell {
+    val fact = stakeFact(pro)
+    return FactCell(
+        label = stringResource(R.string.you_stake_label),
+        value = fact.value.text(),
+        sub = fact.sub?.text(),
+        subMono = true,
+    )
+}
 
 /** Swaps recorded, votes cast, stocks watched: each a numeral, each cell opening its own tab. */
 @Composable

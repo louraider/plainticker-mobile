@@ -482,18 +482,34 @@
     <string name="you_wallet_label">Wallet</string>
     <string name="you_wallet_none">Not connected</string>
     <string name="you_wallet_note">The wallet is asked to connect on each launch. No key or session is kept.</string>
+    <!-- Every value below is a half-width FactGrid mono cell at the default 24sp valueSize:
+         FactCellView draws it maxLines = 1, softWrap = false, so anything past about 10 characters
+         clips mid-character rather than wrapping (v0.12.0, "no wallet c"). YouModelTest pins the
+         10-character budget for every one of these; the detail that does not fit belongs in the
+         cell's sub line instead, which wraps and is never clipped. -->
     <string name="you_pro_label">Pro</string>
     <string name="you_pro_pass">Pass</string>
     <string name="you_pro_stake">Stake</string>
-    <string name="you_pro_subscription">Subscription</string>
+    <!-- Was "Subscription" (12 characters, clips); a plan is what a subscription is. -->
+    <string name="you_pro_subscription">Plan</string>
     <!-- Pro true with no recognized source (ProModel.kt's entitlementLine keeps the same
          fallback): a plain yes, symmetric with you_pro_none below. -->
     <string name="you_pro_active">Yes</string>
     <string name="you_pro_none">No</string>
     <string name="you_pro_unread">Not read</string>
-    <string name="you_pro_disabled">Not offered</string>
+    <!-- Was "Not offered" (11 characters, clips); "not open" is this app's own word for the same
+         503 monetization_disabled state elsewhere (pass_not_open, vote_tab_not_open). -->
+    <string name="you_pro_disabled">Not open</string>
     <string name="you_pro_until">until %1$s</string>
     <string name="you_stake_label">Staked SKR</string>
+    <!-- The value: a short word, never the figure itself (a plausible stake can run to 20
+         characters, SkrStakeBound.STAKED_SUPPLY_RAW's own worst case). "No wallet" reads as there
+         being no subject to read, not as a reading of zero: a wallet that stakes nothing and a
+         wallet this screen never read are different facts. -->
+    <string name="you_stake_no_wallet">No wallet</string>
+    <string name="you_stake_read">Read</string>
+    <!-- The sub line for the no-wallet state above: unlike the value, a FactGrid sub wraps rather
+         than clips, so the full reason is safe here. -->
     <string name="you_stake_none_wallet">no wallet connected</string>
     <string name="you_heading_device">On this device</string>
     <string name="you_fact_swaps">Swaps recorded</string>
