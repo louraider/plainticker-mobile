@@ -146,3 +146,38 @@ the real mainnet swap survived both.
 and a copy lint, and was visible in the first second of looking at the phone. Nothing in the test
 suite can express a 1.3x Compose layout, because the project has no Robolectric or instrumentation,
 so a screen that is about to be filmed has to be looked at.
+
+## 2026-09-21 · The interface rework walked on the Seeker
+
+Release candidates `v0.12.0` and `v0.13.0`, installed with `adb install -r` over the build already
+there. `firstInstallTime` held at 2026-09-13 10:48:55 through both, so the receipt of the real
+mainnet swap survived the whole rework.
+
+| row | result |
+|---|---|
+| You reached from every tab | Pass. The TopBar's right slot carries it on List, Vote, Portfolio and Watchlist, and is empty on You itself |
+| Back from You | Pass. Returns to the tab that was left, not to the first tab |
+| You at font scale 1.0 and 1.3 | Pass after a second pass. See the defect below |
+| Pro left Portfolio | Pass. Portfolio keeps Holdings and Recent swaps; nothing on it offers to pay |
+| The swap receipt | Pass. `TSLAx · 0.013629` still drawn after both installs |
+| No clipped value anywhere at 1.3 | Pass. Zero ellipsised strings in the dump, on the List and on You |
+| Ten cold starts | Pass. Resumed ten of ten, zero entries in the crash buffer |
+
+**The defect this walk caught, and it is worth recording as a rule rather than an incident.**
+`v0.12.0` drew the Staked SKR cell as `no wallet c`, clipped mid-character, at the default font
+scale. The cause was not the width but the choice: a `FactGrid` value slot is a mono numeral slot,
+and "no wallet connected" is prose. The budget turns out to be about ten characters, derived from
+the 400dp frame giving a 146.5dp cell and JetBrains Mono's advance of roughly 0.6em, which matches
+the observed clip exactly: ten fit and the eleventh was cut.
+
+Four cells would have clipped, not one. `Not offered` at eleven characters, `Subscription` at
+twelve, `no wallet connected` at twenty, and the staked figure itself at up to twenty in its worst
+case. A test now pins the maximum length a fact value may take, for both the strings that come from
+`strings.xml` and the ones composed at runtime, so the next person to add a cell finds out at build
+time instead of on a phone.
+
+**The structural signature to watch for.** This is the same trap as the round header that once drew
+`Round` one letter per line: a slot set to a single line with no wrapping, next to a sibling of
+fixed width. Different component, identical shape. The planning agent reasoned carefully about the
+TopBar and the onboarding panel and was right about both; the cells with a fixed-width label beside
+them were the ones that needed the scrutiny.
