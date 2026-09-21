@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -31,6 +30,7 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 // The row component and this screen's row model share a name; the anatomy keeps an alias.
 import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.PreviewCanvas
+import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.spoken
@@ -138,25 +138,34 @@ internal fun PortfolioContent(
                 }
             }
 
-            !state.connected -> item(key = "connect") {
-                EmptyLine(
-                    text = stringResource(R.string.portfolio_not_connected),
-                    action = stringResource(R.string.action_connect_wallet),
-                    onAction = onConnect,
-                )
+            // The one forward action this state offers, so it is a 56dp button rather than a
+            // text link (U2: no state's only forward action is a TextAction).
+            !state.connected -> {
+                item(key = "connect") { EmptyLine(stringResource(R.string.portfolio_not_connected)) }
+                item(key = "connect-action") {
+                    SecondaryButton(
+                        label = stringResource(R.string.action_connect_wallet),
+                        onClick = onConnect,
+                        modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
+                    )
+                }
             }
 
             state.isCold -> item(key = "skeleton") { SkeletonRows(count = SkeletonRowCount) }
 
             // A fresh wallet holds nothing, which is the common case and not an error. It gets a
-            // sentence that says what would put something here, and the way to go and read first.
+            // sentence that says what would put something here, and the way to go and read first,
+            // as a 56dp button (U2), the same rule the state above keeps.
             state.isEmpty -> {
-                item(key = "empty") {
-                    EmptyLine(
-                        text = stringResource(R.string.portfolio_empty),
-                        action = onBrowseList?.let { stringResource(R.string.action_browse_analyzed) },
-                        onAction = onBrowseList,
-                    )
+                item(key = "empty") { EmptyLine(stringResource(R.string.portfolio_empty)) }
+                if (onBrowseList != null) {
+                    item(key = "browse-action") {
+                        SecondaryButton(
+                            label = stringResource(R.string.action_browse_analyzed),
+                            onClick = onBrowseList,
+                            modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
+                        )
+                    }
                 }
                 item(key = "wallet") { WalletActions(onRefresh = onRefresh, onDisconnect = onDisconnect) }
             }
@@ -310,15 +319,17 @@ private fun WalletActions(onRefresh: () -> Unit, onDisconnect: () -> Unit) {
     }
 }
 
-/** The way into the wallet, on its own line under the sentence that explains why it is offered. */
+/**
+ * The way into the wallet, under the sentence that explains why it is offered: a 56dp button
+ * (U2), the one forward action this state exists to offer, never a text link.
+ */
 @Composable
 private fun ConnectAction(onConnect: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        TextAction(label = stringResource(R.string.action_connect_wallet), onClick = onConnect)
-    }
+    SecondaryButton(
+        label = stringResource(R.string.action_connect_wallet),
+        onClick = onConnect,
+        modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
+    )
 }
 
 /**
@@ -340,21 +351,19 @@ private fun Lede(text: String) {
     )
 }
 
-/** One sentence where the rows would be, so no state of this screen is a blank column. */
+/**
+ * One sentence where the rows would be, so no state of this screen is a blank column. The
+ * forward action that answers it, when there is one, is its own 56dp button below (U2), never
+ * drawn inline as a trailing text link.
+ */
 @Composable
-private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = text,
-            style = PlainTickerType.body,
-            color = Ink2,
-            modifier = Modifier.weight(1f).padding(vertical = HeadingTopGap),
-        )
-        if (action != null && onAction != null) TextAction(label = action, onClick = onAction)
-    }
+private fun EmptyLine(text: String) {
+    Text(
+        text = text,
+        style = PlainTickerType.body,
+        color = Ink2,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Side, vertical = HeadingTopGap),
+    )
 }
 
 /** A closing line under a section: what the screen is not showing, and why. */
@@ -390,6 +399,7 @@ private fun sentence(vararg parts: String?): String =
 private val Side = 20.dp
 private val HeadingTopGap = 30.dp
 private val SectionTopGap = 28.dp
+private val ButtonTop = 8.dp
 private const val SkeletonRowCount = 3
 
 // ---- Previews ------------------------------------------------------------------------------

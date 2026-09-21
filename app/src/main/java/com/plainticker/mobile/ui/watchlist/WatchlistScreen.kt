@@ -31,6 +31,7 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.Panel
 import com.plainticker.mobile.ui.components.PreviewCanvas
+import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.spoken
@@ -132,13 +133,19 @@ internal fun WatchlistContent(
 
         when {
             // The common first state. It says what watching is for and offers the one place to do
-            // it from, rather than leaving a heading over an empty column.
-            state.isEmpty -> item(key = "empty") {
-                EmptyLine(
-                    text = stringResource(R.string.watchlist_empty),
-                    action = onBrowseList?.let { stringResource(R.string.action_browse_analyzed) },
-                    onAction = onBrowseList,
-                )
+            // it from, rather than leaving a heading over an empty column: a 56dp button (U2), the
+            // one forward action this state exists to offer, never a text link.
+            state.isEmpty -> {
+                item(key = "empty") { EmptyLine(stringResource(R.string.watchlist_empty)) }
+                if (onBrowseList != null) {
+                    item(key = "browse-action") {
+                        SecondaryButton(
+                            label = stringResource(R.string.action_browse_analyzed),
+                            onClick = onBrowseList,
+                            modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
+                        )
+                    }
+                }
             }
 
             state.isCold -> item(key = "skeleton") { SkeletonRows(count = SkeletonRowCount) }
@@ -258,21 +265,19 @@ private fun Footer(
     }
 }
 
-/** One sentence where the rows would be, so no state of this screen is a blank column. */
+/**
+ * One sentence where the rows would be, so no state of this screen is a blank column. The
+ * forward action that answers it, when there is one, is its own 56dp button below (U2), never
+ * drawn inline as a trailing text link.
+ */
 @Composable
-private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = text,
-            style = PlainTickerType.body,
-            color = Ink2,
-            modifier = Modifier.weight(1f).padding(bottom = HeadingTopGap),
-        )
-        if (action != null && onAction != null) TextAction(label = action, onClick = onAction)
-    }
+private fun EmptyLine(text: String) {
+    Text(
+        text = text,
+        style = PlainTickerType.body,
+        color = Ink2,
+        modifier = Modifier.fillMaxWidth().padding(bottom = HeadingTopGap).padding(horizontal = Side),
+    )
 }
 
 /**
@@ -285,6 +290,7 @@ private fun sentence(vararg parts: String?): String =
 private val Side = 20.dp
 private val HeadingTopGap = 30.dp
 private val SectionTopGap = 30.dp
+private val ButtonTop = 8.dp
 private const val SkeletonRowCount = 3
 
 // ---- Previews ------------------------------------------------------------------------------
