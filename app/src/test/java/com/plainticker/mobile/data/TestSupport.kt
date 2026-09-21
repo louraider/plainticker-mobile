@@ -3,6 +3,7 @@ package com.plainticker.mobile.data
 import com.plainticker.mobile.data.net.HttpClientFactory
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
@@ -14,6 +15,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CoroutineDispatcher
 
 /** Recorded API answers under src/test/resources. */
 object Fixtures {
@@ -23,9 +25,31 @@ object Fixtures {
             .use { it.readText() }
 }
 
-/** A real [HttpClientFactory] client over a [MockEngine], with the request log exposed. */
-class MockApi(handler: MockRequestHandler) {
-    val engine: MockEngine = MockEngine(handler)
+/**
+ * A real [HttpClientFactory] client over a [MockEngine], with the request log exposed.
+ *
+ * [dispatcher] is `null` by default, which leaves [MockEngine] on its own default (real
+ * `Dispatchers.IO`, from [io.ktor.client.engine.HttpClientEngineConfig.dispatcher] being left
+ * unset) — the plain API/repository tests that make up most callers of this class never touch
+ * `Dispatchers.Main` at all, so pinning to it here would break them. A ViewModel test that
+ * *does* run under [com.plainticker.mobile.MainDispatcherRule] should pass that rule's own
+ * dispatcher: left on real IO, a "mock" call genuinely hops off Main's `TestDispatcher` onto a
+ * real thread and back, which is harmless while a test is actively awaiting it, but a
+ * ViewModel's `init` can leave a collector (and the call it triggers) running past the end of
+ * a test, since these tests construct the ViewModel directly and nothing ever calls the
+ * (internal) `ViewModel.clear()` a real Activity/Fragment would. If that stray call's dispatch
+ * back onto Main lands while the *next* test's rule is swapping `Dispatchers.Main`,
+ * kotlinx-coroutines-test's own concurrency guard throws `IllegalStateException:
+ * Dispatchers.Main is used concurrently with setting it` — see [com.plainticker.mobile.ui.pass.PassViewModelTest],
+ * which pins for exactly this reason.
+ */
+class MockApi(dispatcher: CoroutineDispatcher? = null, handler: MockRequestHandler) {
+    val engine: MockEngine = MockEngine(
+        MockEngineConfig().apply {
+            requestHandlers.add(handler)
+            this.dispatcher = dispatcher
+        },
+    )
     val client: HttpClient = HttpClientFactory.create(engine)
     val requests: List<HttpRequestData> get() = engine.requestHistory
     val lastRequest: HttpRequestData get() = engine.requestHistory.last()

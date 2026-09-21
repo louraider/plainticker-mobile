@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.pass
 
+import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.funkatronics.encoders.Base58
 import com.plainticker.mobile.MainDispatcherRule
@@ -23,8 +24,10 @@ import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
 import com.plainticker.mobile.wallet.WalletAccount
 import com.plainticker.mobile.wallet.WalletOutcome
+import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -32,6 +35,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -56,6 +60,22 @@ class PassViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    /**
+     * Every [PassViewModel] [machine] builds, so [tearDown] can cancel each one's
+     * `viewModelScope`. Production never needs this: an Activity or Fragment's own
+     * ViewModelStore calls the (internal) `ViewModel.clear()` when it is destroyed, which
+     * cancels the scope `init` started `wallet.account.collect` on. Nothing here plays that
+     * role for a `PassViewModel` built directly by a test, so without this the collector (and
+     * whatever it triggers on the next emission) keeps running on `Dispatchers.Main` for the
+     * rest of the JVM's life - past this test, into every test after it.
+     */
+    private val machines = mutableListOf<PassViewModel>()
+
+    @After
+    fun tearDown() {
+        machines.forEach { it.viewModelScope.cancel() }
+    }
+
     private val payer = WalletAccount(ByteArray(32) { 7 }, "Seeker")
     private val destination = "8rUvvKhaNqDVdGjBpkB4XoTBrmMPfsVZJSLQPUHzZyEC"
     private val treasury = "E1STBTGEYpHanVG4HWUJHfzEu6eGbnE9mnGX9KnAmJdL"
@@ -67,12 +87,12 @@ class PassViewModelTest {
     private val confirmBody = """{"pro":true,"source":"pass","until":"2026-10-19T12:00:00.000Z"}"""
 
     /** Routes `/pass/build` and `/pass/confirm` off one engine, the way one live server answers both. */
-    private fun passMock(build: String = buildBody, confirm: String = confirmBody) = MockApi { request ->
+    private fun passMock(build: String = buildBody, confirm: String = confirmBody) = mockApi { request ->
         if (request.url.encodedPath.endsWith(PassApi.CONFIRM_PATH)) respondJson(confirm) else respondJson(build)
     }
 
     private fun entitlementMock(body: String = """{"pro":false,"source":null,"until":null}""") =
-        MockApi { respondJson(body) }
+        mockApi { respondJson(body) }
 
     private fun wallet(connected: Boolean = true) = FakeWalletSession().apply { if (connected) connectedAs(payer) }
 
@@ -80,6 +100,14 @@ class PassViewModelTest {
         FakeRpcRepository(stake = Result.success(SkrStake(listOf(SkrStakeAccount("s".padEnd(44, '1'), stakeRaw)))))
 
     private val now = 1_789_394_400_000L
+
+    /**
+     * Every [MockApi] this file builds, pinned to [mainDispatcherRule]'s own dispatcher: see
+     * [MockApi]'s `dispatcher` parameter for why an unpinned mock here (its default, and the
+     * right default for the plain API tests that make up most of [MockApi]'s callers) risks
+     * the exact isolation flake this class exists to guard against.
+     */
+    private fun mockApi(handler: MockRequestHandler): MockApi = MockApi(mainDispatcherRule.dispatcher, handler)
 
     private fun machine(
         pass: MockApi = passMock(),
@@ -101,7 +129,7 @@ class PassViewModelTest {
         // The same test dispatcher Main is pointed at, so a receipt's write is deterministic
         // under runTest exactly the way VoteViewModelTest already keeps its own.
         ioDispatcher = mainDispatcherRule.dispatcher,
-    )
+    ).also { machines += it }
 
     private fun TestScope.trail(machine: PassViewModel): List<PassState> {
         val seen = mutableListOf<PassState>()
@@ -187,7 +215,7 @@ class PassViewModelTest {
         val session = wallet().apply { this.operations = operations }
         // The build answers, and the confirm half of the same route answers with a failure this
         // app cannot act on: the payment already reached the network by the time this call runs.
-        val pass = MockApi { request ->
+        val pass = mockApi { request ->
             if (request.url.encodedPath.endsWith(PassApi.CONFIRM_PATH)) {
                 respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError)
             } else {
@@ -248,7 +276,7 @@ class PassViewModelTest {
 
     @Test
     fun `503 monetization disabled reads as not open, not as an error`() = runTest {
-        val flagOff = MockApi {
+        val flagOff = mockApi {
             respondJson(
                 """{"error":"This endpoint is not enabled on this server.","code":"monetization_disabled"}""",
                 HttpStatusCode.ServiceUnavailable,
@@ -260,14 +288,14 @@ class PassViewModelTest {
 
     @Test
     fun `a 429 is rate limited and can end differently on a later tap`() = runTest {
-        val limited = MockApi { respondJson("""{"error":"rate_limited"}""", HttpStatusCode.TooManyRequests) }
+        val limited = mockApi { respondJson("""{"error":"rate_limited"}""", HttpStatusCode.TooManyRequests) }
         assertEquals(PassRefusal.RATE_LIMITED, refusalOf(settle(machine(pass = limited))))
         assertTrue(PassRefusal.RATE_LIMITED.retryable)
     }
 
     @Test
     fun `a 200 that is not the contract never reaches the wallet`() = runTest {
-        val garbled = MockApi { respondJson("""{"transaction":"UkVEQUNURUQ="}""") }
+        val garbled = mockApi { respondJson("""{"transaction":"UkVEQUNURUQ="}""") }
         val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64)))
         val session = wallet().apply { this.operations = operations }
 
@@ -302,7 +330,7 @@ class PassViewModelTest {
 
     @Test
     fun `a transaction that has expired is never signed, the server is asked again instead`() = runTest {
-        val pass = MockApi { respondJson(bodyExpiring(now - 1_000L)) }
+        val pass = mockApi { respondJson(bodyExpiring(now - 1_000L)) }
         val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64) { 1 }))
         val session = wallet().apply { this.operations = operations }
         val vm = machine(pass = pass, wallet = session)
@@ -366,7 +394,7 @@ class PassViewModelTest {
 
     @Test
     fun `503 monetization disabled on entitlement reads as disabled, not as a failure`() = runTest {
-        val entitlement = MockApi {
+        val entitlement = mockApi {
             respondJson(
                 """{"error":"This endpoint is not enabled on this server.","code":"monetization_disabled"}""",
                 HttpStatusCode.ServiceUnavailable,
@@ -392,7 +420,7 @@ class PassViewModelTest {
      */
     @Test
     fun `pay refuses outright once entitlement reads as disabled, before any wallet call`() = runTest {
-        val entitlement = MockApi {
+        val entitlement = mockApi {
             respondJson(
                 """{"error":"This endpoint is not enabled on this server.","code":"monetization_disabled"}""",
                 HttpStatusCode.ServiceUnavailable,
@@ -419,7 +447,7 @@ class PassViewModelTest {
 
     @Test
     fun `any other entitlement failure is retryable and distinct from disabled`() = runTest {
-        val entitlement = MockApi { respondHtml("<html>down</html>", HttpStatusCode.BadGateway) }
+        val entitlement = mockApi { respondHtml("<html>down</html>", HttpStatusCode.BadGateway) }
         val vm = machine(entitlement = entitlement)
         vm.pro.test {
             val loaded = awaitUntil { !it.entitlementLoading }
@@ -577,7 +605,7 @@ class PassViewModelTest {
     fun `a pending payment that still cannot be confirmed stays pending, and offers no second payment`() = runTest {
         val receipts = FakePassReceiptStore()
         receipts.record(PassReceipt(signature = "sig", payer = payer.address, landedAtMillis = now))
-        val pass = MockApi { request ->
+        val pass = mockApi { request ->
             if (request.url.encodedPath.endsWith(PassApi.CONFIRM_PATH)) {
                 respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError)
             } else {
