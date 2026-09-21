@@ -30,7 +30,7 @@ quote stopped describing anything, APPx reading +89.34 percent on $34. The floor
 at four candidates on 2026-09-13: **$4,000 leaves 22 rows carrying a premium**, against 19 at
 $10,000, and it buys NFLXx at $9,370, PEPx at $5,351 and ORCLx at $4,444 without widening the
 widest premium the tracked set holds. One step lower is where it breaks, Vx printing +6.64 percent
-on $2,513. So the app states the figure instead, "$34 behind this price, too thin", and leaves the
+on $2,513. So the app states the figure instead, "$34 behind, too thin", and leaves the
 gauge out. That figure is Jupiter's own `liquidity` field, which runs 0.21 to 0.54 of what two
 independent aggregators count, so the app reports what Jupiter reports rather than calling it the
 pool. Nothing is filtered: disclosure, not curation.

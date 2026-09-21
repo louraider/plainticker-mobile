@@ -36,10 +36,11 @@ import com.plainticker.mobile.ui.theme.Muted
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * A 64dp row: ticker mono 18 and company 13 left with a mono 12 meta line, a mono 18 value and
- * a 13 sub word right, an optional trailing text action, one Line divider below. One focusable
- * item for a screen reader (descendants merged) with the click labelled "Open TSLAx"; the
- * trailing action stays its own target. [muted] is the price-only row: everything in Muted.
+ * A 64dp-minimum row: ticker mono 18 and company 13 left with a mono 12 meta line (up to two
+ * lines, so a numeral wraps rather than clips), a mono 18 value and a 13 sub word right, an
+ * optional trailing text action, one Line divider below. One focusable item for a screen reader
+ * (descendants merged) with the click labelled "Open TSLAx"; the trailing action stays its own
+ * target. [muted] is the price-only row: everything in Muted.
  *
  * [description] is what the merged item says instead of its parts read end to end. Without it a
  * reader hears the row's cells in order, punctuation and all ("TSLAx Tesla, Inc. 2.01364 TSLAx
@@ -138,7 +139,7 @@ fun ListRow(
                         text = meta,
                         style = PlainTickerType.meta,
                         color = Muted,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }

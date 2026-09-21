@@ -141,6 +141,13 @@ internal fun VoteTabContent(
                     itemsIndexed(state.leaders, key = { _, leader -> "leader:" + leader.ticker }) { index, leader ->
                         LeaderRow(leader = leader, last = index == state.leaders.lastIndex, onOpenDetail = onOpenDetail, onVote = onVote)
                     }
+                } else if (state.round != null) {
+                    // A round is open and nothing has been voted on yet: the heading above would
+                    // otherwise sit over nothing. Drawn only here, never in the notOpen branch,
+                    // which is a different state and already says its own piece.
+                    item(key = "no-votes-yet") {
+                        Footnote(text = stringResource(R.string.vote_tab_no_votes_yet))
+                    }
                 }
 
                 if (state.myVotes.isNotEmpty()) {
