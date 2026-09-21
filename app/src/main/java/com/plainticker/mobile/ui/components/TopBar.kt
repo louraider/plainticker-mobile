@@ -18,16 +18,21 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.plainticker.mobile.ui.theme.Accent
 import com.plainticker.mobile.ui.theme.Ink
 import com.plainticker.mobile.ui.theme.Muted
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * 56dp after the status inset: the wordmark left, one text action right (Watch) or one static
- * mono fragment (the wallet). Lives inside the scrolling content, so it scrolls away, never sticky.
+ * 56dp after the status inset: the wordmark left, one text action right (Watch, You) or one
+ * static mono fragment (the wallet). Lives inside the scrolling content, so it scrolls away,
+ * never sticky.
  *
  * @param insets the inset the bar absorbs; pass `WindowInsets(0)` when a parent already pads it.
  * @param onTitleLongPress debug builds only: a long press on the wordmark opens the gallery.
+ * @param onAction null with [action] non-null draws the action as a picture of itself, in the
+ * same Accent text style but with no click target: the onboarding backdrop (task U3) shows the
+ * You action this way, the same rule [TopTabs]'s own `onSelect = null` already keeps for its tabs.
  */
 @Composable
 fun TopBar(
@@ -70,6 +75,8 @@ fun TopBar(
         )
         when {
             action != null && onAction != null -> TextAction(label = action, onClick = onAction)
+            // A picture of the action, not the action itself: same Accent text, no click target.
+            action != null -> Text(text = action, style = PlainTickerType.textAction, color = Accent, maxLines = 1)
             meta != null -> Text(text = meta, style = PlainTickerType.meta, color = Muted, maxLines = 1)
         }
     }
@@ -81,6 +88,8 @@ private fun TopBarPreview() {
     PreviewCanvas {
         Column {
             TopBar(action = "Watch", onAction = {}, insets = WindowInsets(0))
+            // The onboarding backdrop's own case: an action with no handler, drawn as a picture.
+            TopBar(action = "You", insets = WindowInsets(0))
             TopBar(meta = "3kF9…Qm2v", insets = WindowInsets(0))
             TopBar(insets = WindowInsets(0))
         }

@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.home
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,13 +33,22 @@ import com.plainticker.mobile.ui.vote.VoteTabViewModel
 import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistScreen
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
+import com.plainticker.mobile.ui.you.YouScreen
 
-/** List, Vote, Portfolio, Watchlist, the order docs/plan-monetisation-2026-09-19.md section 1.5 settles. */
+/**
+ * List, Vote, Portfolio, Watchlist, the order docs/plan-monetisation-2026-09-19.md section 1.5
+ * settles, then You, appended last (docs/plan-app-uiux-2026-09-21.md, task U1). You is a home tab
+ * rather than a nav route, exactly like the other four, but it sits outside the tab row: it is
+ * reached only from the TopBar's action (DESIGN.md section 4) and TopTabs never draws a fifth
+ * label for it. [WATCHLIST]'s ordinal is unmoved, which is what lets the digest notification's
+ * stored `EXTRA_TAB` keep pointing at the same screen (HomeTabTest pins all five).
+ */
 enum class HomeTab(@StringRes val label: Int) {
     LIST(R.string.tab_list),
     VOTE(R.string.tab_vote),
     PORTFOLIO(R.string.tab_portfolio),
     WATCHLIST(R.string.tab_watchlist),
+    YOU(R.string.you_heading),
 }
 
 /**
@@ -58,14 +69,42 @@ fun HomeScreen(
     initialTab: Int = HomeTab.LIST.ordinal,
 ) {
     var selected by rememberSaveable { mutableIntStateOf(initialTab.coerceIn(HomeTab.entries.indices)) }
+    // The tab You returns to on back: the last of the four real tabs that was actually selected,
+    // never You itself, so a cold start straight onto You (a deep link naming HomeTab.YOU.ordinal)
+    // still has somewhere honest to go back to.
+    var previousTab by rememberSaveable { mutableIntStateOf(HomeTab.LIST.ordinal) }
     val tabs = HomeTab.entries
-    val labels = tabs.map { stringResource(it.label) }
+    // You sits outside the tab row (DESIGN.md section 4): TopTabs draws only the four real tabs,
+    // in the same order and at the same indices selected already uses, so no remapping is needed.
+    val realTabs = tabs.filterNot { it == HomeTab.YOU }
+    val realLabels = realTabs.map { stringResource(it.label) }
+
+    LaunchedEffect(selected) {
+        if (tabs[selected] != HomeTab.YOU) previousTab = selected
+    }
+    // Back from You returns to the tab left, rather than leaving the app or falling through to
+    // whatever the system back stack holds beneath home (plan U1: "Back from You returns to the
+    // previous tab").
+    BackHandler(enabled = tabs[selected] == HomeTab.YOU) {
+        selected = previousTab
+    }
 
     val header: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
-            TopBar(onTitleLongPress = onOpenGallery)
-            TopTabs(items = labels, selected = selected, onSelect = { selected = it })
+            TopBar(
+                action = stringResource(R.string.you_action),
+                onAction = { selected = HomeTab.YOU.ordinal },
+                onTitleLongPress = onOpenGallery,
+            )
+            TopTabs(items = realLabels, selected = selected, onSelect = { selected = it })
             DebugActions(onOpenSpike = onOpenSpike)
+        }
+    }
+    // You's own header: the TopBar alone, its action slot empty (plan U1: "empty on You"), and no
+    // TopTabs, since You is not one of the four tabs it would otherwise highlight.
+    val youHeader: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth()) {
+            TopBar(onTitleLongPress = onOpenGallery)
         }
     }
 
@@ -91,14 +130,21 @@ fun HomeScreen(
 
             HomeTab.PORTFOLIO -> PortfolioScreen(
                 viewModel = viewModel(factory = factory),
-                // Scoped to the home entry like every other ViewModel here, so a payment mid
-                // flight and this device's entitlement survive a tab switch.
-                passViewModel = viewModel(factory = factory),
                 onOpenDetail = onOpenDetail,
                 // A wallet holding no xStock is offered the list rather than a dead end; the tab
                 // is the host's to select, so the screen asks for it rather than navigating.
                 onBrowseList = { selected = HomeTab.LIST.ordinal },
                 header = header,
+            )
+
+            HomeTab.YOU -> YouScreen(
+                viewModel = viewModel(factory = factory),
+                // Scoped to the home entry like every other ViewModel here, so a payment mid
+                // flight and this device's entitlement survive a tab switch (the same instance
+                // PortfolioScreen used to request; only where it is asked from moved).
+                passViewModel = viewModel(factory = factory),
+                onOpenTab = { tab -> selected = tab },
+                header = youHeader,
             )
 
             HomeTab.WATCHLIST -> {

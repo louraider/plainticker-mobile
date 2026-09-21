@@ -117,17 +117,21 @@ private fun OnboardingContent(
 }
 
 /**
- * The List screen as a picture of itself. Every piece is built without a click handler, so there
- * is nothing to tap and nothing to focus even before the semantics are cleared: the tabs are
- * decorative (TopTabs with no onSelect), the strip offers no refresh and the rows do not open.
+ * The List screen as a picture of itself (task U3: the backdrop draws the real tabs, the You
+ * action and a sector heading, so the first frame stops lying about what the app is). Every piece
+ * is built without a click handler, so there is nothing to tap and nothing to focus even before
+ * the semantics are cleared: the tabs are decorative (TopTabs with no onSelect), the You action is
+ * TopBar's own picture of itself (onAction left null), the strip offers no refresh and the rows do
+ * not open.
  */
 @Composable
 private fun ListBackdrop(modifier: Modifier = Modifier) {
     Column(modifier) {
-        TopBar()
+        TopBar(action = stringResource(R.string.you_action))
         TopTabs(
             items = listOf(
                 stringResource(R.string.tab_list),
+                stringResource(R.string.tab_vote),
                 stringResource(R.string.tab_portfolio),
                 stringResource(R.string.tab_watchlist),
             ),
@@ -143,7 +147,10 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
                 Fmt.monthDay(BackdropNextReport.reportsAt),
             ),
         )
-        Heading(text = stringResource(R.string.list_heading_analyzed), topPadding = 30.dp)
+        // The settled List draws a sector chapter heading here, its row count as the meta, never
+        // the "Analyzed" heading the skeleton alone uses (ListScreen.kt): the backdrop's six
+        // sample rows are one illustrative chapter rather than six real, differently sectored ones.
+        Heading(text = BackdropSector, topPadding = 30.dp, meta = Fmt.count(BackdropRows.size))
         BackdropRows.forEachIndexed { index, row ->
             ListRow(
                 ticker = row.ticker,
@@ -207,6 +214,14 @@ private fun ConsentPanel(
                     )
                     Text(
                         text = stringResource(R.string.onboarding_body_fundamentals),
+                        style = PlainTickerType.body,
+                        color = Ink2,
+                    )
+                    // The map (task U3): what each tab is for, and where the wallet, the pass and
+                    // this device's record live, since the backdrop behind this panel can only
+                    // show that as a picture, never say it.
+                    Text(
+                        text = stringResource(R.string.onboarding_body_map),
                         style = PlainTickerType.body,
                         color = Ink2,
                     )
@@ -310,6 +325,9 @@ private val BackdropRows = listOf(
     BackdropRow("AMZNx", "Amazon.com, Inc.", -0.02, 2, 55.0, RowState.FAIR),
     BackdropRow("COINx", "Coinbase Global", 0.08, 3, 47.0, RowState.WEAK),
 )
+
+/** One illustrative chapter's worth of sample rows; not a claim that every ticker above is GICS Technology. */
+private const val BackdropSector = "Technology"
 
 private const val BackdropWatched = 3
 private val BackdropNextReport = BackdropReport("TSLAx", Instant.parse("2026-10-22T20:00:00Z"))
