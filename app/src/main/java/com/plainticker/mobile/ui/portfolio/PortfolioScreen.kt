@@ -106,7 +106,6 @@ internal fun PortfolioContent(
             Heading(
                 text = stringResource(R.string.portfolio_heading_holdings),
                 meta = state.account?.let { Fmt.shortKey(it.address) },
-                topPadding = HeadingTopGap,
             )
         }
 
@@ -194,12 +193,7 @@ internal fun PortfolioContent(
         // a chain read to draw: a landing this app saw is a landing whether or not it can reach
         // the network now.
         if (state.receipts.isNotEmpty()) {
-            item(key = "swaps") {
-                Heading(
-                    text = stringResource(R.string.portfolio_heading_recent_swaps),
-                    topPadding = SectionTopGap,
-                )
-            }
+            item(key = "swaps") { Heading(text = stringResource(R.string.portfolio_heading_recent_swaps)) }
             itemsIndexed(state.receipts, key = { _, receipt -> "r:" + receipt.signature }) { index, receipt ->
                 Swap(receipt = receipt, last = index == state.receipts.lastIndex)
             }
@@ -362,7 +356,7 @@ private fun EmptyLine(text: String) {
         text = text,
         style = PlainTickerType.body,
         color = Ink2,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side, vertical = HeadingTopGap),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Side, vertical = EmptyLineGap),
     )
 }
 
@@ -397,8 +391,8 @@ private fun sentence(vararg parts: String?): String =
     parts.filterNot { it.isNullOrBlank() }.joinToString(", ") { spoken(it.orEmpty()) }
 
 private val Side = 20.dp
-private val HeadingTopGap = 30.dp
-private val SectionTopGap = 28.dp
+/** Vertical centering for an EmptyLine's sentence; unrelated to Heading's own rhythm (U6). */
+private val EmptyLineGap = 30.dp
 private val ButtonTop = 8.dp
 private const val SkeletonRowCount = 3
 

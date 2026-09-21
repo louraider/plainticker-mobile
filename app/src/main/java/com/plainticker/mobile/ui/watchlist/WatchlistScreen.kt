@@ -128,7 +128,7 @@ internal fun WatchlistContent(
             }
         }
         item(key = "watched") {
-            Heading(text = stringResource(R.string.watchlist_heading_watched), topPadding = HeadingTopGap)
+            Heading(text = stringResource(R.string.watchlist_heading_watched))
         }
 
         when {
@@ -161,7 +161,7 @@ internal fun WatchlistContent(
         }
 
         item(key = "digest") {
-            Heading(text = stringResource(R.string.watchlist_heading_digest), topPadding = SectionTopGap)
+            Heading(text = stringResource(R.string.watchlist_heading_digest))
         }
         item(key = "digest-panel") { Digest(state.digest) }
         item(key = "digest-footer") {
@@ -276,7 +276,7 @@ private fun EmptyLine(text: String) {
         text = text,
         style = PlainTickerType.body,
         color = Ink2,
-        modifier = Modifier.fillMaxWidth().padding(bottom = HeadingTopGap).padding(horizontal = Side),
+        modifier = Modifier.fillMaxWidth().padding(bottom = EmptyLineGap).padding(horizontal = Side),
     )
 }
 
@@ -288,8 +288,8 @@ private fun sentence(vararg parts: String?): String =
     parts.filterNot { it.isNullOrBlank() }.joinToString(", ") { spoken(it.orEmpty()) }
 
 private val Side = 20.dp
-private val HeadingTopGap = 30.dp
-private val SectionTopGap = 30.dp
+/** Vertical centering for an EmptyLine's sentence; unrelated to Heading's own rhythm (U6). */
+private val EmptyLineGap = 30.dp
 private val ButtonTop = 8.dp
 private const val SkeletonRowCount = 3
 
