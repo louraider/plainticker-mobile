@@ -1,7 +1,6 @@
 package com.plainticker.mobile.ui.portfolio
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,7 +14,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -32,13 +30,10 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 // The row component and this screen's row model share a name; the anatomy keeps an alias.
 import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.PreviewCanvas
+import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.spoken
-import com.plainticker.mobile.ui.pass.PassActions
-import com.plainticker.mobile.ui.pass.PassSheet
-import com.plainticker.mobile.ui.pass.PassViewModel
-import com.plainticker.mobile.ui.pass.ProUiState
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.Ink
 import com.plainticker.mobile.ui.theme.Ink2
@@ -60,44 +55,29 @@ import com.plainticker.mobile.wallet.WalletAccount
  * The footnote is not decoration. The chain carries no cost basis, so there is no profit, no loss
  * and no change-since figure anywhere on this screen, and the line under the holdings says that
  * plainly rather than leaving a reader to assume the app simply forgot.
+ *
+ * The wallet's own staked SKR and this device's Pro entitlement left this screen for You
+ * (docs/plan-app-uiux-2026-09-21.md, task U1); [PassViewModel] and its sheet went with them.
  */
 @Composable
 fun PortfolioScreen(
     viewModel: PortfolioViewModel,
-    passViewModel: PassViewModel,
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
     onBrowseList: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val pro by passViewModel.pro.collectAsStateWithLifecycle()
-    val pass by passViewModel.state.collectAsStateWithLifecycle()
-    // A sibling of the LazyColumn, exactly as the vote sheet sits beside the List's and the Vote
-    // tab's own content: the sheet is a modal surface and draws in its own window, so where it
-    // sits in this tree does not matter, only that it outlives the block that opened it.
-    Box(modifier.fillMaxSize()) {
-        PortfolioContent(
-            state = state,
-            onConnect = viewModel::connect,
-            onDisconnect = viewModel::disconnect,
-            onRefresh = viewModel::refresh,
-            onOpenDetail = onOpenDetail,
-            onBrowseList = onBrowseList,
-            pro = pro,
-            onPay = passViewModel::pay,
-            onRetryEntitlement = passViewModel::refreshEntitlement,
-            header = header,
-        )
-        PassSheet(
-            state = pass,
-            actions = PassActions(
-                onConfirm = passViewModel::confirm,
-                onRetry = passViewModel::retry,
-                onClose = passViewModel::close,
-            ),
-        )
-    }
+    PortfolioContent(
+        state = state,
+        onConnect = viewModel::connect,
+        onDisconnect = viewModel::disconnect,
+        onRefresh = viewModel::refresh,
+        onOpenDetail = onOpenDetail,
+        onBrowseList = onBrowseList,
+        modifier = modifier,
+        header = header,
+    )
 }
 
 @Composable
@@ -110,15 +90,6 @@ internal fun PortfolioContent(
     onBrowseList: (() -> Unit)?,
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
-    /**
-     * The Pro block's own state (task A6), defaulted so every existing caller of this composable
-     * (previews, PortfolioScreenTest's source scan) is untouched by its addition: nothing above
-     * this parameter list changed shape, and the block itself is drawn last, after every section
-     * this screen already carried.
-     */
-    pro: ProUiState = ProUiState(),
-    onPay: (() -> Unit)? = null,
-    onRetryEntitlement: () -> Unit = {},
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -135,7 +106,6 @@ internal fun PortfolioContent(
             Heading(
                 text = stringResource(R.string.portfolio_heading_holdings),
                 meta = state.account?.let { Fmt.shortKey(it.address) },
-                topPadding = HeadingTopGap,
             )
         }
 
@@ -167,25 +137,34 @@ internal fun PortfolioContent(
                 }
             }
 
-            !state.connected -> item(key = "connect") {
-                EmptyLine(
-                    text = stringResource(R.string.portfolio_not_connected),
-                    action = stringResource(R.string.action_connect_wallet),
-                    onAction = onConnect,
-                )
+            // The one forward action this state offers, so it is a 56dp button rather than a
+            // text link (U2: no state's only forward action is a TextAction).
+            !state.connected -> {
+                item(key = "connect") { EmptyLine(stringResource(R.string.portfolio_not_connected)) }
+                item(key = "connect-action") {
+                    SecondaryButton(
+                        label = stringResource(R.string.action_connect_wallet),
+                        onClick = onConnect,
+                        modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
+                    )
+                }
             }
 
             state.isCold -> item(key = "skeleton") { SkeletonRows(count = SkeletonRowCount) }
 
             // A fresh wallet holds nothing, which is the common case and not an error. It gets a
-            // sentence that says what would put something here, and the way to go and read first.
+            // sentence that says what would put something here, and the way to go and read first,
+            // as a 56dp button (U2), the same rule the state above keeps.
             state.isEmpty -> {
-                item(key = "empty") {
-                    EmptyLine(
-                        text = stringResource(R.string.portfolio_empty),
-                        action = onBrowseList?.let { stringResource(R.string.action_browse_analyzed) },
-                        onAction = onBrowseList,
-                    )
+                item(key = "empty") { EmptyLine(stringResource(R.string.portfolio_empty)) }
+                if (onBrowseList != null) {
+                    item(key = "browse-action") {
+                        SecondaryButton(
+                            label = stringResource(R.string.action_browse_analyzed),
+                            onClick = onBrowseList,
+                            modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
+                        )
+                    }
                 }
                 item(key = "wallet") { WalletActions(onRefresh = onRefresh, onDisconnect = onDisconnect) }
             }
@@ -214,27 +193,11 @@ internal fun PortfolioContent(
         // a chain read to draw: a landing this app saw is a landing whether or not it can reach
         // the network now.
         if (state.receipts.isNotEmpty()) {
-            item(key = "swaps") {
-                Heading(
-                    text = stringResource(R.string.portfolio_heading_recent_swaps),
-                    topPadding = SectionTopGap,
-                )
-            }
+            item(key = "swaps") { Heading(text = stringResource(R.string.portfolio_heading_recent_swaps)) }
             itemsIndexed(state.receipts, key = { _, receipt -> "r:" + receipt.signature }) { index, receipt ->
                 Swap(receipt = receipt, last = index == state.receipts.lastIndex)
             }
             item(key = "swaps-note") { Footnote(stringResource(R.string.portfolio_receipts_note)) }
-        }
-
-        // The Pro block (task A6): the wallet's own staked SKR and this device's entitlement,
-        // appended after every section this screen already drew. Nothing above this line reads
-        // pro, onPay or onRetryEntitlement, which is the hard invariant by construction: a block
-        // that is free today keeps drawing exactly as it does whether or not this one is here.
-        item(key = "pro-heading") {
-            Heading(text = stringResource(R.string.pro_heading), topPadding = SectionTopGap)
-        }
-        item(key = "pro-block") {
-            ProBlock(state = pro, onPay = onPay, onRetryEntitlement = onRetryEntitlement)
         }
     }
 }
@@ -350,15 +313,17 @@ private fun WalletActions(onRefresh: () -> Unit, onDisconnect: () -> Unit) {
     }
 }
 
-/** The way into the wallet, on its own line under the sentence that explains why it is offered. */
+/**
+ * The way into the wallet, under the sentence that explains why it is offered: a 56dp button
+ * (U2), the one forward action this state exists to offer, never a text link.
+ */
 @Composable
 private fun ConnectAction(onConnect: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        TextAction(label = stringResource(R.string.action_connect_wallet), onClick = onConnect)
-    }
+    SecondaryButton(
+        label = stringResource(R.string.action_connect_wallet),
+        onClick = onConnect,
+        modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
+    )
 }
 
 /**
@@ -380,21 +345,19 @@ private fun Lede(text: String) {
     )
 }
 
-/** One sentence where the rows would be, so no state of this screen is a blank column. */
+/**
+ * One sentence where the rows would be, so no state of this screen is a blank column. The
+ * forward action that answers it, when there is one, is its own 56dp button below (U2), never
+ * drawn inline as a trailing text link.
+ */
 @Composable
-private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = text,
-            style = PlainTickerType.body,
-            color = Ink2,
-            modifier = Modifier.weight(1f).padding(vertical = HeadingTopGap),
-        )
-        if (action != null && onAction != null) TextAction(label = action, onClick = onAction)
-    }
+private fun EmptyLine(text: String) {
+    Text(
+        text = text,
+        style = PlainTickerType.body,
+        color = Ink2,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Side, vertical = EmptyLineGap),
+    )
 }
 
 /** A closing line under a section: what the screen is not showing, and why. */
@@ -428,8 +391,9 @@ private fun sentence(vararg parts: String?): String =
     parts.filterNot { it.isNullOrBlank() }.joinToString(", ") { spoken(it.orEmpty()) }
 
 private val Side = 20.dp
-private val HeadingTopGap = 30.dp
-private val SectionTopGap = 28.dp
+/** Vertical centering for an EmptyLine's sentence; unrelated to Heading's own rhythm (U6). */
+private val EmptyLineGap = 30.dp
+private val ButtonTop = 8.dp
 private const val SkeletonRowCount = 3
 
 // ---- Previews ------------------------------------------------------------------------------

@@ -43,9 +43,12 @@ class OnboardingScreenTest {
     fun `every sentence on the screen comes from strings xml`() {
         listOf(
             "app_name", "onboarding_headline", "onboarding_body_chain", "onboarding_body_fundamentals",
-            "onboarding_body_disclaimer", "onboarding_certify", "onboarding_continue",
-            "tab_list", "tab_portfolio", "tab_watchlist",
-            "list_heading_analyzed", "list_row_meta_premium", "list_row_meta_join",
+            "onboarding_body_map", "onboarding_body_disclaimer", "onboarding_certify", "onboarding_continue",
+            // The backdrop's own truth (task U3): the four real tabs and the You action, both
+            // drawn as pictures of themselves, never the three tabs and the pre-chapter heading
+            // the skeleton alone still uses.
+            "tab_list", "tab_vote", "tab_portfolio", "tab_watchlist", "you_action",
+            "list_row_meta_premium", "list_row_meta_join",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
             assertTrue("OnboardingScreen.kt does not read R.string.$name", "R.string.$name" in scan.code)
@@ -64,6 +67,16 @@ class OnboardingScreenTest {
                 "\"${literal.text}\" at line ${literal.line} reads like copy; put it in strings.xml",
                 literal.text.trim().split(Regex("\\s+")).size <= 3,
             )
+        }
+    }
+
+    @Test
+    fun `the map sentence names all four tabs and You`() {
+        val text = Regex("""<string name="onboarding_body_map">(.*?)</string>""")
+            .find(stringsXml)?.groupValues?.get(1)
+        assertTrue("onboarding_body_map is not declared", text != null)
+        listOf("List", "Vote", "Portfolio", "Watchlist", "You").forEach { word ->
+            assertTrue("the map sentence never names $word", Regex("""\b$word\b""").containsMatchIn(text!!))
         }
     }
 

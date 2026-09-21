@@ -137,7 +137,7 @@ internal fun ListContent(
         when {
             cold -> item(key = "skeleton") {
                 Column(Modifier.fillMaxWidth()) {
-                    Heading(text = stringResource(R.string.list_heading_analyzed), topPadding = HeadingTopGap)
+                    Heading(text = stringResource(R.string.list_heading_analyzed))
                     SkeletonRows(count = SkeletonRowCount)
                 }
             }
@@ -163,11 +163,12 @@ internal fun ListContent(
             // different shape (see below), so this branch runs only while the query is blank.
             state.query.isBlank() -> {
                 val chapters = state.analyzedChapters
-                chapters.forEachIndexed { chapterIndex, chapter ->
+                chapters.forEach { chapter ->
                     item(key = "chapter:${chapter.sector ?: NoSectorKey}") {
+                        // One rhythm (U6): Heading's own default (32dp above, 14dp below) applies
+                        // whether this is the first chapter or a later one.
                         Heading(
                             text = chapter.sector ?: stringResource(R.string.list_heading_no_sector),
-                            topPadding = if (chapterIndex == 0) HeadingTopGap else SectionTopGap,
                             meta = Fmt.count(chapter.rows.size),
                         )
                     }
@@ -182,10 +183,7 @@ internal fun ListContent(
                 val leaders = state.nextUpStrip
                 if (leaders.isNotEmpty()) {
                     item(key = "without") {
-                        Heading(
-                            text = stringResource(R.string.list_heading_without_analysis),
-                            topPadding = SectionTopGap,
-                        )
+                        Heading(text = stringResource(R.string.list_heading_without_analysis))
                     }
                     item(key = "next-up-label") { NextUpLabel() }
                     itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
@@ -237,7 +235,7 @@ private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Uni
             text = text,
             style = PlainTickerType.body,
             color = Ink2,
-            modifier = Modifier.weight(1f).padding(vertical = HeadingTopGap),
+            modifier = Modifier.weight(1f).padding(vertical = EmptyLineGap),
         )
         if (action != null && onAction != null) TextAction(label = action, onClick = onAction)
     }
@@ -462,8 +460,9 @@ internal val RowState.label: Int
     }
 
 private val SearchTopGap = 22.dp
-private val HeadingTopGap = 30.dp
-private val SectionTopGap = 28.dp
+
+/** Vertical centering for an EmptyLine's sentence; unrelated to Heading's own rhythm (U6). */
+private val EmptyLineGap = 30.dp
 
 /** Under the strip's label. */
 private val NextUpLabelGap = 6.dp

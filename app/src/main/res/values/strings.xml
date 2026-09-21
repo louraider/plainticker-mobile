@@ -49,6 +49,9 @@
     <string name="onboarding_headline">Tokenized stocks, read before you swap.</string>
     <string name="onboarding_body_chain">Every xStock page starts with what the token itself says: reserves, issuer controls and the split multiplier, read live from the Solana mint.</string>
     <string name="onboarding_body_fundamentals">Then the page turns to the company against its sector: quality, valuation, momentum and F-Score, from SEC filings.</string>
+    <!-- The map (task U3): the backdrop shows the four tabs and You as a picture; this sentence
+         says what each is for in words, before the disclaimer. -->
+    <string name="onboarding_body_map">Start on the List. Vote picks what is analyzed next, Portfolio reads your wallet, Watchlist sends one digest a day. Your wallet, your pass and this device\'s record are under You, top right.</string>
     <string name="onboarding_body_disclaimer">This is not a price forecast or investment advice.</string>
     <string name="onboarding_certify">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</string>
     <string name="onboarding_continue">Read the list</string>
@@ -377,21 +380,22 @@
     <string name="vote_tab_last_round_published">%1$s is covered</string>
     <string name="vote_tab_last_round_uncoverable">%1$s could not be covered</string>
 
-    <!-- Pro entitlement (task A6, docs/plan-monetisation-2026-09-19.md section 1.2): the
-         Portfolio's own block. The sentence names which of pass, stake or subscription carries
-         it and, for a pass or a subscription, when it ends; a stake carries no date because it
-         is re-evaluated continuously rather than granted once. -->
-    <string name="pro_heading">Pro</string>
+    <!-- Pro entitlement (task A6, docs/plan-monetisation-2026-09-19.md section 1.2): You's own
+         block (docs/plan-app-uiux-2026-09-21.md U1). The sentence names which of pass, stake or
+         subscription carries it and, for a pass or a subscription, when it ends; a stake carries
+         no date because it is re-evaluated continuously rather than granted once. The entitlement
+         is answered for this device's own code, not for whichever wallet happens to be connected,
+         so the sentence says "This device", never "This wallet". -->
     <string name="pro_entitlement_loading">Reading this device\'s entitlement.</string>
     <string name="pro_entitlement_disabled">Pro is not offered by this server yet.</string>
     <string name="pro_entitlement_failed">Entitlement status unavailable.</string>
-    <string name="pro_entitlement_pass">This wallet is Pro through a pass.</string>
-    <string name="pro_entitlement_pass_until">This wallet is Pro through a pass, until %1$s.</string>
-    <string name="pro_entitlement_stake">This wallet is Pro through its staked SKR.</string>
-    <string name="pro_entitlement_subscription">This wallet is Pro through a subscription.</string>
-    <string name="pro_entitlement_subscription_until">This wallet is Pro through a subscription, until %1$s.</string>
-    <string name="pro_entitlement_active">This wallet is Pro.</string>
-    <string name="pro_entitlement_none">This wallet is not Pro.</string>
+    <string name="pro_entitlement_pass">This device is Pro through a pass.</string>
+    <string name="pro_entitlement_pass_until">This device is Pro through a pass, until %1$s.</string>
+    <string name="pro_entitlement_stake">This device is Pro through its staked SKR.</string>
+    <string name="pro_entitlement_subscription">This device is Pro through a subscription.</string>
+    <string name="pro_entitlement_subscription_until">This device is Pro through a subscription, until %1$s.</string>
+    <string name="pro_entitlement_active">This device is Pro.</string>
+    <string name="pro_entitlement_none">This device is not Pro.</string>
     <!-- A figure, never a verdict: this screen states what a wallet has staked and stops there,
          whether or not it clears the entitlement threshold the server alone judges it against. -->
     <string name="pro_stake_disconnected">Connect a wallet to read what it has staked.</string>
@@ -465,6 +469,38 @@
     <string name="notification_channel_watchlist">Watchlist</string>
     <string name="notification_channel_watchlist_description">One digest a day about the stocks you watch.</string>
     <string name="notification_digest_title">Daily digest</string>
+
+    <!-- You (task U1, docs/plan-app-uiux-2026-09-21.md section 1.2): the cabinet. The wallet
+         session, the entitlement and the stake the Portfolio used to carry, this device's own
+         record and the notifications line the Watchlist already draws. Never the device code
+         itself: DeviceCodeNeverDrawnTest scans every composable under ui/ for that. -->
+    <string name="you_action">You</string>
+    <string name="you_heading">You</string>
+    <string name="you_wallet_label">Wallet</string>
+    <string name="you_wallet_none">Not connected</string>
+    <string name="you_wallet_note">The wallet is asked to connect on each launch. No key or session is kept.</string>
+    <string name="you_pro_label">Pro</string>
+    <string name="you_pro_pass">Pass</string>
+    <string name="you_pro_stake">Stake</string>
+    <string name="you_pro_subscription">Subscription</string>
+    <!-- Pro true with no recognized source (ProModel.kt's entitlementLine keeps the same
+         fallback): a plain yes, symmetric with you_pro_none below. -->
+    <string name="you_pro_active">Yes</string>
+    <string name="you_pro_none">No</string>
+    <string name="you_pro_unread">Not read</string>
+    <string name="you_pro_disabled">Not offered</string>
+    <string name="you_pro_until">until %1$s</string>
+    <string name="you_stake_label">Staked SKR</string>
+    <string name="you_stake_none_wallet">no wallet connected</string>
+    <string name="you_heading_device">On this device</string>
+    <string name="you_fact_swaps">Swaps recorded</string>
+    <string name="you_fact_votes">Votes cast</string>
+    <string name="you_fact_watched">Stocks watched</string>
+    <string name="you_fact_sub_portfolio">Listed under Portfolio</string>
+    <string name="you_fact_sub_vote">Listed under Vote</string>
+    <string name="you_fact_sub_watchlist">Listed under Watchlist</string>
+    <string name="you_open_tab">Open %1$s</string>
+    <string name="you_version">Version %1$s</string>
 
     <!-- Debug builds only -->
     <string name="debug_open_wallet_spike">Open the wallet spike</string>

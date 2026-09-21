@@ -136,7 +136,6 @@ internal fun VoteTabContent(
                         Heading(
                             text = stringResource(R.string.vote_tab_heading_leaders),
                             meta = Fmt.count(state.leaders.size),
-                            topPadding = if (state.round == null) HeadingTopGap else SectionTopGap,
                         )
                     }
                     itemsIndexed(state.leaders, key = { _, leader -> "leader:" + leader.ticker }) { index, leader ->
@@ -149,7 +148,6 @@ internal fun VoteTabContent(
                         Heading(
                             text = stringResource(R.string.vote_tab_heading_your_votes),
                             meta = Fmt.count(state.myVotes.size),
-                            topPadding = SectionTopGap,
                         )
                     }
                     item(key = "my-votes-note") { Footnote(text = stringResource(R.string.vote_tab_your_votes_note)) }
@@ -160,7 +158,7 @@ internal fun VoteTabContent(
 
                 state.previous?.let { previous ->
                     item(key = "last-round-heading") {
-                        Heading(text = stringResource(R.string.vote_tab_heading_last_round), topPadding = SectionTopGap)
+                        Heading(text = stringResource(R.string.vote_tab_heading_last_round))
                     }
                     item(key = "last-round") { LastRoundRow(previous = previous, onOpenDetail = onOpenDetail) }
                 }
@@ -169,7 +167,6 @@ internal fun VoteTabContent(
                     Heading(
                         text = stringResource(R.string.list_heading_without_analysis),
                         meta = if (state.ballotLoaded) Fmt.count(state.ballot.size) else null,
-                        topPadding = SectionTopGap,
                     )
                 }
                 item(key = "ballot-search") {
@@ -238,7 +235,9 @@ private fun Explainer() {
 private fun RoundHeader(round: VoteRound) {
     val roundId = Fmt.count(round.id)
     val closesText = round.closesAtInstant()?.let { stringResource(R.string.vote_tab_round_closes, Fmt.utc(it)) }
-    Column(Modifier.fillMaxWidth().padding(start = Side, end = Side, top = HeadingTopGap, bottom = 14.dp)) {
+    // One rhythm (U6): the same 32dp above, 14dp below Heading itself defaults to, kept as a
+    // literal because this block cannot use Heading (see the doc comment above).
+    Column(Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 32.dp, bottom = 14.dp)) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.semantics(mergeDescendants = true) { heading() },
@@ -377,14 +376,14 @@ private fun Footnote(text: String, muted: Boolean = true) {
             text = text,
             style = if (muted) PlainTickerType.small else PlainTickerType.body,
             color = if (muted) Muted else Ink2,
-            modifier = Modifier.weight(1f).padding(vertical = if (muted) 8.dp else HeadingTopGap),
+            modifier = Modifier.weight(1f).padding(vertical = if (muted) 8.dp else EmptyLineGap),
         )
     }
 }
 
 private val Side = 20.dp
-private val HeadingTopGap = 30.dp
-private val SectionTopGap = 28.dp
+/** Vertical centering for a standalone Footnote's sentence; unrelated to Heading's own rhythm (U6). */
+private val EmptyLineGap = 30.dp
 private const val SkeletonRowCount = 4
 
 // ---- Previews ------------------------------------------------------------------------------
