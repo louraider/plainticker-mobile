@@ -100,6 +100,12 @@ import kotlinx.coroutines.withContext
  * the fontTools numbers). No value moved to a sub-line: every real value still fits the recomputed
  * budget with room to spare.
  *
+ * **The fifth clip was the label and the sub-line, never measured by the fourth fix above.** The
+ * earlier budget work measured [FactCell.value] alone; [FactCell.label] and [FactCell.sub] are
+ * longer and are what actually clipped on "On this device" ("Swaps recorded" to "Swaps record…"
+ * at 1.0x; every label and sub at 1.3x). [FactCardView]'s own doc comment has the fix (the label
+ * wraps to two lines, the sub to three) and the fontTools arithmetic behind it.
+ *
  * **No Amber [com.plainticker.mobile.ui.components.FactGrid] exists yet** (DESIGN.md section 4:
  * "not yet restyled"; it is also shared with Detail, outside this task's file set), so the two
  * fact groups on this screen (Pro plus Staked SKR; On this device) are drawn by a local `FactGrid`
@@ -495,6 +501,27 @@ private fun FactGrid(cells: List<FactCell>, colors: AmberColors, numeric: Boolea
     }
 }
 
+/**
+ * The fifth clip this project has shipped, on the same "On this device" trio the value budget
+ * above already had to fix once: the earlier pass measured [FactCell.value] against the card's
+ * width and stopped there, never [FactCell.label] or [FactCell.sub], which are longer and are
+ * what actually clipped ("Swaps recorded" to "Swaps record…" at 1.0x; every label and every sub
+ * at 1.3x). The rule (DESIGN.md's clipping rule, section 4: a slot on one line with no wrapping
+ * beside a fixed-width sibling clips) applied here too; the label was drawn `maxLines = 1` with no
+ * real reason, and the sub's existing `maxLines = 2` wrap was sized for 1.0x only.
+ *
+ * **The fix is anatomy, not type size**: let the label wrap to its own second line
+ * ([FactLabelMaxLines]) and give the sub a third line ([FactSubMaxLines]), rather than shrinking
+ * either face. Both budgets are proven against the real font file, word by word, in
+ * [YouModelTest.factLabelWordWidthAt13xDp] and [YouModelTest.factSubWordWidthAt13xDp]: every word
+ * in every real label or sub (fontTools against `res/font/bricolage_grotesque.ttf`, `wght` 400,
+ * `wdth` 100, at [AmberType.meta]'s opsz 12 for the label and [AmberType.context]'s opsz 14 for
+ * the sub, 2026-09-22) fits inside the trio card's own 90.667dp content width even grown to 1.3x,
+ * so a greedy word-wrap never needs more lines than the word count itself: two words for the
+ * longest label ("Swaps recorded", "Stocks watched"), three for every "Listed under …" sub. No
+ * real content on this screen needs a fourth line; a slot that ever did would still ellipsize
+ * rather than clip mid-character, the same backstop `AmberTickerRow`'s own worst-case rows keep.
+ */
 @Composable
 private fun FactCardView(cell: FactCell, colors: AmberColors, numeric: Boolean, modifier: Modifier = Modifier) {
     val description = buildString {
@@ -540,7 +567,7 @@ private fun FactCardView(cell: FactCell, colors: AmberColors, numeric: Boolean, 
             text = cell.label,
             style = AmberType.meta,
             color = colors.textTertiary(AmberSurface.RAISED),
-            maxLines = 1,
+            maxLines = FactLabelMaxLines,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
@@ -555,12 +582,23 @@ private fun FactCardView(cell: FactCell, colors: AmberColors, numeric: Boolean, 
                 text = sub,
                 style = if (cell.subMono) FactSubTabularStyle else AmberType.context,
                 color = colors.textSecondary,
-                maxLines = 2,
+                maxLines = FactSubMaxLines,
                 overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
+
+/**
+ * Two lines for the label, up to the longest real one ("Swaps recorded", "Stocks watched") word
+ * by word: [FactCardView]'s own doc comment has the fontTools numbers. `internal`, not `private`,
+ * so [YouModelTest]'s own word-budget tests assert against the real constant rather than a copy
+ * that could silently drift from it.
+ */
+internal const val FactLabelMaxLines = 2
+
+/** Three lines for the sub, up to the longest real one ("Listed under Portfolio"): see above. */
+internal const val FactSubMaxLines = 3
 
 /** A gap between two cards, not a hairline inside one shared container (DESIGN.md section 8). */
 private val FactCardGap = 8.dp
