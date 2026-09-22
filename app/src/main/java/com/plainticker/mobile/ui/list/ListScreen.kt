@@ -1,70 +1,132 @@
 package com.plainticker.mobile.ui.list
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.AmberChip
+import com.plainticker.mobile.ui.components.AmberPreviewCanvas
+import com.plainticker.mobile.ui.components.AmberSectionHead
+import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.Field
-import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-// The row component and this package's row model share a name; the anatomy keeps an alias.
-import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
-import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TodayStrip
+import com.plainticker.mobile.ui.components.rememberMotionEnabled
+import com.plainticker.mobile.ui.stocks.ActiveChapter
+import com.plainticker.mobile.ui.stocks.SectorChipRow
+import com.plainticker.mobile.ui.stocks.StocksFilter
+import com.plainticker.mobile.ui.stocks.activeChapterAt
+import com.plainticker.mobile.ui.stocks.chapterStartIndices
+import com.plainticker.mobile.ui.stocks.jumpAbbreviationRes
+import com.plainticker.mobile.ui.stocks.matchesStocksFilter
+import com.plainticker.mobile.ui.stocks.sectorChipRow
+import com.plainticker.mobile.ui.stocks.stocksFilterFromSaveKey
+import com.plainticker.mobile.ui.stocks.toSaveKey
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
+import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberTheme
+import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.vote.VoteActions
 import com.plainticker.mobile.ui.vote.VoteSheet
 import com.plainticker.mobile.ui.vote.VoteViewModel
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * The List (T8, DT8; design/canvas/instrument.py screen_list). One scrolling column: the header
- * the host hands in (the TopBar and the tabs, so they scroll away and nothing is sticky), the
- * Today strip while something is watched, the one banner slot, the search field, then the
- * analyzed rows, chaptered by sector (task A1, docs/plan-monetisation-2026-09-19.md section 1.5).
+ * Stocks (docs/design-research-2026-09-21.md section 3): the founder's original complaint, a
+ * ticker list scrolled forever, given a top a reader can move through with intent instead. Search
+ * at the top, then sticky sector chapters with a chapter jump index and a wrapping filter row
+ * (Tracked, Watched, sector), roughly 160 analyzed rows chaptered and roughly 670 uncovered ones
+ * reachable only by search, exactly as the research draws it (section 3, "The list becomes
+ * Stocks"). This file is still named `ListScreen` because [com.plainticker.mobile.ui.stocks.StocksScreen]
+ * mounts it unchanged as the seam a shell pass left behind; nothing else composes it.
  *
- * The roughly 672 uncovered rows no longer tail the list: they leave for a Vote tab in a later
- * task, so nothing here draws them as a section of their own any more. Their data stays reachable
- * two ways. Search spans both sets at once, as one flat list, unchaptered ([ListContent]'s search
- * branch): typing a query narrows [ListUiState.analyzed] and [ListUiState.withoutAnalysis]
- * together, and an uncovered hit opens the same Detail an analyzed one does. And the "Next up"
- * strip still leads where "Without analysis" used to: the three uncovered tokens staked SKR has
- * voted to cover next, with the weight behind each (docs/skr-curation-spec-2026-09-13.md, step 3).
- * It is decided by [nextUpStrip] and drawn here, and when there is nothing to draw it is not
- * there: no heading, no banner, no empty section.
+ * **Where this reading of the approved Amber Stocks frame (`gen.py`'s "amber" Stocks board)
+ * departs from it, and why:**
  *
- * Every number goes through [Fmt]: the composite as an integer, the premium as a signed percent,
- * the age as "2 d old", a chapter's count as a plain integer. The meta line carries at most one
- * middle dot, and the Ukrainian headline of `/summary` is not a field a row even has (see
- * [ListViewModel]).
+ * - The frame's row context reads "of 100, fair" (the composite's classification word). DESIGN.md
+ *   section 1 is explicit that the liquidity floor's disclosure is content and legal copy the
+ *   redesign does not touch, "nothing about the redesign touches it," and that it belongs "on the
+ *   row's single meta line." [AmberTickerRow] has exactly one context slot, and the two contents
+ *   cannot share it without either a second middle dot (a copy rule) or two unrelated lines forced
+ *   into one wrapping sentence, so the disclosure wins: [rowMeta] is unchanged from before this
+ *   pass, and the classification word is dropped from the row (the composite figure, and Detail,
+ *   still carry it).
+ * - The frame draws a segmented "Analyzed 160 / Without analysis 768" control. Task A1 already
+ *   retired full browsing of the uncovered set before this pass started (this file's own header
+ *   comment on the search branch below), so there is no second browsable list for that control to
+ *   switch to; building the control would be a working toggle over a section that draws nothing.
+ *   It is not built. Search and the Next-up strip stay the only two routes to an uncovered row.
+ * - The frame's Today strip (watched count, next report) does not appear on the Stocks board at
+ *   all; the research's information architecture (section 3) folds it into Today's own "Yours"
+ *   block and a Watched filter chip here. [CopyLintTest]'s `CountCopyTest` pins two literal
+ *   `pluralStringResource` calls to this exact file, and this pass could not confirm from inside
+ *   an isolated worktree whether Today's own screen (built in parallel) already carries the
+ *   content those pins describe, so [TodayStrip] stays rather than risk breaking a lint gate
+ *   shared by every screen over a duplication this pass could not verify was resolved. It now
+ *   sits beside the Watched chip, which reads the same count.
+ *
+ * **Performance, for roughly 830 rows under sticky headers:** every row is its own `LazyColumn`
+ * item with its own stable key (`"a:" + ticker`, `"p:" + ticker`, `"n:" + ticker`, unchanged from
+ * before this pass), never a chapter composed as one non-lazy block; see [groupedRowModifier]'s
+ * own doc comment for why [com.plainticker.mobile.ui.components.AmberTickerRowGroup] does not fit
+ * here even though it is the component the anatomy names for this exact tonal container. The
+ * filtered chapters, the chip row's sector list, the per-chapter jump target indices and the
+ * tracked count are each behind their own `remember` keyed to only the state slice that can change
+ * them, so retyping a search character or a chip toggling does not recompute the others, and the
+ * jump index's own highlighted entry is read through `derivedStateOf` so the rail recomposes only
+ * when the highlighted chapter changes, not on every pixel `LazyListState.firstVisibleItemIndex`
+ * reports while scrolling.
  */
 @Composable
 fun ListScreen(
@@ -76,19 +138,24 @@ fun ListScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
-    // The sheet is a modal surface and draws in its own window, so it costs this Box no layout
-    // and takes none from the list. It is a sibling of the LazyColumn rather than an item in it:
-    // an item is disposed when it scrolls out, and a vote that was mid-flight would go with it.
+    val colors = if (isSystemInDarkTheme()) AmberDarkColors else AmberLightColors
     Box(modifier.fillMaxSize()) {
-        ListContent(
-            state = state,
-            onQueryChange = viewModel::search,
-            onClearSearch = viewModel::clearSearch,
-            onRetry = viewModel::refresh,
-            onOpenDetail = onOpenDetail,
-            onVote = { ticker, symbol -> voteViewModel.vote(ticker, symbol) },
-            header = header,
-        )
+        // AmberTheme wraps only the restyled content, not VoteSheet: VoteSheet is Instrument's own
+        // component (ui/vote, another agent's lane), untouched by this pass, and keeping it outside
+        // this boundary means it goes on reading whatever theme the host (still PlainTickerTheme,
+        // DESIGN.md section 11) already provides, exactly as it did before this file changed.
+        AmberTheme(useDarkTheme = colors === AmberDarkColors) {
+            ListContent(
+                state = state,
+                onQueryChange = viewModel::search,
+                onClearSearch = viewModel::clearSearch,
+                onRetry = viewModel::refresh,
+                onOpenDetail = onOpenDetail,
+                onVote = { ticker, symbol -> voteViewModel.vote(ticker, symbol) },
+                header = header,
+                colors = colors,
+            )
+        }
         VoteSheet(
             state = vote,
             actions = VoteActions(
@@ -100,6 +167,9 @@ fun ListScreen(
     }
 }
 
+/** `item(...)` calls before the first chapter's `stickyHeader`: `"header"`, `"chrome"`. */
+private const val ChromeItemCount = 2
+
 @Composable
 internal fun ListContent(
     state: ListUiState,
@@ -109,114 +179,534 @@ internal fun ListContent(
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
     /**
-     * The vote a row under "Without analysis" offers, and a leader of the "Next up" strip too: the
-     * equity ticker the server joins on and the symbol a reader calls it. Null in the previews and
-     * the gallery, where there is no wallet to take it anywhere; the rows then draw exactly as they
-     * did before.
+     * What a merged screen reader item says instead of its parts read end to end; see [ListRow].
+     * Null in the previews and the gallery, where there is no wallet to take it anywhere; the rows
+     * then draw exactly as they did before.
      */
     onVote: ((ticker: String, symbol: String) -> Unit)? = null,
     header: @Composable () -> Unit = {},
+    colors: AmberColors = AmberDarkColors,
 ) {
     val cold = state.isLoading && state.analyzed.isEmpty() && state.withoutAnalysis.isEmpty()
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        // The tab content ends above the navigation bar; the padding is part of the scroll.
-        contentPadding = WindowInsets.navigationBars.asPaddingValues(),
-    ) {
-        item(key = "header") { header() }
-        item(key = "chrome") {
-            Column(Modifier.fillMaxWidth()) {
-                if (state.watched > 0) TodayStrip(text = todayText(state))
-                state.banner?.let { StateBanner(banner = it, onRetry = onRetry) }
-                Spacer(Modifier.height(SearchTopGap))
-                SearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)
-            }
-        }
+    // The chip row's own sector list is read off every analyzed row, not off whatever a filter
+    // has already narrowed the chapters to, so choosing "Tracked" does not make a sector's own
+    // chip disappear because that sector has no tracked row left (StocksFilter.kt's SectorChipRow
+    // doc comment).
+    val allSectors = remember(state.analyzed) {
+        state.analyzed.chapteredBySector().mapNotNull { it.sector }
+    }
+    val chipRow = remember(allSectors) { sectorChipRow(allSectors) }
+    val trackedCount = remember(state.analyzed) { state.analyzed.count { it.tracking is TrackingQuality.Tracked } }
 
-        when {
-            cold -> item(key = "skeleton") {
-                Column(Modifier.fillMaxWidth()) {
-                    Heading(text = stringResource(R.string.list_heading_analyzed))
-                    SkeletonRows(count = SkeletonRowCount)
-                }
-            }
+    var filterKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val activeFilter = stocksFilterFromSaveKey(filterKey)
+    var sectorsExpanded by rememberSaveable { mutableStateOf(false) }
 
-            // A token listed this morning is on neither the bundled snapshot nor the catalog kept
-            // on disk for the day, and the reader who searched for it is the one person who knows
-            // to look. This action is why a settled list has a way to reach the network at all:
-            // it goes to the same [ListViewModel.refresh] the banners offer, which asks the
-            // catalog for the network rather than for whichever cache still answers.
-            state.searchMiss -> item(key = "miss") {
-                EmptyLine(
-                    text = stringResource(R.string.list_search_empty, state.query),
-                    action = stringResource(R.string.list_search_look_again),
-                    onAction = onRetry,
+    // What the chapters actually draw. state.analyzed already carries the search narrowing
+    // (ListViewModel.search), so a chip on top of a query narrows what the query already
+    // narrowed; a query itself switches to the flat branch below and this value goes unused.
+    val visibleChapters = remember(state.analyzed, state.watchedTickers, activeFilter) {
+        state.analyzed.filter { it.matchesStocksFilter(activeFilter, state.watchedTickers) }.chapteredBySector()
+    }
+
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val motionEnabled = rememberMotionEnabled()
+    val chapterStarts = remember(visibleChapters) { chapterStartIndices(visibleChapters, ChromeItemCount) }
+    val activeChapter by remember(chapterStarts) {
+        derivedStateOf { activeChapterAt(listState.firstVisibleItemIndex, chapterStarts) }
+    }
+
+    fun jumpTo(sector: String?) {
+        val index = chapterStarts[sector] ?: return
+        scope.launch { if (motionEnabled) listState.animateScrollToItem(index) else listState.scrollToItem(index) }
+    }
+
+    Box(modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            // The tab content ends above the navigation bar; the padding is part of the scroll.
+            contentPadding = WindowInsets.navigationBars.asPaddingValues(),
+        ) {
+            item(key = "header") { header() }
+            item(key = "chrome") {
+                StocksChrome(
+                    state = state,
+                    onQueryChange = onQueryChange,
+                    onClearSearch = onClearSearch,
+                    onRetry = onRetry,
+                    colors = colors,
+                    trackedCount = trackedCount,
+                    chipRow = chipRow,
+                    sectorsExpanded = sectorsExpanded,
+                    onToggleSectorsExpanded = { sectorsExpanded = !sectorsExpanded },
+                    activeFilter = activeFilter,
+                    onFilterSelect = { tapped -> filterKey = if (activeFilter == tapped) null else tapped.toSaveKey() },
                 )
             }
 
-            // Both sources answered and neither had a row. Rare, but the screen was otherwise
-            // a wordmark, a search field and nothing else, with no banner to explain it.
-            state.emptyResult -> item(key = "empty") { EmptyLine(stringResource(R.string.list_empty)) }
-
-            // Browsing: analyzed rows chaptered by sector, then the Next up strip. Search draws a
-            // different shape (see below), so this branch runs only while the query is blank.
-            state.query.isBlank() -> {
-                val chapters = state.analyzedChapters
-                chapters.forEach { chapter ->
-                    item(key = "chapter:${chapter.sector ?: NoSectorKey}") {
-                        // One rhythm (U6): Heading's own default (32dp above, 14dp below) applies
-                        // whether this is the first chapter or a later one.
-                        Heading(
-                            text = chapter.sector ?: stringResource(R.string.list_heading_no_sector),
-                            meta = Fmt.count(chapter.rows.size),
-                        )
-                    }
-                    itemsIndexed(chapter.rows, key = { _, row -> "a:" + row.ticker }) { index, row ->
-                        AnalyzedRow(row = row, last = index == chapter.rows.lastIndex, onOpenDetail = onOpenDetail)
+            when {
+                cold -> item(key = "skeleton") {
+                    Column(Modifier.fillMaxWidth()) {
+                        AmberSectionHead(title = stringResource(R.string.list_heading_analyzed), colors = colors)
+                        SkeletonRows(count = SkeletonRowCount)
                     }
                 }
 
-                // The uncovered rows themselves no longer tail the list (task A1): the roughly 672
-                // of them leave for a Vote tab in a later task. Only the leaders staked SKR has
-                // voted to cover next still lead here, exactly where "Without analysis" used to.
-                val leaders = state.nextUpStrip
-                if (leaders.isNotEmpty()) {
-                    item(key = "without") {
-                        Heading(text = stringResource(R.string.list_heading_without_analysis))
+                // A token listed this morning is on neither the bundled snapshot nor the catalog
+                // kept on disk for the day, and the reader who searched for it is the one person
+                // who knows to look. This action is why a settled list has a way to reach the
+                // network at all: it goes to the same [ListViewModel.refresh] the banners offer,
+                // which asks the catalog for the network rather than for whichever cache still
+                // answers.
+                state.searchMiss -> item(key = "miss") {
+                    EmptyLine(
+                        text = stringResource(R.string.list_search_empty, state.query),
+                        action = stringResource(R.string.list_search_look_again),
+                        onAction = onRetry,
+                        colors = colors,
+                    )
+                }
+
+                // Both sources answered and neither had a row. Rare, but the screen was otherwise
+                // a wordmark, a search field and nothing else, with no banner to explain it.
+                state.emptyResult -> item(key = "empty") { EmptyLine(stringResource(R.string.list_empty), colors = colors) }
+
+                // Browsing: analyzed rows chaptered by sector as sticky headers, then the Next up
+                // strip. Search draws a different shape (see below), so this branch runs only
+                // while the query is blank.
+                state.query.isBlank() -> {
+                    visibleChapters.forEach { chapter ->
+                        stickyHeader(key = "chapter:${chapter.sector ?: NoSectorKey}") {
+                            AmberSectionHead(
+                                title = chapter.sector ?: stringResource(R.string.list_heading_no_sector),
+                                meta = Fmt.count(chapter.rows.size),
+                                colors = colors,
+                            )
+                        }
+                        itemsIndexed(chapter.rows, key = { _, row -> "a:" + row.ticker }) { index, row ->
+                            AnalyzedRow(
+                                row = row,
+                                modifier = groupedRowModifier(isFirst = index == 0, isLast = index == chapter.rows.lastIndex),
+                                colors = colors,
+                                onOpenDetail = onOpenDetail,
+                            )
+                        }
                     }
-                    item(key = "next-up-label") { NextUpLabel() }
-                    itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
-                        NextUpLeaderRow(
-                            leader = leader,
-                            last = index == leaders.lastIndex,
+
+                    // The roughly 672 uncovered rows no longer tail the list (task A1): they left
+                    // for a Vote tab in an earlier pass. Only the leaders staked SKR has voted to
+                    // cover next still lead here, exactly where "Without analysis" used to.
+                    val leaders = state.nextUpStrip
+                    if (leaders.isNotEmpty()) {
+                        item(key = "without") {
+                            AmberSectionHead(title = stringResource(R.string.list_heading_without_analysis), colors = colors)
+                        }
+                        item(key = "next-up-label") { NextUpLabel(colors = colors) }
+                        itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
+                            NextUpLeaderRow(
+                                leader = leader,
+                                modifier = groupedRowModifier(isFirst = index == 0, isLast = index == leaders.lastIndex),
+                                colors = colors,
+                                onOpenDetail = onOpenDetail,
+                                onVote = onVote,
+                            )
+                        }
+                    }
+                }
+
+                // Searching: one flat list across both sets, unchaptered. An uncovered hit draws
+                // exactly as it does under "Without analysis", price and vote action included, and
+                // opens the same Detail an analyzed hit does. After this pass, search is the only
+                // way to reach an uncovered ticker that is not one of the Next-up leaders.
+                else -> {
+                    itemsIndexed(state.analyzed, key = { _, row -> "a:" + row.ticker }) { index, row ->
+                        AnalyzedRow(
+                            row = row,
+                            modifier = groupedRowModifier(
+                                isFirst = index == 0,
+                                isLast = index == state.analyzed.lastIndex && state.withoutAnalysis.isEmpty(),
+                            ),
+                            colors = colors,
+                            onOpenDetail = onOpenDetail,
+                        )
+                    }
+                    itemsIndexed(state.withoutAnalysis, key = { _, row -> "p:" + row.ticker }) { index, row ->
+                        PriceOnlyRow(
+                            row = row,
+                            modifier = groupedRowModifier(
+                                isFirst = index == 0 && state.analyzed.isEmpty(),
+                                isLast = index == state.withoutAnalysis.lastIndex,
+                            ),
+                            colors = colors,
                             onOpenDetail = onOpenDetail,
                             onVote = onVote,
                         )
                     }
                 }
             }
+        }
 
-            // Searching: one flat list across both sets, unchaptered. An uncovered hit draws
-            // exactly as it does under "Without analysis", price and vote action included, and
-            // opens the same Detail an analyzed hit does.
-            else -> {
-                itemsIndexed(state.analyzed, key = { _, row -> "a:" + row.ticker }) { index, row ->
-                    AnalyzedRow(
-                        row = row,
-                        last = index == state.analyzed.lastIndex && state.withoutAnalysis.isEmpty(),
-                        onOpenDetail = onOpenDetail,
+        if (state.query.isBlank() && visibleChapters.isNotEmpty()) {
+            StocksJumpIndex(
+                chapters = visibleChapters,
+                active = activeChapter,
+                onJump = ::jumpTo,
+                colors = colors,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .windowInsetsPadding(WindowInsets.navigationBars),
+            )
+        }
+    }
+}
+
+// ---- Chrome: title, banner, search, filter row -----------------------------------------------
+
+@Composable
+private fun StocksChrome(
+    state: ListUiState,
+    onQueryChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    onRetry: () -> Unit,
+    colors: AmberColors,
+    trackedCount: Int,
+    chipRow: SectorChipRow,
+    sectorsExpanded: Boolean,
+    onToggleSectorsExpanded: () -> Unit,
+    activeFilter: StocksFilter?,
+    onFilterSelect: (StocksFilter) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().background(colors.surfaceGround)) {
+        Text(
+            text = stringResource(R.string.nav_stocks),
+            style = AmberType.sectionHead,
+            color = colors.textPrimary,
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
+                .semantics { heading() },
+        )
+        if (state.watched > 0) TodayStrip(text = todayText(state))
+        state.banner?.let { StateBanner(banner = it, onRetry = onRetry) }
+        Spacer(Modifier.height(SearchTopGap))
+        SearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)
+        if (chipRow.shown.isNotEmpty()) {
+            StocksFilterRow(
+                trackedCount = trackedCount,
+                watchedCount = state.watched,
+                chipRow = chipRow,
+                expanded = sectorsExpanded,
+                onToggleExpanded = onToggleSectorsExpanded,
+                active = activeFilter,
+                onSelect = onFilterSelect,
+                colors = colors,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClearSearch: () -> Unit) {
+    // Field is Instrument's own text input (ui/components, not restyled by this pass, DESIGN.md
+    // section 4). Re-implementing its focus, cursor and IME handling here to chase the approved
+    // frame's pill-shaped search field risked a real input bug this pass has no device to catch,
+    // for a visual gain a screen-local wrapper cannot make up for without also wrapping its
+    // internals; it keeps working exactly as it did on List, at the cost of being the one piece
+    // of Stocks' chrome that does not yet read Amber's tokens.
+    Field(
+        label = stringResource(R.string.list_search_label),
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = stringResource(R.string.list_search_placeholder),
+        mono = false,
+        action = if (query.isEmpty()) null else stringResource(R.string.action_clear),
+        onAction = onClearSearch,
+    )
+}
+
+/**
+ * The wrapping filter row (docs/design-research-2026-09-21.md section 3): Tracked and Watched
+ * first, then up to six sectors, then a disclosure chip past that
+ * ([com.plainticker.mobile.ui.stocks.sectorChipRow]'s own default). [FlowRow] rather than a
+ * horizontally scrolling [Row] because a horizontally scrolling chip row hides how many sectors
+ * exist at all behind an edge a reader has to discover, and because a scrolling row is exactly
+ * the "fights the reader's own scroll gesture" trap this task's brief names for the jump index;
+ * wrapping keeps every shown chip on screen at once, at the cost of height instead of a hidden
+ * edge. [FlowRow]'s own line-wrapping is what keeps this correct at a 1.3x font scale: each
+ * [AmberChip] grows with the reader's font size and the row gains a line rather than clipping or
+ * scrolling one chip out of reach.
+ */
+@Composable
+private fun StocksFilterRow(
+    trackedCount: Int,
+    watchedCount: Int,
+    chipRow: SectorChipRow,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    active: StocksFilter?,
+    onSelect: (StocksFilter) -> Unit,
+    colors: AmberColors,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        AmberChip(
+            // Tracked and Watched read as a label plus a count, not a sentence a plural has to
+            // agree with ("Tracked 22", never "22 tracked stocks"), so the count stays a plain
+            // string; strings.xml's own comment on stocks_filter_tracked says the same thing.
+            label = stringResource(R.string.stocks_filter_tracked, Fmt.count(trackedCount)), // lint-allow count: no noun follows it
+            selected = active == StocksFilter.Tracked,
+            onClick = { onSelect(StocksFilter.Tracked) },
+            colors = colors,
+        )
+        AmberChip(
+            label = stringResource(R.string.stocks_filter_watched, Fmt.count(watchedCount)), // lint-allow count: no noun follows it
+            selected = active == StocksFilter.Watched,
+            onClick = { onSelect(StocksFilter.Watched) },
+            colors = colors,
+        )
+        val sectors = if (expanded) chipRow.shown + chipRow.overflow else chipRow.shown
+        sectors.forEach { sector ->
+            AmberChip(
+                label = sector,
+                selected = active == StocksFilter.Sector(sector),
+                onClick = { onSelect(StocksFilter.Sector(sector)) },
+                colors = colors,
+            )
+        }
+        if (chipRow.hasOverflow) {
+            AmberChip(
+                label = if (expanded) {
+                    stringResource(R.string.stocks_filter_fewer_sectors)
+                } else {
+                    pluralStringResource(
+                        R.plurals.stocks_filter_more_sectors,
+                        chipRow.overflow.size,
+                        Fmt.count(chipRow.overflow.size),
                     )
-                }
-                itemsIndexed(state.withoutAnalysis, key = { _, row -> "p:" + row.ticker }) { index, row ->
-                    PriceOnlyRow(
-                        row = row,
-                        last = index == state.withoutAnalysis.lastIndex,
-                        onOpenDetail = onOpenDetail,
-                        onVote = onVote,
+                },
+                selected = false,
+                onClick = onToggleExpanded,
+                colors = colors,
+            )
+        }
+    }
+}
+
+// ---- The chapter jump index --------------------------------------------------------------------
+
+/**
+ * The chapter jump index (docs/design-research-2026-09-21.md section 3), read live off
+ * [chapters] rather than a fixed eleven so a sector with zero rows this week is simply not a
+ * target this week (`StocksFilter.kt`'s own doc comment: "a rotating set of sectors" is the whole
+ * reason [jumpAbbreviationRes] is a lookup and not an enum ordinal).
+ *
+ * **What it does, decided rather than guessed.** A tap scrolls to that chapter's own `stickyHeader`
+ * ([jumpTo] in the caller); it does not drag-scroll the list the way a fast-scroll letter index
+ * on Contacts does, because building a continuous drag gesture across eleven short-lived targets
+ * is a second, much larger interaction to get right for a list this much shorter than a phone's
+ * contact book, and a tap is the gesture [LazyListState.animateScrollToItem] already exists for.
+ * Each entry speaks the sector's own full name as its click label
+ * ([R.string.stocks_jump_action]), so the two or three letters on screen are a label for someone
+ * who is already looking at the screen, never the only account of what the target is.
+ *
+ * **It does not compete with a system scrollbar because there is not one to compete with.**
+ * Compose's `LazyColumn` draws no OS-style scrollbar or fast-scroll thumb of its own, so the
+ * column of taps is not sharing the same 22 to 28dp of screen edge with anything else; it stays
+ * a narrow, fixed-width column anyway (rather than growing into a wider drag track) so it keeps
+ * reading as a set of discrete labels and not as a slider a reader could mistake for one.
+ *
+ * **Touch targets, and the one place this pass departs from the database's 48dp rule on
+ * purpose.** [AmberChip] and every other tap target on this screen keeps
+ * `minimumInteractiveComponentSize()`'s full 48dp. Stacked vertically, eleven of those would run
+ * to roughly 530dp, taller than the approved frame's own compact rail and, on a real phone, most
+ * of the content height the list itself needs. A miss here lands on a neighbouring sector rather
+ * than losing money or data, the same reasoning iOS and Android's own built-in fast-scroll
+ * alphabet indices are built on, so each entry gets a smaller but still real [JumpEntryMinHeight]
+ * instead of the full minimum.
+ */
+@Composable
+private fun StocksJumpIndex(
+    chapters: List<SectorChapter>,
+    active: ActiveChapter?,
+    onJump: (String?) -> Unit,
+    colors: AmberColors,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.width(JumpIndexWidth),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        chapters.forEach { chapter ->
+            val resId = jumpAbbreviationRes(chapter.sector)
+            // A sector outside the known eleven (StocksFilter.kt's own doc comment on
+            // jumpAbbreviationRes) still gets a short, if imperfect, label rather than the rail
+            // growing to fit its full name.
+            val label = if (resId != null) stringResource(resId) else chapter.sector.orEmpty().take(3)
+            val fullName = chapter.sector ?: stringResource(R.string.list_heading_no_sector)
+            val isActive = active != null && active.sector == chapter.sector
+            Text(
+                text = label,
+                style = AmberType.meta,
+                color = if (isActive) colors.textPrimary else colors.textTertiary(AmberSurface.GROUND),
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = JumpEntryMinHeight)
+                    .clickable(
+                        onClickLabel = stringResource(R.string.stocks_jump_action, fullName),
+                        role = Role.Button,
+                        onClick = { onJump(chapter.sector) },
                     )
-                }
-            }
+                    .padding(vertical = 4.dp),
+            )
+        }
+    }
+}
+
+private val JumpIndexWidth = 28.dp
+private val JumpEntryMinHeight = 28.dp
+
+// ---- Rows ---------------------------------------------------------------------------------
+
+/**
+ * Groups consecutive rows into one 16dp tonal container the way
+ * [com.plainticker.mobile.ui.components.AmberTickerRowGroup] draws it, one [LazyColumn] item at a
+ * time instead of one non-lazy [Column] per chapter.
+ *
+ * **Why [AmberTickerRowGroup] does not fit here, said once rather than at every call site.**
+ * [AmberTickerRowGroup]'s own content lambda is a plain, non-lazy `Column`: every row inside it
+ * composes and measures together as one unit whenever the group is on screen or in the prefetch
+ * window. That is exactly right for Today's own blocks (a handful of rows each) and exactly wrong
+ * for Stocks, where a sector chapter can carry several dozen of the roughly 830 rows this screen
+ * has: handing `LazyColumn` one giant composable per chapter throws away per-row recycling for
+ * the chapters that most need it, which is the stutter this task's brief warns 830 rows under
+ * sticky headers is the size where a naive list starts to show. This function draws the same
+ * result, a 16dp radius on the group's own top and bottom row and a 1dp seam of the page's own
+ * ground colour between rows, while keeping every row its own keyed `itemsIndexed` item.
+ */
+private fun groupedRowModifier(isFirst: Boolean, isLast: Boolean): Modifier {
+    val corner = 16.dp
+    val top = if (isFirst) corner else 0.dp
+    val bottom = if (isLast) corner else 0.dp
+    return Modifier
+        .padding(horizontal = 16.dp)
+        .padding(bottom = if (isLast) 0.dp else RowGapHeight)
+        .clip(RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom))
+}
+
+private val RowGapHeight = 1.dp
+
+/** Ticker and company left, the composite as an integer with the row's disclosure line right. */
+@Composable
+private fun AnalyzedRow(row: ListRow, modifier: Modifier = Modifier, colors: AmberColors, onOpenDetail: (String) -> Unit) {
+    AmberTickerRow(
+        ticker = row.display,
+        company = row.company,
+        figure = row.composite?.let { Fmt.decimal(it, decimals = 0) },
+        context = rowMeta(row),
+        colors = colors,
+        onClick = { onOpenDetail(row.ticker) },
+        onClickLabel = stringResource(R.string.action_open_ticker, row.display),
+        modifier = modifier,
+    )
+}
+
+/**
+ * An xStock PlainTicker has not classified: the price as the figure, the row's disclosure line
+ * unchanged, and the same one-word vote action price-only rows have carried since the curation
+ * loop needed a place to cast one from.
+ */
+@Composable
+private fun PriceOnlyRow(
+    row: ListRow,
+    modifier: Modifier = Modifier,
+    colors: AmberColors,
+    onOpenDetail: (String) -> Unit,
+    onVote: ((ticker: String, symbol: String) -> Unit)?,
+) {
+    VotableAmberRow(
+        ticker = row.display,
+        company = row.company,
+        figure = row.priceUsd?.let { Fmt.price(it) },
+        context = rowMeta(row),
+        colors = colors,
+        modifier = modifier,
+        onClick = { onOpenDetail(row.ticker) },
+        onClickLabel = stringResource(R.string.action_open_ticker, row.display),
+        onVote = if (onVote == null) null else ({ onVote(row.ticker, row.display) }),
+    )
+}
+
+/** One leader of the "Next up" strip: the weight as the figure, the voter count as context. */
+@Composable
+private fun NextUpLeaderRow(
+    leader: NextUpLeader,
+    modifier: Modifier = Modifier,
+    colors: AmberColors,
+    onOpenDetail: (String) -> Unit,
+    onVote: ((ticker: String, symbol: String) -> Unit)?,
+) {
+    VotableAmberRow(
+        ticker = leader.display,
+        company = leader.company,
+        figure = leader.weight.text(),
+        context = leader.votersCopy.text(),
+        colors = colors,
+        modifier = modifier,
+        onClick = { onOpenDetail(leader.ticker) },
+        onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
+        onVote = if (onVote == null) null else ({ onVote(leader.ticker, leader.display) }),
+    )
+}
+
+/**
+ * [AmberTickerRow] with a trailing vote action beside it, for the two rows that need one and that
+ * [AmberTickerRow] itself has no slot for (its anatomy is ticker, company, figure, context; a
+ * trailing action is Instrument [ListRow]'s own fifth slot, not carried over). A sibling [Row]
+ * rather than a change to [AmberTickerRow] itself, which is out of this task's files: the two
+ * targets stay independently tappable, [AmberTickerRow] keeps its own click merged into one
+ * spoken sentence, and [TextAction] keeps its.
+ */
+@Composable
+private fun VotableAmberRow(
+    ticker: String,
+    company: String?,
+    figure: String?,
+    context: String?,
+    colors: AmberColors,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onClickLabel: String,
+    onVote: (() -> Unit)?,
+) {
+    Row(
+        modifier = modifier.background(colors.surfaceRaised),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AmberTickerRow(
+            ticker = ticker,
+            company = company,
+            figure = figure,
+            context = context,
+            colors = colors,
+            onClick = onClick,
+            onClickLabel = onClickLabel,
+            modifier = Modifier.weight(1f),
+        )
+        if (onVote != null) {
+            TextAction(
+                label = stringResource(R.string.vote_action_row),
+                onClick = onVote,
+                color = colors.actionText,
+                contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 10.dp),
+            )
         }
     }
 }
@@ -226,18 +716,18 @@ internal fun ListContent(
  * one text action that state can offer beside it.
  */
 @Composable
-private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
+private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Unit)? = null, colors: AmberColors) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = text,
-            style = PlainTickerType.body,
-            color = Ink2,
+            style = AmberType.body,
+            color = colors.textSecondary,
             modifier = Modifier.weight(1f).padding(vertical = EmptyLineGap),
         )
-        if (action != null && onAction != null) TextAction(label = action, onClick = onAction)
+        if (action != null && onAction != null) TextAction(label = action, onClick = onAction, color = colors.actionText)
     }
 }
 
@@ -258,108 +748,18 @@ private fun todayText(state: ListUiState): String {
     )
 }
 
-@Composable
-private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClearSearch: () -> Unit) {
-    Field(
-        label = stringResource(R.string.list_search_label),
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = stringResource(R.string.list_search_placeholder),
-        mono = false,
-        action = if (query.isEmpty()) null else stringResource(R.string.action_clear),
-        onAction = onClearSearch,
-    )
-}
-
-/** Ticker and company left, the composite as an integer with its state word right. */
-@Composable
-private fun AnalyzedRow(row: ListRow, last: Boolean, onOpenDetail: (String) -> Unit) {
-    InstrumentRow(
-        ticker = row.display,
-        company = row.company,
-        meta = rowMeta(row),
-        valueRight = row.composite?.let { Fmt.decimal(it, decimals = 0) },
-        valueSub = row.state?.let { stringResource(it.label) },
-        // Every analyzed row keeps the word's column open, including the row that has no word,
-        // because the composites under this heading are one column to the reader scanning them.
-        reserveValueSub = true,
-        divider = !last,
-        onClick = { onOpenDetail(row.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, row.display),
-    )
-}
-
 /**
- * An xStock PlainTicker has not classified: everything Muted, the price as the value.
- *
- * This is the section the curation loop acts on. 672 of the 832 tokenized stocks have no analysis
- * at all (docs/skr-curation-spec-2026-09-13.md), and until now a row here offered a price and
- * nothing else. The trailing action votes with the weight of the reader's staked SKR for this one
- * to be covered next: the same [TextAction] the watchlist row already uses, one word wide because
- * the 64dp row still has to carry a ticker, a company and a price beside it. The sentence the word
- * is short for is on the sheet it opens, which leads with "Vote to cover NFLXx".
+ * "Next up, by staked SKR": the label over the leaders, the face a fact grid labels its cells in.
+ * It sits under the section heading rather than being one, because the leaders are still tokens
+ * without analysis and the strip is the front of that section.
  */
 @Composable
-private fun PriceOnlyRow(
-    row: ListRow,
-    last: Boolean,
-    onOpenDetail: (String) -> Unit,
-    onVote: ((ticker: String, symbol: String) -> Unit)?,
-) {
-    InstrumentRow(
-        ticker = row.display,
-        company = row.company,
-        meta = rowMeta(row),
-        valueRight = row.priceUsd?.let { Fmt.price(it) },
-        trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
-        onTrailingAction = if (onVote == null) null else ({ onVote(row.ticker, row.display) }),
-        muted = true,
-        divider = !last,
-        onClick = { onOpenDetail(row.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, row.display),
-    )
-}
-
-/**
- * "Next up, by staked SKR": the label over the leaders, 13 Outfit 500 Muted, the face a fact
- * grid labels its cells in. It sits under the section heading rather than being one, because
- * the leaders are still tokens without analysis and the strip is the front of that section.
- */
-@Composable
-private fun NextUpLabel() {
+private fun NextUpLabel(colors: AmberColors) {
     Text(
         text = stringResource(R.string.next_up_label),
-        style = PlainTickerType.label,
-        color = Muted,
+        style = AmberType.meta,
+        color = colors.textTertiary(AmberSurface.GROUND),
         modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = NextUpLabelGap),
-    )
-}
-
-/**
- * One leader of the "Next up" strip: the token and its company left, how many wallets voted on
- * the meta line, the staked SKR behind it as the value, and the same one-word vote the rows
- * below it carry. Every figure is in the numeral face because it is a number. The row is not
- * muted the way a price-only row is: the value on its right is a fact this app stands behind,
- * where a price-only row's muting marks the absence of an analysis. Tapping it opens the same
- * Detail the row further down would, so a leader is never a second way to reach a token.
- */
-@Composable
-private fun NextUpLeaderRow(
-    leader: NextUpLeader,
-    last: Boolean,
-    onOpenDetail: (String) -> Unit,
-    onVote: ((ticker: String, symbol: String) -> Unit)?,
-) {
-    InstrumentRow(
-        ticker = leader.display,
-        company = leader.company,
-        meta = leader.votersCopy.text(),
-        valueRight = leader.weight.text(),
-        trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
-        onTrailingAction = if (onVote == null) null else ({ onVote(leader.ticker, leader.display) }),
-        divider = !last,
-        onClick = { onOpenDetail(leader.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
     )
 }
 
@@ -372,13 +772,13 @@ private fun NextUpLeaderRow(
  * a price, and the reader is owed the reason. The figure is Jupiter's and the row does not call
  * it the pool, because measured against DexScreener and GeckoTerminal on 2026-09-13 it runs at
  * 0.21 to 0.54 of what they count. The sentence is a fact about the token and not a risk flag, so
- * it stays in the Muted meta line and never takes Caution, which DESIGN.md section 2 keeps for
+ * it stays in a secondary role and never the caution colour, which DESIGN.md section 2 keeps for
  * issuer control. It is deliberately no longer than the string it replaced: the meta line is one
- * ellipsized line and it still has to carry the analysis age after a middle dot.
+ * to two lines ([AmberTickerRow]'s own `context` wraps rather than clips) and it still has to
+ * carry the analysis age after a middle dot.
  *
  * Either half can be missing: an unpriced row keeps its age, an analysis from today prints no
- * age at all, and a row with neither has no meta line. It is one line in every case, so no row
- * grows taller than the 64dp the list is drawn on.
+ * age at all, and a row with neither has no meta line.
  */
 @Composable
 private fun rowMeta(row: ListRow): String? {
@@ -461,7 +861,7 @@ internal val RowState.label: Int
 
 private val SearchTopGap = 22.dp
 
-/** Vertical centering for an EmptyLine's sentence; unrelated to Heading's own rhythm (U6). */
+/** Vertical centering for an EmptyLine's sentence; unrelated to AmberSectionHead's own rhythm. */
 private val EmptyLineGap = 30.dp
 
 /** Under the strip's label. */
@@ -553,7 +953,7 @@ private val PreviewState = ListUiState(
 @InstrumentPreviews
 @Composable
 private fun ListPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         ListContent(
             state = PreviewState,
             onQueryChange = {},
@@ -567,7 +967,7 @@ private fun ListPreview() {
 @InstrumentPreviews
 @Composable
 private fun ListSnapshotPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         ListContent(
             state = PreviewState.copy(
                 fromSnapshot = true,
@@ -584,7 +984,7 @@ private fun ListSnapshotPreview() {
 @InstrumentPreviews
 @Composable
 private fun ListSearchMissPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         ListContent(
             state = PreviewState.copy(query = "RBLX", analyzed = emptyList(), withoutAnalysis = emptyList()),
             onQueryChange = {},
@@ -598,7 +998,7 @@ private fun ListSearchMissPreview() {
 @InstrumentPreviews
 @Composable
 private fun ListLoadingPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         ListContent(
             state = ListUiState(isLoading = true),
             onQueryChange = {},

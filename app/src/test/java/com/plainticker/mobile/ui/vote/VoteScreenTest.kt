@@ -39,12 +39,26 @@ class VoteScreenTest {
 
     // ---- Where the action is --------------------------------------------------------------------
 
+    /**
+     * Updated for the Amber Stocks restyle (`ui/list/ListScreen.kt`): [AmberTickerRow] carries no
+     * trailing-action slot of its own (`ListFinishedScreenTest`'s "Stocks' analyzed row..." test
+     * pins that it does not need one), so `PriceOnlyRow` and `NextUpLeaderRow` each hand their own
+     * `onVote` through to `VotableAmberRow`, the one place `R.string.vote_action_row` is drawn.
+     * The invariant this test is named for, that only a row without analysis offers the vote, is
+     * unchanged; only the call shape it is read off is.
+     */
     @Test
     fun `the list offers the vote on a row without analysis, and on no other row`() {
+        val votable = body(listScreen, "private fun VotableAmberRow(")
+        assertTrue("the vote action is drawn only when onVote is not null", "if (onVote != null) {" in votable)
+        assertTrue("vote_action_row is the label", "R.string.vote_action_row" in votable)
+
+        val priceOnly = body(listScreen, "private fun PriceOnlyRow(")
         assertTrue(
-            "the price-only row is the one that takes the vote",
-            "trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row)" in listScreen,
+            "a price-only row hands its own vote callback through to the shared row",
+            "onVote = if (onVote == null) null else" in priceOnly,
         )
+
         // The analyzed rows are already covered, so there is nothing there to vote for.
         val analyzed = body(listScreen, "private fun AnalyzedRow(")
         assertFalse("an analyzed row has nothing to vote for", "vote" in analyzed.lowercase())

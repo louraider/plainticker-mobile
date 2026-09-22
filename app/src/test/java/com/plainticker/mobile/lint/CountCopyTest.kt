@@ -115,6 +115,12 @@ class CountCopyTest {
             Case(1, listOf("TSLAx", "1"), "TSLAx reports in 1 day."),
             Case(4, listOf("TSLAx", "4"), "TSLAx reports in 4 days."),
         ),
+        // Stocks' filter row disclosure chip (ui/list/ListScreen.kt, ui/stocks/StocksFilter.kt):
+        // "+n sectors" past the eight shown by default, "sector" singular at one.
+        "stocks_filter_more_sectors" to listOf(
+            Case(1, listOf("1"), "+1 sector"),
+            Case(5, listOf("5"), "+5 sectors"),
+        ),
     )
 
     private data class Case(val quantity: Int, val args: List<String>, val reads: String)

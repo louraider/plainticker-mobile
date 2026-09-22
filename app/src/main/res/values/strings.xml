@@ -95,6 +95,42 @@
     <string name="list_state_fair">fair</string>
     <string name="list_state_weak">weak</string>
 
+    <!-- Stocks: the wrapping filter row (docs/design-research-2026-09-21.md section 3, "a
+         wrapping filter row (Tracked, Watched, sector)"). Tracked and Watched are a label plus a
+         count, not a sentence with a noun the count has to agree with, so the count stays a plain
+         string (the Kotlin call site carries the lint opt out). The sector name itself is the
+         chip label and is read data, never a literal here. -->
+    <string name="stocks_filter_tracked">Tracked %1$s</string>
+    <string name="stocks_filter_watched">Watched %1$s</string>
+    <!-- The disclosure chip past the eight shown by default; "sector" is a counted noun here, so
+         it is a plurals like next_up_voters above. -->
+    <plurals name="stocks_filter_more_sectors">
+        <item quantity="one">+%1$s sector</item>
+        <item quantity="other">+%1$s sectors</item>
+    </plurals>
+    <string name="stocks_filter_fewer_sectors">Fewer sectors</string>
+
+    <!-- Stocks: the chapter jump index (docs/design-research-2026-09-21.md section 3, "a chapter
+         jump index"). Eleven GICS sector names plus the trailing chapter /summary sends no sector
+         for, each cut to two or three letters so the rail stays one narrow column beside the list
+         (gen.py's approved Amber Stocks frame draws the same codes: Com, Dis, Sta, Ene, Fin, Hea,
+         Ind, IT, Mat, RE, Uti). A short code alone would be a row of letters nobody can place, so
+         every jump target also carries stocks_jump_action, which speaks the sector's own full name
+         to a screen reader instead of the abbreviation. -->
+    <string name="stocks_jump_communication_services">Com</string>
+    <string name="stocks_jump_consumer_discretionary">Dis</string>
+    <string name="stocks_jump_consumer_staples">Sta</string>
+    <string name="stocks_jump_energy">Ene</string>
+    <string name="stocks_jump_financials">Fin</string>
+    <string name="stocks_jump_health_care">Hea</string>
+    <string name="stocks_jump_industrials">Ind</string>
+    <string name="stocks_jump_information_technology">IT</string>
+    <string name="stocks_jump_materials">Mat</string>
+    <string name="stocks_jump_real_estate">RE</string>
+    <string name="stocks_jump_utilities">Uti</string>
+    <string name="stocks_jump_no_sector">No</string>
+    <string name="stocks_jump_action">Jump to %1$s</string>
+
     <!-- The "Next up" strip and the Detail standing: the uncovered tickers staked SKR has chosen,
          from GET /api/v1/vote/next-up (docs/skr-curation-spec-2026-09-13.md, app work step 3). -->
     <string name="next_up_label">Next up, by staked SKR</string>

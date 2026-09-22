@@ -48,25 +48,32 @@ class ListSearchScreenTest {
     }
 
     @Test
-    fun `searching draws both sets as one flat list, with no sector chapter and no heading`() {
+    fun `searching draws both sets as one flat list, with no sector chapter and no sticky heading`() {
         val content = body(listScreen, "internal fun ListContent(")
 
-        // The browse branch (blank query) is the only place a chapter heading is drawn; the
-        // search branch is the `else` of the same `when` and draws nothing between them.
+        // Amber's sticky chapters (task: sticky sector chapters, a jump index) are read off
+        // `visibleChapters`, built once, above the `when` that branches on the query; browsing
+        // and searching then read that value (or ignore it) rather than each computing their own.
+        assertTrue("Stocks chapters by sector somewhere in the browse path", "chapteredBySector()" in content)
+
+        // The browse branch (blank query) is the only place a sticky chapter heading is drawn;
+        // the search branch is the `else` of the same `when` and draws nothing between them.
         val browseStart = content.indexOf("state.query.isBlank() ->")
         val searchStart = content.indexOf("else -> {", browseStart)
         assertTrue("both branches of the when are in the source", browseStart >= 0 && searchStart > browseStart)
         val browse = content.substring(browseStart, searchStart)
         val searching = content.substring(searchStart)
 
-        assertTrue("browsing chapters by sector", "state.analyzedChapters" in browse)
-        assertTrue("browsing draws a heading", "Heading(" in browse)
+        assertTrue("browsing walks the chapters the query-blank branch built", "visibleChapters.forEach" in browse)
+        assertTrue("browsing pins each chapter head as a stickyHeader", "stickyHeader(" in browse)
+        assertTrue("the chapter head is Amber's own, not Instrument's Heading", "AmberSectionHead(" in browse)
 
-        assertTrue("no chapter heading while searching", "Heading(" !in searching)
-        assertTrue("no sector read while searching", "analyzedChapters" !in searching)
+        assertTrue("no chapter heading while searching", "AmberSectionHead(" !in searching)
+        assertTrue("no stickyHeader while searching", "stickyHeader(" !in searching)
+        assertTrue("no sector read while searching", "chapteredBySector" !in searching)
 
-        // Both sets, drawn with their own existing row (composite plus state for an analyzed
-        // match, price plus the vote action for an uncovered one) rather than a shape of its own.
+        // Both sets, drawn with their own existing row (composite for an analyzed match, price
+        // plus the vote action for an uncovered one) rather than a shape of its own.
         assertTrue("analyzed matches are drawn", "itemsIndexed(state.analyzed" in searching)
         assertTrue("uncovered matches are drawn", "itemsIndexed(state.withoutAnalysis" in searching)
         assertTrue("an uncovered match keeps its row, price and vote action included", "PriceOnlyRow(" in searching)
