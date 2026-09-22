@@ -94,6 +94,8 @@ class YouScreenTest {
                 "FactGrid(cells = deviceCells",
                 "NotificationsLine(",
                 "Footer()",
+                "R.string.you_heading_licenses",
+                "LicenseRow(",
             ),
         )
     }

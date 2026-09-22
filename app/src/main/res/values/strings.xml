@@ -572,6 +572,22 @@
     <string name="you_open_tab">Open %1$s</string>
     <string name="you_version">Version %1$s</string>
 
+    <!-- Fonts and licenses (U11): the OFL texts ship as assets (app/src/main/assets/licenses/,
+         docs/fonts.md); this device-facing name and credit line are the only part of that
+         attribution the app itself authors. The license body a reader can open with
+         action_read_license is read from the shipped file, byte for byte, never retyped here. -->
+    <string name="you_heading_licenses">Fonts and licenses</string>
+    <string name="you_license_outfit_name">Outfit</string>
+    <string name="you_license_outfit_credit">Copyright 2021 The Outfit Project Authors</string>
+    <string name="you_license_jetbrains_mono_name">JetBrains Mono</string>
+    <string name="you_license_jetbrains_mono_credit">Copyright 2020 The JetBrains Mono Project Authors</string>
+    <string name="you_license_bricolage_name">Bricolage Grotesque</string>
+    <string name="you_license_bricolage_credit">Copyright 2022 The Bricolage Grotesque Project Authors</string>
+    <string name="you_license_terms">Licensed under the SIL Open Font License 1.1.</string>
+    <string name="you_license_unavailable">The license text could not be read on this device.</string>
+    <string name="action_read_license">Read license</string>
+    <string name="action_hide_license">Hide license</string>
+
     <!-- Amber's bottom navigation bar (docs/design-research-2026-09-21.md section 3): the
          redesign's own five destinations, Today, Stocks, Vote, Portfolio, You, not the current
          four-tab-plus-You shape com.plainticker.mobile.ui.home.HomeTab still names. Vote and

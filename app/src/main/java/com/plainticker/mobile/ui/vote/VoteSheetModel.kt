@@ -58,8 +58,18 @@ data class VoteAction(val label: Copy, val kind: VoteActionKind)
 
 enum class VoteActionKind { Confirm, Retry, Close }
 
-/** Lamports carry nine decimals; the vote's fee is a fraction of a cent and is printed as one. */
+/** Lamports' own on-chain precision: what the raw integer below is divided by to read as SOL. */
 private const val LAMPORT_DECIMALS = 9
+
+/**
+ * The fee is shown to six decimals, not to all nine of [LAMPORT_DECIMALS]: see
+ * `com.plainticker.mobile.ui.pass.PassSheetModel`'s own constant of the same name for the
+ * arithmetic (`FactGrid`'s span-1 cell budget against the real `jetbrains_mono_medium.ttf` glyph
+ * widths) behind why nine digits clips this same cell ("0.123456789 SOL", 15 characters, against
+ * about 13 that fit) and six does not (12 characters at its own worst case). The two sheets share
+ * the shape because they share the component, not by copying a number without checking it.
+ */
+private const val LAMPORT_DISPLAY_DECIMALS = 6
 
 /**
  * The sheet for one state, or null when there is no sheet.
@@ -162,7 +172,7 @@ private fun readyCells(stakeRaw: Long, summary: VoteSummary) = listOf(
         label = words(R.string.vote_fee_label),
         value = words(
             R.string.vote_fee,
-            Fmt.tokenAmount(summary.lamports, LAMPORT_DECIMALS, maxDecimals = LAMPORT_DECIMALS),
+            Fmt.tokenAmount(summary.lamports, LAMPORT_DECIMALS, maxDecimals = LAMPORT_DISPLAY_DECIMALS),
         ),
     ),
     VoteCell(

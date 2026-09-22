@@ -100,6 +100,17 @@ private fun homeTabFrom(ordinal: Int): HomeTab = HomeTab.entries.getOrElse(ordin
  * that return is consumed once, resetting the memory to Today, so a second back press keeps
  * unwinding toward the home instead of ping-ponging between the same two destinations. Back from
  * Today itself is the system's own back: Today has nothing under it to return to.
+ *
+ * **The TopBar's right slot, judged against this shell rather than the one U9 was written for
+ * (docs/plan-app-uiux-2026-09-21.md's after-the-hackathon table).** U9 asked for the wallet's
+ * short key there when a session is open, "You" otherwise. "You" is answered above: it is a bar
+ * destination now, not a fallback for an empty slot. The wallet half does not carry over either,
+ * and is deliberately not built: [header] is the *same* composable on all five destinations, so a
+ * session's key drawn there would sit over Today, Stocks and Vote, three screens a wallet has
+ * nothing to do with, and it would duplicate what the two screens that do already draw
+ * ([com.plainticker.mobile.ui.portfolio.PortfolioScreen]'s own `WalletKeyLine`, You's own
+ * `WalletBlock`). The slot stays empty; [HomeScreenTest] pins that the shared [TopBar] call
+ * carries neither `action` nor `meta` so a later change cannot reopen this quietly.
  */
 @Composable
 fun HomeScreen(
