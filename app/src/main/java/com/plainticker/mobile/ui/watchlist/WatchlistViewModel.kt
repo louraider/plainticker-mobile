@@ -65,8 +65,22 @@ data class WatchlistUiState(
     // disagree. True before that join has ever run: every field below is at a default that draws
     // nothing rather than a guess (com.plainticker.mobile.ui.today.TodayModel.kt's functions all
     // return null for an unknown fact instead of inventing one).
-    /** True until the join behind blocks 1, 3 and 4 has completed once, success or failure alike. */
+    /**
+     * True until `/summary`, the catalog and the leaderboard have all answered once, success or
+     * failure alike: the fast half of the join, which blocks 1 (venue), 4 (next up) and 5 (the
+     * footer) read and none of which needs a price. Deliberately independent of [trackedLoading]:
+     * the animator-zero stall (docs/qa-checklist.md, 2026-09-22) was these three blocks sitting
+     * undrawn for as long as Jupiter's own paced fetch took, even though not one of them reads a
+     * price. See [WatchlistViewModel.loadToday]'s own doc for the fetch that used to delay them
+     * regardless.
+     */
     val todayLoading: Boolean = true,
+    /**
+     * True until Jupiter's prices have answered once, success or failure alike: the one thing
+     * block 3 (Tracked today) actually needs and the other three do not. Independent of
+     * [todayLoading] on purpose; see that field's own doc.
+     */
+    val trackedLoading: Boolean = true,
     /** Where the venue is right now, or null while no catalog has answered at all. */
     val market: MarketStatus? = null,
     val analysisGeneratedAtMillis: Long? = null,
@@ -231,14 +245,22 @@ class WatchlistViewModel(
      * **Four network reads, not run one after another.** `/summary`, the catalog and the
      * leaderboard ([nextUpRepo]) answer three unrelated questions and none needs another's result
      * to be *asked*, only Jupiter's prices do (a mint list built from `/summary` joined against the
-     * catalog): read one after another, four round trips cost their sum; the device's own "Tracked
-     * today" skeleton and this block's venue line sitting undrawn for several seconds after launch
-     * (this task's brief, "one more thing") was that sum. [summaryDeferred], [catalogDeferred] and
-     * the leaderboard read below start together with [async] and are only awaited where their
-     * answers are actually needed (the leaderboard's own `await()` sits after prices, because
-     * nothing before it needs it, not because it has to happen after), so the wall time this join
-     * actually costs a reader is two round trips (the three together, then prices) rather than
-     * four, without changing one fact this block ever states.
+     * catalog). [summaryDeferred], [catalogDeferred] and [leaderAnswerDeferred] start together with
+     * [async], so the network cost of the fast three is one round trip, not their sum.
+     *
+     * **Two settles, not one.** The animator-zero stall (docs/qa-checklist.md, 2026-09-22:
+     * venue card and "Tracked today" undrawn or skeletal for three to four seconds at normal
+     * motion, eight to eleven with the animator forced to zero) was traced to this function, not
+     * to motion: `amberBlockEntrance` already snaps to its settled state on the frame after the
+     * data arrives regardless of the animator scale (`TodayScreenTest` pins exactly that), so a
+     * block already gated by state cannot become *slower* to read because motion is off. What
+     * actually held the venue line, Next up and the footer back was this function publishing
+     * every field in one `_state.update` at the very end, after awaiting [prices.pricesFirst] -
+     * Jupiter's own paced fetch, several seconds by design ([PriceRepository]'s own doc) - even
+     * though none of those three blocks reads a price. [todayLoading] now flips the moment the
+     * fast three have answered, in its own update, with [market], [nextUpLeader], [voteRound] and
+     * the two coverage totals already on state; [trackedLoading] flips separately once prices have
+     * answered, because block 3's rows are the one thing here that actually needs one.
      *
      * Never throws: a source that did not answer costs its own facts (the fields below stay at
      * their [WatchlistUiState] defaults, which is what [com.plainticker.mobile.ui.today.TodayModel.kt]'s
@@ -246,7 +268,7 @@ class WatchlistViewModel(
      */
     private fun loadToday() {
         todayJob?.cancel()
-        _state.update { it.copy(todayLoading = true) }
+        _state.update { it.copy(todayLoading = true, trackedLoading = true) }
         todayJob = viewModelScope.launch {
             val summaryDeferred = async { runCatching { summaries.summary() } }
             val catalogDeferred = async {
@@ -265,24 +287,6 @@ class WatchlistViewModel(
                 val asset = byTicker[row.ticker.uppercase()] ?: return@mapNotNull null // lint-allow uppercase: map key
                 row to asset
             }
-
-            val mints = analyzed.mapNotNull { (_, asset) -> asset.solanaMint }.distinct().take(TODAY_PRICE_BUDGET)
-            val pricesAskedAt = clock.nowMillis()
-            val fetch = if (mints.isEmpty()) null else runCatching { prices.pricesFirst(mints) }.getOrNull()
-
-            val tracked = analyzed.mapNotNull { (row, asset) ->
-                val mint = asset.solanaMint ?: return@mapNotNull null
-                val entry = fetch?.priced?.get(mint) ?: return@mapNotNull null
-                val quality = TrackingQuality.of(entry.usdPrice, entry.stockData?.price, entry.liquidity)
-                if (quality !is TrackingQuality.Tracked) return@mapNotNull null
-                TrackedRow(
-                    ticker = row.ticker,
-                    symbol = asset.symbol,
-                    company = row.company ?: asset.name,
-                    premiumPct = quality.premiumPct,
-                    poolUsd = quality.poolUsd,
-                )
-            }.sortedByDescending { it.poolUsd }
 
             val analyzedKeys = analyzed.mapTo(HashSet()) { (row, _) -> row.ticker.uppercase() } // lint-allow uppercase: map key
             val withoutAnalysisTotal = assets.count { it.underlyingTicker.uppercase() !in analyzedKeys } // lint-allow uppercase: map key
@@ -303,19 +307,47 @@ class WatchlistViewModel(
             val generatedAtMillis = summaryResult.getOrNull()?.generatedAt?.let { stamp ->
                 runCatching { Instant.parse(stamp).toEpochMilli() }.getOrNull()
             }
-            val pricesFetchedAtMillis = if (fetch != null) pricesAskedAt else null
 
+            // The fast half settles here, before prices are ever asked for: the venue line, Next
+            // up and the footer need nothing below this point.
             _state.update { current ->
                 current.copy(
                     todayLoading = false,
                     market = MarketHours.ofCatalog(assets, clock.nowMillis()),
                     analysisGeneratedAtMillis = generatedAtMillis,
-                    pricesFetchedAtMillis = pricesFetchedAtMillis,
                     analyzedTotal = analyzed.size,
                     withoutAnalysisTotal = withoutAnalysisTotal,
-                    tracked = tracked,
                     nextUpLeader = leaderRow,
                     voteRound = leaderAnswer?.round,
+                    nowMillis = clock.nowMillis(),
+                )
+            }
+
+            val mints = analyzed.mapNotNull { (_, asset) -> asset.solanaMint }.distinct().take(TODAY_PRICE_BUDGET)
+            val pricesAskedAt = clock.nowMillis()
+            val fetch = if (mints.isEmpty()) null else runCatching { prices.pricesFirst(mints) }.getOrNull()
+
+            val tracked = analyzed.mapNotNull { (row, asset) ->
+                val mint = asset.solanaMint ?: return@mapNotNull null
+                val entry = fetch?.priced?.get(mint) ?: return@mapNotNull null
+                val quality = TrackingQuality.of(entry.usdPrice, entry.stockData?.price, entry.liquidity)
+                if (quality !is TrackingQuality.Tracked) return@mapNotNull null
+                TrackedRow(
+                    ticker = row.ticker,
+                    symbol = asset.symbol,
+                    company = row.company ?: asset.name,
+                    premiumPct = quality.premiumPct,
+                    poolUsd = quality.poolUsd,
+                )
+            }.sortedByDescending { it.poolUsd }
+
+            val pricesFetchedAtMillis = if (fetch != null) pricesAskedAt else null
+
+            _state.update { current ->
+                current.copy(
+                    trackedLoading = false,
+                    pricesFetchedAtMillis = pricesFetchedAtMillis,
+                    tracked = tracked,
                     nowMillis = clock.nowMillis(),
                 )
             }
