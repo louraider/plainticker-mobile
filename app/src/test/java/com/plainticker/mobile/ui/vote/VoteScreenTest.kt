@@ -169,14 +169,62 @@ class VoteScreenTest {
      * digits, so the title barely notices; the round's meta was a whole clause, "1, closes 21 Sep
      * 2026 00:00 UTC", which starved "Round" to one letter per line on the Seeker. There is no
      * layout test on a plain JVM that can measure this again, so what is pinned is the fix: the
-     * round no longer routes through [Heading] at all, and its number still renders in the mono
-     * face rather than back inside the Outfit title.
+     * round no longer routes through [Heading] at all, or through the bespoke anatomy that first
+     * replaced it. It now reuses Amber's own section head
+     * ([com.plainticker.mobile.ui.components.AmberSectionHead]), whose own tests
+     * (`AmberSectionHeadTest`) pin the same anti-starvation behaviour generically: its title wraps
+     * to two lines with a bound rather than being squeezed to one without one.
      */
     @Test
     fun `the round header does not hand its title to Heading's weighted column`() {
         val block = body(voteTabScreen, "private fun RoundHeader(")
         assertFalse("a clause-length meta in Heading is what starved the title on-device", "Heading(" in block)
-        assertTrue("the round number stays in the mono face", "PlainTickerType.trackValue" in block)
+        assertTrue(
+            "the round now reuses AmberSectionHead, whose own title wraps rather than starves",
+            "AmberSectionHead(" in block,
+        )
+    }
+
+    /**
+     * [com.plainticker.mobile.ui.components.AmberSectionHead]'s own contract (`AmberSectionHeadTest`)
+     * is that its `meta` stays a short, single-line count next to the title, never a full clause.
+     * What is pinned here is specific to this call site: RoundHeader hands the round id to `meta`
+     * and the close time to `lede`, not the other way around, which is the actual fix for the
+     * clause-in-a-shared-width-slot bug the class doc above names.
+     */
+    @Test
+    fun `the round id goes to the short meta slot and the close time goes to the full width lede`() {
+        val block = body(voteTabScreen, "private fun RoundHeader(")
+        assertTrue("the round id is Fmt.count, a plain grouped integer, never a sentence", "val roundId = Fmt.count(round.id)" in block)
+        assertTrue("the meta slot gets the round id and nothing else", "meta = roundId" in block)
+        assertTrue("the close clause is the lede, drawn full width below the title, not squeezed beside it", "lede = closesText" in block)
+        assertFalse("the close clause never reaches the meta slot", "meta = closesText" in block)
+    }
+
+    /**
+     * The two values [RoundHeader] actually hands `AmberSectionHead`, measured at their real
+     * worst case rather than assumed (the same discipline `AmberTickerRowTest` and
+     * `AmberSectionHeadTest` apply to their own call sites).
+     */
+    @Test
+    fun `the round header's own content is measured at its worst case, not guessed`() {
+        // A round id is a monotonically increasing counter, one round open at a time; even at
+        // four digits it stays a short, comma-grouped integer, nowhere near a clause.
+        assertEquals("9,999", com.plainticker.mobile.ui.Fmt.count(9_999L))
+
+        // Every field of Fmt.utc but the day is fixed width: the month is always three letters,
+        // the year four digits, the hour and the minute zero-padded to two. The day is the only
+        // field that varies, one or two digits; the 31st (a month that has one) is the longest
+        // Fmt.utc ever produces.
+        val longestUtc = com.plainticker.mobile.ui.Fmt.utc(java.time.Instant.parse("2026-10-31T00:00:00Z"))
+        assertEquals("31 Oct 2026 00:00 UTC", longestUtc)
+        val longestCloses = "Closes $longestUtc"
+        assertEquals(
+            "28 characters, full width, no maxLines cap on the lede: nowhere near where a 400dp " +
+                "device would need to wrap it, let alone starve anything beside it",
+            28,
+            longestCloses.length,
+        )
     }
 
     // ---- The explainer is short enough that nobody scrolls past it, tightened on review -----------------
