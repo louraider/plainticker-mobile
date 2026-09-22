@@ -29,39 +29,43 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
-import com.plainticker.mobile.ui.theme.Accent
-import com.plainticker.mobile.ui.theme.Canvas
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Line
-import com.plainticker.mobile.ui.theme.LineStrong
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerRippleAlpha
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 private val ButtonPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp)
 
-/** The theme ripple is Accent, invisible on an Accent fill; the primary button ripples in Canvas. */
-private val PrimaryRipple = RippleConfiguration(color = Canvas, rippleAlpha = PlainTickerRippleAlpha)
-
-/** 56dp, Accent fill, Canvas text 16/600, radius 0. Renders as [DisabledButton] when not enabled. */
+/**
+ * 56dp, filled with [AmberColors.actionFill], radius 0. Renders as [DisabledButton] when not
+ * enabled. [colors] defaults to the system-following [defaultAmberColors] rather than Instrument's
+ * fixed-dark Accent/Canvas: this button and [SecondaryButton] are what the swap sheet and the
+ * pass sheet still reach for (money and entitlement, DESIGN.md section 1), so a button that stayed
+ * Instrument-dark on an Amber-light sheet is exactly the fault this pass exists to close.
+ */
 @Composable
 fun PrimaryButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     if (!enabled) {
-        DisabledButton(label = label, modifier = modifier)
+        DisabledButton(label = label, modifier = modifier, colors = colors)
     } else {
         val interactionSource = remember { MutableInteractionSource() }
-        ButtonFrame(modifier = modifier, interactionSource = interactionSource) {
-            CompositionLocalProvider(LocalRippleConfiguration provides PrimaryRipple) {
+        val ripple = RippleConfiguration(color = colors.actionOnFill, rippleAlpha = PlainTickerRippleAlpha)
+        ButtonFrame(modifier = modifier, interactionSource = interactionSource, focusColor = colors.actionText) {
+            CompositionLocalProvider(LocalRippleConfiguration provides ripple) {
                 Button(
                     onClick = onClick,
                     modifier = Modifier.fillMaxSize(),
                     shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Canvas),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.actionFill,
+                        contentColor = colors.actionOnFill,
+                    ),
                     elevation = null,
                     contentPadding = ButtonPadding,
                     interactionSource = interactionSource,
@@ -73,21 +77,25 @@ fun PrimaryButton(
     }
 }
 
-/** 56dp, transparent, 1dp Line strong border, Ink text. */
+/** 56dp, transparent, 1dp bordered, [AmberColors.textPrimary] text. See [PrimaryButton] on [colors]. */
 @Composable
 fun SecondaryButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    ButtonFrame(modifier = modifier, interactionSource = interactionSource) {
+    ButtonFrame(modifier = modifier, interactionSource = interactionSource, focusColor = colors.actionText) {
         OutlinedButton(
             onClick = onClick,
             modifier = Modifier.fillMaxSize(),
             shape = RectangleShape,
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent, contentColor = Ink),
-            border = BorderStroke(1.dp, LineStrong),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.Transparent,
+                contentColor = colors.textPrimary,
+            ),
+            border = BorderStroke(1.dp, colors.border),
             contentPadding = ButtonPadding,
             interactionSource = interactionSource,
         ) {
@@ -96,11 +104,12 @@ fun SecondaryButton(
     }
 }
 
-/** 56dp, transparent, 1dp Line border, Muted text. Not a target. */
+/** 56dp, transparent, 1dp bordered, tertiary text. Not a target. See [PrimaryButton] on [colors]. */
 @Composable
 fun DisabledButton(
     label: String,
     modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     Box(modifier.fillMaxWidth().height(56.dp)) {
         Button(
@@ -110,10 +119,10 @@ fun DisabledButton(
             shape = RectangleShape,
             colors = ButtonDefaults.buttonColors(
                 disabledContainerColor = Color.Transparent,
-                disabledContentColor = Muted,
+                disabledContentColor = colors.textTertiary(AmberSurface.GROUND),
             ),
             elevation = null,
-            border = BorderStroke(1.dp, Line),
+            border = BorderStroke(1.dp, colors.border),
             contentPadding = ButtonPadding,
         ) {
             Text(text = label, style = PlainTickerType.button, maxLines = 1)
@@ -122,13 +131,14 @@ fun DisabledButton(
 }
 
 /**
- * 56dp frame. While focused it draws the 2dp Accent outline with a 2dp Canvas gap, so the ring
- * reads on a filled button as well as on a bordered one.
+ * 56dp frame. While focused it draws a 2dp [focusColor] outline with a 2dp gap, so the ring reads
+ * on a filled button as well as on a bordered one.
  */
 @Composable
 private fun ButtonFrame(
     modifier: Modifier,
     interactionSource: MutableInteractionSource,
+    focusColor: Color,
     content: @Composable () -> Unit,
 ) {
     val focused by interactionSource.collectIsFocusedAsState()
@@ -136,7 +146,7 @@ private fun ButtonFrame(
         modifier
             .fillMaxWidth()
             .height(56.dp)
-            .then(if (focused) Modifier.border(2.dp, Accent).padding(4.dp) else Modifier),
+            .then(if (focused) Modifier.border(2.dp, focusColor).padding(4.dp) else Modifier),
     ) {
         content()
     }

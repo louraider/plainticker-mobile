@@ -47,9 +47,8 @@ import com.plainticker.mobile.ui.components.PrimaryButton
 import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.Sheet
 import com.plainticker.mobile.ui.components.SheetSurface
-import com.plainticker.mobile.ui.theme.Elevated
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
+import com.plainticker.mobile.ui.components.defaultAmberColors
+import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import com.plainticker.mobile.ui.text
 import kotlinx.coroutines.launch
@@ -91,6 +90,11 @@ internal fun ColumnScope.PassSheetBody(
     actions: PassActions,
     takeFocus: Boolean = true,
 ) {
+    // This is money and entitlement, the other flow DESIGN.md section 1's "must keep working
+    // identically in both themes" line names: paying for the pass this device's Pro state comes
+    // from. A theme-following AmberColors replaces the fixed-dark Ink/Ink2/Elevated this sheet
+    // drew unconditionally before this fix.
+    val colors = defaultAmberColors()
     ConfirmOnSent(content.bar != null)
     val lead = leadFocus(takeFocus)
 
@@ -101,7 +105,7 @@ internal fun ColumnScope.PassSheetBody(
     Text(
         text = content.title.text(),
         style = PlainTickerType.sheetTitle,
-        color = Ink,
+        color = colors.textPrimary,
         maxLines = 1,
         softWrap = false,
         modifier = (if (content.bar == null) lead else Modifier)
@@ -110,18 +114,18 @@ internal fun ColumnScope.PassSheetBody(
             .semantics { heading() },
     )
 
-    content.phase?.let { Sentence(it.text(), Ink2, PhaseTop) }
+    content.phase?.let { Sentence(it.text(), colors.textSecondary, PhaseTop) }
 
     if (content.cells.isNotEmpty()) {
         Spacer(Modifier.height(GridTop))
         FactGrid(
             cells = content.cells.map { it.factCell() },
-            surface = Elevated,
+            colors = colors,
             minCellHeight = CellHeight,
         )
     }
 
-    content.notice?.let { Sentence(it.text(), Ink2, NoticeTop) }
+    content.notice?.let { Sentence(it.text(), colors.textSecondary, NoticeTop) }
 
     Column(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),

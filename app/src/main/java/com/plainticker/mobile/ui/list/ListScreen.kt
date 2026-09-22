@@ -54,6 +54,7 @@ import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.SkeletonRows
@@ -186,7 +187,7 @@ internal fun ListContent(
      */
     onVote: ((ticker: String, symbol: String) -> Unit)? = null,
     header: @Composable () -> Unit = {},
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     val cold = state.isLoading && state.analyzed.isEmpty() && state.withoutAnalysis.isEmpty()
 

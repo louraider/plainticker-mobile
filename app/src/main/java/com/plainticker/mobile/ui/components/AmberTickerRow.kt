@@ -27,7 +27,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberType
 
 /**
@@ -83,7 +82,7 @@ fun AmberTickerRow(
     modifier: Modifier = Modifier,
     figure: String? = null,
     context: String? = null,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     onClick: (() -> Unit)? = null,
     onClickLabel: String = "Open $ticker",
     /** What a merged screen reader item says instead of its parts read end to end; see [ListRow]. */
@@ -201,7 +200,7 @@ private const val MetaWeight = 2f
 @Composable
 fun AmberTickerRowGroup(
     modifier: Modifier = Modifier,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
