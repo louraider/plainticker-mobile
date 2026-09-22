@@ -137,16 +137,17 @@ class StocksFilterTest {
     }
 
     /**
-     * The measurement behind [com.plainticker.mobile.ui.list.ListScreen]'s `JumpIndexWidth`
-     * (28dp): every authored abbreviation the jump index can show is short enough to sit in one
-     * narrow column without wrapping or clipping, the same "measure the longest and pin it" rule
-     * this task's brief applies to the row's own longest sector and company name
-     * ([com.plainticker.mobile.ui.components.AmberSectionHeadTest],
-     * [com.plainticker.mobile.ui.components.AmberTickerRowTest]), read here off the eleven jump
-     * strings this pass itself authored rather than off catalog data.
+     * Necessary, not sufficient: every authored abbreviation is three characters or fewer. A
+     * previous pass treated this as the whole justification for `JumpIndexWidth`, but three
+     * characters of Bricolage Grotesque at 1.3x font scale do not all fit a 28dp column (the
+     * device found "Com" rendering as "Co", silently, with no ellipsis) — a character count is
+     * not a rendered width. The real guarantee is the fontTools-measured width test below (`the
+     * widest jump abbreviation, measured against the real font, clears the rail's width with
+     * margin at both scales`); this test stays only as the cheap, always-true precondition that
+     * measurement assumes.
      */
     @Test
-    fun `every jump index label is short enough for the rail's fixed width`() {
+    fun `every jump index label is three characters or fewer, the precondition the width test below assumes`() {
         val names = listOf(
             "stocks_jump_communication_services", "stocks_jump_consumer_discretionary",
             "stocks_jump_consumer_staples", "stocks_jump_energy", "stocks_jump_financials",
@@ -157,6 +158,71 @@ class StocksFilterTest {
             val label = ShippedCopy.strings.getValue(name)
             assertTrue("$name (\"$label\") is longer than the rail was sized for", label.length <= 3)
         }
+    }
+
+    /**
+     * The real guarantee the test above cannot give: every jump abbreviation's own rendered width,
+     * measured against `res/font/bricolage_grotesque.ttf` itself with fontTools (2026-09-22),
+     * instantiated at the exact variation coordinates [com.plainticker.mobile.ui.theme.AmberType.meta]
+     * builds ([com.plainticker.mobile.ui.list.ListScreen]'s `StocksJumpIndex` draws every label in
+     * that style) — `wght` 400, `wdth` 100, `opsz` 12 — summing each glyph's own `hmtx` advance
+     * width and scaling by the 12sp point size, the same method
+     * [com.plainticker.mobile.ui.components.AmberTickerRowTest] and
+     * [com.plainticker.mobile.ui.you.YouModelTest] already use and that this file's own numbers
+     * were cross-checked against (`outfit_semibold.ttf` "Vote" at 14sp reproduces
+     * [com.plainticker.mobile.ui.components.AmberTickerRowTest]'s own pinned 30.856dp exactly).
+     *
+     * At 1.3x, sp text scales by the raw factor and the box's own dp width does not (the same
+     * conservative assumption [com.plainticker.mobile.ui.components.AmberTickerRowTest]'s
+     * trailing-action budgets use), so 1.0x widths below are multiplied by 1.3 rather than
+     * re-instantiated at a different `opsz`: [com.plainticker.mobile.ui.theme.Type.bricolage] locks
+     * `opsz` to the style's own fixed point size regardless of the reader's font scale setting, so
+     * the real device never re-optically-sizes this glyph at 1.3x either.
+     *
+     * "Com" is the widest of the twelve at both scales. `JumpIndexWidth` (48dp, widened from 28dp
+     * for the touch-target floor, [com.plainticker.mobile.ui.list.ListScreen]'s own doc comment on
+     * `StocksJumpIndex`) clears it with 22.008dp to spare at 1.0x and 14.210dp at 1.3x: comfortable
+     * margin at both, not a bare pass.
+     */
+    @Test
+    fun `the widest jump abbreviation, measured against the real font, clears the rail's width with margin at both scales`() {
+        val railWidthDp = 48.0
+        // label to (1.0x width, 1.3x width), fontTools against bricolage_grotesque.ttf at
+        // wght=400/wdth=100/opsz=12 (AmberType.meta), 2026-09-22.
+        val widths = mapOf(
+            "Com" to (25.992 to 33.790),
+            "Dis" to (17.652 to 22.948),
+            "Sta" to (18.816 to 24.461),
+            "Ene" to (21.024 to 27.331),
+            "Fin" to (17.064 to 22.183),
+            "Hea" to (21.924 to 28.501),
+            "Ind" to (17.676 to 22.979),
+            "IT" to (9.744 to 12.667),
+            "Mat" to (21.924 to 28.501),
+            "RE" to (14.892 to 19.360),
+            "Uti" to (16.080 to 20.904),
+            "No" to (16.032 to 20.842),
+        )
+        val (widestLabel, widestPair) = widths.entries.maxBy { it.value.second }
+        assertEquals("\"Com\" is expected to be the widest jump label at 1.3x", "Com", widestLabel)
+
+        widths.forEach { (label, pair) ->
+            val (at1x, at13x) = pair
+            assertTrue(
+                "\"$label\" ($at1x dp) must fit the rail's own $railWidthDp dp width at 1.0x, with margin",
+                at1x <= railWidthDp - 10.0,
+            )
+            assertTrue(
+                "\"$label\" ($at13x dp) must fit the rail's own $railWidthDp dp width at 1.3x, with margin, " +
+                    "or a character silently clips the way \"Com\" clipped to \"Co\" on the device",
+                at13x <= railWidthDp - 10.0,
+            )
+        }
+
+        // The binding case, spelled out rather than left inside the loop above.
+        val (widest1x, widest13x) = widestPair
+        assertEquals(22.008, railWidthDp - widest1x, 0.01)
+        assertEquals(14.210, railWidthDp - widest13x, 0.01)
     }
 
     // ---- chapterStartIndices and activeChapterAt ---------------------------------------------
