@@ -209,6 +209,15 @@ val DetailUiState.heroTicker: String get() = symbol ?: ticker
 /** The company, from the analysis first because it is the registrant's own name. */
 val DetailUiState.heroCompany: String? get() = analysis?.company ?: asset?.name
 
+/**
+ * The sector line under the hero's company name, in the approved Amber Detail frame (`AAPLx /
+ * Apple Inc. / Information Technology`). Read straight from the analysis, the same raw-data
+ * treatment [heroCompany] already gets: null while nothing is served yet, or for a ticker
+ * PlainTicker does not classify, in which case the hero simply carries two lines instead of
+ * three rather than a heading over nothing.
+ */
+val DetailUiState.heroSector: String? get() = analysis?.sector
+
 // ---- The verdict (task app-verdict) ------------------------------------------------------------
 
 /**

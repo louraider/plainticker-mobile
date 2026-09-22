@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
@@ -58,18 +59,19 @@ import com.plainticker.mobile.data.xstocks.Underlying
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.AmberPreviewCanvas
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.FactTone
 import com.plainticker.mobile.ui.components.Gauge
-import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
-import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.PrimaryButton
 import com.plainticker.mobile.ui.components.SignalRow
 import com.plainticker.mobile.ui.components.SkeletonBar
+import com.plainticker.mobile.ui.components.SkeletonSwitch
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopScrim
@@ -81,10 +83,9 @@ import com.plainticker.mobile.ui.swap.SwapState
 import com.plainticker.mobile.ui.swap.SwapToken
 import com.plainticker.mobile.ui.swap.SwapViewModel
 import com.plainticker.mobile.ui.swap.quoteOrNull
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.vote.VoteActions
 import com.plainticker.mobile.ui.vote.VoteSheet
 import com.plainticker.mobile.ui.vote.VoteState
@@ -225,7 +226,7 @@ internal fun DetailContent(
                 }
                 Spacer(Modifier.height(LiveGap))
                 LiveBlock(state)
-                Heading(text = stringResource(R.string.detail_heading_backing), topPadding = BackingGap)
+                AmberSectionHead(title = stringResource(R.string.detail_heading_backing))
                 TrustBlock(state)
             }
 
@@ -274,18 +275,36 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = stringResource(R.string.detail_verdict_label), style = PlainTickerType.label, color = Muted)
+        Text(
+            text = stringResource(R.string.detail_verdict_label),
+            style = AmberType.meta,
+            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+        )
         when (block) {
             VerdictBlock.Loading -> SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
 
             is VerdictBlock.Unlocked ->
-                Text(text = block.label.text(), style = PlainTickerType.heading, color = Ink)
+                // A word, never a colour: DESIGN.md section 7 keeps colour for direction and
+                // risk, never for a classification, so this carries no more emphasis than
+                // AmberDarkColors.textPrimary gives every other primary word on the screen.
+                Text(text = block.label.text(), style = AmberType.sectionHead, color = AmberDarkColors.textPrimary)
 
             VerdictBlock.Locked -> {
+                // The placeholder shape carries no text at all, amber or otherwise: the real
+                // word never reached this app to draw, so there is nothing here to restyle
+                // into something that reads as the word behind a filter.
                 SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
-                Text(text = stringResource(R.string.detail_pro_peek_note), style = PlainTickerType.small, color = Muted)
+                Text(
+                    text = stringResource(R.string.detail_pro_peek_note),
+                    style = AmberType.context,
+                    color = AmberDarkColors.textSecondary,
+                )
                 if (onViewPortfolio != null) {
-                    TextAction(label = stringResource(R.string.receipt_view_portfolio), onClick = onViewPortfolio)
+                    TextAction(
+                        label = stringResource(R.string.receipt_view_portfolio),
+                        onClick = onViewPortfolio,
+                        color = AmberDarkColors.actionText,
+                    )
                 }
             }
         }
@@ -294,10 +313,30 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
 
 // ---- Hero and price ----------------------------------------------------------------------------
 
-/** The 64sp mono ticker with the company under it. One line, never wrapped (DESIGN.md section 3). */
+/**
+ * The Amber Detail frame's own hero anatomy (`scratchpad/design/mockups/gen.py`'s `detail_body`,
+ * the `.hero` block, "amber" dict): the ticker small and secondary above, the company name the
+ * large lead, the sector a third, quieter line below it. This inverts Instrument's hero, which led
+ * with a 64sp mono ticker and gave the company a small caption underneath; there is no Amber type
+ * scale entry that draws a bare ticker symbol at hero size, and the approved frame draws the
+ * company as the lead identity instead, which is what a reader actually recognizes a stock by.
+ * [AmberHeroCompany] extends [AmberType.sectionHead] (22/700) up to the frame's own 34sp rather
+ * than declaring a new style in `Type.kt` (`ui/theme/`, out of this task's `ui/detail/` lane); it
+ * stays a word style (no `tnum`) because a company name is words, not a numeral.
+ *
+ * **Motion, applied where it means something rather than everywhere.** The company name is the
+ * one thing on this screen that genuinely arrives, once, on a cold open: null until the catalog
+ * or the analysis answers, non-null for the rest of the screen's life. [SkeletonSwitch] (`ui/
+ * components/Skeleton.kt`) is the existing, already reduced-motion-aware primitive for exactly
+ * this shape ("skeleton while loading, then the content fading in over 200ms ease-out, instant
+ * under reduced motion, never a spinner"); reused here rather than forked, and not reached for
+ * anywhere else on this screen, because nowhere else on Detail is a single value's first arrival
+ * the whole story the way the reader's own recognition of the company is.
+ *
+ * Merged, so the ticker, the company and the sector reach a screen reader as one phrase.
+ */
 @Composable
 private fun Hero(state: DetailUiState) {
-    // Merged, so the ticker and the company reach a screen reader as one phrase.
     Column(
         Modifier
             .fillMaxWidth()
@@ -306,20 +345,31 @@ private fun Hero(state: DetailUiState) {
     ) {
         Text(
             text = state.heroTicker,
-            style = PlainTickerType.heroTicker,
-            color = Ink,
+            style = AmberType.context,
+            color = AmberDarkColors.textSecondary,
             maxLines = 1,
             softWrap = false,
         )
         val company = state.heroCompany
-        Spacer(Modifier.height(HeroCompanyGap))
-        if (company != null) {
-            Text(text = company, style = PlainTickerType.company, color = Ink2, maxLines = 2)
-        } else {
-            SkeletonBar(width = 160.dp, height = 16.dp)
+        Spacer(Modifier.height(HeroTickerGap))
+        SkeletonSwitch(
+            loading = company == null,
+            skeleton = { SkeletonBar(width = 200.dp, height = 30.dp) },
+            content = {
+                Text(text = company.orEmpty(), style = AmberHeroCompany, color = AmberDarkColors.textPrimary, maxLines = 2)
+            },
+        )
+        val sector = state.heroSector
+        if (sector != null) {
+            Spacer(Modifier.height(HeroCompanyGap))
+            Text(text = sector, style = AmberType.meta, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
         }
     }
 }
+
+/** See [Hero]'s own doc comment for why this extends [AmberType.sectionHead] rather than [AmberType.figureLarge]. */
+private val AmberHeroCompany: TextStyle =
+    AmberType.sectionHead.copy(fontSize = 34.sp, lineHeight = 38.sp, letterSpacing = (-0.01).em)
 
 /**
  * How the two figures of the price row are set. One decision, taken once, so the two figures
@@ -337,8 +387,9 @@ internal data class PriceFigureType(
 /**
  * The type of the price pair, which the liquidity floor decides and the screen only obeys.
  *
- * Above the floor the pair is asymmetric on purpose: the token's own price leads at 40sp Ink and
- * the reference sits beside it at 20sp Ink 2, so a reader knows which is which without being told.
+ * Above the floor the pair is asymmetric on purpose: the token's own price leads at 40sp amber
+ * ([AmberDarkColors.actionText]) and the reference sits beside it at 20sp
+ * [AmberDarkColors.textSecondary], so a reader knows which is which without being told.
  *
  * Below the floor that same asymmetry is a trap, and it is the one this screen shipped with. The
  * screen has just said the pool is too thin to track the NYSE close, and then set the two numbers
@@ -349,19 +400,32 @@ internal data class PriceFigureType(
  */
 internal fun priceFigureType(comparable: Boolean): PriceFigureType = if (comparable) {
     PriceFigureType(
-        token = PlainTickerType.heroPrice,
-        reference = PlainTickerType.referencePrice,
+        token = AmberPriceLead,
+        reference = AmberPriceSmall,
         skeletonHeight = 40.dp,
         referenceLift = ReferenceLift,
     )
 } else {
     PriceFigureType(
-        token = PlainTickerType.referencePrice,
-        reference = PlainTickerType.referencePrice,
+        token = AmberPriceSmall,
+        reference = AmberPriceSmall,
         skeletonHeight = 20.dp,
         referenceLift = 0.dp,
     )
 }
+
+/**
+ * Amber-styled equivalents of Instrument's `heroPrice` (40sp) and `referencePrice` (20sp),
+ * extended from the closest [AmberType] number styles rather than declared fresh in `Type.kt`
+ * (`ui/theme/`, out of this task's `ui/detail/` lane): Bricolage, tabular, at the exact point
+ * sizes `DetailFinishedScreenTest` already pins for the liquidity floor's "neither figure leads"
+ * contract, so that contract keeps holding without the test needing to change. The `opsz` axis
+ * stays pinned at each base style's own point size (34 and 18) rather than tracking 40 and 20
+ * exactly, a cosmetic nit rather than a functional one.
+ */
+private val AmberPriceLead: TextStyle =
+    AmberType.figureLarge.copy(fontSize = 40.sp, lineHeight = 44.sp, letterSpacing = (-0.03).em)
+private val AmberPriceSmall: TextStyle = AmberType.figureRow.copy(fontSize = 20.sp, lineHeight = 24.sp)
 
 /**
  * The token's own figure left, the reference right, and above them the one sentence the liquidity
@@ -386,8 +450,8 @@ private fun PriceBlock(state: DetailUiState) {
     row.lead?.let {
         Text(
             text = it.text(),
-            style = PlainTickerType.body,
-            color = Ink,
+            style = AmberType.body,
+            color = AmberDarkColors.textPrimary,
             modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = PriceTop),
         )
     }
@@ -400,11 +464,18 @@ private fun PriceBlock(state: DetailUiState) {
         verticalAlignment = Alignment.Bottom,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(text = row.tokenLabel.text(), style = PlainTickerType.label, color = Muted)
+            Text(
+                text = row.tokenLabel.text(),
+                style = AmberType.meta,
+                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            )
             val price = row.tokenPrice
             when {
+                // Colour separates the two figures at every size (DESIGN.md section 1.1): the
+                // token's own figure is always AmberDarkColors.actionText, whether or not it
+                // leads on size, never a second colour for direction.
                 price != null ->
-                    Text(text = price, style = type.token, color = Ink, maxLines = 1, softWrap = false)
+                    Text(text = price, style = type.token, color = AmberDarkColors.actionText, maxLines = 1, softWrap = false)
 
                 pending -> SkeletonBar(width = 160.dp, height = type.skeletonHeight)
 
@@ -412,11 +483,13 @@ private fun PriceBlock(state: DetailUiState) {
                 else -> Text(
                     text = stringResource(R.string.value_missing),
                     style = type.token,
-                    color = Muted,
+                    color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
                     maxLines = 1,
                 )
             }
-            row.tokenNote?.let { Text(text = it.text(), style = PlainTickerType.small, color = Ink2) }
+            row.tokenNote?.let {
+                Text(text = it.text(), style = AmberType.context, color = AmberDarkColors.textSecondary)
+            }
         }
         if (row.referencePrice != null || pending) {
             Column(
@@ -424,13 +497,17 @@ private fun PriceBlock(state: DetailUiState) {
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.padding(bottom = type.referenceLift),
             ) {
-                Text(text = row.referenceLabel.text(), style = PlainTickerType.label, color = Muted)
+                Text(
+                    text = row.referenceLabel.text(),
+                    style = AmberType.meta,
+                    color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                )
                 val reference = row.referencePrice
                 if (reference != null) {
                     Text(
                         text = reference,
                         style = type.reference,
-                        color = Ink2,
+                        color = AmberDarkColors.textSecondary,
                         maxLines = 1,
                         softWrap = false,
                     )
@@ -443,8 +520,8 @@ private fun PriceBlock(state: DetailUiState) {
     row.referenceNote?.let {
         Text(
             text = it.text(),
-            style = PlainTickerType.small,
-            color = Ink2,
+            style = AmberType.context,
+            color = AmberDarkColors.textSecondary,
             modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = ReferenceNoteTop),
         )
     }
@@ -492,6 +569,11 @@ private fun TrustBlock(state: DetailUiState) {
                 valueSize = if (fact.span > 1) SpanValueSize else CellValueSize,
             )
         },
+        // FactGrid itself is not one of the six named Amber components and its cell text
+        // colours are internal to ui/components/FactGrid.kt, out of this task's ui/detail/
+        // lane; `surface` is the one parameter it exposes, so the cells at least sit on
+        // Amber's own tonal surface instead of Instrument's Canvas.
+        surface = AmberDarkColors.surfaceRaised,
     )
 }
 
@@ -503,6 +585,20 @@ private fun TrustBlock(state: DetailUiState) {
  * The v1.1 payload carries no leaf fundamentals (docs/data-map.md, gap 1), so the sector section is
  * the composite in the heading and three tracks: no grid is invented under them, and no heading is
  * left standing over nothing.
+ *
+ * **Where the approved frame and the real payload disagree.** `scratchpad/design/mockups/gen.py`'s
+ * Amber Detail fragment additionally draws the composite as its own big [AmberFigure][
+ * com.plainticker.mobile.ui.components.AmberFigure] cell ("50, of 100, sector median 55") beside a
+ * "Sector rank" fact cell ("15 of 23, Information Technology, by composite") in a two-column facts
+ * row. Neither figure is data this screen has: there is no sector-median or sector-rank field on
+ * [AnalysisPayload][com.plainticker.mobile.data.plainticker.AnalysisPayload], only
+ * `compositePercentile`, which is exactly the one number already drawn above, in the section
+ * head's own meta slot. Building either cell would mean inventing the second operand of a
+ * comparison this screen has no standing to state, the same failure mode DESIGN.md section 1
+ * exists to keep off the liquidity floor. So this section stays composite-in-the-heading plus
+ * three tracks, restyled but not restructured, and `DetailScreenTest`'s existing
+ * `detail_fact_sector_rank` / `detail_fact_sector_median` assertions (nothing invented under the
+ * three tracks) keep pinning exactly that.
  */
 @Composable
 private fun FundamentalsBlock(state: DetailUiState) {
@@ -521,7 +617,7 @@ private fun FundamentalsBlock(state: DetailUiState) {
         return
     }
 
-    Heading(text = stringResource(R.string.detail_heading_sector), meta = state.compositeMeta?.text())
+    AmberSectionHead(title = stringResource(R.string.detail_heading_sector), meta = state.compositeMeta?.text())
     state.tracks.forEach { row ->
         if (row.value != null) {
             Track(
@@ -535,10 +631,10 @@ private fun FundamentalsBlock(state: DetailUiState) {
         }
     }
 
-    Heading(text = stringResource(R.string.detail_heading_fscore))
+    AmberSectionHead(title = stringResource(R.string.detail_heading_fscore))
     state.fScore?.let { FScoreBlock(it) }
 
-    Heading(text = stringResource(R.string.detail_heading_method))
+    AmberSectionHead(title = stringResource(R.string.detail_heading_method))
     state.method?.let { MethodBlock(it) }
 }
 
@@ -548,8 +644,8 @@ private fun FScoreBlock(fscore: FScoreContent) {
     if (fscore.unavailable) {
         Text(
             text = stringResource(R.string.detail_not_available_filer),
-            style = PlainTickerType.body,
-            color = Ink2,
+            style = AmberType.body,
+            color = AmberDarkColors.textSecondary,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         )
         return
@@ -569,19 +665,23 @@ private fun FScoreBlock(fscore: FScoreContent) {
     ) {
         Text(
             text = score ?: stringResource(R.string.value_missing),
-            style = PlainTickerType.fScoreNumeral,
-            color = if (score != null) Ink else Muted,
+            style = AmberFScoreNumeral,
+            color = if (score != null) AmberDarkColors.actionText else AmberDarkColors.textTertiary(AmberSurface.GROUND),
             maxLines = 1,
         )
         Text(
             text = pluralStringResource(R.plurals.detail_fscore_of, fscore.outOf, Fmt.count(fscore.outOf)),
-            style = PlainTickerType.company,
-            color = Muted,
+            style = AmberType.context,
+            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
             modifier = Modifier.padding(bottom = FScoreCounterLift),
         )
     }
     fscore.signals.forEach { signal -> SignalRow(name = stringResource(signal.name), ok = signal.ok) }
 }
+
+/** Instrument's `fScoreNumeral` was 56sp mono; extended from [AmberType.figureLarge] the same way [AmberPriceLead] is. */
+private val AmberFScoreNumeral: TextStyle =
+    AmberType.figureLarge.copy(fontSize = 56.sp, lineHeight = 60.sp, letterSpacing = (-0.03).em)
 
 /** The payload's own statement, then the static sources line, with the age above both when old. */
 @Composable
@@ -590,9 +690,15 @@ private fun MethodBlock(method: MethodContent) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        method.age?.let { Text(text = it.text(), style = PlainTickerType.small, color = Muted) }
-        Text(text = method.statement.text(), style = PlainTickerType.body, color = Ink2)
-        Text(text = method.sources.text(), style = PlainTickerType.small, color = Muted)
+        method.age?.let {
+            Text(text = it.text(), style = AmberType.context, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+        }
+        Text(text = method.statement.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
+        Text(
+            text = method.sources.text(),
+            style = AmberType.context,
+            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+        )
     }
 }
 
@@ -607,16 +713,24 @@ private fun MethodBlock(method: MethodContent) {
 @Composable
 private fun ReadSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
     val block = state.readNarrative ?: return
-    Heading(text = stringResource(R.string.detail_heading_read), topPadding = SectionGap)
+    AmberSectionHead(title = stringResource(R.string.detail_heading_read))
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(text = block.text.text(), style = PlainTickerType.body, color = Ink2)
+        Text(text = block.text.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
         if (!block.full) {
-            Text(text = stringResource(R.string.detail_pro_peek_note), style = PlainTickerType.small, color = Muted)
+            Text(
+                text = stringResource(R.string.detail_pro_peek_note),
+                style = AmberType.context,
+                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            )
             if (onViewPortfolio != null) {
-                TextAction(label = stringResource(R.string.receipt_view_portfolio), onClick = onViewPortfolio)
+                TextAction(
+                    label = stringResource(R.string.receipt_view_portfolio),
+                    onClick = onViewPortfolio,
+                    color = AmberDarkColors.actionText,
+                )
             }
         }
     }
@@ -629,10 +743,9 @@ private fun ReadSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
 @Composable
 private fun NextStepsSection(state: DetailUiState) {
     val block = state.nextStepsBlock ?: return
-    Heading(
-        text = stringResource(R.string.detail_heading_next_steps),
+    AmberSectionHead(
+        title = stringResource(R.string.detail_heading_next_steps),
         meta = Fmt.count(block.items.size),
-        topPadding = SectionGap,
     )
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
@@ -640,12 +753,16 @@ private fun NextStepsSection(state: DetailUiState) {
     ) {
         block.items.forEach { row ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(text = row.title, style = PlainTickerType.body, color = Ink2)
-                row.detail?.let { Text(text = it, style = PlainTickerType.small, color = Ink2) }
+                Text(text = row.title, style = AmberType.body, color = AmberDarkColors.textSecondary)
+                row.detail?.let { Text(text = it, style = AmberType.context, color = AmberDarkColors.textSecondary) }
             }
         }
         if (!block.full) {
-            Text(text = stringResource(R.string.detail_pro_peek_note), style = PlainTickerType.small, color = Muted)
+            Text(
+                text = stringResource(R.string.detail_pro_peek_note),
+                style = AmberType.context,
+                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            )
         }
     }
 }
@@ -668,12 +785,16 @@ private fun SwapBlock(
         modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = SwapGap),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PrimaryButton(
+        // The swap flow itself (its sheet, its receipt) is untouched: only this trigger button
+        // is restyled, to Amber's own primary action, one of the six named components.
+        AmberPrimaryAction(
             label = label.text(),
             onClick = onSwap,
             enabled = state.mint != null && !swap.isBusy,
         )
-        cost?.let { Text(text = it.text(), style = PlainTickerType.meta, color = Muted) }
+        cost?.let {
+            Text(text = it.text(), style = AmberType.meta, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+        }
     }
 }
 
@@ -693,7 +814,12 @@ private fun SwapBlock(
 private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?) {
     if (!state.analysisNotServed || onVote == null) return
     Row(modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = VoteGap)) {
-        TextAction(label = stringResource(R.string.vote_action), onClick = onVote, contentPadding = VoteActionPadding)
+        TextAction(
+            label = stringResource(R.string.vote_action),
+            onClick = onVote,
+            color = AmberDarkColors.actionText,
+            contentPadding = VoteActionPadding,
+        )
     }
 }
 
@@ -714,8 +840,8 @@ private fun NextUpBlock(state: DetailUiState) {
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = line.rank.text(), style = PlainTickerType.body, color = Ink2)
-        Text(text = line.weight.text(), style = PlainTickerType.meta, color = Muted)
+        Text(text = line.rank.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
+        Text(text = line.weight.text(), style = AmberType.meta, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
     }
 }
 
@@ -731,8 +857,10 @@ private fun NoticeLine(text: Copy, hint: Copy? = null) {
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = text.text(), style = PlainTickerType.body, color = Ink2)
-        hint?.let { Text(text = it.text(), style = PlainTickerType.small, color = Muted) }
+        Text(text = text.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
+        hint?.let {
+            Text(text = it.text(), style = AmberType.context, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+        }
     }
 }
 
@@ -750,8 +878,12 @@ private fun AbsentRow(label: String) {
             .semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = label, style = PlainTickerType.rowLabel, color = Ink2, modifier = Modifier.weight(1f))
-        Text(text = stringResource(R.string.detail_not_available_filer), style = PlainTickerType.small, color = Muted)
+        Text(text = label, style = AmberType.body, color = AmberDarkColors.textSecondary, modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.detail_not_available_filer),
+            style = AmberType.context,
+            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+        )
     }
 }
 
@@ -759,6 +891,9 @@ private fun AbsentRow(label: String) {
 
 private val Side = 20.dp
 private val HeroTop = 12.dp
+/** Between the small ticker line and the hero company name below it. */
+private val HeroTickerGap = 4.dp
+/** Between the hero company name and the sector line below it. */
 private val HeroCompanyGap = 6.dp
 /** Between the verdict block and the hero above it, the same gap [PriceTop] used before it moved down. */
 private val VerdictTop = 28.dp
@@ -771,7 +906,6 @@ private val LeadGap = 14.dp
 private val ReferenceLift = 6.dp
 private val ReferenceNoteTop = 18.dp
 private val LiveGap = 28.dp
-private val BackingGap = 28.dp
 private val SectionGap = 28.dp
 private val FScoreGap = 6.dp
 private val FScoreCounterLift = 4.dp
@@ -870,7 +1004,7 @@ private val PreviewState = DetailUiState(
 @InstrumentPreviews
 @Composable
 private fun DetailPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         DetailContent(PreviewState, SwapState.Closed(), PreviewSwapActions, onToggleWatch = {}, onSwap = {})
     }
 }
@@ -878,7 +1012,7 @@ private fun DetailPreview() {
 @InstrumentPreviews
 @Composable
 private fun DetailLoadingPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         DetailContent(
             DetailUiState(ticker = "TSLA", nowMillis = PreviewNow),
             SwapState.Closed(),
@@ -893,7 +1027,7 @@ private fun DetailLoadingPreview() {
 @InstrumentPreviews
 @Composable
 private fun DetailDegradedPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         DetailContent(
             PreviewState.copy(
                 analysisState = AnalysisState.NotServed,
