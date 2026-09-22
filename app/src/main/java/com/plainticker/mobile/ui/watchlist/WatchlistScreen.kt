@@ -57,6 +57,24 @@ import java.time.LocalDate
  * Nothing here computes anything: [WatchlistModel.kt] picks every sentence and
  * [WatchlistViewModel] every number, so a premium on a row comes from the same rule as the list's
  * and the digest is never re-derived from the rows on screen.
+ *
+ * **U10, judged against this screen as it stands rather than built as written**
+ * (docs/plan-app-uiux-2026-09-21.md's after-the-hackathon table: "Watchlist with numbers when
+ * little is watched: the report countdown as a `Track`", citing the design review of 13 September,
+ * docs/design-review-2026-09-13.md's "Weakest: Watchlist as shipped" finding). Two things changed
+ * under that row. First, the screen
+ * that finding was about no longer exists on its own: [WatchlistContent] is now Today's Yours
+ * block ([com.plainticker.mobile.ui.today.TodayScreen]), drawn between a populated venue card and
+ * a populated Tracked today section rather than alone on the third tab, so the "55 percent of the
+ * frame empty" reading a mostly-empty screen earned on 13 September does not describe what a
+ * reader now sees even when nothing is watched. Second, [Track] itself (a position on a scale:
+ * label, value, state word, a tick against a range) is not a shape a report countdown actually
+ * has: there is no range a date-until-next-report is a position on, only a plain "no report date"
+ * or "reports on %1$s" sentence ([watchRow]'s own `report` half), so fitting it to `Track` would
+ * be forcing the component to a fact it was not built to state rather than answering the review's
+ * actual ask. `Track` also lives in `ui/components/`, retired by other agents in parallel this
+ * week and out of this pass's own file set regardless. Nothing built here; the empty state stays
+ * the plain sentence and [com.plainticker.mobile.ui.components.SecondaryButton] it already draws.
  */
 @Composable
 fun WatchlistScreen(
