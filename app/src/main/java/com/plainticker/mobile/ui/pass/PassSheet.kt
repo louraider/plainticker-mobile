@@ -163,6 +163,11 @@ private fun PassCell.factCell(): FactCell {
         value = value.text(),
         span = span,
         valueSize = if (span > 1) 28.sp else 18.sp,
+        // Every PassCell that carries something to copy (the signature, the destination) is an
+        // on-chain identifier drawn from Fmt.shortKey; every one that carries nothing to copy
+        // (the amount, the fee) is a number. The two happen to coincide exactly for this screen's
+        // cells, so [copied] doubles as the signal FactCell.valueMono needs.
+        valueMono = copied != null,
         onTap = if (copied == null) null else {
             { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(copyLabel, copied))) } }
         },

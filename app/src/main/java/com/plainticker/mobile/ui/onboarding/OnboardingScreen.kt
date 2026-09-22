@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Fmt
-import com.plainticker.mobile.ui.components.Heading
+import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.ListRow
 import com.plainticker.mobile.ui.components.PreviewCanvas
@@ -148,7 +148,7 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
         // The settled List draws a sector chapter heading here, its row count as the meta, never
         // the "Analyzed" heading the skeleton alone uses (ListScreen.kt): the backdrop's six
         // sample rows are one illustrative chapter rather than six real, differently sectored ones.
-        Heading(text = BackdropSector, topPadding = 30.dp, meta = Fmt.count(BackdropRows.size))
+        AmberSectionHead(title = BackdropSector, meta = Fmt.count(BackdropRows.size))
         BackdropRows.forEachIndexed { index, row ->
             ListRow(
                 ticker = row.ticker,

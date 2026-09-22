@@ -380,6 +380,11 @@ private fun SheetCell.factCell(): FactCell {
         span = span,
         subMono = subMono,
         valueSize = size.valueSize(),
+        // SheetCellSize.Fragment is, by its own doc comment, "a signature or a slot: a key, not a
+        // quantity" — the receipt's two explorer-lookup fields. Both are on-chain identifiers, the
+        // slot included, so both stay in FactCell.valueMono's JetBrains Mono; Headline and Normal
+        // are always a quantity (an amount, a percent, a SOL figure).
+        valueMono = size == SheetCellSize.Fragment,
         onTap = if (copied == null) {
             null
         } else {

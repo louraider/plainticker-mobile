@@ -563,16 +563,25 @@ private fun TrustBlock(state: DetailUiState) {
         }
         return
     }
+    val hookLabel = stringResource(R.string.detail_fact_hook)
     FactGrid(
         cells = state.trustFacts.map { fact ->
+            val labelText = fact.label.text()
             FactCell(
-                label = fact.label.text(),
+                label = labelText,
                 value = fact.value.text(),
                 sub = fact.sub?.text(),
                 span = fact.span,
                 subMono = fact.subMono,
                 tone = if (fact.caution) FactTone.Caution else FactTone.Neutral,
                 valueSize = if (fact.span > 1) SpanValueSize else CellValueSize,
+                // The transfer hook's program id (DetailModel.kt's hookCell, Fmt.shortKey(program))
+                // is the one TrustFact value that is an on-chain identifier rather than a number or
+                // a state word; every other trust fact is one of those two. TrustFact itself carries
+                // no field to say so (DetailModel.kt is outside this file set), so the one cell is
+                // picked out by its own label, which is unique among the five trust facts and is
+                // already resolved above for the row itself.
+                valueMono = labelText == hookLabel,
             )
         },
         // FactGrid now reads a theme-following AmberColors by default for both its surface and
