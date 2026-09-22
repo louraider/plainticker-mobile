@@ -10,6 +10,7 @@ import com.plainticker.mobile.ui.pass.ProUiState
 import com.plainticker.mobile.wallet.WalletAccount
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -278,6 +279,99 @@ class YouModelTest {
                 )
             }
         }
+    }
+
+    // ---- The label and sub-line budget the earlier value-only pass never measured (fifth clip) -
+
+    /**
+     * The trio card's own inner content width (see [maxFactWordValueLength]'s own comment for the
+     * derivation: (400 − 2×20 − 2×8) ÷ 3 − 2×12 on the Seeker's 400dp frame). Every text slot in a
+     * device-fact cell (label, value, sub) draws inside exactly this many dp, whatever the font
+     * scale: dp layout does not grow with a reader's text-size setting, only the glyphs inside it
+     * do, which is why 1.3x is strictly the harder case below and 1.0x needs no separate table.
+     */
+    private val factLineWidthDp = 90.667
+
+    /**
+     * `FactCardView`'s label ([com.plainticker.mobile.ui.theme.AmberType.meta], 12sp/400, opsz 12)
+     * grown to 1.3x. fontTools against `res/font/bricolage_grotesque.ttf`, `wght` 400, `wdth` 100,
+     * `opsz` 12, 2026-09-22, one glyph run per word (no kerning applied, which only ever makes the
+     * real render narrower than this, so the number stays the safe direction for a clip check).
+     */
+    private val factLabelWordWidthAt13xDp = mapOf(
+        "Swaps" to 49.078,
+        "recorded" to 67.049,
+        "Votes" to 42.432,
+        "cast" to 31.387,
+        "Stocks" to 50.544,
+        "watched" to 63.367,
+    )
+
+    /**
+     * `FactCardView`'s sub ([com.plainticker.mobile.ui.theme.AmberType.context], 14sp/400, opsz
+     * 14) grown to 1.3x, same method as [factLabelWordWidthAt13xDp].
+     */
+    private val factSubWordWidthAt13xDp = mapOf(
+        "Listed" to 51.488,
+        "under" to 50.105,
+        "Portfolio" to 73.928,
+        "Vote" to 39.749,
+        "Today" to 52.671,
+    )
+
+    /**
+     * A greedy word-wrap only ever needs as many lines as there are words (it starts a new line
+     * only when the current one is already full), so "every word fits one line, and there are no
+     * more words than the cell's own line budget" is a sufficient, conservative proof that the
+     * real wrap never needs an extra line — the same kind of arithmetic proof
+     * [AmberTickerRowTest] runs against this font file, rather than a simulation of Compose's own
+     * line-breaker.
+     */
+    private fun assertWordsFitOnTheirOwnLines(text: String, widths: Map<String, Double>, maxLines: Int) {
+        val words = text.split(" ")
+        assertTrue(
+            "\"$text\" is ${words.size} words, past the $maxLines-line budget this cell's anatomy " +
+                "gives it; even one word per line would need a line this cell does not have",
+            words.size <= maxLines,
+        )
+        words.forEach { word ->
+            val width = widths[word] ?: error(
+                "\"$word\" (from \"$text\") has no measured width in this table; remeasure it with " +
+                    "fontTools against res/font/bricolage_grotesque.ttf at this style's exact " +
+                    "wght/wdth/opsz before this test can prove the new copy still fits",
+            )
+            assertTrue(
+                "\"$word\" ($width dp at 1.3x) exceeds the trio card's own $factLineWidthDp dp line " +
+                    "budget on its own, so no amount of wrapping saves it",
+                width <= factLineWidthDp,
+            )
+        }
+    }
+
+    @Test
+    fun `every On this device label wraps within its own line budget, at 1_3x`() {
+        listOf(R.string.you_fact_swaps, R.string.you_fact_votes, R.string.you_fact_watched).forEach { id ->
+            val label = ShippedCopy.render(Copy.Words(id))
+            assertWordsFitOnTheirOwnLines(label, factLabelWordWidthAt13xDp, FactLabelMaxLines)
+        }
+    }
+
+    @Test
+    fun `every On this device sub wraps within its own line budget, at 1_3x`() {
+        listOf(R.string.you_fact_sub_portfolio, R.string.you_fact_sub_vote, R.string.you_fact_sub_watchlist).forEach { id ->
+            val sub = ShippedCopy.render(Copy.Words(id))
+            assertWordsFitOnTheirOwnLines(sub, factSubWordWidthAt13xDp, FactSubMaxLines)
+        }
+    }
+
+    @Test
+    fun `the stocks watched sub names the destination it actually opens, not the folded Watchlist tab`() {
+        // HomeTab.WATCHLIST maps to AmberDestination.TODAY (HomeScreen.kt's toAmberDestination):
+        // Watchlist folded into Today, and tapping this cell opens Today (deviceCells above), so
+        // the copy must say Today, the same staleness rule as every other "Listed under" string.
+        val sub = ShippedCopy.strings.getValue("you_fact_sub_watchlist")
+        assertEquals("Listed under Today", sub)
+        assertFalse("the copy still names the retired Watchlist destination", sub.contains("Watchlist"))
     }
 
     // ---- Fonts and licenses (task U11) ---------------------------------------------------------

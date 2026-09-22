@@ -199,11 +199,17 @@ private fun TodayAfterContent(
 }
 
 /**
- * Block 3: Tracked today. A skeleton while [WatchlistUiState.todayLoading] is true, then either the
- * rows (deepest pool first, [TrackedPreviewCount] of them, "All N tracked" handing the rest to
- * Stocks) or nothing at all once the join has settled with no analyzed universe to draw from
- * ([WatchlistUiState.analyzedTotal] at 0): the section is undrawn rather than drawn with a "0 of 0"
- * lede that has nothing behind it.
+ * Block 3: Tracked today. Undrawn while [WatchlistUiState.todayLoading] is true and this screen
+ * does not yet know whether there is an analyzed universe to draw from at all; once that is known,
+ * either nothing (no analyzed universe, [WatchlistUiState.analyzedTotal] at 0: the section stays
+ * undrawn rather than drawn with a "0 of 0" lede that has nothing behind it) or the section head
+ * with a skeleton while [WatchlistUiState.trackedLoading] is still true (Jupiter's prices, the one
+ * thing these rows need, have not answered yet), then the rows themselves (deepest pool first,
+ * [TrackedPreviewCount] of them, "All N tracked" handing the rest to Stocks). Gated on
+ * [trackedLoading][WatchlistUiState.trackedLoading] rather than [todayLoading][WatchlistUiState.todayLoading]
+ * on purpose: the animator-zero stall (docs/qa-checklist.md, 2026-09-22) was this section (and the
+ * venue line) sitting on skeleton for as long as the price fetch took even though the venue line
+ * reads no price at all; [WatchlistViewModel.loadToday]'s own doc has the fix in full.
  */
 @Composable
 private fun TodayTrackedBlock(
@@ -215,11 +221,11 @@ private fun TodayTrackedBlock(
     Column(modifier = Modifier.fillMaxWidth().amberBlockEntrance(step = TrackedEntranceStep)) {
         AmberSectionHead(
             title = stringResource(R.string.today_heading_tracked),
-            meta = if (state.todayLoading) null else Fmt.count(state.tracked.size),
-            lede = trackedLede(state.tracked.size, state.analyzedTotal)?.text(),
+            meta = if (state.trackedLoading) null else Fmt.count(state.tracked.size),
+            lede = if (state.trackedLoading) null else trackedLede(state.tracked.size, state.analyzedTotal)?.text(),
         )
         when {
-            state.todayLoading -> SkeletonRows(count = TrackedSkeletonCount)
+            state.trackedLoading -> SkeletonRows(count = TrackedSkeletonCount)
             state.tracked.isNotEmpty() -> {
                 AmberTickerRowGroup {
                     state.tracked.take(TrackedPreviewCount).forEach { row ->
@@ -324,7 +330,7 @@ private const val TrackedSkeletonCount = 3
  * The settle this screen's class doc names: a block fades in and rises [EntranceRise] into place,
  * once, the first time it has something to draw, staggered by [step] positions of
  * [StaggerStepMillis] each. `remember`'s state lives with the call site, so a block that starts as
- * a skeleton and later gets real rows (Tracked today while [WatchlistUiState.todayLoading] flips)
+ * a skeleton and later gets real rows (Tracked today while [WatchlistUiState.trackedLoading] flips)
  * settles once on that arrival rather than replaying on every later recomposition, the same way the
  * `revealed` flag in [com.plainticker.mobile.ui.you.YouScreen]'s identity reveal and
  * [com.plainticker.mobile.ui.portfolio.PortfolioScreen]'s Total does.

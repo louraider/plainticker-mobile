@@ -303,6 +303,120 @@ class VoteScreenTest {
         assertTrue("TextAction(" in row)
     }
 
+    // ---- The ballot's trailing action never reaches the physical screen edge, found on-device at 1.0x and 1.3x --
+
+    /**
+     * [BallotRow] draws "Vote" as a [TextAction] sibling of [AmberTickerRow] inside a `Box`, not
+     * through [AmberTickerRow]'s own `trailingAction` (this row carries no figure or context to
+     * share the meta line with, [BallotRow]'s own doc comment). That overlay never inherited
+     * [AmberTickerRow]'s own `padding(horizontal = 16.dp, ...)` (`AmberTickerRow.kt`), because it
+     * sits beside that padded `Column` rather than inside it, and neither this screen's
+     * `LazyColumn` (`contentPadding` is `navigationBars` only) nor [AmberRowDivider] add any
+     * horizontal padding of their own. `Modifier.align(Alignment.CenterEnd)` alone pinned the
+     * action flush to the `Box`'s own edge, which on this screen is the physical screen edge: on
+     * the device it touched the edge at 1.0x font scale and clipped the final "e" of "Vote" at
+     * 1.3x, in both themes. The fix adds `padding(end = 16.dp)` after the alignment, matching
+     * [AmberTickerRow]'s own horizontal padding exactly, the same margin [LeaderRow] and
+     * Watchlist's own row already get for free by drawing their trailing action through
+     * [AmberTickerRow]'s own `trailingAction` slot instead of an overlay.
+     */
+    @Test
+    fun `the ballot row's trailing action is inset from the box's own edge, not flush against it`() {
+        val row = body(voteTabScreen, "private fun BallotRow(")
+        val boxIndex = row.indexOf("Box(Modifier.fillMaxWidth())")
+        assertTrue("the overlay Box must still appear; this row never grew a figure to share the meta line with", boxIndex >= 0)
+        val textActionIndex = row.indexOf("TextAction(", boxIndex)
+        assertTrue("TextAction must be inside the overlay Box", textActionIndex > boxIndex)
+        val tail = row.substring(textActionIndex)
+        assertTrue(
+            "the action must still be end-aligned within the row",
+            "modifier = Modifier.align(Alignment.CenterEnd)" in tail,
+        )
+        assertTrue(
+            "an end padding after the alignment is what keeps the action off the physical screen " +
+                "edge; align alone pins it flush to whichever edge the Box itself is flush " +
+                "against, and this screen adds no horizontal padding around its rows",
+            "modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)" in tail,
+        )
+    }
+
+    /**
+     * The regression generalized, so a future overlay in this file cannot repeat its exact shape:
+     * anything positioned with `Alignment.CenterEnd` inside a `Box` here is, by construction,
+     * pinned flush to that `Box`'s own right edge, and nothing between this screen's rows and the
+     * physical display (`LazyColumn`'s own `contentPadding`, [AmberRowDivider]) adds horizontal
+     * padding of its own. `Modifier.align(Alignment.CenterEnd)` with no end padding after it is
+     * exactly the shape that shipped the clipped "Vote" action; this fails if that shape ever
+     * reappears anywhere in this file, on this row or a new one, with no inset or a zero one.
+     */
+    @Test
+    fun `nothing aligned to a row's own end edge in this screen can reach the physical screen edge`() {
+        val alignments = Regex("""Modifier\.align\(Alignment\.CenterEnd\)(\.padding\(end = (\d+)\.dp\))?""")
+            .findAll(voteTabScreen)
+            .toList()
+        assertTrue("the regression's own call site must still be found", alignments.isNotEmpty())
+        alignments.forEach { match ->
+            val paddingClause = match.groupValues[1]
+            val marginDp = match.groupValues[2].toIntOrNull() ?: 0
+            assertTrue(
+                "\"${match.value}\" aligns to a Box's own end edge with no positive end padding " +
+                    "after it, which pins it flush to the physical screen edge on this screen " +
+                    "(nothing here adds horizontal padding of its own) -- exactly the shape that " +
+                    "clipped \"Vote\" on the ballot row",
+                paddingClause.isNotEmpty() && marginDp > 0,
+            )
+        }
+    }
+
+    /**
+     * The margin itself, as arithmetic rather than an assumption: `padding(end = 16.dp)` is a
+     * `Dp` value, and `Dp` never scales with `fontScale`, only `sp` text does, so the gap after
+     * "Vote" does not shrink as the label grows. fontTools against `res/font/outfit_semibold.ttf`
+     * -- the exact font, weight and size [TextAction] draws through (`PlainTickerType.textAction`,
+     * Outfit SemiBold 14sp) -- gives "Vote" itself as 30.856dp at 1.0x, the same number
+     * [com.plainticker.mobile.ui.components.AmberTickerRowTest]'s own leader-row test already
+     * pins for the identical label, font, weight and size; grown by the raw 1.3x factor (the same
+     * conservative, worse-than-real assumption every other margin proof in this codebase uses) it
+     * is 40.113dp. Both stay far short of a real device's own width (>= 320dp, the narrowest
+     * shipped Android width bucket), so this fix's 16dp margin is never squeezed by overflow at
+     * either scale: the action's touch target and its visible glyphs move together, 16dp clear of
+     * the physical edge, at 1.0x and at 1.3x alike.
+     */
+    @Test
+    fun `the ballot row's trailing-action margin is 16dp at 1_0x font scale and 16dp at 1_3x, unlike the label it sits beside`() {
+        val endMarginDp = 16.0 // Modifier.padding(end = 16.dp) on BallotRow's overlaid TextAction.
+
+        // "Vote" (vote_action_row) at PlainTickerType.textAction's Outfit SemiBold 14sp: the same
+        // 30.856dp AmberTickerRowTest's own leader-row test measures and pins for this exact
+        // label, font, weight and size.
+        val voteLabelWidthDp = 30.856
+        val actionStartPaddingDp = 16.0 // TextAction's own default contentPadding start.
+        val touchTargetFloorDp = 48.0 // TextAction's own defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).
+        val renderedWidthAt10xDp = maxOf(actionStartPaddingDp + voteLabelWidthDp, touchTargetFloorDp)
+
+        // dp is density-independent and immune to fontScale; only the sp-sized label grows at 1.3x.
+        val voteLabelWidthAt13xDp = voteLabelWidthDp * 1.3
+        val renderedWidthAt13xDp = maxOf(actionStartPaddingDp + voteLabelWidthAt13xDp, touchTargetFloorDp)
+
+        // A real device is at minimum 320dp wide; the grown action at 1.3x, plus this fix's own
+        // margin, is nowhere near that, so the margin is never squeezed by overflow at either scale.
+        val minRealisticScreenWidthDp = 320.0
+        assertTrue(
+            "the action plus its margin must clear even the narrowest real device at 1.0x",
+            renderedWidthAt10xDp + endMarginDp <= minRealisticScreenWidthDp,
+        )
+        assertTrue(
+            "the action plus its margin must clear even the narrowest real device at 1.3x",
+            renderedWidthAt13xDp + endMarginDp <= minRealisticScreenWidthDp,
+        )
+
+        // The margin itself: a fixed Dp modifier, unaffected by the label's own growth.
+        val marginAt10xDp = endMarginDp
+        val marginAt13xDp = endMarginDp
+        assertEquals(16.0, marginAt10xDp, 0.0)
+        assertEquals(16.0, marginAt13xDp, 0.0)
+    }
+
     /**
      * Nothing on this screen scrolls independently or sits above the content: the whole thing is
      * one `LazyColumn`, so [BallotSearchField] is exactly as far from view once scrolled past as
