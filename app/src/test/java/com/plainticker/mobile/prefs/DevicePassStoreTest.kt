@@ -67,6 +67,32 @@ class DevicePassStoreTest {
     }
 
     @Test
+    fun `a new code carries at least 128 bits of entropy`() {
+        val bits = SharedPrefsDevicePassStore.CODE_LENGTH *
+            (Math.log(SharedPrefsDevicePassStore.CODE_ALPHABET.length.toDouble()) / Math.log(2.0))
+        assertTrue("a new code carries only $bits bits", bits >= 128.0)
+        assertEquals(26, SharedPrefsDevicePassStore.CODE_LENGTH)
+        assertEquals(26, SharedPrefsDevicePassStore(FakePrefs()).code().length)
+    }
+
+    @Test
+    fun `an existing 10-symbol code is kept exactly as stored, never replaced`() {
+        // A paying device already holds a code minted at the earlier length; its pass is bound to
+        // that code's hash, so replacing it would orphan the pass.
+        val legacy = "K7M9QRSTXY"
+        assertEquals(SharedPrefsDevicePassStore.LEGACY_CODE_LENGTH, legacy.length)
+        val backing = FakePrefs()
+        backing.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacy).apply()
+
+        val store = SharedPrefsDevicePassStore(backing)
+        assertEquals(legacy, store.code())
+        assertEquals(SharedPrefsDevicePassStore.sha256Hex(legacy), store.codeHash())
+        // A cold start over the same storage still finds the same legacy code.
+        assertEquals(legacy, SharedPrefsDevicePassStore(backing).code())
+        assertEquals(legacy, backing.getString(SharedPrefsDevicePassStore.KEY_CODE, null))
+    }
+
+    @Test
     fun `the hash is the code's own SHA-256, lowercase hex, and never the code itself`() {
         val store = SharedPrefsDevicePassStore(FakePrefs())
         val code = store.code()
