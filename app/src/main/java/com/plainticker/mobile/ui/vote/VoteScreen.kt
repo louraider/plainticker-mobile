@@ -67,6 +67,33 @@ import java.math.BigInteger
  * every function on this screen previously read directly. What has no Amber component yet (the
  * leader row's inline vote action beside a figure, the ballot search field) is called out at its
  * own definition rather than forked quietly; see [LeaderRow] and [BallotSearchField].
+ *
+ * **U13, measured rather than changed** (docs/plan-app-uiux-2026-09-21.md's after-the-hackathon
+ * table: "the scroll-away header's cost deep in the ballot," 0 hours, P3, deliberately left as a
+ * measurement before proposing anything to DESIGN.md section 4). No reader panel was available for
+ * this pass, so what follows is a structural measurement off the source and the shipped catalog,
+ * not a device or a person's account, offered as that and not as a substitute for one.
+ *
+ * The ballot is genuinely deep: `app/src/main/assets/snapshot/xstocks.json` carries 928 symbols,
+ * docs/data-map.md's own count puts 157 of them in the Analyzed section, so [state.ballot] can run
+ * to 928 minus 157, 771 rows. Each is at least 64dp ([AmberTickerRow]'s own `defaultMinSize`), so
+ * reaching the middle of that list alone is tens of thousands of display points below where the
+ * ballot begins, itself already below the header, the explainer, the round header, Leaders, Your
+ * votes and Last round.
+ *
+ * What that costs, and what it does not. [header]'s own content (the wordmark, a debug-only
+ * gallery entry) carries nothing a voter needs mid-ballot, and [HomeScreen]'s own
+ * [com.plainticker.mobile.ui.components.AmberBottomNav] is a sibling of this screen's `LazyColumn`,
+ * not a child of it ([HomeScreenTest]'s own structural test), so switching destinations, the one
+ * thing the pre-bottom-bar shell needed the header for, is reachable at any scroll depth regardless
+ * of what this screen's own header carries. The action this screen exists for is not stranded
+ * either: [BallotRow] draws its own inline "Vote" beside every row, so a voter who has found a
+ * candidate deep in the list never needs to scroll back to cast it. What is genuinely lost,
+ * confirmed structurally rather than assumed: [BallotSearchField], a plain `LazyColumn` item like
+ * every section above it, not sticky, so re-reaching it once scrolled past means climbing back past
+ * the whole ballot, at the same tens-of-thousands-of-dp cost the descent down was. If DESIGN.md
+ * section 4 is ever revisited over this, that field, not the [header] the row named, is where the
+ * real cost sits.
  */
 @Composable
 fun VoteScreen(

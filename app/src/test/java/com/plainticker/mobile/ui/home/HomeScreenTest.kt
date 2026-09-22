@@ -35,4 +35,38 @@ class HomeScreenTest {
         assertFalse("U9: the shared header must carry no TopBar action (see HomeScreen's own class doc)", "action =" in call)
         assertFalse("U9: the shared header must carry no wallet fragment (see HomeScreen's own class doc)", "meta =" in call)
     }
+
+    /**
+     * The structural fact [com.plainticker.mobile.ui.vote.VoteScreen]'s own U13 measurement rests
+     * on: [AmberBottomNav] is a sibling of the weighted `Box` that hosts the selected destination's
+     * scrolling content, not a child of it, so switching destinations stays reachable at any scroll
+     * depth regardless of what a destination's own scrolled-away header carries.
+     */
+    @Test
+    fun `the bottom bar is a sibling of the scrolled destination content, not nested inside it`() {
+        val boxStart = source.indexOf("Box(Modifier.weight(1f)) {")
+        assertTrue("HomeScreen.kt has no weighted destination Box", boxStart >= 0)
+        val braceOpen = source.indexOf('{', boxStart)
+        val braceClose = closingBrace(source, braceOpen)
+        val navIndex = source.indexOf("AmberBottomNav(")
+        assertTrue("AmberBottomNav must be drawn somewhere in HomeScreen.kt", navIndex >= 0)
+        assertTrue(
+            "AmberBottomNav must be drawn after the weighted content Box closes, as its sibling, " +
+                "never nested inside it",
+            navIndex > braceClose,
+        )
+    }
+
+    private fun closingBrace(code: String, openBraceIndex: Int): Int {
+        var depth = 0
+        var i = openBraceIndex
+        while (i < code.length) {
+            when (code[i]) {
+                '{' -> depth++
+                '}' -> { depth--; if (depth == 0) return i }
+            }
+            i++
+        }
+        return code.length - 1
+    }
 }
