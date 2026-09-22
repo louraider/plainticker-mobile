@@ -177,6 +177,25 @@ class PlainTickerApiTest {
     }
 
     @Test
+    fun `getSummary carries the code in the X-PT-Code header only, never in the URL`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/summary.json")) }
+        api(mock).getSummary(code = "ABCDE12345")
+        assertEquals("ABCDE12345", mock.lastRequest.headers[EntitlementApi.HEADER_CODE])
+        assertFalse("the code must never reach the URL", "ABCDE12345" in mock.lastRequest.url.toString())
+        assertEquals("/api/v1/summary", mock.lastRequest.url.encodedPath)
+        assertTrue(mock.lastRequest.url.parameters.isEmpty())
+    }
+
+    @Test
+    fun `getSummary with no code asks unauthenticated, and carries no header`() = runTest {
+        val mock = MockApi { respondJson(Fixtures.read("plainticker/summary.json")) }
+        api(mock).getSummary()
+        assertNull(mock.lastRequest.headers[EntitlementApi.HEADER_CODE])
+        api(mock).getSummary(code = " ")
+        assertNull(mock.lastRequest.headers[EntitlementApi.HEADER_CODE])
+    }
+
+    @Test
     fun `no code asks unauthenticated, and carries no header`() = runTest {
         val mock = MockApi { respondJson(Fixtures.read("plainticker/analysis-aapl.json")) }
         api(mock).getAnalysis("AAPL")
