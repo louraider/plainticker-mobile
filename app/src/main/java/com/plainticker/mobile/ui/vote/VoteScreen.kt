@@ -446,7 +446,22 @@ private fun BallotRow(
                     label = stringResource(R.string.vote_action_row),
                     onClick = { onVote(entry.ticker, entry.display) },
                     color = colors.actionText,
-                    modifier = Modifier.align(Alignment.CenterEnd),
+                    // The overlay's own end inset: AmberTickerRow's ticker/company line gets its
+                    // right margin for free from the Column's own `padding(horizontal = 16.dp, ...)`
+                    // (AmberTickerRow.kt), but this action is a sibling of that Column inside the
+                    // Box above, not a child of it, so it never inherited that padding. Without this,
+                    // Modifier.align(Alignment.CenterEnd) alone pins the action flush to the Box's own
+                    // edge, which is the physical screen edge (this screen's LazyColumn and
+                    // AmberRowDivider carry no horizontal padding of their own): on-device the row
+                    // touched the edge at 1.0x font scale and clipped the final "e" of "Vote" at 1.3x
+                    // (both themes). 16dp here matches AmberTickerRow's own horizontal padding exactly,
+                    // the same margin every other trailing action in this app already gets by sitting
+                    // inside that Column (LeaderRow and Watchlist's row, both through
+                    // AmberTickerRow's own `trailingAction`; see VoteScreenTest's own margin test).
+                    // Applied outside TextAction's `modifier` parameter, i.e. outside its own
+                    // `defaultMinSize(48.dp, 48.dp)`, so it repositions the full 48dp+ touch target
+                    // rather than shrinking it.
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
                 )
             }
         }
