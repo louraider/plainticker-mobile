@@ -131,7 +131,7 @@ private fun InsetsPreview() {
                 TopTabs(items = listOf("List", "Portfolio", "Watchlist"), selected = 0, onSelect = {})
                 Spacer(Modifier.height(64.dp))
                 Column(Modifier.padding(horizontal = 20.dp).windowInsetsPadding(navigationBar)) {
-                    PrimaryButton(label = "Swap USDC to TSLAx", onClick = {})
+                    AmberPrimaryAction(label = "Swap USDC to TSLAx", onClick = {})
                 }
             }
             SystemBarBand(Modifier.align(Alignment.TopCenter).windowInsetsTopHeight(statusBar))

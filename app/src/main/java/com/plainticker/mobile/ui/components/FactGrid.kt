@@ -29,14 +29,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /** Caution is for an explicit issuer-control risk only (permanent delegate, pausable transfers). */
 enum class FactTone { Neutral, Caution }
 
 /**
- * One cell of a [FactGrid]: label 13 Muted, value in mono, an optional sub line in Outfit 13
- * (or mono 12 when it carries numbers). A [span] of 2 takes the whole row.
+ * One cell of a [FactGrid]: label in [AmberType.meta], value in [AmberType.factValueAt] (or
+ * JetBrains Mono when [valueMono]), an optional sub line in [AmberType.context] (or
+ * [AmberType.figureInline], tabular, when it carries numbers). A [span] of 2 takes the whole row.
  */
 data class FactCell(
     val label: String,
@@ -46,6 +48,15 @@ data class FactCell(
     val subMono: Boolean = false,
     val tone: FactTone = FactTone.Neutral,
     val valueSize: TextUnit = 24.sp,
+    /**
+     * True when [value] is itself an on-chain identifier (a short key or signature fragment,
+     * [com.plainticker.mobile.ui.Fmt.shortKey]) rather than a number or a state word: it stays in
+     * JetBrains Mono for glyph disambiguation, the rule Type.kt's Amber section states for every
+     * identifier ("JetBrainsMono... remains for on-chain identifiers only; numbers never fall
+     * back to it under Amber", docs/fonts.md). Every other value, including a percent, a
+     * multiplier or a plain word like "Yes", draws in Amber's own Bricolage Grotesque instead.
+     */
+    val valueMono: Boolean = false,
     /**
      * What tapping the cell does, for a fact that is also a handle: the receipt's signature is
      * copied this way. Null on every cell that is only a fact, which is nearly all of them.
@@ -63,9 +74,25 @@ data class FactCell(
  * [colors] defaults to the system-following [defaultAmberColors] and drives both the gap/border
  * colour and every cell's text; [surface] still defaults from [colors] but stays overridable, the
  * way the swap sheet, the pass sheet and Detail's own blocks already choose their own surface
- * tone. Before this fix, [surface] was the only thing here that could be repainted for Amber: the
- * label, value and sub text stayed Instrument's fixed-dark Muted/Ink/Ink2/Caution regardless, so a
- * caller that lifted [surface] to Amber's light ground was left with near-white text on it.
+ * tone.
+ *
+ * **This anatomy carries the app's worst recurring defect**: a value draws `maxLines = 1,
+ * softWrap = false` beside a sibling of fixed width (a half-width cell has a same-width neighbour;
+ * a full-width one has none), so anything the glyphs do not fit clips mid-character rather than
+ * wrapping (v0.12.0: "no wallet connected" clipped to "no wallet c"). This pass moves the label,
+ * value and sub off Instrument's fixed-dark Muted/Ink/Ink2/Caution colours (the surface fix above)
+ * *and* off Instrument's Outfit/JetBrains-Mono faces onto Amber's own type ([AmberType.meta],
+ * [AmberType.factValueAt], [AmberType.context]/[AmberType.figureInline]), which is exactly the
+ * kind of anatomy change that voids a previously-pinned character budget: JetBrains Mono is
+ * monospace (every glyph the same width) and Bricolage Grotesque is proportional, so a budget
+ * measured against one face says nothing about the other. [FactGridTest] re-derives the character
+ * budget against `res/font/bricolage_grotesque.ttf` itself with fontTools, at the exact `wght`,
+ * `wdth` and `opsz` [AmberType.factValueAt] builds, for both cell widths this grid actually draws
+ * (a half-width cell beside another on a 400dp frame, and a full-width [FactCell.span] 2 cell), and
+ * states the longest real value every call site can draw against it. [FactCell.valueMono] is the
+ * one value this recomputation does not touch: an on-chain identifier stays in
+ * [PlainTickerType.factValueAt]'s JetBrains Mono, unchanged, so the budget for that branch is
+ * unchanged too.
  */
 @Composable
 fun FactGrid(
@@ -166,10 +193,10 @@ private fun FactCellView(
             },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text = cell.label, style = PlainTickerType.label, color = colors.textTertiary(labelSurface))
+        Text(text = cell.label, style = AmberType.meta, color = colors.textTertiary(labelSurface))
         Text(
             text = cell.value,
-            style = PlainTickerType.factValueAt(cell.valueSize),
+            style = if (cell.valueMono) PlainTickerType.factValueAt(cell.valueSize) else AmberType.factValueAt(cell.valueSize),
             color = if (cell.tone == FactTone.Caution) colors.stateCaution else colors.textPrimary,
             maxLines = 1,
             softWrap = false,
@@ -177,7 +204,7 @@ private fun FactCellView(
         cell.sub?.let { sub ->
             Text(
                 text = sub,
-                style = if (cell.subMono) PlainTickerType.meta else PlainTickerType.small,
+                style = if (cell.subMono) AmberType.figureInline else AmberType.context,
                 color = colors.textSecondary,
             )
         }

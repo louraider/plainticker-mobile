@@ -2,9 +2,8 @@ package com.plainticker.mobile
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import com.plainticker.mobile.ui.theme.Accent
-import com.plainticker.mobile.ui.theme.Canvas
-import com.plainticker.mobile.ui.theme.Ink
+import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.abs
@@ -21,12 +20,26 @@ import org.w3c.dom.Element
 
 /**
  * Brand assets, DESIGN.md section 9, read straight from disk like [ManifestTest]: the adaptive
- * launcher icon is the "Two corners" mark in Canvas over an Ink tile, carries a monochrome layer
- * with the same shapes, keeps every coordinate inside the mask a launcher actually cuts, and no
- * template bitmap is left in a mipmap folder. The splash theme paints Canvas behind the same
- * rectangles in Ink with light system bar icons and hands over to the app theme; the notification
- * icon is the same mark in white. Colors are compared with the Kotlin tokens, not with copied
- * literals, so a change to [Canvas], [Ink] or [Accent] cannot leave the icon behind.
+ * launcher icon is the "Two corners" mark in Amber's own dark ground over an Amber-ink tile,
+ * carries a monochrome layer with the same shapes, keeps every coordinate inside the mask a
+ * launcher actually cuts, and no template bitmap is left in a mipmap folder. The splash theme
+ * paints that same ground behind the same rectangles in that same ink, with light system bar
+ * icons, and hands over to the app theme; the notification icon is the same mark in white. Colors
+ * are compared with [AmberDarkColors], not with copied literals, so a change to
+ * [AmberDarkColors.surfaceGround] or [AmberDarkColors.textPrimary] cannot leave the icon behind.
+ *
+ * **2026-09-22: the colour pair, not the shapes.** Every assertion below used to read
+ * Instrument's own fixed `Canvas` (`#0B0F14`) and `Ink` (`#E8ECF1`) Kotlin tokens, chosen on
+ * 2026-09-15, over a week before the founder picked Amber, and never revisited: DESIGN.md
+ * section 9 found the arrangement survived Amber but the colour pair was argued entirely inside
+ * Instrument's retired, flat palette and had become, as of Amber, a colour nobody else in the app
+ * drew any more, visible as a launcher tile that no longer matched the app and a cool-to-warm
+ * flash on the splash in light mode. The shapes are untouched (the founder's own pick, not this
+ * pass's to redraw); every colour assertion below now reads [AmberDarkColors.surfaceGround] and
+ * [AmberDarkColors.textPrimary] in exactly the same two roles instead, mirrored into
+ * `res/values/colors.xml` as `amber_ground` and `amber_ink` (`design/brand/marks.py`,
+ * `AMBER_GROUND`/`AMBER_INK`). The launcher, the splash and the plain window background painted
+ * before Compose's first frame now all agree on this one pair.
  *
  * Four lessons are pinned here and every one of them was learned by shipping the wrong thing.
  *
@@ -43,10 +56,14 @@ import org.w3c.dom.Element
  * is itself, flipped top to bottom it is not, and the test for the second is below.
  *
  * Ground. Four icon attempts were rejected and all four put a Canvas tile on a near-black drawer
- * wallpaper, where it measures 1.03 to 1 across its own edge and is not a tile at all. The tile is
- * Ink now and the mark on it is Canvas; that pair measures 15.48 to 1 in the same drawer. So the
- * background layer is asserted against the [Ink] token and asserted to differ from the fill the
- * mark is drawn in, because a figure the same colour as its ground is the failure this replaces.
+ * wallpaper, where it measured 1.03 to 1 across its own edge and was not a tile at all. The tile
+ * is [AmberDarkColors.textPrimary] now and the mark on it is [AmberDarkColors.surfaceGround];
+ * Instrument's own Ink-on-Canvas pair measured 15.48 to 1 in the real drawer, and Amber's own
+ * pair computes to 16.0:1 by the same WCAG formula (AmberContrastTest's own pinned
+ * textPrimary-over-surfaceGround figure for this exact pair; this file has no device to re-shoot
+ * the drawer photo with). So the background layer is asserted against
+ * [AmberDarkColors.textPrimary] and asserted to differ from the fill the mark is drawn in,
+ * because a figure the same colour as its ground is the failure this replaces.
  *
  * Mask. Every earlier mark was asserted inside the central 66 circle, radius 33, on the grounds
  * that a launcher might cut a circle. This mark's corners sit 39.6 units out, so that rule would
@@ -117,14 +134,15 @@ class BrandAssetsTest {
     }
 
     @Test
-    fun `launcher background is the ink token and the mark on it is not`() {
-        // The ground is the part four rejected attempts got wrong: a Canvas tile has no boundary
-        // at all against this phone's drawer wallpaper, 1.03 to 1 measured. The tile is Ink now.
-        assertEquals(hex(Ink), color("ic_launcher_background"))
-        assertEquals(hex(Ink), color("ink"))
-        assertEquals(hex(Canvas), color("canvas"))
+    fun `launcher background is amber's own text-primary token and the mark on it is amber's own ground`() {
+        // The ground is the part four rejected attempts got wrong: a near-black tile has no
+        // boundary at all against this phone's drawer wallpaper, 1.03 to 1 measured. The tile is
+        // AmberDarkColors.textPrimary now (Instrument's retired Ink played this role before).
+        assertEquals(hex(AmberDarkColors.textPrimary), color("ic_launcher_background"))
+        assertEquals(hex(AmberDarkColors.textPrimary), color("amber_ink"))
+        assertEquals(hex(AmberDarkColors.surfaceGround), color("amber_ground"))
         // And the mark has to be a figure on that ground rather than the same colour as it.
-        assertEquals(setOf(hex(Canvas)), vector("ic_launcher_foreground.xml").fills.toSet())
+        assertEquals(setOf(hex(AmberDarkColors.surfaceGround)), vector("ic_launcher_foreground.xml").fills.toSet())
     }
 
     /** A color resource with `@color/` aliases followed. */
@@ -225,10 +243,13 @@ class BrandAssetsTest {
     fun `foreground is two registration corners with an empty centre between them`() {
         val fg = vector("ic_launcher_foreground.xml")
         assertEquals(108, fg.size)
-        // Four rectangles, all in Canvas over the Ink tile. DESIGN.md section 2 allows one accent
-        // and this mark uses none, so nothing here may be Accent.
+        // Four rectangles, all in Amber's own dark ground over Amber's own ink tile. DESIGN.md
+        // section 2 allows one accent and this mark uses none, so nothing here may be either
+        // theme's action.fill (Amber's own accent), the same rule this test pinned against
+        // Instrument's retired Accent before the colour pair moved.
         assertEquals(4, fg.paths.size)
-        assertFalse("the mark carries an accent it was not drawn with", fg.fills.contains(hex(Accent)))
+        assertFalse("the mark carries an accent it was not drawn with", fg.fills.contains(hex(AmberDarkColors.actionFill)))
+        assertFalse("the mark carries an accent it was not drawn with", fg.fills.contains(hex(AmberLightColors.actionFill)))
 
         val (topAcross, topDown, bottomAcross, bottomDown) = fg.boxes()
         // Each corner is two arms meeting at one vertex: the top-left pair share (26, 26), the
@@ -342,16 +363,17 @@ class BrandAssetsTest {
     }
 
     @Test
-    fun `the splash draws the same shapes in ink, because the foreground is drawn for a light tile`() {
-        // The splash paints Canvas and then this vector over it. It cannot be the adaptive icon's
-        // foreground layer any more: that layer is Canvas, for the Ink tile the launcher shows,
-        // and Canvas on Canvas is nothing. Same rectangles, different color, one generator.
+    fun `the splash draws the same shapes in amber's own ink, because the foreground is drawn for a light tile`() {
+        // The splash paints Amber's own ground and then this vector over it. It cannot be the
+        // adaptive icon's foreground layer any more: that layer is the same ground, for the
+        // Amber-ink tile the launcher shows, and that ground on itself is nothing. Same
+        // rectangles, different color, one generator.
         val fg = vector("ic_launcher_foreground.xml")
         val brand = vector("ic_brand_mark.xml")
         assertEquals(108, brand.size)
         assertEquals(fg.data, brand.data)
-        assertEquals(setOf(hex(Ink)), brand.fills.toSet())
-        assertEquals(hex(Canvas), color("canvas"))
+        assertEquals(setOf(hex(AmberDarkColors.textPrimary)), brand.fills.toSet())
+        assertEquals(hex(AmberDarkColors.surfaceGround), color("amber_ground"))
     }
 
     @Test
@@ -388,18 +410,19 @@ class BrandAssetsTest {
             .single { it.getAttribute("name") == name }.textContent.trim()
 
     @Test
-    fun `starting theme paints canvas behind the brand mark then hands over to the app theme`() {
+    fun `starting theme paints amber's own ground behind the brand mark then hands over to the app theme`() {
         val starting = style("Theme.PlainTicker.Starting")
         assertEquals("Theme.SplashScreen", starting.getAttribute("parent"))
-        assertEquals("@color/canvas", starting.item("windowSplashScreenBackground"))
+        assertEquals("@color/amber_ground", starting.item("windowSplashScreenBackground"))
         assertEquals("@drawable/ic_brand_mark", starting.item("windowSplashScreenAnimatedIcon"))
         assertEquals("@style/Theme.PlainTicker", starting.item("postSplashScreenTheme"))
-        assertEquals("@color/canvas", style("Theme.PlainTicker").item("android:windowBackground"))
+        assertEquals("@color/amber_ground", style("Theme.PlainTicker").item("android:windowBackground"))
     }
 
     @Test
-    fun `starting theme keeps light system bar icons over canvas whatever the system theme`() {
-        // Theme.SplashScreen is DayNight: without these, a light system theme gets dark icons on Canvas.
+    fun `starting theme keeps light system bar icons over amber's own ground whatever the system theme`() {
+        // Theme.SplashScreen is DayNight: without these, a light system theme gets dark icons on
+        // amber_ground.
         val starting = style("Theme.PlainTicker.Starting")
         assertEquals("false", starting.item("android:windowLightStatusBar"))
         assertEquals("false", starting.item("android:windowLightNavigationBar"))

@@ -37,8 +37,8 @@ import com.plainticker.mobile.ui.theme.AmberType
  * handle in [AmberColors.actionText] amber rather than a neutral line.
  *
  * "Spring entry" (research 5.5) is motion-token work DESIGN.md section 6 defers to a later pass;
- * what plays today is `ModalBottomSheet`'s own default slide, unmodified, the same way Instrument's
- * [Sheet] leaves it.
+ * what plays today is `ModalBottomSheet`'s own default slide, unmodified, the same way the retired
+ * Instrument `Sheet` left it.
  */
 @Composable
 fun AmberSheet(
@@ -63,22 +63,34 @@ fun AmberSheet(
     )
 }
 
-/** The top edge and handle, shared by the modal sheet and [AmberSheetSurface]. */
+/**
+ * The top edge and handle, shared by the modal sheet and [AmberSheetSurface]. `ModalBottomSheet`
+ * wraps whatever this draws in a plain `clickable` box with no minimum size of its own (confirmed
+ * against the pinned `material3` 1.4.0 sources: the drag handle's tap target is exactly this
+ * composable's measured bounds), so the 23dp padding on each side of the 2dp bar is not decorative
+ * spacing, it is the target: 23 + 2 + 23 = 48dp, the same floor `BottomSheetDefaults.DragHandle`
+ * reaches with 22dp around its own 4dp bar. A handle drawn at the old 12/8dp padding (22dp total)
+ * measured under the 48dp rule this task's brief calls a hard one, not a preference.
+ */
 @Composable
 fun AmberSheetHandle(modifier: Modifier = Modifier, colors: AmberColors = defaultAmberColors()) {
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
-                .padding(top = 12.dp, bottom = 8.dp)
-                .size(width = 28.dp, height = 2.dp)
+                .padding(vertical = HandleTouchPadding)
+                .size(width = 28.dp, height = HandleBarHeight)
                 .background(colors.actionText),
         )
     }
 }
 
 /**
- * The sheet's surface without the modal: a landed receipt shown inline, and every preview here.
- * Same 28dp top radius and amber handle as the modal version.
+ * The sheet's surface without the modal: a landed receipt shown inline, the onboarding panel
+ * (`OnboardingScreen.kt`'s `ConsentPanel`, migrated off the retired Instrument `SheetSurface`), and
+ * every preview here. Same 28dp top radius and amber handle as the modal version. [handle] false
+ * draws the same 1dp [AmberColors.border] top edge the retired `SheetSurface` fell back to instead
+ * of drawing nothing: the onboarding panel sits over a 25 percent backdrop and needs that edge to
+ * read as a surface rather than a soft fade.
  */
 @Composable
 fun AmberSheetSurface(
@@ -93,12 +105,22 @@ fun AmberSheetSurface(
             .clip(AmberSheetShape)
             .background(colors.surfaceHigh),
     ) {
-        if (handle) AmberSheetHandle(colors = colors)
+        if (handle) {
+            AmberSheetHandle(colors = colors)
+        } else {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+        }
         content()
     }
 }
 
 private val AmberSheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+/** The visible bar (design research 5.5's "28x2dp handle instead of the Material pill"). */
+private val HandleBarHeight = 2.dp
+
+/** 23dp each side of [HandleBarHeight] is the 48dp touch-target floor; see [AmberSheetHandle]. */
+private val HandleTouchPadding = 23.dp
 
 @InstrumentPreviews
 @Composable

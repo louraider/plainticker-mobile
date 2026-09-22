@@ -21,14 +21,20 @@ import com.plainticker.mobile.ui.theme.AmberType
 /**
  * Amber's section head (docs/design-research-2026-09-21.md section 5.5): 22/700 at `opsz` 22, 24dp
  * above, "sits on the card edge" rather than the 32dp-above, rule-separated spacing Instrument's
- * [Heading] uses. [title] carries the whole row's [androidx.compose.ui.semantics.heading] mark, so
- * a screen reader can still jump section to section the way plan section 13 Pass 6 asked
- * [Heading] to.
+ * retired `Heading` used. [title] carries the whole row's
+ * [androidx.compose.ui.semantics.heading] mark, so a screen reader can still jump section to
+ * section the way plan section 13 Pass 6 asked `Heading` to.
  *
- * The same starved-title trap [com.plainticker.mobile.ui.vote.VoteScreen]'s `RoundHeader` doc
- * comment names ([Heading] hands its title a `weight(1f)` column and its meta the rest of the row
- * at the meta's own width, so a long meta starves a short title) is why [title] here is allowed to
- * wrap to two lines rather than being forced to one: [meta] is meant to stay a short count
+ * **This is now the one section head Amber draws, everywhere.** `Heading`
+ * (`ui/components/Heading.kt`) was retired rather than kept as a second component that meant the
+ * same thing: it carried Instrument's fixed-dark colours and Outfit face under Amber's screens (six
+ * call sites across Gallery, Onboarding and Watchlist), and its anatomy was the exact starved-title
+ * trap this component was already built to close everywhere else. `VoteScreen.kt`'s `RoundHeader`
+ * doc comment names that trap directly (`Heading` hands its title a `weight(1f)` column and its
+ * meta the rest of the row at the meta's own width, so a long meta starves a short title) as the
+ * reason it moved to this component before this pass ever started; every remaining `Heading` call
+ * site got the same move rather than a second, parallel fix. [title] is allowed to wrap to two
+ * lines rather than being forced to one for the same reason: [meta] is meant to stay a short count
  * ("22", "160", research 5.3's "board" figures), but [title] is not always short. The GICS sector
  * names the Stocks chapter head draws it for run up to 22 characters ("Consumer Discretionary",
  * "Communication Services", "Information Technology"), and wrapping costs nothing next to a

@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.you
 
+import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.data.rpc.SkrStakeBound
@@ -122,3 +123,30 @@ fun deviceFacts(state: YouUiState): DeviceFacts = DeviceFacts(
  */
 fun notificationLine(notificationsOn: Boolean): Copy =
     digestFooter(record = DigestRecord.NONE, notificationsOn = notificationsOn, nowMillis = 0L).delivery
+
+/**
+ * One bundled font's attribution (task U11): a device-facing name and credit line, both authored
+ * here and pinned to strings.xml like every other sentence on this screen, and the asset path of
+ * the OFL text itself, read byte for byte rather than retyped as copy (docs/fonts.md's own
+ * license section names the same three files this list points at).
+ */
+data class BundledFontLicense(@StringRes val nameRes: Int, @StringRes val creditRes: Int, val assetPath: String)
+
+/**
+ * The three faces the app ships today (docs/fonts.md): Outfit and JetBrains Mono from Instrument,
+ * Bricolage Grotesque added for Amber. U11 was written before Amber's own typeface landed, so this
+ * is the full, current list rather than the two the row assumed.
+ */
+val bundledFontLicenses: List<BundledFontLicense> = listOf(
+    BundledFontLicense(R.string.you_license_outfit_name, R.string.you_license_outfit_credit, "licenses/outfit_ofl.txt"),
+    BundledFontLicense(
+        R.string.you_license_jetbrains_mono_name,
+        R.string.you_license_jetbrains_mono_credit,
+        "licenses/jetbrains_mono_ofl.txt",
+    ),
+    BundledFontLicense(
+        R.string.you_license_bricolage_name,
+        R.string.you_license_bricolage_credit,
+        "licenses/bricolage_grotesque_ofl.txt",
+    ),
+)

@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- DESIGN.md Canvas token; the window background before Compose draws its first frame. -->
-    <color name="canvas">#0B0F14</color>
-    <!-- DESIGN.md Ink token; the launcher tile's ground, so the icon has an edge in the drawer.
-         A Canvas tile measured 1.03 to 1 against the Seeker's wallpaper and this one measures
-         15.48; see design/brand/two-corners/gallery.html. -->
-    <color name="ink">#E8ECF1</color>
+    <!-- Amber's own dark-set ground (Tokens.kt AmberPrimitive.groundDark, read through the public
+         AmberDarkColors.surfaceGround): the launcher mark's fill, the splash window background,
+         and the plain window background painted before Compose draws its first frame. Replaces
+         Instrument's retired, cool "canvas" (#0B0F14): DESIGN.md section 9 found that pair was
+         reasoned entirely inside Instrument's old palette and left a cool-to-warm flash once
+         Amber's own theme went live. -->
+    <color name="amber_ground">#16130D</color>
+    <!-- Amber's own dark-set primary text (Tokens.kt AmberPrimitive.text1Dark, read through the
+         public AmberDarkColors.textPrimary): the launcher tile's ground, so the icon has an edge
+         in the drawer, and the splash mark's fill over amber_ground. Replaces Instrument's
+         retired "ink" (#E8ECF1); same pairing (a near-black mark on a near-white tile), Amber's
+         own values. WCAG contrast against amber_ground is 16.0:1, matching AmberContrastTest's
+         own pinned textPrimary-over-surfaceGround figure; see design/brand/marks.py. -->
+    <color name="amber_ink">#F5EEDD</color>
 </resources>

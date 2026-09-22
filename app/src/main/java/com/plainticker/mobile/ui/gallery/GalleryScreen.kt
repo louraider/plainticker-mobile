@@ -32,21 +32,21 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.ui.components.AmberDisabledAction
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
+import com.plainticker.mobile.ui.components.AmberSectionHead
+import com.plainticker.mobile.ui.components.AmberSheet
+import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.Banner
-import com.plainticker.mobile.ui.components.DisabledButton
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.Gauge
-import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.ListRow
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.Panel
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.PrimaryButton
-import com.plainticker.mobile.ui.components.SecondaryButton
-import com.plainticker.mobile.ui.components.Sheet
-import com.plainticker.mobile.ui.components.SheetSurface
 import com.plainticker.mobile.ui.components.SignalRow
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.SkeletonSwitch
@@ -93,9 +93,9 @@ fun GalleryScreen(
             .navigationBarsPadding(),
     ) {
         TopBar(action = "Watch", onAction = {}, onTitleLongPress = onBack, colors = AmberDarkColors)
-        Banner(text = "Debug gallery, sample data from the canvas", action = "Close", onAction = onBack)
-        TopTabs(items = GallerySamples.tabs, selected = tab, onSelect = { tab = it })
-        TodayStrip(text = GallerySamples.TODAY)
+        Banner(text = "Debug gallery, sample data from the canvas", action = "Close", onAction = onBack, colors = AmberDarkColors)
+        TopTabs(items = GallerySamples.tabs, selected = tab, onSelect = { tab = it }, colors = AmberDarkColors)
+        TodayStrip(text = GallerySamples.TODAY, colors = AmberDarkColors)
 
         // Detail: hero, price row, gauge, live bar.
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)) {
@@ -142,17 +142,17 @@ fun GalleryScreen(
             TextAction(label = if (live) "Show stale" else "Show live", onClick = { live = !live })
         }
 
-        Heading(text = "Backing and controls", topPadding = 14.dp)
+        AmberSectionHead(title = "Backing and controls", colors = AmberDarkColors)
         FactGrid(cells = GallerySamples.backing, colors = AmberDarkColors)
 
-        Heading(text = "Against the sector", meta = GallerySamples.COMPOSITE)
+        AmberSectionHead(title = "Against the sector", meta = GallerySamples.COMPOSITE, colors = AmberDarkColors)
         GallerySamples.tracks.forEach {
             Track(label = it.label, value = it.value, state = it.state, positionPct = it.positionPct, colors = AmberDarkColors)
         }
         Spacer(Modifier.height(14.dp))
         FactGrid(cells = GallerySamples.sector, colors = AmberDarkColors, minCellHeight = 88.dp)
 
-        Heading(text = "F-Score")
+        AmberSectionHead(title = "F-Score", colors = AmberDarkColors)
         Row(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -162,7 +162,7 @@ fun GalleryScreen(
         }
         GallerySamples.signals.forEach { (name, ok) -> SignalRow(name = name, ok = ok, colors = AmberDarkColors) }
 
-        Heading(text = "Method")
+        AmberSectionHead(title = "Method", colors = AmberDarkColors)
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = GallerySamples.METHOD, style = PlainTickerType.body, color = Ink2)
             Text(text = GallerySamples.SOURCES, style = PlainTickerType.small, color = Muted)
@@ -171,14 +171,14 @@ fun GalleryScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            PrimaryButton(label = "Swap USDC to TSLAx", onClick = { sheetOpen = true }, colors = AmberDarkColors)
+            AmberPrimaryAction(label = "Swap USDC to TSLAx", onClick = { sheetOpen = true }, colors = AmberDarkColors)
             Text(text = GallerySamples.COST_LINE, style = PlainTickerType.meta, color = Muted)
-            SecondaryButton(label = "View in Portfolio", onClick = {}, colors = AmberDarkColors)
-            DisabledButton(label = "Read the list", colors = AmberDarkColors)
+            AmberSecondaryAction(label = "View in Portfolio", onClick = {}, colors = AmberDarkColors)
+            AmberDisabledAction(label = "Read the list", colors = AmberDarkColors)
         }
 
         // List: search field, analyzed rows, price-only rows, with the skeleton in front.
-        Heading(text = "Search")
+        AmberSectionHead(title = "Search", colors = AmberDarkColors)
         Field(
             colors = AmberDarkColors,
             label = "Search",
@@ -189,7 +189,7 @@ fun GalleryScreen(
             action = if (query.isNotEmpty()) "Clear" else null,
             onAction = { query = "" },
         )
-        Heading(text = "Analyzed", topPadding = 30.dp)
+        AmberSectionHead(title = "Analyzed", colors = AmberDarkColors)
         Row(Modifier.padding(start = 4.dp)) {
             TextAction(label = if (loading) "Show rows" else "Show skeleton", onClick = { loading = !loading })
         }
@@ -208,7 +208,7 @@ fun GalleryScreen(
                 }
             }
         }
-        Heading(text = "Without analysis", topPadding = 28.dp)
+        AmberSectionHead(title = "Without analysis", colors = AmberDarkColors)
         GallerySamples.priceOnly.forEachIndexed { index, row ->
             ListRow(
                 ticker = row.ticker,
@@ -222,7 +222,7 @@ fun GalleryScreen(
         }
 
         // Portfolio: wallet fragment in the bar, total, holdings.
-        Heading(text = "Holdings")
+        AmberSectionHead(title = "Holdings", colors = AmberDarkColors)
         TopBar(meta = GallerySamples.WALLET, insets = WindowInsets(0), colors = AmberDarkColors)
         Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = "\$1,289.01", style = PlainTickerType.bigValue, color = Ink, maxLines = 1, softWrap = false)
@@ -247,7 +247,7 @@ fun GalleryScreen(
         )
 
         // Watchlist: rows with a trailing action, the digest panel.
-        Heading(text = "Watched", topPadding = 30.dp)
+        AmberSectionHead(title = "Watched", colors = AmberDarkColors)
         GallerySamples.watched.forEachIndexed { index, row ->
             ListRow(
                 ticker = row.ticker,
@@ -259,14 +259,14 @@ fun GalleryScreen(
                 onClick = {},
             )
         }
-        Heading(text = "Daily digest", topPadding = 30.dp)
+        AmberSectionHead(title = "Daily digest", colors = AmberDarkColors)
         Panel {
             Text(text = GallerySamples.DIGEST_TIME, style = PlainTickerType.meta, color = Muted)
             Text(text = GallerySamples.DIGEST, style = PlainTickerType.panelBody, color = Ink)
         }
 
         // Swap sheet and receipt on the static surface; the same content opens modally above.
-        Heading(text = "Amount field")
+        AmberSectionHead(title = "Amount field", colors = AmberDarkColors)
         Field(
             colors = AmberDarkColors,
             label = "Amount, USDC",
@@ -282,8 +282,8 @@ fun GalleryScreen(
             color = Muted,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
         )
-        Heading(text = "Receipt, landed")
-        SheetSurface(colors = AmberDarkColors) {
+        AmberSectionHead(title = "Receipt, landed", colors = AmberDarkColors)
+        AmberSheetSurface(colors = AmberDarkColors) {
             SwapSheetBody(content = receiptContent(), actions = GalleryNoActions, takeFocus = false)
         }
         Spacer(Modifier.height(48.dp))
@@ -291,7 +291,7 @@ fun GalleryScreen(
 
     if (sheetOpen) {
         // The real sheet over a real state, so a cell the product drops cannot live on here.
-        Sheet(onDismissRequest = { sheetOpen = false }, colors = AmberDarkColors) {
+        AmberSheet(onDismissRequest = { sheetOpen = false }, colors = AmberDarkColors) {
             SwapSheetBody(
                 content = amountContent(amount),
                 actions = GalleryNoActions.copy(

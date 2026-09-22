@@ -94,6 +94,8 @@ class YouScreenTest {
                 "FactGrid(cells = deviceCells",
                 "NotificationsLine(",
                 "Footer()",
+                "R.string.you_heading_licenses",
+                "LicenseRow(",
             ),
         )
     }
@@ -128,10 +130,10 @@ class YouScreenTest {
     @Test
     fun `the button matrix never draws two accent fills`() {
         val actions = body("private fun ActionButtons(", "private fun WalletBlock(")
-        // Amber restyle: AmberPrimaryAction and AmberSecondaryAction (this file's own small
-        // Amber-styled analogue of Instrument's SecondaryButton; DESIGN.md section 4's built
-        // component list has no shared secondary action yet) replace Instrument's PrimaryButton
-        // and SecondaryButton, keeping the same one-fill, never-a-text-link rule (U2).
+        // Amber restyle: AmberPrimaryAction and AmberSecondaryAction, both now the shared
+        // components in ui/components/AmberPrimaryAction.kt (AmberSecondaryAction was a private
+        // copy living only in this file until Instrument's PrimaryButton and SecondaryButton
+        // retired), keeping the same one-fill, never-a-text-link rule (U2).
         assertTrue("the primary slot is an AmberPrimaryAction", "AmberPrimaryAction(label = it.label.text()" in actions)
         assertTrue(
             "the secondary slot is an AmberSecondaryAction, never a text action",

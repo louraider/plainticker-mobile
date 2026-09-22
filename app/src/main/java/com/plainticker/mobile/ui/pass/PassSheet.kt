@@ -38,15 +38,15 @@ import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.EntitlementResponse
 import com.plainticker.mobile.data.plainticker.PassBuild
 import com.plainticker.mobile.data.plainticker.PassSummary
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
+import com.plainticker.mobile.ui.components.AmberSheet
+import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.PrimaryButton
-import com.plainticker.mobile.ui.components.SecondaryButton
-import com.plainticker.mobile.ui.components.Sheet
-import com.plainticker.mobile.ui.components.SheetSurface
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.PlainTickerType
@@ -54,7 +54,7 @@ import com.plainticker.mobile.ui.text
 import kotlinx.coroutines.launch
 
 /**
- * The pay sheet: the same [Sheet] surface the vote and the swap use, drawing whatever
+ * The pay sheet: the same [AmberSheet] surface the vote and the swap use, drawing whatever
  * [PassSheetContent] the machine's state resolved to (task A6). It decides nothing and computes
  * nothing, exactly as [com.plainticker.mobile.ui.vote.VoteSheet] is split.
  *
@@ -75,7 +75,7 @@ fun PassSheet(state: PassState, actions: PassActions, modifier: Modifier = Modif
     val sheetState = rememberModalBottomSheetState(
         confirmValueChange = remember { { target: SheetValue -> target != SheetValue.Hidden || !held.value } },
     )
-    Sheet(
+    AmberSheet(
         onDismissRequest = { if (!content.holdsOpen) actions.onClose() },
         modifier = modifier,
         sheetState = sheetState,
@@ -131,8 +131,8 @@ internal fun ColumnScope.PassSheetBody(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),
         verticalArrangement = Arrangement.spacedBy(ActionGap),
     ) {
-        content.primary?.let { PrimaryButton(label = it.label.text(), onClick = actions.of(it.kind)) }
-        content.secondary?.let { SecondaryButton(label = it.label.text(), onClick = actions.of(it.kind)) }
+        content.primary?.let { AmberPrimaryAction(label = it.label.text(), onClick = actions.of(it.kind)) }
+        content.secondary?.let { AmberSecondaryAction(label = it.label.text(), onClick = actions.of(it.kind)) }
     }
 }
 
@@ -163,6 +163,11 @@ private fun PassCell.factCell(): FactCell {
         value = value.text(),
         span = span,
         valueSize = if (span > 1) 28.sp else 18.sp,
+        // Every PassCell that carries something to copy (the signature, the destination) is an
+        // on-chain identifier drawn from Fmt.shortKey; every one that carries nothing to copy
+        // (the amount, the fee) is a number. The two happen to coincide exactly for this screen's
+        // cells, so [copied] doubles as the signal FactCell.valueMono needs.
+        valueMono = copied != null,
         onTap = if (copied == null) null else {
             { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(copyLabel, copied))) } }
         },
@@ -232,7 +237,7 @@ private fun PassSheetPreview() {
     PreviewCanvas {
         Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
             PreviewStates.forEach { state ->
-                SheetSurface {
+                AmberSheetSurface {
                     state.sheet()?.let { PassSheetBody(content = it, actions = PreviewActions, takeFocus = false) }
                 }
             }

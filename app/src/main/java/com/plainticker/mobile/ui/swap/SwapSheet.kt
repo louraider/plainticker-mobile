@@ -48,16 +48,16 @@ import androidx.compose.ui.unit.sp
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
+import com.plainticker.mobile.ui.components.AmberSheet
+import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.PrimaryButton
-import com.plainticker.mobile.ui.components.SecondaryButton
-import com.plainticker.mobile.ui.components.Sheet
-import com.plainticker.mobile.ui.components.SheetSurface
 import com.plainticker.mobile.ui.components.SkeletonBar
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.defaultAmberColors
@@ -69,7 +69,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * The swap sheet and the receipt (task T10, design task DT7), on the one [Sheet] surface.
+ * The swap sheet and the receipt (task T10, design task DT7), on the one [AmberSheet] surface.
  *
  * This file draws and nothing else. Every sentence and every number it renders was decided by
  * [SheetContent]; what is left here is anatomy, focus and one haptic. Four things are worth
@@ -122,7 +122,7 @@ fun SwapSheet(
     val sheetState = rememberModalBottomSheetState(
         confirmValueChange = remember { { target: SheetValue -> target != SheetValue.Hidden || !landing.value } },
     )
-    Sheet(
+    AmberSheet(
         // A submission in flight cannot be taken back, and close() would cancel the call that is
         // carrying it. While it is landing the sheet stays put; every other state dismisses.
         onDismissRequest = { if (state !is SwapState.Landing) actions.onClose() },
@@ -196,10 +196,10 @@ internal fun ColumnScope.SwapSheetBody(
         verticalArrangement = Arrangement.spacedBy(ActionGap),
     ) {
         content.primary?.let {
-            PrimaryButton(label = it.label.text(), onClick = actions.of(it.kind), enabled = it.enabled)
+            AmberPrimaryAction(label = it.label.text(), onClick = actions.of(it.kind), enabled = it.enabled)
         }
         content.secondary?.let {
-            SecondaryButton(label = it.label.text(), onClick = actions.of(it.kind))
+            AmberSecondaryAction(label = it.label.text(), onClick = actions.of(it.kind))
         }
         content.footnote?.let {
             Text(text = it.text(), style = PlainTickerType.small, color = colors.textTertiary(AmberSurface.GROUND))
@@ -234,7 +234,7 @@ private fun Title(content: SheetContent, lead: Modifier, actions: SwapActions, c
             modifier = lead.semantics { heading() },
         )
         content.flip?.let {
-            TextAction(label = it.text(), onClick = actions.onFlip, contentPadding = FlipPadding)
+            TextAction(label = it.text(), onClick = actions.onFlip, color = colors.actionText, contentPadding = FlipPadding)
         }
     }
 }
@@ -380,6 +380,11 @@ private fun SheetCell.factCell(): FactCell {
         span = span,
         subMono = subMono,
         valueSize = size.valueSize(),
+        // SheetCellSize.Fragment is, by its own doc comment, "a signature or a slot: a key, not a
+        // quantity" — the receipt's two explorer-lookup fields. Both are on-chain identifiers, the
+        // slot included, so both stay in FactCell.valueMono's JetBrains Mono; Headline and Normal
+        // are always a quantity (an amount, a percent, a SOL figure).
+        valueMono = size == SheetCellSize.Fragment,
         onTap = if (copied == null) {
             null
         } else {
@@ -485,7 +490,7 @@ private fun previewInput() = SwapAmount.parse("5", 6, PreviewFunds.usdcRaw)
 @Composable
 private fun SheetPreview(state: SwapState, submitSwaps: Boolean = true) {
     PreviewCanvas {
-        SheetSurface {
+        AmberSheetSurface {
             SwapSheetBody(
                 content = state.sheet(nowMillis = 9_000L, submitSwaps = submitSwaps)!!,
                 actions = PreviewActions,

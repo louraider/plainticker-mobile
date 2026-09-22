@@ -8,6 +8,7 @@ import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.ShippedCopy
 import com.plainticker.mobile.ui.pass.ProUiState
 import com.plainticker.mobile.wallet.WalletAccount
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -277,5 +278,47 @@ class YouModelTest {
                 )
             }
         }
+    }
+
+    // ---- Fonts and licenses (task U11) ---------------------------------------------------------
+
+    /** Gradle runs unit tests from the module directory; the fallback covers an IDE run from the root. */
+    private val module: File = listOf(".", "app").map(::File)
+        .first { File(it, "src/main/AndroidManifest.xml").isFile }
+        .canonicalFile
+
+    @Test
+    fun `every bundled font the app actually ships today is attributed, not just the two U11 was written against`() {
+        // docs/fonts.md's own table: Outfit and JetBrains Mono from Instrument, Bricolage Grotesque
+        // added for Amber. U11 predates the third; this pins that the list did not stay at two.
+        assertEquals(3, bundledFontLicenses.size)
+        assertEquals(
+            "one row per asset, none doubled or dropped",
+            bundledFontLicenses.size,
+            bundledFontLicenses.map { it.assetPath }.distinct().size,
+        )
+    }
+
+    @Test
+    fun `every attributed font names a real, non-blank string and a license file that ships in the APK`() {
+        bundledFontLicenses.forEach { license ->
+            val name = ShippedCopy.render(Copy.Words(license.nameRes))
+            val credit = ShippedCopy.render(Copy.Words(license.creditRes))
+            assertTrue("a font's device-facing name must not be blank", name.isNotBlank())
+            assertTrue("$name's credit line must not be blank", credit.isNotBlank())
+            assertTrue("$name's credit line must name a copyright", credit.contains("Copyright"))
+
+            // The asset itself: docs/fonts.md's own three paths, read the same way the license
+            // screen will (relative to app/src/main/assets/), not assumed to exist.
+            val file = File(module, "src/main/assets/${license.assetPath}")
+            assertTrue("${license.assetPath} does not exist; docs/fonts.md's own list is now wrong", file.isFile)
+            assertTrue("${license.assetPath} is empty", file.readText().isNotBlank())
+        }
+    }
+
+    @Test
+    fun `the license terms sentence names the actual license, spelled out rather than abbreviated`() {
+        val terms = ShippedCopy.strings.getValue("you_license_terms")
+        assertTrue(terms.contains("SIL Open Font License 1.1"))
     }
 }

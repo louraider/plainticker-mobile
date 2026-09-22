@@ -14,16 +14,22 @@ rules that came from the founder's own backtests and from legal exposure, not fr
 are restated here in the same sections they held before, because `CopyLintTest` enforces some of
 them directly from disk and a renumbering would only cost the reader something for no reason.
 Section 1 (the liquidity floor and the app's own record) and section 7 (copy and content rules)
-are that content. Sections 2 and 3 (colour, typography) are Amber's, built in this pass. Sections
-4, 5, 6 and 9 (components, layout, motion, the brand mark) are **not yet restyled**: the
-composables that implement them today still run Instrument's anatomy, on purpose, because
-building the token and type foundation first is what lets the next pass restyle every component
-against one set of names instead of guessing. Section 8 (anti-patterns) is rewritten, because
-Amber's own research overturns two or three of Instrument's specific bans by name.
+are that content. Sections 2 and 3 (colour, typography) are Amber's, built in the token-and-type
+foundation pass. Sections 4, 5, 6 and 9 (components, layout, motion, the brand mark) were marked
+**not yet restyled** in that pass, on purpose, because the composables behind them still ran
+Instrument's anatomy and building the token and type foundation first is what let the restyle
+passes that followed work against one set of names instead of guessing. Those passes have since
+run: five of them (branches `design/amber-heads`, `design/amber-chrome`, `design/amber-rows` and
+`design/amber-leftovers`, merged onto this branch, plus the screen-by-screen passes before them)
+restyled or retired nearly every component `ui/components/` held, and this revision rewrites
+sections 4, 5, 6 and 9 against what is actually built rather than against the plan for building
+it. Section 8 (anti-patterns) is rewritten, because Amber's own research overturns two or three of
+Instrument's specific bans by name.
 
-Where this document says a thing is "not yet restyled," treat the components as they are: correct
-for what they draw today, not a template for new work. Read `Tokens.kt`, `Type.kt` and `Theme.kt`
-for what is actually built; this document explains why they look the way they do.
+A handful of pieces under `ui/components/` are still Instrument's own anatomy, unmoved, either on
+purpose or because no pass's file set reached them; section 4 names each one and says which.
+Read `Tokens.kt`, `Type.kt` and `Theme.kt` for the palette and type scale this document describes;
+section 4 is now the reference for the components themselves, not a placeholder for it.
 
 ## 1. The liquidity floor and the app's own record
 
@@ -166,51 +172,424 @@ split for every style `AmberType` exposes.
 direction in section 5.5 converges on. Every other size and weight is transcribed from section 5.5
 directly (the ticker row, a number with its context, the section head).
 
-## 4. Components — not yet restyled
+## 4. Components
 
-Instrument's anatomy (ListRow, FactGrid, Track, Gauge, Sheet, the buttons) is what `ui/components`
-still draws. Its radius-0 shape lock and its "every number in mono" rule are Instrument's, not
-Amber's; do not carry them into new work. Amber's own shape and component language is in
-`docs/design-research-2026-09-21.md` sections 5.3 and 5.5 (radii by hierarchy: 8dp chips, 16dp
-list containers, 28dp for a status card or a sheet's top radius; `AmberShapes` in `Theme.kt`
-already carries these). Restyling each component to read `AmberColors` and `AmberType` instead of
-Instrument's tokens is the next phase's work.
+`ui/components/` went through five further passes since sections 2 and 3 were written (branches
+`design/amber-heads`, `design/amber-chrome`, `design/amber-rows` and `design/amber-leftovers`, all
+merged onto this branch, on top of the screen-by-screen passes before them): every product-facing
+composable that used to draw Instrument's anatomy now draws Amber's, or has been retired in favour
+of one that does. A handful of pieces stayed on Instrument's own anatomy, on purpose or because no
+pass's file set reached them; both kinds are recorded in 4.7 rather than left for the next reader
+to guess at.
 
-## 5. Layout — not yet restyled
+**The rule every budget below exists to enforce**, stated once because it caused four separate
+clipping incidents on this branch before anyone wrote it down: a slot that draws on one line with
+no wrapping, beside a sibling of fixed or content-derived width, clips the moment real content is
+longer than whatever sat in the preview. A `Row` measures its unweighted children first and hands
+weighted ones whatever is left, so a "meta" column that looks unweighted in a screenshot can still
+starve a weighted name beside it: `AmberTickerRow`'s own anatomy below did exactly this, twice,
+before the fix that held. The durable fix is either to give every competing slot in a row a real
+`weight`, or to put the slots on their own lines so neither one's worst case has to share a budget
+with the other's. **A layout is verified by measurement, never by reading an accessibility tree**:
+the tree reports the semantic string a screen reader would hear, not the rendered one, and the
+second of the four clipping fixes on this branch was signed off exactly that way and still shipped
+broken. Every budget in this section was instead measured with fontTools against the real bundled
+font (`res/font/bricolage_grotesque.ttf`, or `jetbrains_mono_medium.ttf` for an identifier) at the
+exact `wght`/`wdth`/`opsz` the style in question draws, against real strings the catalog and
+`strings.xml` can actually produce.
 
-The shared information architecture (Today, Stocks, Vote, Portfolio, You; the liquidity floor's
-`Tracked today` block; chapters replacing infinite scroll) is `docs/design-research-2026-09-21.md`
-section 3. Detail's own layout order does not change in any direction the research drew, Amber
-included; only the tokens and components under it do.
+### 4.1 Rows
 
-## 6. Motion — the two pieces the calendar cut, now built
+**`AmberTickerRow`** (`AmberTickerRow.kt`) is the one row every screen with a list of tickers now
+draws: Stocks, Today (Yours, Tracked, Next up), Portfolio, Vote, and the onboarding backdrop. 64dp
+minimum, grown by content. Two lines, each given the row's *full* content width rather than
+splitting it with the other: a name line (`ticker`, unweighted and non-wrapping, beside `company`,
+`weight(1f, fill = false)`, one line, ellipsis) and a meta line (`context`, `weight(1f, fill =
+false)`, up to two lines, beside `figure`, unweighted and non-wrapping). An optional
+`trailingAction` (Vote, Unwatch) shares the meta line only, never the name line, through
+`TextAction`. States: with or without `company`; with or without `figure`/`context`; with or
+without `trailingAction`; pressed (`surfaceRaised` steps to `surfaceHigh`, the same tonal move that
+surface means everywhere else).
 
-Section 7's calendar named exactly two pieces of Amber's motion that would not land in the
-research's eight-day slice: chip morphing and staggered entry. Both are now built, once the
-founder decided the calendar had room after all; everything else section 5.3 draws under Motion
-(the bar pill morphing width, a spring sheet entry) is still not built, for the same reason it
-never was: it is components-and-motion-token work that belongs with the component that will use
-it, and neither the bar nor the sheet was touched in this pass.
+This anatomy clipped twice before the two-line fix. The first pass gave the name group and the
+meta group a weighted split of one `Row` (3-to-2); the device still drew "META x  Meta Pl…",
+because the pair that actually starved was the *outer* one: a `Row` measures the meta group's own
+content, up to a full 32-character disclosure clause, before it ever divides space among weighted
+siblings, so the meta group acted as a fixed-width sibling in everything but name. The fix puts
+`ticker`/`company` and `context`/`figure` on two separate lines, each owning the row's whole width,
+so the two groups never compete for the same budget at all.
 
-**Chip morphing** (`AmberChip.kt`, `shapeFor`). The corner radius animates from 8dp to full (16dp,
-the same radius `CircleShape` draws at the chip's fixed 32dp height) with a spring
-(`Spring.StiffnessMediumLow`, no bounce), gated by `rememberMotionEnabled()` the same way the two
-screens below already gate theirs; `snap()` replaces the spring at animator scale 0. Built without
-`1.5.0-alpha`: that library exists to morph shapes whose vertex topology disagrees (a star into a
-circle), and this chip's two states are the same rectangle disagreeing on one corner value, so a
-plain `animateDpAsState` over that one `Dp` reads identically on a phone at this size. Section
-5.3's own risk line names the alpha as the exact temptation to refuse here; this is that refusal,
-not an oversight. See `AmberChip.kt`'s doc on `shapeFor` for the full reasoning, and the report for
-what would actually justify the dependency later.
+Measured budgets (400dp frame, 336dp of content width once `AmberTickerRowGroup`'s 16dp side
+padding and the row's own 16dp are taken out):
 
-**Staggered entry** (`TodayScreen.kt`, `amberBlockEntrance`). Today's blocks 1, 3, 4 and 5 (venue,
-tracked, next up, footer) fade in and rise 8dp into place once, the first time each has something
-to draw, 40ms apart, with the same no-bounce spring and the same `rememberMotionEnabled()` gate
-YouScreen's identity reveal and PortfolioScreen's Total already use. Block 2, Yours, is
-deliberately left still: it is `WatchlistContent`'s shared, per-ticker list, the shape of thing a
-stagger reads wrong on even at a handful of rows, and the same composable a 830-row list elsewhere
-in the app would generalize from if a per-item stagger habit started here. Nothing on Today depends
-on motion to be legible: every block's un-animated state is already its settled one.
+| Slot | Style | Available | Worst real content | Margin (1.3x) | Past the budget |
+|---|---|---|---|---|---|
+| `company`, no trailing action | `rowCompany` 14/400 | 250.70dp | "Meta Platforms, Inc." (20 chars), 129.07dp | 121.64dp (59.73dp) | ellipsis, 1 line; the catalog's one 54-char outlier (4.7% of 928 names) still ellipsizes, by design |
+| `context`, no figure/action | `context` 14/400 | 214.78dp | worst `list_row_meta_join` (32 chars), 192.44dp | 22.34dp | wraps to 2 lines, then ellipsis |
+| `context`, Vote leader row (figure + trailingAction) | `context` 14/400 | 167.92dp of 289.14dp total | "9,999 voters", 83.16dp | 84.76dp (16.59dp) | not reached at realistic content |
+| `context`, Watchlist row (trailingAction, no figure) | `context` 14/400 | 263.19dp | realistic join (39 chars), 246.57dp | 16.62dp at 1.0x, wraps at 1.3x | wraps to 2 lines |
+
+`AmberTickerRowGroup` is the 16dp tonal container a run of rows sits inside (`surfaceGround` behind
+a 1dp seam, each row's own `surfaceRaised`). It is a non-lazy `Column`, so it fits a small, fixed
+run (Today's "Next up," the onboarding backdrop's six sample rows) and not a list that must stay a
+`LazyColumn` for recycling. Stocks (~830 rows under sticky sector chapters) and Portfolio (three
+separate `itemsIndexed` lists) rebuild the same visual container per row instead:
+`ListScreen.kt`'s `groupedRowModifier`/`groupEdge` (left/right edges on every row, top only on the
+first, bottom only on the last, inset by the 16dp corner so the line stops short of the curve
+rather than crossing it as a straight chord) and `PortfolioScreen.kt`'s `AmberRowFrame` (only the
+run's first and last row round their outer corners, a 1dp `surfaceGround` seam under every other
+row). Vote's ballot and Watchlist's rows use a third, plainer variant, `AmberRowDivider`, a bare
+`HorizontalDivider` between lazy items with no rounded container at all, the same trade for the
+same reason: an unbounded list cannot be one non-lazy `Column`.
+
+**Light theme's exception**, stated once because all four containers share it: `surfaceRaised`
+over `surfaceGround` measures about 1.03:1 in light (`#FFFFFF` on `#FFFBF2`) against a healthy
+1.12:1 in dark, so a run of rows reads as one faint smear rather than a grouped block.
+`AmberTickerRowGroup`, `groupedRowModifier`/`groupEdge`, `AmberChip` and `SkeletonBar` each draw one 1dp
+`border` edge, gated on `colors === AmberLightColors`, outlining the group once rather than framing
+every row (the anti-pattern section 8 still bans). Dark is untouched, byte-identical.
+
+**`ListRow`** (`ListRow.kt`), Instrument's own row, is not retired. See 4.7.
+
+### 4.2 Figures and section heads
+
+**`AmberFigure`** (`AmberFigure.kt`) is the number with its context: an optional `label` above,
+`figure` (34/700, tabular, always `actionText` amber, win or lose) and an optional `context`
+sentence below, in an optional 28dp card (`card = false` draws it bare, Detail's plain composite
+cell). States: with or without `label`; with or without `context`; `card` true/false; `tone`
+(`Neutral` or `Caution`, and `Caution` colours only `context`, never `figure`, "never staged as a
+grade," section 7). No measured budget is needed here, on purpose: `figure` is short, tabular,
+single-line content with nothing beside it to starve it; `context` carries no `maxLines` at all, so
+a full sentence (Today's own lede, "22 of 160 analyzed can be tracked today") simply wraps; the
+card fills whatever width it is given rather than a literal dp. This is the shape every budget
+elsewhere in this section is measured against: no fixed-width sibling, so nothing to clip against.
+
+**`AmberSectionHead`** (`AmberSectionHead.kt`) is the one heading component Amber draws anywhere,
+replacing the retired `Heading` (4.7). `title` (22/700, up to two lines, carries the row's heading
+semantics), an optional short `meta` count on the same line, an optional full-width `lede` below.
+`background` defaults to the page ground but takes a caller-supplied colour for a `stickyHeader`
+chapter (Stocks' sector chapters) that must stay opaque while pinned over scrolling content.
+`Heading`'s own defect, and the reason this component exists, was a `weight(1f)` title against an
+unweighted meta that could starve to one letter when the meta ran long (`VoteScreen`'s
+`RoundHeader` hit this before Amber). `AmberSectionHead` inverts which side is allowed to grow:
+`meta` stays a short count and never wraps, `title` is allowed two lines because it is not always
+short. Measured: the GICS sector names Stocks groups xStocks into run up to 22 characters, three
+tied for the longest (`LongestSectorName`, "Communication Services," pinned against
+`app/src/main/assets/snapshot/summary.json`). No dp budget is stated because `title` has nowhere it
+can clip: it owns a `weight(1f)` column and wraps rather than squeezing.
+
+### 4.3 Actions
+
+**`AmberPrimaryAction`** / **`AmberDisabledAction`** / **`AmberSecondaryAction`**
+(`AmberPrimaryAction.kt`) are the 56dp, 16dp-radius button family: filled amber with dark text
+(primary, enabled); transparent with a 1dp border and tertiary text (disabled, no focus ring: a
+disabled `Button` takes none); transparent with a 1dp border and primary text (secondary, retiring
+Instrument's `SecondaryButton` and a private copy `YouScreen.kt` used to carry). All three share
+`AmberActionFrame`, a 2dp focus ring along the button's own 16dp radius. `label` is always
+`maxLines = 1` with ellipsis; no character budget is pinned, because every caller supplies a short,
+translator-controlled string rather than variable-length data. The rule this family holds,
+unchanged since before Amber: no state's only forward action is a text link. `AmberDisabledAction`
+is what keeps a disabled state a real button rather than letting it collapse toward that shape.
+
+**`TextAction`** (`TextAction.kt`) is the only secondary-action primitive in the app, and it was
+not restyled: it still draws in `PlainTickerType.textAction` (Outfit SemiBold), with a
+caller-supplied `color`. Every Amber row's trailing action (`AmberTickerRow`'s Vote/Unwatch,
+`Banner`'s Retry, `Field`'s Max/Clear) reaches for it with `colors.actionText` passed in
+explicitly, so the type face stays Instrument's by design (`AmberType` has no equivalent word style
+at this size and weight) while the colour is always Amber's. Carried forward, not an oversight.
+
+**`AmberChip`** (`AmberChip.kt`) is Amber's filter chip: 32dp, `surfaceRaised`/`textPrimary`
+unselected, `surfaceHigh` with a 1dp border ring selected, `minimumInteractiveComponentSize()`
+reserving the 48dp touch target without growing the visual chip. The corner radius morphs 8dp to
+full (16dp) with a spring on selection (section 6). `label` is `maxLines = 1` with ellipsis; every
+caller (a sector name, a tracked/watched count) is short, bounded content, so no arithmetic budget
+is pinned the way the ticker row's is. Light theme draws the same 1dp border ring unselected too,
+for the reason given above.
+
+### 4.4 Sheets and grids
+
+**`AmberSheet`** / **`AmberSheetSurface`** / **`AmberSheetHandle`** (`AmberSheet.kt`) are swap,
+vote and pass's shared surface: `surfaceHigh` (the highest tonal step, section 2), 28dp top radius,
+an amber handle rather than a neutral line. `AmberSheet` wraps `ModalBottomSheet`;
+`AmberSheetSurface` is the same chrome without the modal, for a surface that is always on screen (a
+landed swap receipt, the onboarding gate) rather than a bottom sheet. `handle = false` draws a 1dp
+border top edge instead, the seam the onboarding panel needs sitting over its own decorative 25
+percent backdrop. The handle's own touch target is 48dp by construction (23dp padding each side of
+a 2dp bar), stated because it replaced a 22dp-total handle that measured under the floor. No
+content slot here has its own measured budget: a sheet's content is built from other components
+(`AmberPrimaryAction`, `FactGrid`), each measured on its own terms.
+
+**`FactGrid`** / **`FactCell`** (`FactGrid.kt`) is the two-column blueprint grid Detail's
+fundamentals, and the swap/pass/vote sheets' fact cells, all draw through: `label` (meta), `value`
+(`factValueAt`, Bricolage proportional, or JetBrains Mono when `FactCell.valueMono`, for an
+on-chain identifier only), an optional `sub` line, `span` 1 (half-width, pairs up) or 2 (full-width,
+alone in its row). `tone = Caution` colours `value` itself, not just a sub-line, for the one case
+section 1.2 names, an explicit issuer-control fact stated as a plain word ("Yes"), not a price or
+score; this is not the rule `AmberFigure` enforces (which never colours a live figure), because a
+boolean fact word is not the kind of number that rule protects.
+
+**This is the one anatomy in the app that still clips rather than wraps**, and its own doc comment
+says so plainly: `value` draws `maxLines = 1, softWrap = false` beside a same-width sibling (a
+half-width cell) or alone (a full-width one), so content past the budget clips mid-character rather
+than falling back to a second line. Every budget below was re-derived against the bundled font at
+`FactGrid`'s exact size after its label/value/sub faces moved off Instrument's monospace onto
+Amber's proportional one, exactly the kind of anatomy change that silently voids a
+previously-measured budget, which is why these are stated here rather than only in the test file.
+
+Geometry on a 400dp frame: the grid's own 20dp side padding plus its 1dp border trick leaves 358dp
+for a row. A half-width cell (two per row, less the 1dp gap and 32dp of the cell's own padding)
+gets **146.5dp**; a full-width (`span = 2`) cell gets **326dp**.
+
+| Caller | Value size | Available | Character budget | Worst real value | Headroom |
+|---|---|---|---|---|---|
+| Pass/Vote sheet, signature fee | 18sp | 146.5dp | **13 characters** | "0.123456 SOL" (12 chars, `LAMPORT_DISPLAY_DECIMALS = 6`) | 1 character |
+| SwapSheet, `SheetCellSize.Normal` | 22sp | 146.5dp | **10 characters** | "0.002039285" (11 chars is the largest still measured clear; the budget keeps one under it) | -- |
+| Detail, `CellValueSize` | 24sp | 146.5dp | **8 characters** | "Unknown" (7 chars) | 35.55dp |
+| Full-width (`span = 2`) cells | 28sp | 326dp | **20 characters** | "4,389,047,809.999999" (20 chars) | 28.22dp |
+
+The 18sp row is the one that actually clipped in production: the signature fee used to format at
+lamports' own 9-decimal precision ("0.123456789 SOL," 15 characters against a 13-character budget)
+until it was narrowed to a 6-decimal display precision, the honest precision for a quantity worth
+about $0.0000002 at the seventh decimal. A future cell drawn at any of these three sizes must stay
+inside its budget or accept the clip; there is no wrap fallback here, unlike every row and figure
+above it.
+
+### 4.5 Detail's own drawn elements
+
+**`Gauge`** (`Gauge.kt`) is the tracking gauge, the one piece of this restyle the founder's own
+approved mockup actually draws: a full-width `surfaceHigh` capsule (4dp thick, fully rounded), a
+1dp tertiary reference tick at the midpoint, a 2dp amber token tick standing proud on both sides,
+`caption` left and the signed premium right. States: on-scale; off-scale (the tick stands off the
+capsule in the open canvas rather than resting against it, so a saturated reading is never mistaken
+for a position on the stated scale); undrawn entirely below the liquidity floor or when Jupiter
+reports no reference price. Instrument's separate end-stop ticks are gone; the capsule's own
+rounded ends already read as the scale's boundary. Measured: `caption` (no `maxLines`, wraps
+freely) has a 285.686dp budget against the longest real off-scale caption at 268.660dp, a 17.026dp
+margin that wraps to two lines past 1.3x scale rather than clipping.
+
+**`Track`** (`Track.kt`) is a position, never a filled bar: `label` (secondary, left), `value`
+(primary, tabular) and `state` (tertiary, a word) right, over the same `surfaceHigh` capsule
+`Gauge` draws, with a 2dp `textPrimary` marker, never `actionText` amber, because this states a
+classification against the sector, not a live reading, and colour stays reserved for the figures it
+already means something on. The marker settles with a 400ms cubic-bezier tween, unchanged since
+before this restyle. Measured: `label`'s budget is 197.234dp against the longest real `state` word
+("near 52-week high," 103.812dp) paired with the widest `value`, a 116.279dp margin (46.76dp at
+1.3x).
+
+**`LiveBar`** (`LiveBar.kt`) is the swap and pass sheets' phase indicator: a 2dp bar that breathes
+(opacity 1 to 0.45, 2.4s ease-in-out) only while `live` is true, static when landed or stale. This
+is the one continuous motion in the app; section 6 names it the one piece this restyle must not
+touch. `label` (context, wraps freely) and `meta` (single line, now `TextOverflow.Ellipsis`) sit in
+a column that used to carry no width modifier at all beside the bar's fixed 2dp, exactly this
+section's opening trap, and now carries `weight(1f, fill = false)`. Measured: `meta`'s budget is
+344dp against the longest real meta (46 characters, 255.624dp), an 88.376dp margin (11.689dp at
+1.3x).
+
+**`SignalRow`** (`SignalRow.kt`) is one F-Score signal: `name` (secondary unless passed, then
+primary-weighted by colour, not size) left, `word` ("yes"/"no"/"n/a," never tabular: these are
+words, not numerals) right. A null answer (a filing the server could not evaluate) reads "n/a" in
+tertiary, never "no": a check nobody could evaluate is not a check the company failed. Measured:
+`name`'s budget is 324.494dp against the longest real signal name (29 characters, "Operating cash
+flow positive," 200.295dp), a 124.199dp margin (57.058dp at 1.3x).
+
+### 4.6 Chrome
+
+**`AmberBottomNav`** (`AmberBottomNav.kt`) is the five-destination bar (Today, Stocks, Vote,
+Portfolio, You) that replaced the four-tab-plus-TopBar-action shell: `ShortNavigationBar`,
+material3 1.4.0's stable component (section 10), 64dp on `surfaceRaised`, labels always shown, a
+`surfaceHigh` pill behind the selected item. No variable-length slot: every label is a short, fixed
+string, so no character budget applies. The pill's width-morph (research 5.3) is not built; what
+plays is `NavigationItem`'s own built-in selection transition.
+
+**`TopBar`** (`TopBar.kt`) still draws `PlainTickerType.wordmark` (Instrument's word style,
+unchanged by the redesign per section 3) but resolves `defaultAmberColors()` for its three colours.
+One slot on the right: a real action (`TextAction`), a picture of an action with no handler (the
+onboarding backdrop's "You"), or a short meta fragment (a wallet's short key). Never sticky;
+scrolls away with the content, covered when needed by `TopScrim` (`Insets.kt`), which paints
+nothing and holds no semantics of its own.
+
+**`Banner`** (`Banner.kt`) is the one state slot under the header: `surfaceRaised`, a wrapping
+`text` (no `maxLines`, so no clip risk) and an optional `TextAction`. Restyled to resolve
+`defaultAmberColors()`; type stayed `PlainTickerType.label`.
+
+**`Field`** (`Field.kt`) is the only text field (the swap amount, Stocks' search): resolved to
+`defaultAmberColors()`, but its anatomy and type (`PlainTickerType.fieldValue`/`fieldText`) are
+untouched, because neither needed a change to read correctly once its three colours did.
+
+**`Skeleton`** (`Skeleton.kt`, `SkeletonBar`/`SkeletonRows`/`SkeletonSwitch`) is the only loading
+treatment anywhere in the app; there is no spinner. Resolved to `defaultAmberColors()`; carries the
+same light-only 1dp border ring described above, since a skeleton fill is exactly the kind of flat
+`surfaceRaised` block that nearly disappears on white. `SkeletonSwitch` is also what Detail's
+`Hero` reuses for the company name's single cold-open reveal (section 6).
+
+### 4.7 Retirements and deliberate exceptions
+
+| Component | Status | Where it went, or why it stayed |
+|---|---|---|
+| `Heading` | Retired | Replaced everywhere by `AmberSectionHead`, which closes the exact starved-title trap `Heading`'s weighted-title-against-unweighted-meta anatomy caused. |
+| `PrimaryButton`, `DisabledButton` | Retired | Replaced by `AmberPrimaryAction`/`AmberDisabledAction`. |
+| `SecondaryButton` (shared, and a private `YouScreen.kt` copy) | Retired | Both replaced by one shared `AmberSecondaryAction`. |
+| `Sheet`, `SheetSurface` | Retired | Replaced by `AmberSheet`/`AmberSheetSurface` (28dp top radius, `surfaceHigh`, amber handle, versus Instrument's square, neutral one). |
+| `ListRow` | **Kept, one caller** | `GalleryScreen.kt` only (debug builds), to stay field-for-field comparable with `design/canvas/instrument.py`'s own artboards. Every product screen moved to `AmberTickerRow`. Do not add a second caller. |
+| `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak: `ListScreen.kt` (Stocks) draws `TodayStrip` beside the Watched chip whenever a reader has watched a ticker, directly on that screen's own `colors.surfaceGround`, and it was reading Instrument's fixed `Ink2`/`Line` there, near-invisible on Amber's light ground. The `pluralStringResource` calls behind that text still live only in `ListScreen.kt`, unmoved (`CopyLintTest`'s `CountCopyTest` pins them there; this fix only threads the screen's own `colors` through, not the copy). `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
+| `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. The digest block on Today now follows the system light/dark setting like the rest of the screen. |
+| `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept, Instrument type, Amber colour** | Anatomy and `PlainTickerType` styles unchanged; each now resolves `defaultAmberColors()` instead of a fixed dark token. Not an oversight: none of these needed a shape change to read correctly, only a colour source that follows the system theme. |
+
+## 5. Layout
+
+The shared information architecture (Today, Stocks, Vote, Portfolio, You under `AmberBottomNav`,
+replacing the old List/Vote/Portfolio/Watchlist tab row and a TopBar "You" action; chapters
+replacing infinite scroll on Stocks) is `docs/design-research-2026-09-21.md` section 3, and it
+shipped as drawn: `HomeScreen` hosts five peer destinations, Watchlist folded into Today's own
+"Yours" block, Stocks gained sticky sector chapters, a jump index and a wrapping filter row.
+Detail's own layout order does not change in any direction the research drew, Amber included; only
+the tokens and components under it do.
+
+### 5.1 The surface ladder
+
+Three tiers, `AmberSurface.GROUND` / `RAISED` / `HIGH`, and a rule for reading tertiary text on any
+of them:
+
+| Surface | Used for |
+|---|---|
+| `surfaceGround` | The page background; the seam between rows inside a tonal group; a `stickyHeader`'s own default background. |
+| `surfaceRaised` | A ticker row's own fill; the venue/total card body; `AmberChip` and `AmberBottomNav`'s container unselected; `FactGrid`'s default cell surface; `SkeletonBar`'s fill. |
+| `surfaceHigh` | The highest surface: a selected chip; `AmberSheet`/`AmberSheetSurface`; the pressed state of a ticker row; the active bottom-nav pill; the `Gauge`/`Track` capsule fill (drawn directly on the page, not inside a card); `FactGrid`'s surface on the swap and pass sheets. |
+
+**Tertiary text never sits on `surfaceHigh`**, and it is enforced in code, not by convention:
+`AmberColors.textTertiary(on: AmberSurface)` is the only way to read that colour out of the class,
+and it promotes to `textSecondary` the moment `on == AmberSurface.HIGH`. The reason is the light
+theme's own thin margin: the pair measures 4.32:1 in dark and 4.12:1 in light on `surfaceHigh`,
+both inside the "4.1 to 4.4:1" band the research measured and both under the 4.5:1 AA floor for
+normal text, so a caller cannot pass `surfaceHigh` and get a failing colour back even by mistake.
+Every call site in `ui/components/` and every screen that draws its own text on a resolved surface
+(`AmberSectionHead`'s chapter head, `FactGrid`'s cell label) goes through this function rather than
+reading `textTertiary` as a field.
+
+A related but separate fact about the same thin margin: `surfaceRaised` over `surfaceGround`
+measures about 1.03:1 in light against 1.12:1 in dark, so a plain tonal fill (a ticker row, an
+unselected chip, a skeleton bar) reads as nearly invisible on white *before* any text is even
+drawn on it. This is not the tertiary-on-high rule, it is a step lower on the ladder, and it is
+why `AmberTickerRowGroup`, the grouped-row modifiers, `AmberChip` and `SkeletonBar` each draw the
+light-only 1dp border ring documented in section 4 and pinned in section 8's anti-patterns entry.
+
+### 5.2 Spacing and shape
+
+No single spacing-scale token exists (`Tokens.kt` has no `AmberSpacing`); the rhythm below is what
+every component in `ui/components/` and every screen actually uses, read off the source rather than
+declared once and possibly drifted from:
+
+| Value | Where |
+|---|---|
+| 1dp | The seam between rows in a tonal group; grid and gauge/track hairline elements. |
+| 4dp to 6dp | A slot's own internal line gaps (`AmberFigure`'s label/figure/context, `AmberSectionHead`'s row-to-lede gap). |
+| 8dp to 10dp | Gaps between a fixed label and its paired value (`Track`'s value/state, `AmberTickerRow`'s ticker/company and context/figure pairs). |
+| 12dp | Gaps between two independent groups sharing a row (`Gauge`/`Track`/`LiveBar`'s caption-and-value row, the chip row, `AmberSectionHead`'s title/meta gap). |
+| 16dp | A ticker row's own side padding and `AmberTickerRowGroup`'s outer side padding; `AmberChip`'s horizontal padding; a list container's shape radius. |
+| 20dp | The near-universal screen-edge and card side inset: `AmberFigure`, `FactGrid`, `Gauge`, `Track`, `LiveBar`, `SignalRow`, `Field`, sheet content. |
+| 24dp | Above an `AmberSectionHead`. |
+| 28dp | A status card's or a sheet's top radius. |
+
+Shape follows a three-step hierarchy by role, not by screen (`AmberShapes` in `Theme.kt`): **8dp**
+for a chip's resting corner, **16dp** for a list container or a button, **28dp** for a status card
+or a sheet's top radius. A chip's selected radius is a fourth, dynamic value
+(full/pill, `ChipHeight / 2`) reached by animating the 8dp value rather than switching shapes (section 6).
+
+### 5.3 Screen by screen
+
+**Today** opens on `surfaceGround`: a venue status card (`AmberFigure`), "Tracked today" and "Next
+up" as `AmberSectionHead` plus `AmberTickerRowGroup` blocks, then Watchlist's own content
+(`WatchlistContent`) as the "Yours" block in between, then a footer count. See section 4.7 for
+`WatchlistContent`'s own un-restyled digest panel.
+
+**Stocks** (`ListScreen.kt`, mounted by `StocksScreen`) replaced an infinite scroll with search at
+the top, sticky sector chapters (`stickyHeader` items painted opaque so pinned content never shows
+scrolling rows through it), a chapter jump index as a real `Row` sibling of the list, not an overlay
+(an earlier version drew it as a `Box` on top of the full-width `LazyColumn` and it covered the
+search field, the chips and every sticky heading; the list now takes `weight(1f)` so the jump index
+narrows it rather than sitting over it), and a wrapping filter row (`FlowRow`, so 1.3x font scale
+grows the row instead of hiding a chip past an edge). One filter active at a time, because the jump
+index already reaches a sector without narrowing anything, so a sector chip's own job is holding
+one still rather than stacking with Tracked/Watched.
+
+**Vote** lays out a header, an explainer, the round header, Leaders, Your votes, a search field,
+then the ballot, all in one `LazyColumn` with no sticky header at all. This was measured, not
+assumed: the shipped catalog runs to 928 symbols and the ballot can hold up to 771 rows at 64dp
+each, tens of thousands of display points below where the screen starts. What that costs is
+specific, not a vague "it's long": the header carries nothing a voter needs mid-ballot (switching
+destinations is `AmberBottomNav`'s job, not this screen's, since the bar is a sibling of the
+scrolling content, not a child of it) and every ballot row draws its own inline "Vote," so a voter
+never scrolls back up to cast one. What is genuinely lost is `BallotSearchField`: it is a plain,
+non-sticky `LazyColumn` item like every section above it, so re-reaching it once scrolled past
+costs the same climb the descent down did. This is recorded in `VoteScreen.kt`'s own class doc
+rather than fixed; if this layout is ever revisited, that field, not the header, is where the real
+cost sits.
+
+**Portfolio** and **You** both use a hero `AmberFigure` (the total; the identity block) followed by
+`AmberRowFrame`-grouped rows or local fact cells; see section 4.1 and 4.4 for why each has its own
+per-row or local grouping rather than `AmberTickerRowGroup` directly.
+
+**Detail** keeps its pre-Amber section order (hero, verdict, price, gauge, fundamentals, method,
+what to check next); only the components under each section moved. The hero sits directly on
+`surfaceGround`; the gauge and track capsules are the one place `surfaceHigh` is used for a drawn
+element rather than a container.
+
+### 5.4 The clipping rule, as a layout fact
+
+Section 4 states the rule at the component level (a slot with no wrapping beside a sibling of fixed
+or content-derived width clips). At the layout level it shows up one step higher: Stocks' own
+company-name clip was not a bug in `AmberTickerRow` itself but in the outer `Row` around it, which
+gave its meta column no `weight` at all, so Compose measured that column's full disclosure clause
+before it ever divided space among the weighted name group beside it, a column with no explicit
+width acting exactly like a fixed one. The fix (`AnalyzedRow`, `ListScreen.kt`) gives both outer
+groups a weight (name 3, meta 2) rather than leaving either one unweighted. The general form: any
+time two variable-length groups share a row, both need a `weight`, or neither should share the row
+at all.
+
+## 6. Motion
+
+**Where motion is applied**, exhaustively, because a reader building a new screen needs to know
+this is the whole list, not a sample of it:
+
+| Where | Spec | Gate | Snaps to |
+|---|---|---|---|
+| `AmberChip`'s corner radius, selecting/deselecting | `spring(dampingRatio = NoBouncy, stiffness = MediumLow)` on the radius `Dp`, 8dp to full | `rememberMotionEnabled()` | The selected or unselected end shape |
+| `TodayScreen`'s block entrance (venue, tracked, next up, footer; blocks 1, 3, 4, 5) | The same no-bounce, medium-low spring, on alpha and an 8dp rise, staggered 40ms per block, once, the first time a block has something to draw | `rememberMotionEnabled()` | Alpha 1, no translation |
+| Portfolio's Total card; You's Pro/Staked SKR pair | `tween(150ms, LinearOutSlowInEasing)`, the research's "quick" token, once on first composition | `rememberMotionEnabled()` | Alpha 1 |
+| `SkeletonSwitch` (Detail's `Hero` company name; every other skeleton-to-content switch in the app) | `tween(200ms, EaseOut)` alpha fade, never a spinner | `rememberMotionEnabled()` | Alpha 1 |
+| `Track`'s position marker | `tween(400ms, CubicBezierEasing(.2, .8, .2, 1))`, unchanged since before this restyle | `rememberMotionEnabled()` | The target position |
+| `LiveBar`'s breathing bar | `infiniteRepeatable(tween(1200ms, EaseInOut), reverse)`, alpha 1 to 0.45, while `live` is true | `rememberMotionEnabled()` | Alpha 1 (stops breathing, does not disappear) |
+
+Two spring families do the orchestrated work (`AmberChip`'s morph and `TodayScreen`'s stagger), both
+`Spring.DampingRatioNoBouncy` at `Spring.StiffnessMediumLow`: a settle, never a bounce, because a
+bouncy alpha can overshoot past fully opaque and read as a flicker on a small block, and a bouncy
+shape morph would read as wobble on a 32dp chip. A single "quick" 150ms linear-ease tween is the
+one-shot reveal token (Portfolio's Total, You's identity pair), distinct from the spring family and
+from `Skeleton`'s own, older 200ms ease-out fade and `Track`'s 400ms cubic-bezier settle, both
+predating Amber's motion pass and left untouched because nothing about this restyle changed what
+either one settles.
+
+**Where motion is deliberately absent.** `Gauge`, `FactGrid`, `AmberSectionHead`, `AmberFigure`,
+`AmberTickerRow`, `SignalRow` and `AmberBottomNav`'s own selection indicator carry none: `Gauge`'s
+own doc comment states it outright ("Motion. None: this canvas answers to `positionPct`-style
+continuous change nowhere the research draws"), and the same is true of every static value the
+others draw.
+Two pieces the research's own anatomy calls for are still not built, for the reason they never
+were: they are motion-token work that belongs with the component that will use it, not a global
+pass. `AmberSheet`'s "spring entry" is not built; what plays is `ModalBottomSheet`'s own default
+slide, unmodified. `AmberBottomNav`'s pill width-morph is not built; what plays is `NavigationItem`'s
+own built-in selection transition, unmodified. Neither omission is silent: both are named at their
+own call site's doc comment, not left for a reader to discover by their absence.
+
+**The rule every entry above already satisfies**: nothing may need motion to be legible, because
+the smoke script (`scripts/device-smoke.sh`) runs with the system animator duration scale at 0, and
+`rememberMotionEnabled()` returns false under exactly that condition. Every gated animation above
+replaces its spec with `snap()` at that scale, landing on its settled value on the next frame
+rather than partway through a transition; `LiveBar` simply stops breathing and holds at full
+opacity, which is also its fully legible state, because `label` itself already says "Live from the
+mint" or "Landed" in words, not only through whether the bar is moving. A new component that needs
+its animation to finish before a reader can tell what it says has not met this bar, no matter how
+good the animation looks with motion on.
 
 ## 7. Copy and content rules
 
@@ -303,12 +682,79 @@ shape hierarchy, a semantic token tier, a warm identity instead of a tinted near
 direct answer to that list, and a future edit that quietly re-flattens it back toward one of these
 markers is the regression this section exists to name.
 
-## 9. Brand mark — not yet restyled
+## 9. Brand mark
 
-Unchanged. The launcher and notification icons (`design/brand/marks.py`, `design/brand/glyph.py`)
-are pinned to Instrument's `Ink` and `Canvas` tokens by `BrandAssetsTest`, and this pass does not
-touch them: repainting the icon is a decision for whoever owns it next, not a side effect of a
-token foundation. See `docs/fonts.md`'s Brand mark section for how the icon is generated.
+**What it is.** "Two corners" (`design/brand/marks.py`, `CHOSEN = "two-corners"`), the founder's
+own pick from a selection gallery on 2026-09-15, over a week before Amber was chosen. Two L-shaped
+registration corners on the adaptive icon's 108-unit viewport, top-left and bottom-right, on
+opposite diagonals, with an empty centre between them: "the place the app keeps around a figure it
+has not printed," the mark's own docstring says, echoing section 1.1's liquidity floor before
+either Amber or this document's own restyle existed. Four axis-aligned rectangles, Amber's own
+dark-set ground (`#16130D`, `AmberDarkColors.surfaceGround`) on Amber's own dark-set primary text
+as the tile (`#F5EEDD`, `AmberDarkColors.textPrimary`); `BrandAssetsTest` pins both the geometry
+(rotationally symmetric about the centre, never mirror-symmetric top to bottom, so a flattened,
+one-colour silhouette still reads as itself rather than collapsing into a plus sign) and the two
+colours directly against `AmberDarkColors`. The same rectangles reappear as the splash icon (in
+Amber's own ink, over Amber's own ground as the window background) and the notification icon (in
+white, fitted to the 24dp status-bar viewport).
+
+**Judgement, looked at on Amber's ground rather than transcribed, and since fixed (2026-09-22).**
+The arrangement survives: two registration corners around a deliberately empty centre is a shape,
+not a palette, and the idea it carries, a kept place where a figure is not printed rather than one
+filled with a guess, still reads as this product's argument regardless of which colour system sits
+behind it. What did not survive was the colour execution, and it did not survive for a reason more
+specific than "it looks different now."
+
+`Ink` and `Canvas`, the pair this section used to name here, are Instrument's own tokens, and were,
+as of this restyle, colours that appeared nowhere else the app drew: Amber's actual grounds are
+warm, `#16130D` dark and `#FFFBF2` light, against Instrument's cool near-black `#0B0F14` and cool
+near-white `#E8ECF1`. The choice of `Ink` over `Canvas` was argued carefully at the time, but the
+argument was made entirely inside Instrument's old, flat nine-token section 2: four ground
+treatments were composited into a real drawer screenshot and measured across the tile edge
+(`Canvas` 1.04:1, an accent field 7.23:1, a cool off-white field 16.79:1, `Ink` 15.48:1), and the
+off-white option, the one closest in spirit to Amber's own warm light ground, was rejected
+specifically because it "costs two colours that are not in DESIGN.md section 2," a constraint that
+no longer described the palette this document now governs.
+
+**The fix.** The mark itself was not touched, only which two Kotlin colours the same two roles
+(mark fill, tile ground) read: Amber's own dark-set `surfaceGround` (`#16130D`) replaces `Canvas`,
+and Amber's own dark-set `textPrimary` (`#F5EEDD`) replaces `Ink`, in exactly the pairing the 2026-
+09-15 drawer measurement picked (a near-black figure on a near-white tile), now in Amber's own warm
+hex rather than Instrument's cool one. `res/values/colors.xml` carries them as `amber_ground` and
+`amber_ink` (`design/brand/marks.py`'s `AMBER_GROUND`/`AMBER_INK`, the same names `glyph.py`
+regenerates `ic_launcher_foreground.xml`, `ic_brand_mark.xml` and `ic_launcher_background.xml`
+from), and `Theme.PlainTicker`/`Theme.PlainTicker.Starting` in `themes.xml` now paint
+`@color/amber_ground` instead of `@color/canvas` for the plain window background and the splash,
+so the launcher tile, the splash and the first Compose frame all agree on one pair rather than the
+splash and the plain window background staying on Instrument's cool near-black while the live
+`AmberTheme` content painted a warm one a moment later. That was the cool-to-warm flash in light
+mode section 9 used to describe here: `AmberTheme`'s light `surfaceGround` is a warm cream, and a
+splash window still painted in Instrument's cool near-black flashed into it rather than resolving
+with it. `BrandAssetsTest` now pins the launcher, the splash and both starting-theme colour items
+against `AmberDarkColors.surfaceGround`/`textPrimary` instead of the retired `Canvas`/`Ink` Kotlin
+tokens, so a future edit to either can no longer leave the icon behind the way this one did.
+
+The new pair's own contrast, computed the same WCAG relative-luminance way `AmberContrastTest`
+computes every other ratio in this document, is 16.0:1 (`AmberDarkColors.textPrimary` over
+`AmberDarkColors.surfaceGround`, the same figure that test already pins independently for that
+exact pair) — not a fresh photograph of the real Seeker drawer the way the 2026-09-15 figures
+above were, since this fix had no device to retake one with, but the same formula every other
+number in this section already answers to.
+
+**One more fact, unrelated to colour but worth stating beside it** because it bears on any future
+revision: the mark's own corners
+sit 39.60 units from centre, well past the 33-unit circle every earlier mark was checked against,
+and clear the real superellipse mask a launcher actually cuts by only 0.81 of a unit (two device
+pixels on the Seeker). This is a property of the arrangement, not the colour, and nothing above
+changes it, but it means the mark is already at the edge of its own safe zone, which narrows how
+much room a future revision has to move these corners at all, whatever it does with colour.
+
+**What this is not.** Not a recommendation to redraw it: that is a judgement about identity and
+cost the founder should make deliberately, against a concrete replacement, the same way section 10
+asks for `1.5.0-alpha` to be decided against a concrete component rather than reached for by
+default. What changed here is narrower: the arrangement still works and now the colour pair does
+too, on Amber's own values instead of Instrument's retired ones, closing the mismatch that used to
+be visible at the launcher and at cold launch in light mode.
 
 ## 10. Material3 Expressive: what 1.4.0 actually has
 
@@ -345,7 +791,15 @@ Built in this pass, both themes: `AmberDarkColors` / `AmberLightColors` (semanti
 `AmberTheme` (the M3 wiring). `AmberContrastTest` pins every ratio section 2 states and the
 tertiary-on-high rule; `AmberThemeTest` pins the colour-scheme mapping and the type scale.
 
-**Not built in this pass, on purpose**: `AmberTheme` is not yet the app's active theme
-(`MainActivity` still calls `PlainTickerTheme`); motion tokens; the restyle of any existing
-component or screen; the brand mark. Each is a later phase's work, once this foundation exists for
+**Not built in this pass, on purpose**: `AmberTheme` was not yet the app's active theme
+(`MainActivity` still called `PlainTickerTheme`); motion tokens; the restyle of any existing
+component or screen; the brand mark. Each was later-phase work, once this foundation existed for
 it to build on.
+
+**Since this paragraph was first written**, every item above but one has been built: `AmberTheme`
+is now the app's live theme, wired to the system light/dark setting (`MainActivity`); the
+components, layout and motion the paragraph deferred are what sections 4, 5 and 6 now describe, in
+full, against the shipped code rather than a plan for it. The brand mark was the one holdout:
+section 9 recorded why its arrangement still worked and why its colour pair, as shipped, did not,
+and on 2026-09-22 the colour pair was moved onto Amber's own ground values (the shape is still the
+founder's, untouched) so the launcher, the splash and the first Compose frame agree.

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,21 +25,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
+import com.plainticker.mobile.ui.components.AmberSectionHead
+import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
-import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-// The row component and this screen's row model share a name; the anatomy keeps an alias.
-import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.Panel
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.spoken
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
@@ -57,6 +56,25 @@ import java.time.LocalDate
  * Nothing here computes anything: [WatchlistModel.kt] picks every sentence and
  * [WatchlistViewModel] every number, so a premium on a row comes from the same rule as the list's
  * and the digest is never re-derived from the rows on screen.
+ *
+ * **U10, judged against this screen as it stands rather than built as written**
+ * (docs/plan-app-uiux-2026-09-21.md's after-the-hackathon table: "Watchlist with numbers when
+ * little is watched: the report countdown as a `Track`", citing the design review of 13 September,
+ * docs/design-review-2026-09-13.md's "Weakest: Watchlist as shipped" finding). Two things changed
+ * under that row. First, the screen
+ * that finding was about no longer exists on its own: [WatchlistContent] is now Today's Yours
+ * block ([com.plainticker.mobile.ui.today.TodayScreen]), drawn between a populated venue card and
+ * a populated Tracked today section rather than alone on the third tab, so the "55 percent of the
+ * frame empty" reading a mostly-empty screen earned on 13 September does not describe what a
+ * reader now sees even when nothing is watched. Second, [Track] itself (a position on a scale:
+ * label, value, state word, a tick against a range) is not a shape a report countdown actually
+ * has: there is no range a date-until-next-report is a position on, only a plain "no report date"
+ * or "reports on %1$s" sentence ([watchRow]'s own `report` half), so fitting it to `Track` would
+ * be forcing the component to a fact it was not built to state rather than answering the review's
+ * actual ask. `Track` also lives in `ui/components/`, retired by other agents in parallel this
+ * week and out of this pass's own file set regardless. Nothing built here; the empty state stays
+ * the plain sentence and [AmberSecondaryAction] it already draws (chrome's retirement of
+ * Instrument's `SecondaryButton` landed on this branch after this note was written).
  */
 @Composable
 fun WatchlistScreen(
@@ -138,7 +156,7 @@ internal fun WatchlistContent(
             }
         }
         item(key = "watched") {
-            Heading(text = stringResource(R.string.watchlist_heading_watched))
+            AmberSectionHead(title = stringResource(R.string.watchlist_heading_watched))
         }
 
         when {
@@ -149,7 +167,7 @@ internal fun WatchlistContent(
                 item(key = "empty") { EmptyLine(stringResource(R.string.watchlist_empty)) }
                 if (onBrowseList != null) {
                     item(key = "browse-action") {
-                        SecondaryButton(
+                        AmberSecondaryAction(
                             label = stringResource(R.string.action_browse_analyzed),
                             onClick = onBrowseList,
                             modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
@@ -171,7 +189,7 @@ internal fun WatchlistContent(
         }
 
         item(key = "digest") {
-            Heading(text = stringResource(R.string.watchlist_heading_digest))
+            AmberSectionHead(title = stringResource(R.string.watchlist_heading_digest))
         }
         item(key = "digest-panel") { Digest(state.digest) }
         item(key = "digest-footer") {
@@ -195,18 +213,29 @@ internal fun WatchlistContent(
  */
 @Composable
 private fun DebugRunCheck(onRunCheck: () -> Unit) {
+    val colors = defaultAmberColors()
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         horizontalArrangement = Arrangement.End,
     ) {
-        TextAction(label = stringResource(R.string.debug_run_watchlist_check), onClick = onRunCheck)
+        TextAction(
+            label = stringResource(R.string.debug_run_watchlist_check),
+            onClick = onRunCheck,
+            color = colors.actionText,
+        )
     }
 }
 
 /**
- * One watched ticker: the token left, the next report and the premium on the meta line, "Unwatch"
- * trailing. The row opens Detail and the text action does not, so the two targets are separate and
- * both are 48dp; there is no swipe, which Pass 2 rejected for discoverability.
+ * One watched ticker: Amber's ticker row, the token on its name line, the next report and the
+ * premium joined as the meta line's context (no figure: this row never prices anything), "Unwatch"
+ * trailing through [AmberTickerRow]'s own `trailingAction`. The row opens Detail and the text
+ * action does not, so the two targets are separate and both are 48dp; there is no swipe, which
+ * Pass 2 rejected for discoverability.
+ *
+ * The divider between rows is [AmberRowDivider], not a group: Watchlist can carry as many rows as
+ * a wallet is watching, so each stays its own lazy item rather than one non-lazy group holding all
+ * of them, the same trade `VoteScreen.kt`'s own ballot makes.
  */
 @Composable
 private fun Watched(
@@ -219,26 +248,52 @@ private fun Watched(
     val report = watch.report.text()
     val tracking = watch.tracking?.text()
     val meta = tracking?.let { stringResource(R.string.list_row_meta_join, report, it) } ?: report
-    InstrumentRow(
-        ticker = watch.symbol,
-        company = watch.company,
-        meta = meta,
-        trailingAction = stringResource(R.string.action_unwatch),
-        onTrailingAction = { onUnwatch(watch.ticker) },
-        divider = !last,
-        onClick = { onOpenDetail(watch.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, watch.symbol),
-        description = sentence(watch.symbol, watch.company, report, tracking),
-    )
+    AmberRowDivider(last = last) {
+        AmberTickerRow(
+            ticker = watch.symbol,
+            company = watch.company,
+            context = meta,
+            trailingAction = stringResource(R.string.action_unwatch),
+            onTrailingAction = { onUnwatch(watch.ticker) },
+            onClick = { onOpenDetail(watch.ticker) },
+            onClickLabel = stringResource(R.string.action_open_ticker, watch.symbol),
+            description = sentence(watch.symbol, watch.company, report, tracking),
+        )
+    }
 }
 
-/** The digest Panel: the time it was produced in mono meta, the digest itself under it. */
+/**
+ * The 1dp seam between rows, drawn manually because this screen's rows are individual lazy items
+ * rather than one [com.plainticker.mobile.ui.components.AmberTickerRowGroup]: the same trade
+ * `VoteScreen.kt`'s own [com.plainticker.mobile.ui.vote.VoteScreen] carries for its ballot, read
+ * here against [com.plainticker.mobile.ui.theme.AmberColors.border].
+ */
+@Composable
+private fun AmberRowDivider(last: Boolean, content: @Composable () -> Unit) {
+    val colors = defaultAmberColors()
+    Column(Modifier.fillMaxWidth()) {
+        content()
+        if (!last) HorizontalDivider(thickness = 1.dp, color = colors.border)
+    }
+}
+
+/**
+ * The digest Panel: the time it was produced in mono meta, the digest itself under it.
+ *
+ * Reads [defaultAmberColors] rather than Instrument's fixed-dark `Ink`/`Muted`: this panel sits on
+ * Today's Yours block, the first thing a reader sees, over [com.plainticker.mobile.ui.home.HomeScreen]'s
+ * own live `AmberTheme` surface, so a fixed-dark colour here would draw near-invisible text in
+ * light mode rather than resolving with the rest of the screen.
+ */
 @Composable
 private fun Digest(record: DigestRecord) {
+    val colors = defaultAmberColors()
     val panel = digestPanel(record)
-    Panel {
-        panel.producedAt?.let { Text(text = it, style = PlainTickerType.meta, color = Muted) }
-        Text(text = panel.body.text(), style = PlainTickerType.panelBody, color = Ink)
+    Panel(colors = colors) {
+        panel.producedAt?.let {
+            Text(text = it, style = PlainTickerType.meta, color = colors.textTertiary(AmberSurface.RAISED))
+        }
+        Text(text = panel.body.text(), style = PlainTickerType.panelBody, color = colors.textPrimary)
     }
 }
 
@@ -248,6 +303,10 @@ private fun Digest(record: DigestRecord) {
  * A device that will not show notifications says so once, here, with the way to change it beside
  * the sentence. That is the whole of the app's response to a refused permission: the digest is on
  * the screen either way, and nothing asks again.
+ *
+ * Reads [defaultAmberColors] rather than Instrument's fixed-dark `Ink2`/`Muted`/`Accent` default,
+ * the same class of fault [Digest] carried: this footer sits directly on Today's Yours block, not
+ * inside a Panel, so a fixed-dark colour would draw near-invisible text on Amber's light ground.
  */
 @Composable
 private fun Footer(
@@ -256,6 +315,7 @@ private fun Footer(
     nowMillis: Long,
     onEnableNotifications: (() -> Unit)?,
 ) {
+    val colors = defaultAmberColors()
     val footer = digestFooter(record = record, notificationsOn = notificationsOn, nowMillis = nowMillis)
     Column(
         modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 16.dp),
@@ -265,14 +325,20 @@ private fun Footer(
             Text(
                 text = footer.delivery.text(),
                 style = PlainTickerType.small,
-                color = Ink2,
+                color = colors.textSecondary,
                 modifier = Modifier.weight(1f),
             )
             if (!notificationsOn && onEnableNotifications != null) {
-                TextAction(label = stringResource(R.string.action_enable), onClick = onEnableNotifications)
+                TextAction(
+                    label = stringResource(R.string.action_enable),
+                    onClick = onEnableNotifications,
+                    color = colors.actionText,
+                )
             }
         }
-        footer.checked?.let { Text(text = it.text(), style = PlainTickerType.small, color = Muted) }
+        footer.checked?.let {
+            Text(text = it.text(), style = PlainTickerType.small, color = colors.textTertiary(AmberSurface.GROUND))
+        }
     }
 }
 
@@ -280,13 +346,17 @@ private fun Footer(
  * One sentence where the rows would be, so no state of this screen is a blank column. The
  * forward action that answers it, when there is one, is its own 56dp button below (U2), never
  * drawn inline as a trailing text link.
+ *
+ * Reads [defaultAmberColors] rather than Instrument's fixed-dark `Ink2`, the same class of fault
+ * [Digest] and [Footer] carried.
  */
 @Composable
 private fun EmptyLine(text: String) {
+    val colors = defaultAmberColors()
     Text(
         text = text,
         style = PlainTickerType.body,
-        color = Ink2,
+        color = colors.textSecondary,
         modifier = Modifier.fillMaxWidth().padding(bottom = EmptyLineGap).padding(horizontal = Side),
     )
 }

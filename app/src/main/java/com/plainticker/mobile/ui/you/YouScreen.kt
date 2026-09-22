@@ -6,7 +6,6 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,7 +14,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -25,9 +23,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -57,6 +53,7 @@ import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactTone
@@ -80,6 +77,8 @@ import com.plainticker.mobile.ui.theme.JetBrainsMono
 import com.plainticker.mobile.ui.theme.TABULAR_NUMERALS
 import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.wallet.WalletAccount
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * You (docs/plan-app-uiux-2026-09-21.md, task U1; restyled to Amber, docs/design-research-2026-09-21.md
@@ -113,6 +112,14 @@ import com.plainticker.mobile.wallet.WalletAccount
  * and never appears here or on any other screen: this file reads only [PassViewModel]'s already
  * resolved [ProUiState], never the store itself, and DeviceCodeNeverDrawnTest scans every
  * composable under ui/ so a later change cannot draw it by accident.
+ *
+ * **Fonts and licenses, after the footer (task U11).** [bundledFontLicenses] names every face the
+ * app ships today, not the two U11 was written against: Amber added Bricolage Grotesque
+ * (docs/fonts.md), so this list is the current three, Outfit and JetBrains Mono from Instrument
+ * alongside it. Each [LicenseRow] states the font and its copyright as its own sentence, then
+ * reads the shipped OFL text itself (`app/src/main/assets/licenses/`) on request rather than
+ * retyping it: a license's own wording is not this screen's copy to author or run through
+ * strings.xml's formatting.
  */
 @Composable
 fun YouScreen(
@@ -221,6 +228,10 @@ internal fun YouContent(
             NotificationsLine(notificationsOn = state.notificationsOn, onEnable = onEnableNotifications, colors = colors)
         }
         item(key = "footer") { Footer() }
+        item(key = "licenses-heading") {
+            AmberSectionHead(title = stringResource(R.string.you_heading_licenses), colors = colors)
+        }
+        items(bundledFontLicenses, key = { it.assetPath }) { license -> LicenseRow(license = license, colors = colors) }
     }
 }
 
@@ -236,9 +247,13 @@ private fun YouAction.handler(onConnect: () -> Unit, onPay: () -> Unit): () -> U
 
 /**
  * Exactly one 56dp button per state (plan section 1.2), never two Accent fills:
- * [AmberPrimaryAction] for the primary slot, [AmberSecondaryAction] (this file's own small
- * Amber-styled analogue of Instrument's `SecondaryButton`; no shared Amber equivalent exists yet)
- * for the one case that pairs Connect wallet with Pay for Pro.
+ * [AmberPrimaryAction] for the primary slot, [AmberSecondaryAction][
+ * com.plainticker.mobile.ui.components.AmberSecondaryAction] for the one case that pairs Connect
+ * wallet with Pay for Pro. Until this pass [AmberSecondaryAction][
+ * com.plainticker.mobile.ui.components.AmberSecondaryAction] was a private copy living only in this
+ * file ("no shared Amber equivalent exists yet"); it is now the shared component `SecondaryButton`
+ * retired in favour of, so this call site and the swap, pass and vote sheets reach for the same
+ * function rather than two that mean the same thing.
  */
 @Composable
 private fun ActionButtons(actions: YouActions, onConnect: () -> Unit, onPay: () -> Unit, colors: AmberColors) {
@@ -251,29 +266,6 @@ private fun ActionButtons(actions: YouActions, onConnect: () -> Unit, onPay: () 
         }
         actions.secondary?.let {
             AmberSecondaryAction(label = it.label.text(), onClick = it.handler(onConnect, onPay), colors = colors)
-        }
-    }
-}
-
-/**
- * The one bordered action Amber has not built a shared component for
- * (docs/design-research-2026-09-21.md section 5.5 lists a primary action only): the same 56dp,
- * 16dp-radius frame [AmberPrimaryAction] uses, transparent with a 1dp [AmberColors.border] and
- * [AmberColors.textPrimary] text, so it reads as a real button beside the filled one rather than a
- * dimmer copy of it.
- */
-@Composable
-private fun AmberSecondaryAction(label: String, onClick: () -> Unit, colors: AmberColors, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(56.dp)) {
-        OutlinedButton(
-            onClick = onClick,
-            modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent, contentColor = colors.textPrimary),
-            border = BorderStroke(1.dp, colors.border),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp),
-        ) {
-            Text(text = label, style = AmberType.button, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -421,6 +413,50 @@ private fun Footer() {
             style = AmberType.context,
             color = colors.textTertiary(AmberSurface.GROUND),
         )
+    }
+}
+
+/**
+ * One bundled font (task U11): its device-facing name and credit line, always on screen, then the
+ * license terms sentence and a text action that reads the OFL text itself in place. The body is
+ * read from `app/src/main/assets/` on first open and kept for the life of this composition
+ * ([remember] keyed on the asset path), never retyped as copy: a license's own wording is not this
+ * app's to author or to run through strings.xml's formatting and pluralization.
+ */
+@Composable
+private fun LicenseRow(license: BundledFontLicense, colors: AmberColors) {
+    var expanded by remember(license.assetPath) { mutableStateOf(false) }
+    var body by remember(license.assetPath) { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    LaunchedEffect(license.assetPath, expanded) {
+        if (expanded && body == null) {
+            body = withContext(Dispatchers.IO) {
+                runCatching { context.assets.open(license.assetPath).bufferedReader().use { it.readText() } }.getOrNull()
+            }
+        }
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = BlockGap).padding(horizontal = Side),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(text = stringResource(license.nameRes), style = AmberType.body, color = colors.textPrimary)
+        Text(text = stringResource(license.creditRes), style = AmberType.context, color = colors.textSecondary)
+        Text(text = stringResource(R.string.you_license_terms), style = AmberType.context, color = colors.textSecondary)
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
+            TextAction(
+                label = stringResource(if (expanded) R.string.action_hide_license else R.string.action_read_license),
+                onClick = { expanded = !expanded },
+                color = colors.actionText,
+            )
+        }
+        if (expanded) {
+            Text(
+                text = body ?: stringResource(R.string.you_license_unavailable),
+                style = AmberType.meta,
+                color = colors.textSecondary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 

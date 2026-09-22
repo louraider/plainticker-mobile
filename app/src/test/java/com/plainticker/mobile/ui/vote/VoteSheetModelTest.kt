@@ -86,6 +86,27 @@ class VoteSheetModelTest {
         assertEquals("the whole address is what a tap carries off the screen", collector, sentTo.copies)
     }
 
+    /**
+     * A fee that is not a round number of SOL (a base fee plus whatever priority fee applied,
+     * which is the common case, not the edge case) used to print all nine of lamports' own
+     * decimals: "0.123456789 SOL", 15 characters, wide enough to clip the fact cell it sits in
+     * (`LAMPORT_DISPLAY_DECIMALS`'s own doc comment in `VoteSheetModel.kt` has the arithmetic
+     * against the real font). Six decimals, this file's `measuredStake` fee of 5,000 lamports
+     * being too round to have ever caught it, is the regression this test is for.
+     */
+    @Test
+    fun `an unrounded fee is shown to six decimals, not to all nine of lamports' own precision`() {
+        val unrounded = build.copy(summary = build.summary.copy(lamports = 123_456_789L))
+        val content = sheetOf(VoteState.Ready("NFLX", "NFLXx", collector, measuredStake, unrounded))
+        val fee = content.cells[1]
+        assertEquals(
+            "half-up at six decimals, not the nine-decimal exact reading (\"0.123456789 SOL\") that " +
+                "used to clip the fact cell",
+            "0.123457 SOL",
+            ShippedCopy.render(fee.value),
+        )
+    }
+
     @Test
     fun `the confirm step says what the vote is and that the signer is the voter`() {
         val lede = render(sheetOf(ready()).notice)!!

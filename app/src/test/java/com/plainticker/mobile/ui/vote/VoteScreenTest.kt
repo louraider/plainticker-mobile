@@ -286,6 +286,61 @@ class VoteScreenTest {
         assertFalse("the two states must not say the same thing twice", "vote_tab_no_votes_yet" in notOpenBlock)
     }
 
+    // ---- U13: what the scroll-away header actually costs deep in the ballot, measured --------------
+
+    /**
+     * The one thing the ballot needs and the header cannot strand: [BallotRow] carries its own
+     * inline vote action, so a voter who has scrolled deep into the ballot never has to scroll back
+     * to a fixed slot to cast it. Distinct from the existing "the list offers the vote..." test
+     * above, which pins the same rule for `ui/list/ListScreen.kt`'s own row; this screen's
+     * `BallotRow` is its own definition, not a call into that one.
+     */
+    @Test
+    fun `the ballot row carries its own vote action, never only the header`() {
+        val row = body(voteTabScreen, "private fun BallotRow(")
+        assertTrue("the vote action is drawn only when onVote is offered", "if (onVote != null) {" in row)
+        assertTrue("vote_action_row is the label, the same short one the list uses", "R.string.vote_action_row" in row)
+        assertTrue("TextAction(" in row)
+    }
+
+    /**
+     * Nothing on this screen scrolls independently or sits above the content: the whole thing is
+     * one `LazyColumn`, so [BallotSearchField] is exactly as far from view once scrolled past as
+     * the ballot itself is deep. If this ever changes (a sticky search field, a second scroll
+     * container), the U13 measurement above changes with it and needs a second look.
+     */
+    @Test
+    fun `nothing on this screen is sticky, so the search field scrolls away exactly as far as the ballot goes`() {
+        assertEquals("exactly one scroll container", 1, count(voteTabScreen, "LazyColumn("))
+        assertEquals("nothing here is sticky", 0, count(voteTabScreen, "stickyHeader"))
+        assertTrue("the search field is a plain LazyColumn item like every section above it", "BallotSearchField(" in voteTabScreen)
+    }
+
+    /**
+     * The ballot's real scale, checked against the shipped catalog and docs/data-map.md's own
+     * analyzed count rather than assumed: what U13's class-doc measurement above is arithmetic on.
+     */
+    @Test
+    fun `the ballot the header scrolls away from is hundreds of rows deep, measured against the shipped catalog`() {
+        val catalog = File(module, "src/main/assets/snapshot/xstocks.json").readText()
+        val symbols = catalog.split("\"symbol\"").size - 1
+        assertEquals("app/src/main/assets/snapshot/xstocks.json's own symbol count", 928, symbols)
+        val analyzed = 157 // docs/data-map.md: "analyzed xStocks reaching the Analyzed section | 157"
+        val ballotRows = symbols - analyzed
+        assertEquals(771, ballotRows)
+        // AmberTickerRow.kt's own floor; not read from that file (out of this task's file set), but
+        // the number itself is quoted verbatim in VoteScreen.kt's own class doc above it and is the
+        // same 64dp every other ticker row in this app already uses.
+        val minRowDp = 64
+        assertTrue(
+            "scrolling to the middle of a 771-row ballot alone is tens of thousands of display " +
+                "points, many screen-heights below where it begins",
+            (ballotRows / 2) * minRowDp > 10_000,
+        )
+    }
+
+    private fun count(source: String, marker: String): Int = source.split(marker).size - 1
+
     /** Everything from [function] to the line that closes it at column zero. */
     private fun body(source: String, function: String): String {
         val start = source.indexOf(function)

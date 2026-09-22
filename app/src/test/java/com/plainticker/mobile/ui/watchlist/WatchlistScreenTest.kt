@@ -126,7 +126,10 @@ class WatchlistScreenTest {
     @Test
     fun `the digest on screen is the one that was stored`() {
         val panel = body("private fun Digest(", "private fun Footer(")
-        assertTrue("the Panel is the digest container", "Panel {" in panel)
+        // "Panel(colors = colors) {" since the fix for the light-theme Digest leak (Digest now
+        // resolves defaultAmberColors and hands it to Panel instead of Panel reading Instrument's
+        // fixed-dark Elevated/Line on its own); still the digest's one container either way.
+        assertTrue("the Panel is the digest container", "Panel(" in panel)
         assertTrue("it draws what the model read out of the record", "digestPanel(record)" in panel)
         assertEquals("the screen must not assemble a digest", 0, count("digest("))
         assertTrue("the model reads the stored text raw", "raw(text)" in modelScan.code)
