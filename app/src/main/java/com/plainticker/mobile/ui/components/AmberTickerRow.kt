@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
@@ -99,6 +101,61 @@ import com.plainticker.mobile.ui.theme.AmberType
  *   common bare-figure case ("100", the composite score this exact row draws) it still clears one
  *   line, 250.18dp of text against a 284.97dp budget — [context]'s `maxLines = 2` stays a backstop
  *   for a case this arithmetic says should not occur, not the thing making the row correct.
+ *
+ * **The leader row, unblocked: [trailingAction] shares the meta line, never the name line.** The
+ * migration this row exists to unblock (Vote's leader row, `VoteScreen.kt`'s `LeaderRow`) needs the
+ * weight *and* a "Vote" action at once, and this row used to have exactly one right-hand slot for
+ * that: [figure]. Three shapes were open. Give the leader row its own anatomy from Amber's
+ * language: rejected, because it would duplicate this row's own name line and figure/context
+ * pairing for one caller, the anatomy this task's brief calls load-bearing everywhere else. Move
+ * the action somewhere else a reader can still reach it (a swipe, a second tap target off the
+ * row): rejected, because Vote's own explainer already spent its budget saying a vote is a signed
+ * transaction, not a gesture to discover by accident. What ships: [trailingAction] optional and
+ * additive, sharing width with [figure] and [context] on the *meta* line only, never with [ticker]
+ * and [company] on the name line above — the two lines still never compete with each other, which
+ * is this row's own load-bearing fix, and the name line's whole budget above (the "Meta Platforms,
+ * Inc." arithmetic) is unchanged by a trailing action because nothing about it changed.
+ *
+ * The meta line's own inner [Row] (context, figure) now carries `weight(1f, fill = false)` itself,
+ * one level up from where [context] already carries it against [figure]: the same "short, bounded
+ * content first, flexible content claims whatever is left" pairing this row proves twice already,
+ * proved a third time against [trailingAction], which is short and bounded the same way [ticker]
+ * is — a fixed word ("Vote", "Unwatch") that only grows with font scale, never with unrelated data
+ * the way a company name or a meta sentence does. [TextAction]'s own 16dp start padding is the gap;
+ * nothing here adds a second one, the same convention [ListRow]'s own value-and-action [Row]
+ * already uses.
+ *
+ * **Proof, the same method, for the two real callers.** Content width with [trailingAction] present
+ * is 336dp less [TextAction]'s own rendered width (16dp start padding plus its label at
+ * `PlainTickerType.textAction`, Outfit SemiBold 14sp — an Outfit style, not Bricolage, because
+ * [TextAction] is the one existing control every trailing action in this app already draws through).
+ * - **Vote's leader row** (`figure` = the app's own widest figure, `next_up_weight` "31,209.9 SKR",
+ *   113.220dp; `context` = `next_up_voters`, "9,999 voters" at four digits' realistic ceiling for
+ *   one token's own leaderboard, 83.160dp; action = "Vote", 30.856dp at 1.0x). Content width with
+ *   the action present: 336 − (16 + 30.856) = 289.144dp. Context and figure split that exactly as
+ *   the budget above already proves for the two-item case: figure's 113.220dp plus the 8dp gap
+ *   leaves context 167.924dp, and "9,999 voters" clears it by 84.764dp. At 1.3x (the same flat,
+ *   worse-than-real scaling [ListRow.valueSubWidth] and the arithmetic above already use: dp
+ *   padding is unscaled, sp text scales by the raw factor) the action's label grows to 40.113dp
+ *   (rendered width 56.113dp), content width becomes 336 − 56.113 = 279.887dp, figure grows to
+ *   147.186dp, and context's budget is 279.887 − 147.186 − 8 = 124.701dp against "9,999 voters"
+ *   grown to 108.108dp: a 16.593dp margin. The name line is not part of either computation, so its
+ *   own 1.0x and 1.3x margins above ("Meta Platforms, Inc." at 121.638dp and 59.734dp) are untouched
+ *   by this row carrying a leader's own worst catalog ticker and company at the same time.
+ * - **Watchlist's row** (`figure` = null, no figure at all on this caller; `context` = the report
+ *   and tracking clauses `list_row_meta_join`s together; action = "Unwatch", the widest label this
+ *   row draws, 56.812dp at 1.0x, rendered width 72.812dp). Content width with the action present:
+ *   336 − 72.812 = 263.188dp, all of it context's own budget since there is no figure to share it
+ *   with. The realistic join ("Reports Oct 22 · $2.7k behind, too thin", 39 characters) measures
+ *   246.568dp: a 16.62dp margin at 1.0x, but at 1.3x (the action's own label growing to 73.856dp,
+ *   the budget shrinking to 246.144dp) that same clause grows to 320.54dp and no longer clears one
+ *   line. The pathological join ("Not in the analysis list · $99.9k behind, too thin", 50
+ *   characters, 305.144dp) does not clear the 1.0x budget either. Both wrap to a second line rather
+ *   than clipping — [context] keeps `maxLines = 2` and `TextOverflow.Ellipsis`, the same resolution
+ *   the 54-character company outlier above accepts, and even the pathological join grown to 1.3x
+ *   (396.69dp) fits inside two lines' own combined capacity (2 × 246.144 = 492.29dp) with room to
+ *   spare, so `maxLines = 2` is a real backstop here, not a silent third line of truncation waiting
+ *   to happen.
  */
 @Composable
 fun AmberTickerRow(
@@ -107,6 +164,14 @@ fun AmberTickerRow(
     modifier: Modifier = Modifier,
     figure: String? = null,
     context: String? = null,
+    /**
+     * An optional label sharing the meta line with [figure] and [context] (see this function's own
+     * doc comment, "The leader row, unblocked"): a real, frequently used affordance on the same row
+     * as the weight it acts on, drawn through [TextAction] exactly as every other trailing action in
+     * this app already is. Ignored unless [onTrailingAction] is also given.
+     */
+    trailingAction: String? = null,
+    onTrailingAction: (() -> Unit)? = null,
     colors: AmberColors = defaultAmberColors(),
     onClick: (() -> Unit)? = null,
     onClickLabel: String = "Open $ticker",
@@ -168,31 +233,52 @@ fun AmberTickerRow(
                 )
             }
         }
-        // The meta line: the identical pairing, mirrored. [context] comes first with
+        // The meta line: the identical pairing, mirrored, now itself wrapped in one more unweighted
+        // Row so an optional trailingAction can sit beside it without ever touching the name line
+        // above (see this function's own doc comment, "The leader row, unblocked"). The inner Row
+        // keeps context and figure exactly as proven above; [context] still comes first with
         // weight(1f, fill = false) so it claims whatever the unweighted [figure] does not, and
-        // [figure] comes last so it still reads as the row's right-hand numeral. Never right-aligned
-        // as a block any more (the old Column's horizontalAlignment = End): a full sentence with
-        // room to itself reads better start-aligned than right-ragged.
-        if (figure != null || context != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (context != null) {
-                    Text(
-                        text = context,
-                        style = AmberType.context,
-                        color = colors.textSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.alignByBaseline().weight(1f, fill = false),
-                    )
+        // [figure] still comes last so it still reads as the row's right-hand numeral. The inner Row
+        // itself now carries that same weight(1f, fill = false), one level up, against
+        // trailingAction: short, bounded content first (a fixed word, only font scale grows it),
+        // flexible content claims the rest, the same pairing this row already proves twice. Never
+        // right-aligned as a block any more (the old Column's horizontalAlignment = End): a full
+        // sentence with room to itself reads better start-aligned than right-ragged.
+        if (figure != null || context != null || trailingAction != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (context != null) {
+                        Text(
+                            text = context,
+                            style = AmberType.context,
+                            color = colors.textSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.alignByBaseline().weight(1f, fill = false),
+                        )
+                    }
+                    if (figure != null) {
+                        Text(
+                            text = figure,
+                            style = AmberType.figureRow,
+                            color = colors.actionText,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.alignByBaseline(),
+                        )
+                    }
                 }
-                if (figure != null) {
-                    Text(
-                        text = figure,
-                        style = AmberType.figureRow,
+                // TextAction's own 16dp start padding is the gap; this Row adds no second one, the
+                // same convention ListRow's own value-and-action Row already uses.
+                if (trailingAction != null && onTrailingAction != null) {
+                    TextAction(
+                        label = trailingAction,
+                        onClick = onTrailingAction,
                         color = colors.actionText,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.alignByBaseline(),
+                        contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 0.dp, bottom = 10.dp),
                     )
                 }
             }
@@ -273,6 +359,28 @@ private fun AmberTickerRowPreview() {
                     company = "Tesla xStock",
                     figure = "0.013629",
                     context = "TSLAx, swapped 13 Sep",
+                    onClick = {},
+                )
+            }
+            // The leader row this file's own doc comment unblocks: the worst catalog ticker and the
+            // app's own widest figure, still carrying a trailing action, at once.
+            AmberTickerRowGroup {
+                AmberTickerRow(
+                    ticker = "AUTO.GBx",
+                    company = "SPDR S&P Oil & Gas Exploration & Production ETF xStock",
+                    figure = "31,209.9 SKR",
+                    context = "9,999 voters",
+                    trailingAction = "Vote",
+                    onTrailingAction = {},
+                    onClick = {},
+                )
+                AmberTickerRow(
+                    ticker = "TSMx",
+                    company = "Taiwan Semiconductor",
+                    figure = "31,209.9 SKR",
+                    context = "3 voters",
+                    trailingAction = "Vote",
+                    onTrailingAction = {},
                     onClick = {},
                 )
             }

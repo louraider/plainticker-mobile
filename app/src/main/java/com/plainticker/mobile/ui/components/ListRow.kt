@@ -36,17 +36,28 @@ import com.plainticker.mobile.ui.theme.Muted
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * A 64dp-minimum row: ticker mono 18 and company 13 left with a mono 12 meta line (up to two
- * lines, so a numeral wraps rather than clips), a mono 18 value and a 13 sub word right, an
- * optional trailing text action, one Line divider below. One focusable item for a screen reader
- * (descendants merged) with the click labelled "Open TSLAx"; the trailing action stays its own
- * target. [muted] is the price-only row: everything in Muted.
+ * Instrument's ticker row: a 64dp-minimum row, ticker mono 18 and company 13 left with a mono 12
+ * meta line (up to two lines, so a numeral wraps rather than clips), a mono 18 value and a 13 sub
+ * word right, an optional trailing text action, one Line divider below. One focusable item for a
+ * screen reader (descendants merged) with the click labelled "Open TSLAx"; the trailing action
+ * stays its own target. [muted] is the price-only row: everything in Muted.
  *
  * [description] is what the merged item says instead of its parts read end to end. Without it a
  * reader hears the row's cells in order, punctuation and all ("TSLAx Tesla, Inc. 2.01364 TSLAx
  * · +0.09% vs NYSE close"); with it the row is one spoken sentence, which is what plan section 13
  * Pass 6 asks of a list row. The caller composes it, because only the caller knows which cell is
  * which; [com.plainticker.mobile.ui.components.spoken] is what turns a numeral into words.
+ *
+ * **Not retired, and why that is not the same task as finishing the migration.** Every
+ * product-facing caller now draws [AmberTickerRow] instead (Onboarding's backdrop, Watchlist,
+ * Vote's leader row — see [AmberTickerRow]'s own doc comment, "The leader row, unblocked", for the
+ * case that blocked the last of them). One caller is left, deliberately: `GalleryScreen.kt`
+ * (debug builds only), which exists to check the phone against `design/canvas/instrument.py`'s own
+ * artboards — its `RowSample` data is that canvas's own numbers, field for field
+ * (`GallerySamples.kt`'s own doc comment). Retargeting its rows to [AmberTickerRow] would make it
+ * stop matching the artboards it exists to validate against, which is a different task (rebuilding
+ * a comparison tool against a new canvas) than migrating a product screen's anatomy. This row stays
+ * until that tool is retargeted or retired on its own terms.
  */
 @Composable
 fun ListRow(

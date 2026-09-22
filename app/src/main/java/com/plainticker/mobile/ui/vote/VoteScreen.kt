@@ -33,9 +33,6 @@ import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-// The row component and this package's row model share a name; the anatomy keeps an alias, the
-// same one ListScreen and PortfolioScreen already carry.
-import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
@@ -64,9 +61,12 @@ import java.math.BigInteger
  * round header, every section head and the ticker rows this screen owns now read [AmberType] and
  * [com.plainticker.mobile.ui.theme.AmberColors] instead of Instrument's tokens, resolved with the
  * system-following [defaultAmberColors] rather than the fixed-dark [com.plainticker.mobile.ui.theme.AmberDarkColors]
- * every function on this screen previously read directly. What has no Amber component yet (the
- * leader row's inline vote action beside a figure, the ballot search field) is called out at its
- * own definition rather than forked quietly; see [LeaderRow] and [BallotSearchField].
+ * every function on this screen previously read directly. [LeaderRow] draws through
+ * [AmberTickerRow]'s own `trailingAction`, which did not exist when this screen was first
+ * restyled (see [LeaderRow]'s own doc comment for why the collision that blocked it needed that
+ * component's anatomy to grow, not a workaround on this screen). What still has no Amber
+ * component (the ballot search field) is called out at its own definition; see
+ * [BallotSearchField].
  */
 @Composable
 fun VoteScreen(
@@ -285,21 +285,22 @@ private fun RoundHeader(round: VoteRound) {
 }
 
 /**
- * One leader: the token and its company left, its voters as Amber's ticker-row context, the
- * weight right, an inline "Vote" action when [onVote] is offered.
+ * One leader: the token and its company on Amber's name line, its voters as the meta line's
+ * context, the weight as its figure, an inline "Vote" action when [onVote] is offered.
  *
- * **Stays on the Instrument [InstrumentRow] on purpose, not restyled.** Amber's own ticker row
- * (`AmberTickerRow`) has exactly one slot on its right: a figure with an optional context line
- * under it, which is where the vote weight and the voter count already belong. It has no third,
- * independent slot for a trailing action beside that figure, and this row genuinely needs one at
+ * **The case that blocked this row's migration, and how it is solved.** Amber's own ticker row
+ * (`AmberTickerRow`) used to have exactly one slot on its right: a figure with an optional context
+ * line under it, which is where the vote weight and the voter count already belong, and no third,
+ * independent slot for a trailing action beside that figure — yet this row genuinely needs one at
  * the same time: the weight is the reason "Leaders" exists, and the vote action is a real,
- * frequently used affordance on this exact row, not decoration. Composing a `TextAction` over the
- * figure column would sit it on top of the weight number rather than beside it; there is nowhere
- * else in `AmberTickerRow`'s anatomy to put it without extending the component, which is `ui/
- * components/` work this task's brief keeps out of its lane. [MyVoteRow] and [BallotRow] below use
- * `AmberTickerRow` directly, because neither of them has this collision: the wallet's own votes
- * never carry a trailing action, and the ballot's rows carry one only when they carry no figure at
- * all.
+ * frequently used affordance on this exact row, not decoration. `AmberTickerRow` now takes an
+ * optional `trailingAction`, sharing width with the figure and context on the meta line only,
+ * never with the ticker and company above (`AmberTickerRow`'s own doc comment, "The leader row,
+ * unblocked", has the anatomy and the arithmetic, including at 1.3x font scale where the weight
+ * and the action both grow). [MyVoteRow] and [BallotRow] below draw through `AmberTickerRow`
+ * directly without a trailing action wired in, because neither of them has this collision: the
+ * wallet's own votes never carry a trailing action, and the ballot's rows carry one only when they
+ * carry no figure at all, [BallotRow]'s own already-working overlay.
  */
 @Composable
 private fun LeaderRow(
@@ -308,17 +309,18 @@ private fun LeaderRow(
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
 ) {
-    InstrumentRow(
-        ticker = leader.display,
-        company = leader.company,
-        meta = leader.votersCopy.text(),
-        valueRight = leader.weight.text(),
-        trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
-        onTrailingAction = if (onVote == null) null else ({ onVote(leader.ticker, leader.display) }),
-        divider = !last,
-        onClick = { onOpenDetail(leader.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
-    )
+    AmberRowDivider(last = last) {
+        AmberTickerRow(
+            ticker = leader.display,
+            company = leader.company,
+            figure = leader.weight.text(),
+            context = leader.votersCopy.text(),
+            trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
+            onTrailingAction = if (onVote == null) null else ({ onVote(leader.ticker, leader.display) }),
+            onClick = { onOpenDetail(leader.ticker) },
+            onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
+        )
+    }
 }
 
 /**
@@ -391,7 +393,7 @@ private fun statusStringRes(status: PreviousRoundStatus): Int = when (status) {
  * One token without analysis: Amber's ticker row, muted only by carrying no figure of its own,
  * with the "Vote" action composed over its empty right column when [onVote] is offered. A clean
  * fit, unlike [LeaderRow]: this row never draws a figure, so the overlaid action has nothing to
- * collide with. [InstrumentRow]'s `muted` flag (a dimmer ticker and company colour for an
+ * collide with. [com.plainticker.mobile.ui.components.ListRow]'s `muted` flag (a dimmer ticker and company colour for an
  * uncovered row) has no `AmberTickerRow` equivalent; the row still reads as lower priority from
  * its section (under "Without analysis") and from carrying no figure, so this is accepted rather
  * than forked.
@@ -429,7 +431,7 @@ private fun BallotRow(
  * AmberTickerRowGroup]), drawn here instead: the ballot can run to the hundreds of rows this
  * app's own catalogue carries without analysis, so its rows stay individual lazy items rather
  * than one non-lazy group holding all of them. A manual divider between items is the same trade
- * [InstrumentRow] itself makes (`divider: Boolean = !last`), read here against
+ * [com.plainticker.mobile.ui.components.ListRow] itself makes (`divider: Boolean = !last`), read here against
  * [com.plainticker.mobile.ui.theme.AmberColors.border] instead of Instrument's Line.
  */
 @Composable
