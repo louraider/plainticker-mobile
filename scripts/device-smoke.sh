@@ -716,10 +716,12 @@ wait_quiet() { # max-seconds
   return 0   # a screen that never settles is the screen's business; the walk carries on
 }
 
-# LIST-DUMP is a dump of the List tab as it stands; TICKERX is the row to open; PREFIX names the
-# dumps this makes, and PREFIX-top is left holding the top of Detail. Search rather than scroll:
-# the list is sorted by composite, so where a row sits is data, and a walk that depends on data is
-# a walk that fails on a Tuesday.
+# LIST-DUMP is a dump of the Stocks screen as it stands (still named "list" internally, per
+# ui/stocks/StocksScreen.kt's own doc comment: "the 160-row list, moved here rather than
+# rewritten"; there is no tab bar to name a tab on any more, docs/design-research-2026-09-21.md
+# section 3); TICKERX is the row to open; PREFIX names the dumps this makes, and PREFIX-top is left
+# holding the top of Detail. Search rather than scroll: the list is sorted by composite, so where a
+# row sits is data, and a walk that depends on data is a walk that fails on a Tuesday.
 open_detail() { # LIST-DUMP TICKERX PREFIX
   open_list_search "$1" "${2%x}"
   sh_ input keyevent KEYCODE_BACK   # close the keyboard, not the screen
