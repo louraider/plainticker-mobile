@@ -128,8 +128,15 @@ class YouScreenTest {
     @Test
     fun `the button matrix never draws two accent fills`() {
         val actions = body("private fun ActionButtons(", "private fun WalletBlock(")
-        assertTrue("the primary slot is a PrimaryButton", "PrimaryButton(label = it.label.text()" in actions)
-        assertTrue("the secondary slot is a SecondaryButton, never a text action", "SecondaryButton(label = it.label.text()" in actions)
+        // Amber restyle: AmberPrimaryAction and AmberSecondaryAction (this file's own small
+        // Amber-styled analogue of Instrument's SecondaryButton; DESIGN.md section 4's built
+        // component list has no shared secondary action yet) replace Instrument's PrimaryButton
+        // and SecondaryButton, keeping the same one-fill, never-a-text-link rule (U2).
+        assertTrue("the primary slot is an AmberPrimaryAction", "AmberPrimaryAction(label = it.label.text()" in actions)
+        assertTrue(
+            "the secondary slot is an AmberSecondaryAction, never a text action",
+            "AmberSecondaryAction(label = it.label.text()" in actions,
+        )
         assertEquals("Pay for Pro is never drawn as a text action", 0, count("TextAction(label = it.label"))
     }
 
