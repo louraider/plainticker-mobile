@@ -63,6 +63,7 @@ import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.Banner
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.FactTone
@@ -83,7 +84,7 @@ import com.plainticker.mobile.ui.swap.SwapState
 import com.plainticker.mobile.ui.swap.SwapToken
 import com.plainticker.mobile.ui.swap.SwapViewModel
 import com.plainticker.mobile.ui.swap.quoteOrNull
-import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.vote.VoteActions
@@ -189,6 +190,7 @@ internal fun DetailContent(
     /** Null in the previews and the gallery; the peek's own way to Pro when it is not (task A6). */
     onViewPortfolio: (() -> Unit)? = null,
 ) {
+    val colors = defaultAmberColors()
     // The only Box on Detail, and the only thing in it that does not scroll is the scrim: the
     // 64sp hero used to draw in the same pixels as the white system clock, because the content
     // scrolls under a transparent status bar and nothing stood between them (Insets.kt). Nothing
@@ -204,6 +206,7 @@ internal fun DetailContent(
             TopBar(
                 action = stringResource(if (state.watched) R.string.action_watching else R.string.action_watch),
                 onAction = onToggleWatch,
+                colors = colors,
             )
             state.banner?.let { Banner(text = stringResource(it.text)) }
 
@@ -246,7 +249,7 @@ internal fun DetailContent(
             SwapSheet(state = swap, actions = swapActions)
             VoteSheet(state = vote, actions = voteActions)
         }
-        TopScrim(Modifier.align(Alignment.TopCenter))
+        TopScrim(Modifier.align(Alignment.TopCenter), groundColor = colors.surfaceGround)
     }
 }
 
@@ -268,6 +271,7 @@ internal fun DetailContent(
 @Composable
 private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
     val block = state.verdictBlock ?: return
+    val colors = defaultAmberColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -278,7 +282,7 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
         Text(
             text = stringResource(R.string.detail_verdict_label),
             style = AmberType.meta,
-            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            color = colors.textTertiary(AmberSurface.GROUND),
         )
         when (block) {
             VerdictBlock.Loading -> SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
@@ -286,8 +290,8 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
             is VerdictBlock.Unlocked ->
                 // A word, never a colour: DESIGN.md section 7 keeps colour for direction and
                 // risk, never for a classification, so this carries no more emphasis than
-                // AmberDarkColors.textPrimary gives every other primary word on the screen.
-                Text(text = block.label.text(), style = AmberType.sectionHead, color = AmberDarkColors.textPrimary)
+                // colors.textPrimary gives every other primary word on the screen.
+                Text(text = block.label.text(), style = AmberType.sectionHead, color = colors.textPrimary)
 
             VerdictBlock.Locked -> {
                 // The placeholder shape carries no text at all, amber or otherwise: the real
@@ -297,13 +301,13 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
                 Text(
                     text = stringResource(R.string.detail_pro_peek_note),
                     style = AmberType.context,
-                    color = AmberDarkColors.textSecondary,
+                    color = colors.textSecondary,
                 )
                 if (onViewPortfolio != null) {
                     TextAction(
                         label = stringResource(R.string.receipt_view_portfolio),
                         onClick = onViewPortfolio,
-                        color = AmberDarkColors.actionText,
+                        color = colors.actionText,
                     )
                 }
             }
@@ -337,6 +341,7 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
  */
 @Composable
 private fun Hero(state: DetailUiState) {
+    val colors = defaultAmberColors()
     Column(
         Modifier
             .fillMaxWidth()
@@ -346,7 +351,7 @@ private fun Hero(state: DetailUiState) {
         Text(
             text = state.heroTicker,
             style = AmberType.context,
-            color = AmberDarkColors.textSecondary,
+            color = colors.textSecondary,
             maxLines = 1,
             softWrap = false,
         )
@@ -356,13 +361,13 @@ private fun Hero(state: DetailUiState) {
             loading = company == null,
             skeleton = { SkeletonBar(width = 200.dp, height = 30.dp) },
             content = {
-                Text(text = company.orEmpty(), style = AmberHeroCompany, color = AmberDarkColors.textPrimary, maxLines = 2)
+                Text(text = company.orEmpty(), style = AmberHeroCompany, color = colors.textPrimary, maxLines = 2)
             },
         )
         val sector = state.heroSector
         if (sector != null) {
             Spacer(Modifier.height(HeroCompanyGap))
-            Text(text = sector, style = AmberType.meta, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+            Text(text = sector, style = AmberType.meta, color = colors.textTertiary(AmberSurface.GROUND))
         }
     }
 }
@@ -388,8 +393,8 @@ internal data class PriceFigureType(
  * The type of the price pair, which the liquidity floor decides and the screen only obeys.
  *
  * Above the floor the pair is asymmetric on purpose: the token's own price leads at 40sp amber
- * ([AmberDarkColors.actionText]) and the reference sits beside it at 20sp
- * [AmberDarkColors.textSecondary], so a reader knows which is which without being told.
+ * ([colors.actionText]) and the reference sits beside it at 20sp
+ * [colors.textSecondary], so a reader knows which is which without being told.
  *
  * Below the floor that same asymmetry is a trap, and it is the one this screen shipped with. The
  * screen has just said the pool is too thin to track the NYSE close, and then set the two numbers
@@ -444,6 +449,7 @@ private val AmberPriceSmall: TextStyle = AmberType.figureRow.copy(fontSize = 20.
  */
 @Composable
 private fun PriceBlock(state: DetailUiState) {
+    val colors = defaultAmberColors()
     val row = state.priceRow
     val pending = state.quote.isLoading
     val type = priceFigureType(row.comparable)
@@ -451,7 +457,7 @@ private fun PriceBlock(state: DetailUiState) {
         Text(
             text = it.text(),
             style = AmberType.body,
-            color = AmberDarkColors.textPrimary,
+            color = colors.textPrimary,
             modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = PriceTop),
         )
     }
@@ -467,15 +473,15 @@ private fun PriceBlock(state: DetailUiState) {
             Text(
                 text = row.tokenLabel.text(),
                 style = AmberType.meta,
-                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                color = colors.textTertiary(AmberSurface.GROUND),
             )
             val price = row.tokenPrice
             when {
                 // Colour separates the two figures at every size (DESIGN.md section 1.1): the
-                // token's own figure is always AmberDarkColors.actionText, whether or not it
+                // token's own figure is always colors.actionText, whether or not it
                 // leads on size, never a second colour for direction.
                 price != null ->
-                    Text(text = price, style = type.token, color = AmberDarkColors.actionText, maxLines = 1, softWrap = false)
+                    Text(text = price, style = type.token, color = colors.actionText, maxLines = 1, softWrap = false)
 
                 pending -> SkeletonBar(width = 160.dp, height = type.skeletonHeight)
 
@@ -483,12 +489,12 @@ private fun PriceBlock(state: DetailUiState) {
                 else -> Text(
                     text = stringResource(R.string.value_missing),
                     style = type.token,
-                    color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                    color = colors.textTertiary(AmberSurface.GROUND),
                     maxLines = 1,
                 )
             }
             row.tokenNote?.let {
-                Text(text = it.text(), style = AmberType.context, color = AmberDarkColors.textSecondary)
+                Text(text = it.text(), style = AmberType.context, color = colors.textSecondary)
             }
         }
         if (row.referencePrice != null || pending) {
@@ -500,14 +506,14 @@ private fun PriceBlock(state: DetailUiState) {
                 Text(
                     text = row.referenceLabel.text(),
                     style = AmberType.meta,
-                    color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                    color = colors.textTertiary(AmberSurface.GROUND),
                 )
                 val reference = row.referencePrice
                 if (reference != null) {
                     Text(
                         text = reference,
                         style = type.reference,
-                        color = AmberDarkColors.textSecondary,
+                        color = colors.textSecondary,
                         maxLines = 1,
                         softWrap = false,
                     )
@@ -521,7 +527,7 @@ private fun PriceBlock(state: DetailUiState) {
         Text(
             text = it.text(),
             style = AmberType.context,
-            color = AmberDarkColors.textSecondary,
+            color = colors.textSecondary,
             modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = ReferenceNoteTop),
         )
     }
@@ -569,11 +575,11 @@ private fun TrustBlock(state: DetailUiState) {
                 valueSize = if (fact.span > 1) SpanValueSize else CellValueSize,
             )
         },
-        // FactGrid itself is not one of the six named Amber components and its cell text
-        // colours are internal to ui/components/FactGrid.kt, out of this task's ui/detail/
-        // lane; `surface` is the one parameter it exposes, so the cells at least sit on
-        // Amber's own tonal surface instead of Instrument's Canvas.
-        surface = AmberDarkColors.surfaceRaised,
+        // FactGrid now reads a theme-following AmberColors by default for both its surface and
+        // its label/value/sub text (ui/components/FactGrid.kt), so no override is needed here;
+        // previously only `surface` was settable from a call site and it was pinned to a literal
+        // dark colour regardless of the system setting, while the cell text stayed Instrument's
+        // fixed-dark Muted/Ink/Ink2 underneath whatever surface was passed in.
     )
 }
 
@@ -641,11 +647,12 @@ private fun FundamentalsBlock(state: DetailUiState) {
 /** The numeral out of nine, then the nine signals in the fixed order of docs/data-map.md. */
 @Composable
 private fun FScoreBlock(fscore: FScoreContent) {
+    val colors = defaultAmberColors()
     if (fscore.unavailable) {
         Text(
             text = stringResource(R.string.detail_not_available_filer),
             style = AmberType.body,
-            color = AmberDarkColors.textSecondary,
+            color = colors.textSecondary,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         )
         return
@@ -666,13 +673,13 @@ private fun FScoreBlock(fscore: FScoreContent) {
         Text(
             text = score ?: stringResource(R.string.value_missing),
             style = AmberFScoreNumeral,
-            color = if (score != null) AmberDarkColors.actionText else AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            color = if (score != null) colors.actionText else colors.textTertiary(AmberSurface.GROUND),
             maxLines = 1,
         )
         Text(
             text = pluralStringResource(R.plurals.detail_fscore_of, fscore.outOf, Fmt.count(fscore.outOf)),
             style = AmberType.context,
-            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            color = colors.textTertiary(AmberSurface.GROUND),
             modifier = Modifier.padding(bottom = FScoreCounterLift),
         )
     }
@@ -686,18 +693,19 @@ private val AmberFScoreNumeral: TextStyle =
 /** The payload's own statement, then the static sources line, with the age above both when old. */
 @Composable
 private fun MethodBlock(method: MethodContent) {
+    val colors = defaultAmberColors()
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         method.age?.let {
-            Text(text = it.text(), style = AmberType.context, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+            Text(text = it.text(), style = AmberType.context, color = colors.textTertiary(AmberSurface.GROUND))
         }
-        Text(text = method.statement.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
+        Text(text = method.statement.text(), style = AmberType.body, color = colors.textSecondary)
         Text(
             text = method.sources.text(),
             style = AmberType.context,
-            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            color = colors.textTertiary(AmberSurface.GROUND),
         )
     }
 }
@@ -713,23 +721,24 @@ private fun MethodBlock(method: MethodContent) {
 @Composable
 private fun ReadSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
     val block = state.readNarrative ?: return
+    val colors = defaultAmberColors()
     AmberSectionHead(title = stringResource(R.string.detail_heading_read))
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(text = block.text.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
+        Text(text = block.text.text(), style = AmberType.body, color = colors.textSecondary)
         if (!block.full) {
             Text(
                 text = stringResource(R.string.detail_pro_peek_note),
                 style = AmberType.context,
-                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                color = colors.textTertiary(AmberSurface.GROUND),
             )
             if (onViewPortfolio != null) {
                 TextAction(
                     label = stringResource(R.string.receipt_view_portfolio),
                     onClick = onViewPortfolio,
-                    color = AmberDarkColors.actionText,
+                    color = colors.actionText,
                 )
             }
         }
@@ -743,6 +752,7 @@ private fun ReadSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
 @Composable
 private fun NextStepsSection(state: DetailUiState) {
     val block = state.nextStepsBlock ?: return
+    val colors = defaultAmberColors()
     AmberSectionHead(
         title = stringResource(R.string.detail_heading_next_steps),
         meta = Fmt.count(block.items.size),
@@ -753,15 +763,15 @@ private fun NextStepsSection(state: DetailUiState) {
     ) {
         block.items.forEach { row ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(text = row.title, style = AmberType.body, color = AmberDarkColors.textSecondary)
-                row.detail?.let { Text(text = it, style = AmberType.context, color = AmberDarkColors.textSecondary) }
+                Text(text = row.title, style = AmberType.body, color = colors.textSecondary)
+                row.detail?.let { Text(text = it, style = AmberType.context, color = colors.textSecondary) }
             }
         }
         if (!block.full) {
             Text(
                 text = stringResource(R.string.detail_pro_peek_note),
                 style = AmberType.context,
-                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                color = colors.textTertiary(AmberSurface.GROUND),
             )
         }
     }
@@ -781,6 +791,7 @@ private fun SwapBlock(
 ) {
     val label = state.swapLabel ?: return
     val cost = state.costLine(swap.quoteOrNull?.allInCostPct)
+    val colors = defaultAmberColors()
     Column(
         modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = SwapGap),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -793,7 +804,7 @@ private fun SwapBlock(
             enabled = state.mint != null && !swap.isBusy,
         )
         cost?.let {
-            Text(text = it.text(), style = AmberType.meta, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+            Text(text = it.text(), style = AmberType.meta, color = colors.textTertiary(AmberSurface.GROUND))
         }
     }
 }
@@ -813,11 +824,12 @@ private fun SwapBlock(
 @Composable
 private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?) {
     if (!state.analysisNotServed || onVote == null) return
+    val colors = defaultAmberColors()
     Row(modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = VoteGap)) {
         TextAction(
             label = stringResource(R.string.vote_action),
             onClick = onVote,
-            color = AmberDarkColors.actionText,
+            color = colors.actionText,
             contentPadding = VoteActionPadding,
         )
     }
@@ -833,6 +845,7 @@ private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?) {
 @Composable
 private fun NextUpBlock(state: DetailUiState) {
     val line = state.nextUpLine ?: return
+    val colors = defaultAmberColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -840,8 +853,8 @@ private fun NextUpBlock(state: DetailUiState) {
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = line.rank.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
-        Text(text = line.weight.text(), style = AmberType.meta, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+        Text(text = line.rank.text(), style = AmberType.body, color = colors.textSecondary)
+        Text(text = line.weight.text(), style = AmberType.meta, color = colors.textTertiary(AmberSurface.GROUND))
     }
 }
 
@@ -850,6 +863,7 @@ private fun NextUpBlock(state: DetailUiState) {
 /** One sentence where a block would be, so no state of this screen is a blank column. */
 @Composable
 private fun NoticeLine(text: Copy, hint: Copy? = null) {
+    val colors = defaultAmberColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -857,9 +871,9 @@ private fun NoticeLine(text: Copy, hint: Copy? = null) {
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(text = text.text(), style = AmberType.body, color = AmberDarkColors.textSecondary)
+        Text(text = text.text(), style = AmberType.body, color = colors.textSecondary)
         hint?.let {
-            Text(text = it.text(), style = AmberType.context, color = AmberDarkColors.textTertiary(AmberSurface.GROUND))
+            Text(text = it.text(), style = AmberType.context, color = colors.textTertiary(AmberSurface.GROUND))
         }
     }
 }
@@ -871,6 +885,7 @@ private fun NoticeLine(text: Copy, hint: Copy? = null) {
  */
 @Composable
 private fun AbsentRow(label: String) {
+    val colors = defaultAmberColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -878,11 +893,11 @@ private fun AbsentRow(label: String) {
             .semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = label, style = AmberType.body, color = AmberDarkColors.textSecondary, modifier = Modifier.weight(1f))
+        Text(text = label, style = AmberType.body, color = colors.textSecondary, modifier = Modifier.weight(1f))
         Text(
             text = stringResource(R.string.detail_not_available_filer),
             style = AmberType.context,
-            color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+            color = colors.textTertiary(AmberSurface.GROUND),
         )
     }
 }

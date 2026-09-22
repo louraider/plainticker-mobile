@@ -15,7 +15,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 
@@ -41,7 +40,7 @@ fun AmberSectionHead(
     modifier: Modifier = Modifier,
     meta: String? = null,
     lede: String? = null,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     /**
      * The background this head paints itself, since a `stickyHeader` item scrolls over content
      * that must not show through it while it is pinned. Defaults to the page ground; a chapter

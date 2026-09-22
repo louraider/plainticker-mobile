@@ -60,12 +60,10 @@ import com.plainticker.mobile.ui.components.Sheet
 import com.plainticker.mobile.ui.components.SheetSurface
 import com.plainticker.mobile.ui.components.SkeletonBar
 import com.plainticker.mobile.ui.components.TextAction
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.Canvas
-import com.plainticker.mobile.ui.theme.Elevated
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -146,17 +144,22 @@ internal fun ColumnScope.SwapSheetBody(
     actions: SwapActions,
     takeFocus: Boolean = true,
 ) {
+    // This is money: the swap sheet and its receipt, DESIGN.md section 1's "must keep working
+    // identically in both themes" line. Every colour below now reads a theme-following AmberColors
+    // rather than the fixed-dark Ink/Ink2/Muted/Canvas/Elevated this sheet drew unconditionally
+    // before this fix, which left the sheet dark regardless of the system setting.
+    val colors = defaultAmberColors()
     ConfirmOnLanded(content.receipt?.signature)
     val lead = leadFocus(takeFocus)
 
-    content.debug?.let { DebugBand(it) }
+    content.debug?.let { DebugBand(it, colors) }
 
     if (content.isReceipt) {
         // The receipt leads with what happened, not with what the sheet was for.
         content.phase?.let { Phase(it, lead) }
-        content.receipt?.let { Received(it) }
+        content.receipt?.let { Received(it, colors) }
     } else {
-        Title(content, lead, actions)
+        Title(content, lead, actions, colors)
         content.phase?.let { Phase(it, Modifier) }
     }
 
@@ -170,22 +173,22 @@ internal fun ColumnScope.SwapSheetBody(
             onAction = actions.onMax,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
-        Sentence(field.balance, PlainTickerType.meta, Muted, BalanceTop)
+        Sentence(field.balance, PlainTickerType.meta, colors.textTertiary(AmberSurface.GROUND), BalanceTop)
     }
 
-    content.notice?.let { Sentence(it, PlainTickerType.small, Ink2, NoticeTop) }
+    content.notice?.let { Sentence(it, PlainTickerType.small, colors.textSecondary, NoticeTop) }
 
     Spacer(Modifier.height(BlockTop))
     when (content.costNotice) {
         CostNotice.AtTap -> Text(
             text = stringResource(CostNotice.AtTap.text),
             style = PlainTickerType.small,
-            color = Muted,
+            color = colors.textTertiary(AmberSurface.GROUND),
             modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         )
 
         CostNotice.Loading -> CostSkeleton()
-        null -> FactGrid(cells = content.cells.map { it.factCell() }, surface = Elevated, minCellHeight = CellHeight)
+        null -> FactGrid(cells = content.cells.map { it.factCell() }, colors = colors, minCellHeight = CellHeight)
     }
 
     Column(
@@ -198,7 +201,9 @@ internal fun ColumnScope.SwapSheetBody(
         content.secondary?.let {
             SecondaryButton(label = it.label.text(), onClick = actions.of(it.kind))
         }
-        content.footnote?.let { Text(text = it.text(), style = PlainTickerType.small, color = Muted) }
+        content.footnote?.let {
+            Text(text = it.text(), style = PlainTickerType.small, color = colors.textTertiary(AmberSurface.GROUND))
+        }
     }
 }
 
@@ -218,12 +223,12 @@ private fun SwapActions.of(kind: SheetActionKind): () -> Unit = when (kind) {
  * direction, and this product has one trading verb.
  */
 @Composable
-private fun Title(content: SheetContent, lead: Modifier, actions: SwapActions) {
+private fun Title(content: SheetContent, lead: Modifier, actions: SwapActions, colors: AmberColors) {
     Column(Modifier.fillMaxWidth().padding(start = Side, end = Side, top = TitleTop)) {
         Text(
             text = content.title.text(),
             style = PlainTickerType.sheetTitle,
-            color = Ink,
+            color = colors.textPrimary,
             maxLines = 1,
             softWrap = false,
             modifier = lead.semantics { heading() },
@@ -253,7 +258,7 @@ private fun Phase(phase: SheetPhase, lead: Modifier) {
  * ticker beside it on the same baseline at the fact size, so the pair stays on one line at 1.3x.
  */
 @Composable
-private fun Received(receipt: SheetReceipt) {
+private fun Received(receipt: SheetReceipt, colors: AmberColors) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,12 +266,16 @@ private fun Received(receipt: SheetReceipt) {
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(ReceivedGap),
     ) {
-        Text(text = receipt.label.text(), style = PlainTickerType.label, color = Muted)
+        Text(
+            text = receipt.label.text(),
+            style = PlainTickerType.label,
+            color = colors.textTertiary(AmberSurface.GROUND),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(ReceivedGap), verticalAlignment = Alignment.Bottom) {
             Text(
                 text = receipt.amount.text(),
                 style = PlainTickerType.bigValue,
-                color = Ink,
+                color = colors.textPrimary,
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier.alignByBaseline(),
@@ -274,7 +283,7 @@ private fun Received(receipt: SheetReceipt) {
             Text(
                 text = receipt.symbol,
                 style = PlainTickerType.trackValue,
-                color = Ink2,
+                color = colors.textSecondary,
                 maxLines = 1,
                 modifier = Modifier.alignByBaseline(),
             )
@@ -283,18 +292,19 @@ private fun Received(receipt: SheetReceipt) {
 }
 
 /**
- * What a debug build is, said in every state of the sheet. Canvas inside an Elevated sheet, so it
- * reads as a band the page shows through rather than as one more sentence about the swap.
+ * What a debug build is, said in every state of the sheet. The page ground inside the sheet's own
+ * surface, so it reads as a band the page shows through rather than as one more sentence about the
+ * swap.
  */
 @Composable
-private fun DebugBand(text: Copy) {
+private fun DebugBand(text: Copy, colors: AmberColors) {
     Text(
         text = text.text(),
         style = PlainTickerType.label,
-        color = Ink2,
+        color = colors.textSecondary,
         modifier = Modifier
             .fillMaxWidth()
-            .background(Canvas)
+            .background(colors.surfaceGround)
             .padding(horizontal = Side, vertical = BandPadding),
     )
 }

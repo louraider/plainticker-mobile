@@ -39,10 +39,10 @@ import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.list.NextUpLeader
 import com.plainticker.mobile.ui.list.skrWeight
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 import java.math.BigInteger
@@ -62,9 +62,11 @@ import java.math.BigInteger
  *
  * Restyled to Amber (docs/design-research-2026-09-21.md section 5.3, DESIGN.md section 4): the
  * round header, every section head and the ticker rows this screen owns now read [AmberType] and
- * [AmberDarkColors] instead of Instrument's tokens. What has no Amber component yet (the leader
- * row's inline vote action beside a figure, the ballot search field) is called out at its own
- * definition rather than forked quietly; see [LeaderRow] and [BallotSearchField].
+ * [com.plainticker.mobile.ui.theme.AmberColors] instead of Instrument's tokens, resolved with the
+ * system-following [defaultAmberColors] rather than the fixed-dark [com.plainticker.mobile.ui.theme.AmberDarkColors]
+ * every function on this screen previously read directly. What has no Amber component yet (the
+ * leader row's inline vote action beside a figure, the ballot search field) is called out at its
+ * own definition rather than forked quietly; see [LeaderRow] and [BallotSearchField].
  */
 @Composable
 fun VoteScreen(
@@ -224,23 +226,24 @@ internal fun VoteTabContent(
  */
 @Composable
 private fun Explainer() {
+    val colors = defaultAmberColors()
     Column(Modifier.fillMaxWidth().padding(horizontal = Side, vertical = 2.dp)) {
         Text(
             text = stringResource(R.string.vote_tab_explainer_what),
             style = AmberType.body,
-            color = AmberDarkColors.textPrimary,
+            color = colors.textPrimary,
             modifier = Modifier.padding(top = 12.dp),
         )
         Text(
             text = stringResource(R.string.vote_tab_explainer_how),
             style = AmberType.body,
-            color = AmberDarkColors.textPrimary,
+            color = colors.textPrimary,
             modifier = Modifier.padding(top = 10.dp),
         )
         Text(
             text = stringResource(R.string.vote_gameable),
             style = AmberType.context,
-            color = AmberDarkColors.textSecondary,
+            color = colors.textSecondary,
             modifier = Modifier.padding(top = 10.dp),
         )
     }
@@ -346,6 +349,7 @@ private fun MyVoteRow(receipt: VoteReceipt, last: Boolean, onOpenDetail: (String
  */
 @Composable
 private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) -> Unit) {
+    val colors = defaultAmberColors()
     val statusText = stringResource(statusStringRes(previous.status), previous.display)
     val weightVoters = previous.weightRaw?.let {
         pluralStringResource(R.plurals.next_up_detail_weight, previous.voters, skrWeight(it), Fmt.count(previous.voters))
@@ -365,12 +369,12 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
             .let { base -> if (clickable) base.clickable(onClickLabel = openLabel, role = Role.Button) { onOpenDetail(previous.ticker) } else base }
             .padding(horizontal = Side, vertical = 12.dp),
     ) {
-        Text(text = statusText, style = AmberType.body, color = AmberDarkColors.textPrimary)
+        Text(text = statusText, style = AmberType.body, color = colors.textPrimary)
         if (meta != null) {
             Text(
                 text = meta,
                 style = AmberType.meta,
-                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                color = colors.textTertiary(AmberSurface.GROUND),
                 modifier = Modifier.padding(top = 3.dp),
             )
         }
@@ -399,6 +403,7 @@ private fun BallotRow(
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
 ) {
+    val colors = defaultAmberColors()
     AmberRowDivider(last = last) {
         Box(Modifier.fillMaxWidth()) {
             AmberTickerRow(
@@ -411,7 +416,7 @@ private fun BallotRow(
                 TextAction(
                     label = stringResource(R.string.vote_action_row),
                     onClick = { onVote(entry.ticker, entry.display) },
-                    color = AmberDarkColors.actionText,
+                    color = colors.actionText,
                     modifier = Modifier.align(Alignment.CenterEnd),
                 )
             }
@@ -425,13 +430,14 @@ private fun BallotRow(
  * app's own catalogue carries without analysis, so its rows stay individual lazy items rather
  * than one non-lazy group holding all of them. A manual divider between items is the same trade
  * [InstrumentRow] itself makes (`divider: Boolean = !last`), read here against
- * [AmberDarkColors.border] instead of Instrument's Line.
+ * [com.plainticker.mobile.ui.theme.AmberColors.border] instead of Instrument's Line.
  */
 @Composable
 private fun AmberRowDivider(last: Boolean, content: @Composable () -> Unit) {
+    val colors = defaultAmberColors()
     Column(Modifier.fillMaxWidth()) {
         content()
-        if (!last) HorizontalDivider(thickness = 1.dp, color = AmberDarkColors.border)
+        if (!last) HorizontalDivider(thickness = 1.dp, color = colors.border)
     }
 }
 
@@ -451,11 +457,12 @@ private fun BallotSearchField(query: String, onQueryChange: (String) -> Unit, on
 /** A closing line, [muted] by default (a footnote); the not-open line stands on its own instead. */
 @Composable
 private fun Footnote(text: String, muted: Boolean = true) {
+    val colors = defaultAmberColors()
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Side), verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = text,
             style = if (muted) AmberType.context else AmberType.body,
-            color = if (muted) AmberDarkColors.textTertiary(AmberSurface.GROUND) else AmberDarkColors.textSecondary,
+            color = if (muted) colors.textTertiary(AmberSurface.GROUND) else colors.textSecondary,
             modifier = Modifier.weight(1f).padding(vertical = if (muted) 8.dp else EmptyLineGap),
         )
     }

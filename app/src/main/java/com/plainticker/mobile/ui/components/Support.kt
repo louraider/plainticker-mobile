@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.components
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.Accent
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
 import com.plainticker.mobile.ui.theme.AmberTheme
 import com.plainticker.mobile.ui.theme.Canvas
 import com.plainticker.mobile.ui.theme.PlainTickerTheme
@@ -48,6 +50,21 @@ fun AmberPreviewCanvas(colors: AmberColors = AmberDarkColors, content: @Composab
         Box(Modifier.fillMaxWidth().background(colors.surfaceGround)) { content() }
     }
 }
+
+/**
+ * The theme-following [AmberColors] every shared component reaches for when a call site does not
+ * pick one itself: [AmberDarkColors] or [AmberLightColors] by the system setting, recomposing live
+ * when that setting changes, the same [isSystemInDarkTheme] primitive `ListScreen`, `PortfolioScreen`
+ * and `YouScreen` already compute their own copy of. Named as a default-parameter expression
+ * (`colors: AmberColors = defaultAmberColors()`) rather than a `CompositionLocal`: nothing in this
+ * codebase wraps every one of these components in one shared `AmberTheme` before reaching them (a
+ * component composed straight off `HomeScreen`, `DetailScreen` or the swap and pass sheets has no
+ * such ancestor), so a default has to derive the answer the same way a screen's own root does
+ * rather than assume one was already provided above it. Kept in `ui/components/` so every shared
+ * component in this package can default to it without a new import cycle.
+ */
+@Composable
+fun defaultAmberColors(): AmberColors = if (isSystemInDarkTheme()) AmberDarkColors else AmberLightColors
 
 /** Keyboard or switch-access focus: a 2dp Accent outline, never removed (DESIGN.md section 6). */
 @Composable

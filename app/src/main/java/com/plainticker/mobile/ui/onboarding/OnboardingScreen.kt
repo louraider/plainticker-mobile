@@ -48,13 +48,10 @@ import com.plainticker.mobile.ui.components.TodayStrip
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopTabs
 import com.plainticker.mobile.ui.components.focusOutline
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.list.RowState
 import com.plainticker.mobile.ui.list.label
-import com.plainticker.mobile.ui.theme.Accent
-import com.plainticker.mobile.ui.theme.Canvas
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.LineStrong
+import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import java.time.Instant
 
@@ -98,7 +95,8 @@ private fun OnboardingContent(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.fillMaxSize().background(Canvas)) {
+    val colors = defaultAmberColors()
+    Box(modifier.fillMaxSize().background(colors.surfaceGround)) {
         ListBackdrop(
             Modifier
                 .matchParentSize()
@@ -186,10 +184,15 @@ private fun ConsentPanel(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The one real, always-opaque content on this screen (the backdrop behind it is a decorative,
+    // 25-percent watermark), so it reads a theme-following palette rather than Instrument's
+    // fixed-dark Ink/Ink2/Accent/LineStrong: this is the gate every reader passes through once,
+    // and it must read on Amber's light ground as correctly as on its dark one.
+    val colors = defaultAmberColors()
     SheetSurface(modifier = modifier, handle = false) {
         Column(
             modifier = Modifier
-                // The navigation bar, or 40dp of canvas, whichever is deeper.
+                // The navigation bar, or 40dp of ground, whichever is deeper.
                 .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets(bottom = PanelBottomPadding)))
                 .padding(start = PanelSidePadding, end = PanelSidePadding, top = PanelTopPadding),
             verticalArrangement = Arrangement.spacedBy(PanelGap),
@@ -200,22 +203,22 @@ private fun ConsentPanel(
                 modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(PanelGap),
             ) {
-                Text(text = stringResource(R.string.app_name), style = PlainTickerType.wordmark, color = Ink)
+                Text(text = stringResource(R.string.app_name), style = PlainTickerType.wordmark, color = colors.textPrimary)
                 Text(
                     text = stringResource(R.string.onboarding_headline),
                     style = PlainTickerType.onboardingTitle,
-                    color = Ink,
+                    color = colors.textPrimary,
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(BodyGap)) {
                     Text(
                         text = stringResource(R.string.onboarding_body_chain),
                         style = PlainTickerType.body,
-                        color = Ink2,
+                        color = colors.textSecondary,
                     )
                     Text(
                         text = stringResource(R.string.onboarding_body_fundamentals),
                         style = PlainTickerType.body,
-                        color = Ink2,
+                        color = colors.textSecondary,
                     )
                     // The map (task U3): what each tab is for, and where the wallet, the pass and
                     // this device's record live, since the backdrop behind this panel can only
@@ -223,36 +226,40 @@ private fun ConsentPanel(
                     Text(
                         text = stringResource(R.string.onboarding_body_map),
                         style = PlainTickerType.body,
-                        color = Ink2,
+                        color = colors.textSecondary,
                     )
-                    // The disclaimer is the one paragraph in Ink: it is the sentence that must land.
+                    // The disclaimer is the one paragraph in primary text: it is the sentence that
+                    // must land.
                     Text(
                         text = stringResource(R.string.onboarding_body_disclaimer),
                         style = PlainTickerType.body,
-                        color = Ink,
+                        color = colors.textPrimary,
                     )
                 }
-                ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange)
+                ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange, colors = colors)
             }
             PrimaryButton(
                 label = stringResource(R.string.onboarding_continue),
                 onClick = onContinue,
                 enabled = enabled,
+                colors = colors,
             )
         }
     }
 }
 
 /**
- * A 20dp square, 1dp Line strong empty and an Accent fill when checked, with no check glyph: the
- * shape lock holds here too. The whole row is the target (at least 48dp, full width), so a screen
- * reader hears one Checkbox whose label is the sentence and a switch user reaches it once.
+ * A 20dp square, bordered and empty or filled in the action colour when checked, with no check
+ * glyph: the shape lock holds here too. The whole row is the target (at least 48dp, full width),
+ * so a screen reader hears one Checkbox whose label is the sentence and a switch user reaches it
+ * once.
  */
 @Composable
 private fun ConsentCheckbox(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Row(
@@ -273,12 +280,12 @@ private fun ConsentCheckbox(
             Modifier
                 .padding(top = 1.dp)
                 .size(CheckboxSize)
-                .then(if (checked) Modifier.background(Accent) else Modifier.border(1.dp, LineStrong)),
+                .then(if (checked) Modifier.background(colors.actionFill) else Modifier.border(1.dp, colors.border)),
         )
         Text(
             text = stringResource(R.string.onboarding_certify),
             style = PlainTickerType.consent,
-            color = Ink2,
+            color = colors.textSecondary,
         )
     }
 }

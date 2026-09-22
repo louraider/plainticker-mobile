@@ -45,7 +45,7 @@ fun AmberSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(),
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     ModalBottomSheet(
@@ -65,7 +65,7 @@ fun AmberSheet(
 
 /** The top edge and handle, shared by the modal sheet and [AmberSheetSurface]. */
 @Composable
-fun AmberSheetHandle(modifier: Modifier = Modifier, colors: AmberColors = AmberDarkColors) {
+fun AmberSheetHandle(modifier: Modifier = Modifier, colors: AmberColors = defaultAmberColors()) {
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
@@ -84,7 +84,7 @@ fun AmberSheetHandle(modifier: Modifier = Modifier, colors: AmberColors = AmberD
 fun AmberSheetSurface(
     modifier: Modifier = Modifier,
     handle: Boolean = true,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(

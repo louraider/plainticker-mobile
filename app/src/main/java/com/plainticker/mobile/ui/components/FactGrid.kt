@@ -27,12 +27,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.plainticker.mobile.ui.theme.Canvas
-import com.plainticker.mobile.ui.theme.Caution
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Line
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /** Caution is for an explicit issuer-control risk only (permanent delegate, pausable transfers). */
@@ -60,15 +56,23 @@ data class FactCell(
 )
 
 /**
- * The blueprint grid: two columns, 1dp Line gaps and border, cells on the surface. Exactly as many
+ * The blueprint grid: two columns, 1dp gaps and border, cells on the surface. Exactly as many
  * cells as facts (no facts, no grid); an odd trailing cell leaves an empty half. Each cell speaks
  * one sentence.
+ *
+ * [colors] defaults to the system-following [defaultAmberColors] and drives both the gap/border
+ * colour and every cell's text; [surface] still defaults from [colors] but stays overridable, the
+ * way the swap sheet, the pass sheet and Detail's own blocks already choose their own surface
+ * tone. Before this fix, [surface] was the only thing here that could be repainted for Amber: the
+ * label, value and sub text stayed Instrument's fixed-dark Muted/Ink/Ink2/Caution regardless, so a
+ * caller that lifted [surface] to Amber's light ground was left with near-white text on it.
  */
 @Composable
 fun FactGrid(
     cells: List<FactCell>,
     modifier: Modifier = Modifier,
-    surface: Color = Canvas,
+    colors: AmberColors = defaultAmberColors(),
+    surface: Color = colors.surfaceRaised,
     minCellHeight: Dp = 96.dp,
 ) {
     if (cells.isEmpty()) return
@@ -77,8 +81,8 @@ fun FactGrid(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .background(Line)
-            .border(1.dp, Line)
+            .background(colors.border)
+            .border(1.dp, colors.border)
             .padding(1.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
@@ -91,6 +95,7 @@ fun FactGrid(
                     FactCellView(
                         cell = cell,
                         surface = surface,
+                        colors = colors,
                         minHeight = minCellHeight,
                         modifier = Modifier.weight(cell.span.coerceIn(1, 2).toFloat()).fillMaxHeight(),
                     )
@@ -129,6 +134,7 @@ fun packRows(cells: List<FactCell>): List<List<FactCell>> {
 private fun FactCellView(
     cell: FactCell,
     surface: Color,
+    colors: AmberColors,
     minHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
@@ -137,6 +143,12 @@ private fun FactCellView(
         cell.sub?.let { append(", ").append(spoken(it)) }
     }
     val tap = cell.onTap
+    // The tertiary-on-high rule (Tokens.kt, AmberColors.textTertiary) is keyed to which of the
+    // three named surfaces the text actually sits on; a cell's own [surface] is always one of
+    // colors.surfaceRaised (the grid's own default) or colors.surfaceHigh (the swap and pass
+    // sheets, sitting on AmberSheet's lifted tone), so the label below promotes correctly on the
+    // sheet cases instead of silently failing the same ratio Detail already guards against.
+    val labelSurface = if (surface == colors.surfaceHigh) AmberSurface.HIGH else AmberSurface.RAISED
     Column(
         modifier = modifier
             .background(surface)
@@ -154,11 +166,11 @@ private fun FactCellView(
             },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text = cell.label, style = PlainTickerType.label, color = Muted)
+        Text(text = cell.label, style = PlainTickerType.label, color = colors.textTertiary(labelSurface))
         Text(
             text = cell.value,
             style = PlainTickerType.factValueAt(cell.valueSize),
-            color = if (cell.tone == FactTone.Caution) Caution else Ink,
+            color = if (cell.tone == FactTone.Caution) colors.stateCaution else colors.textPrimary,
             maxLines = 1,
             softWrap = false,
         )
@@ -166,7 +178,7 @@ private fun FactCellView(
             Text(
                 text = sub,
                 style = if (cell.subMono) PlainTickerType.meta else PlainTickerType.small,
-                color = Ink2,
+                color = colors.textSecondary,
             )
         }
     }

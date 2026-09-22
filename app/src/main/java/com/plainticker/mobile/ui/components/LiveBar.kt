@@ -29,14 +29,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.plainticker.mobile.ui.theme.Accent
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * A 2dp Accent bar beside "Live from the mint" that breathes (opacity 1 to 0.45, 2.4 s ease-in-out)
- * only while [live] is true and the system animator scale is not 0. Static when landed or stale.
- * The only continuous motion on a screen.
+ * A 2dp bar beside "Live from the mint" that breathes (opacity 1 to 0.45, 2.4 s ease-in-out) only
+ * while [live] is true and the system animator scale is not 0. Static when landed or stale. The
+ * only continuous motion on a screen.
+ *
+ * [colors] defaults to the system-following [defaultAmberColors] rather than Instrument's
+ * fixed-dark Accent/Muted: this bar draws the swap sheet's and the pass sheet's own phase, and a
+ * bar that stayed dark on an Amber-light sheet is the same money-flow fault [Sheet] closes.
  *
  * @param announcement what a screen reader hears when the region changes; pass something stable
  *   (not the ticking "2 s ago") so it is announced at most once per update that matters.
@@ -48,6 +52,7 @@ fun LiveBar(
     live: Boolean,
     modifier: Modifier = Modifier,
     announcement: String = "$label, $meta",
+    colors: AmberColors = defaultAmberColors(),
 ) {
     val breathing = live && rememberMotionEnabled()
     val alpha: State<Float> = if (breathing) {
@@ -79,11 +84,16 @@ fun LiveBar(
                 .width(2.dp)
                 .fillMaxHeight()
                 .graphicsLayer { this.alpha = alpha.value }
-                .background(Accent),
+                .background(colors.stateLive),
         )
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(text = label, style = PlainTickerType.textAction, color = Accent)
-            Text(text = meta, style = PlainTickerType.meta, color = Muted, maxLines = 1)
+            Text(text = label, style = PlainTickerType.textAction, color = colors.actionText)
+            Text(
+                text = meta,
+                style = PlainTickerType.meta,
+                color = colors.textTertiary(AmberSurface.GROUND),
+                maxLines = 1,
+            )
         }
     }
 }

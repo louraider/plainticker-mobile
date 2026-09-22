@@ -47,8 +47,8 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SecondaryButton
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 import kotlinx.coroutines.launch
@@ -95,13 +95,13 @@ fun VoteSheet(state: VoteState, actions: VoteActions, modifier: Modifier = Modif
  *
  * **[FactGrid] stays Instrument's own component, not restyled here.** It is not one of the six
  * Amber components this task's brief names (the ticker row, `AmberFigure`, the section head, the
- * primary action, the sheet, chips), and its cell text colours are internal to `ui/components/
- * FactGrid.kt`, outside this task's `ui/vote/` lane. What is exposed and safe to set from here is
- * its `surface` parameter, so the cells at least sit on [AmberDarkColors.surfaceHigh], the same
- * fill [AmberSheet] gives the sheet around them, rather than Instrument's Elevated.
- * [SecondaryButton] is the same kind of leftover: there is no Amber secondary action among the
- * six named components, so the "Close" button below stays Instrument's bordered button rather
- * than a forked one-off.
+ * primary action, the sheet, chips). Its surface and its cell text now both read a theme-following
+ * `AmberColors` by default (`ui/components/FactGrid.kt`), and this call site still pins its own
+ * `surface` explicitly to [colors]' own `surfaceHigh`, the same fill [AmberSheet] gives the sheet
+ * around them, rather than Instrument's Elevated. [LiveBar] and [SecondaryButton] read the same
+ * theme-following default now too. [SecondaryButton] itself is still the same kind of leftover
+ * anatomy-wise: there is no Amber secondary action among the six named components, so the "Close"
+ * button below stays Instrument's bordered button rather than a forked one-off.
  */
 @Composable
 internal fun ColumnScope.VoteSheetBody(
@@ -109,6 +109,7 @@ internal fun ColumnScope.VoteSheetBody(
     actions: VoteActions,
     takeFocus: Boolean = true,
 ) {
+    val colors = defaultAmberColors()
     ConfirmOnSent(content.bar != null)
     val lead = leadFocus(takeFocus)
 
@@ -125,7 +126,7 @@ internal fun ColumnScope.VoteSheetBody(
     Text(
         text = content.title.text(),
         style = AmberSheetTitle,
-        color = AmberDarkColors.textPrimary,
+        color = colors.textPrimary,
         maxLines = 1,
         softWrap = false,
         modifier = (if (content.bar == null) lead else Modifier)
@@ -136,26 +137,27 @@ internal fun ColumnScope.VoteSheetBody(
 
     // What is in flight, always as a sentence. This app draws no spinners (DESIGN.md section 8),
     // so the phase is the only thing that says a round-trip is happening, and it has to say which.
-    content.phase?.let { Sentence(it.text(), AmberType.body, AmberDarkColors.textSecondary, PhaseTop) }
+    content.phase?.let { Sentence(it.text(), AmberType.body, colors.textSecondary, PhaseTop) }
 
     if (content.cells.isNotEmpty()) {
         Spacer(Modifier.height(GridTop))
         FactGrid(
             cells = content.cells.map { it.factCell() },
-            surface = AmberDarkColors.surfaceHigh,
+            colors = colors,
+            surface = colors.surfaceHigh,
             minCellHeight = CellHeight,
         )
     }
 
-    content.notice?.let { Sentence(it.text(), AmberType.body, AmberDarkColors.textSecondary, NoticeTop) }
+    content.notice?.let { Sentence(it.text(), AmberType.body, colors.textSecondary, NoticeTop) }
 
     // The weakness of a balance-weighted vote, set in the metadata face under the figure it is
-    // about. It is never [AmberDarkColors.stateCaution]: DESIGN.md section 7 keeps that colour
+    // about. It is never [colors.stateCaution]: DESIGN.md section 7 keeps that colour
     // for an issuer control the mint actually carries, and this is a property of the mechanism,
     // not a flag. `textTertiary(HIGH)` promotes to `textSecondary` on this sheet's own surface,
     // so the contrast rule holds without the call site having to know that.
     content.disclosure?.let {
-        Sentence(it.text(), AmberType.meta, AmberDarkColors.textTertiary(AmberSurface.HIGH), DisclosureTop)
+        Sentence(it.text(), AmberType.meta, colors.textTertiary(AmberSurface.HIGH), DisclosureTop)
     }
 
     Column(

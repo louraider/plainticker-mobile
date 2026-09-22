@@ -61,6 +61,7 @@ import com.plainticker.mobile.ui.swap.SwapAmount
 import com.plainticker.mobile.ui.swap.SwapSheetBody
 import com.plainticker.mobile.ui.swap.SwapState
 import com.plainticker.mobile.ui.swap.sheet
+import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.Canvas
 import com.plainticker.mobile.ui.theme.Ink
 import com.plainticker.mobile.ui.theme.Ink2
@@ -91,7 +92,7 @@ fun GalleryScreen(
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding(),
     ) {
-        TopBar(action = "Watch", onAction = {}, onTitleLongPress = onBack)
+        TopBar(action = "Watch", onAction = {}, onTitleLongPress = onBack, colors = AmberDarkColors)
         Banner(text = "Debug gallery, sample data from the canvas", action = "Close", onAction = onBack)
         TopTabs(items = GallerySamples.tabs, selected = tab, onSelect = { tab = it })
         TodayStrip(text = GallerySamples.TODAY)
@@ -133,20 +134,23 @@ fun GalleryScreen(
         Gauge(
             referenceLabel = "Token vs NYSE close",
             tracking = TrackingQuality.Tracked(GallerySamples.PREMIUM_PCT, poolUsd = GallerySamples.POOL_USD),
+            colors = AmberDarkColors,
         )
         Spacer(Modifier.height(28.dp))
-        LiveBar(label = "Live from the mint", meta = GallerySamples.LIVE_META, live = live)
+        LiveBar(label = "Live from the mint", meta = GallerySamples.LIVE_META, live = live, colors = AmberDarkColors)
         Row(Modifier.padding(start = 4.dp)) {
             TextAction(label = if (live) "Show stale" else "Show live", onClick = { live = !live })
         }
 
         Heading(text = "Backing and controls", topPadding = 14.dp)
-        FactGrid(cells = GallerySamples.backing)
+        FactGrid(cells = GallerySamples.backing, colors = AmberDarkColors)
 
         Heading(text = "Against the sector", meta = GallerySamples.COMPOSITE)
-        GallerySamples.tracks.forEach { Track(label = it.label, value = it.value, state = it.state, positionPct = it.positionPct) }
+        GallerySamples.tracks.forEach {
+            Track(label = it.label, value = it.value, state = it.state, positionPct = it.positionPct, colors = AmberDarkColors)
+        }
         Spacer(Modifier.height(14.dp))
-        FactGrid(cells = GallerySamples.sector, minCellHeight = 88.dp)
+        FactGrid(cells = GallerySamples.sector, colors = AmberDarkColors, minCellHeight = 88.dp)
 
         Heading(text = "F-Score")
         Row(
@@ -156,7 +160,7 @@ fun GalleryScreen(
             Text(text = "8", style = PlainTickerType.fScoreNumeral, color = Ink, modifier = Modifier.alignByBaseline())
             Text(text = "of 9 signals", style = PlainTickerType.company, color = Muted, modifier = Modifier.alignByBaseline())
         }
-        GallerySamples.signals.forEach { (name, ok) -> SignalRow(name = name, ok = ok) }
+        GallerySamples.signals.forEach { (name, ok) -> SignalRow(name = name, ok = ok, colors = AmberDarkColors) }
 
         Heading(text = "Method")
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -167,15 +171,16 @@ fun GalleryScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            PrimaryButton(label = "Swap USDC to TSLAx", onClick = { sheetOpen = true })
+            PrimaryButton(label = "Swap USDC to TSLAx", onClick = { sheetOpen = true }, colors = AmberDarkColors)
             Text(text = GallerySamples.COST_LINE, style = PlainTickerType.meta, color = Muted)
-            SecondaryButton(label = "View in Portfolio", onClick = {})
-            DisabledButton(label = "Read the list")
+            SecondaryButton(label = "View in Portfolio", onClick = {}, colors = AmberDarkColors)
+            DisabledButton(label = "Read the list", colors = AmberDarkColors)
         }
 
         // List: search field, analyzed rows, price-only rows, with the skeleton in front.
         Heading(text = "Search")
         Field(
+            colors = AmberDarkColors,
             label = "Search",
             value = query,
             onValueChange = { query = it },
@@ -218,7 +223,7 @@ fun GalleryScreen(
 
         // Portfolio: wallet fragment in the bar, total, holdings.
         Heading(text = "Holdings")
-        TopBar(meta = GallerySamples.WALLET, insets = WindowInsets(0))
+        TopBar(meta = GallerySamples.WALLET, insets = WindowInsets(0), colors = AmberDarkColors)
         Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(text = "\$1,289.01", style = PlainTickerType.bigValue, color = Ink, maxLines = 1, softWrap = false)
             Text(text = "3 xStocks, priced by Jupiter", style = PlainTickerType.small, color = Muted)
@@ -263,6 +268,7 @@ fun GalleryScreen(
         // Swap sheet and receipt on the static surface; the same content opens modally above.
         Heading(text = "Amount field")
         Field(
+            colors = AmberDarkColors,
             label = "Amount, USDC",
             value = amount,
             onValueChange = { amount = it },
@@ -277,13 +283,15 @@ fun GalleryScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
         )
         Heading(text = "Receipt, landed")
-        SheetSurface { SwapSheetBody(content = receiptContent(), actions = GalleryNoActions, takeFocus = false) }
+        SheetSurface(colors = AmberDarkColors) {
+            SwapSheetBody(content = receiptContent(), actions = GalleryNoActions, takeFocus = false)
+        }
         Spacer(Modifier.height(48.dp))
     }
 
     if (sheetOpen) {
         // The real sheet over a real state, so a cell the product drops cannot live on here.
-        Sheet(onDismissRequest = { sheetOpen = false }) {
+        Sheet(onDismissRequest = { sheetOpen = false }, colors = AmberDarkColors) {
             SwapSheetBody(
                 content = amountContent(amount),
                 actions = GalleryNoActions.copy(

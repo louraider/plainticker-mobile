@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.Canvas
 import com.plainticker.mobile.ui.theme.LineStrong
+import com.plainticker.mobile.ui.theme.AmberColors
 
 /*
  * Edge to edge (plan section 13 Pass 6, DT5). MainActivity draws under both system bars, which are
@@ -59,19 +60,25 @@ import com.plainticker.mobile.ui.theme.LineStrong
  * 2. **It holds nothing.** No text, no action, no semantics and no pointer input: it is one Box
  *    with a gradient, so a touch goes through it and a screen reader never meets it. A sticky
  *    header is a header that stays; this stays and is not a header.
- * 3. **It is opaque only where the clock is.** Full Canvas across the status bar inset, then a
- *    [ScrimFade] fall to nothing, so content dissolves as it leaves rather than being cut off by
+ * 3. **It is opaque only where the clock is.** Full ground colour across the status bar inset, then
+ *    a [ScrimFade] fall to nothing, so content dissolves as it leaves rather than being cut off by
  *    a hard edge. A hard edge is what a status-bar background looks like, and it would make the
  *    890dp artboards wrong in the other direction.
+ *
+ * [groundColor] defaults to Instrument's [Canvas] for source compatibility with callers that have
+ * not moved to Amber, but every live call site (`HomeScreen`, `DetailScreen`) now passes the
+ * screen's own [AmberColors.surfaceGround] instead: a scrim hard-coded to Instrument's near-black
+ * painted an opaque dark band across the top of every Amber screen regardless of theme, which on
+ * Amber's light ground read as a black bar under the clock rather than an invisible one.
  */
 @Composable
-fun TopScrim(modifier: Modifier = Modifier) {
+fun TopScrim(modifier: Modifier = Modifier, groundColor: Color = Canvas) {
     val inset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val opaqueTo = scrimOpaqueFraction(inset)
     val stops = if (opaqueTo > 0f) {
-        arrayOf(0f to Canvas, opaqueTo to Canvas, 1f to Color.Transparent)
+        arrayOf(0f to groundColor, opaqueTo to groundColor, 1f to Color.Transparent)
     } else {
-        arrayOf(0f to Canvas, 1f to Color.Transparent)
+        arrayOf(0f to groundColor, 1f to Color.Transparent)
     }
     Box(modifier.fillMaxWidth().height(inset + ScrimFade).background(Brush.verticalGradient(*stops)))
 }

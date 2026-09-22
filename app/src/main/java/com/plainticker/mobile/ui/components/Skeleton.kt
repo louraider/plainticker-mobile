@@ -21,17 +21,22 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.plainticker.mobile.ui.theme.Elevated
-import com.plainticker.mobile.ui.theme.Line
+import com.plainticker.mobile.ui.theme.AmberColors
 
-/** One Elevated bar standing in for a line of text. */
+/**
+ * One bar standing in for a line of text, on [colors]' own [AmberColors.surfaceRaised]: a skeleton
+ * built for a dark ground (Instrument's fixed [com.plainticker.mobile.ui.theme.Elevated]) read as a
+ * row of near-black blocks on Amber's light ground, exactly the "built for a dark ground" fault
+ * this pass looks for, so the fill now follows [defaultAmberColors] like every other shared piece.
+ */
 @Composable
 fun SkeletonBar(
     modifier: Modifier = Modifier,
     width: Dp = 120.dp,
     height: Dp = 14.dp,
+    colors: AmberColors = defaultAmberColors(),
 ) {
-    Box(modifier.size(width = width, height = height).background(Elevated))
+    Box(modifier.size(width = width, height = height).background(colors.surfaceRaised))
 }
 
 /** [count] placeholder list rows at 64dp with dividers; announced once as "Loading". */
@@ -39,6 +44,7 @@ fun SkeletonBar(
 fun SkeletonRows(
     count: Int,
     modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     Column(modifier.fillMaxWidth().semantics { contentDescription = "Loading" }) {
         repeat(count) {
@@ -49,10 +55,10 @@ fun SkeletonRows(
                     .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SkeletonBar(width = 96.dp, height = 16.dp)
-                SkeletonBar(width = 180.dp, height = 12.dp)
+                SkeletonBar(width = 96.dp, height = 16.dp, colors = colors)
+                SkeletonBar(width = 180.dp, height = 12.dp, colors = colors)
             }
-            HorizontalDivider(thickness = 1.dp, color = Line)
+            HorizontalDivider(thickness = 1.dp, color = colors.border)
         }
     }
 }
