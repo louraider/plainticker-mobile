@@ -34,7 +34,27 @@ enum class PassActionKind { Confirm, Retry, Close }
 
 /** USDC and USDT both carry six decimals. */
 private const val USDC_DECIMALS = 6
+
+/** Lamports' own on-chain precision: what the raw integer below is divided by to read as SOL. */
 private const val LAMPORT_DECIMALS = 9
+
+/**
+ * The fee is shown to six decimals, [Fmt]'s own default for a token quantity ("six by default",
+ * `Fmt.kt`) and the precision every other figure in this app keeps, not to all nine of
+ * [LAMPORT_DECIMALS]. Nine is what the conversion above needs to read the raw integer correctly;
+ * it is not a reason to print all nine digits of a signer's fee. A real fee (base plus whatever
+ * priority fee applied) is essentially never a round number of SOL, so the old setting printed up
+ * to nine non-zero decimals: "0.123456789 SOL", 15 characters. `FactGrid` gives a span-1 cell
+ * about 146.5dp at this style's 18sp (400dp sheet, minus 20dp*2 grid margin, 1dp*2 border and
+ * padding, a 1dp row gap split two ways, 16dp*2 cell padding); JetBrains Mono Medium is a true
+ * monospace face (every glyph 600 of 1000 units wide, fontTools against
+ * `res/font/jetbrains_mono_medium.ttf`), so that is 10.8dp per character at 18sp and about 13
+ * characters fit. 15 does not. A lamport is worth about $0.0000002, so nothing past the sixth
+ * decimal (a millionth of a SOL) could change what a signer decides: six decimals is both the
+ * honest precision for an amount that small and the shorter one, 12 characters at its own worst
+ * case ("0.123456 SOL"), a character inside the budget rather than two over it.
+ */
+private const val LAMPORT_DISPLAY_DECIMALS = 6
 
 fun PassState.sheet(): PassSheetContent? = when (this) {
     is PassState.Closed -> null
@@ -102,7 +122,7 @@ private fun readyCells(summary: PassSummary) = listOf(
     ),
     PassCell(
         label = words(R.string.vote_fee_label),
-        value = words(R.string.vote_fee, Fmt.tokenAmount(summary.lamports, LAMPORT_DECIMALS, maxDecimals = LAMPORT_DECIMALS)),
+        value = words(R.string.vote_fee, Fmt.tokenAmount(summary.lamports, LAMPORT_DECIMALS, maxDecimals = LAMPORT_DISPLAY_DECIMALS)),
     ),
     PassCell(
         label = words(R.string.pass_destination_label),
