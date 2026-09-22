@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -223,9 +224,15 @@ internal fun ListContent(
         scope.launch { if (motionEnabled) listState.animateScrollToItem(index) else listState.scrollToItem(index) }
     }
 
-    Box(modifier.fillMaxSize()) {
+    // A Row, not a Box with the rail overlaid: an overlay never takes width away from what sits
+    // under it, which is exactly how the rail used to end up drawn over the search field, the
+    // filter chips and the sticky sector heading rather than beside them (this task's brief, part
+    // 2). Reserving the rail's own [JumpIndexWidth] as a real sibling column means the chrome and
+    // every chapter narrow to make room for it instead, on every frame the rail is shown, not just
+    // where a chapter happens to end short of the rail's height.
+    Row(modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             state = listState,
             // The tab content ends above the navigation bar; the padding is part of the scroll.
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
@@ -355,9 +362,11 @@ internal fun ListContent(
                 active = activeChapter,
                 onJump = ::jumpTo,
                 colors = colors,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .windowInsetsPadding(WindowInsets.navigationBars),
+                // No BoxScope.align: the outer Row's own verticalAlignment (CenterVertically)
+                // centers this sibling column the same way Alignment.CenterEnd used to center it
+                // inside the Box, minus the overlap. The rail's own width comes from its
+                // [JumpIndexWidth] modifier, unchanged.
+                modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars),
             )
         }
     }
@@ -519,6 +528,27 @@ private fun StocksFilterRow(
  * column of taps is not sharing the same 22 to 28dp of screen edge with anything else; it stays
  * a narrow, fixed-width column anyway (rather than growing into a wider drag track) so it keeps
  * reading as a set of discrete labels and not as a slider a reader could mistake for one.
+ *
+ * **It does compete with the chrome, and used to draw over it.** This composable was, until the
+ * device found it, a `Box` overlay: positioned on top of the same-height `LazyColumn` rather than
+ * beside it, so it drew over the search field at the top, the filter chips below it and every
+ * sticky sector heading, instead of leaving each its own width. The caller ([ListContent]) now
+ * lays this out as a real [Row] sibling next to the `LazyColumn`, which the [LazyColumn] gives a
+ * `weight(1f)` so the chrome and every chapter narrow by this column's own width whenever it is
+ * shown, rather than a fixed width nobody but this composable knows to leave clear.
+ *
+ * **Whether the rail and [StocksFilterRow]'s sector chips are the same act of navigation twice.**
+ * They read a reader's intent differently, not just their pixels differently, and
+ * `StocksFilter.kt`'s own doc comment on [StocksFilter.Sector] already draws the line: "the jump
+ * index already reaches a sector without narrowing anything (it scrolls, a chip filters)... a
+ * sector chip's own job is the thing the jump index cannot do: keep one sector still while the
+ * rest fall away." Concretely: the rail is for a reader moving *through* the full order (browsing
+ * Health Care, then continuing into Industrials next), where a tap only relocates the scroll
+ * position and every other chapter stays one flick away; a chip is for a reader who wants to *stop
+ * seeing* every sector but one (narrowing to only Health Care, Tracked, or Watched, and staying
+ * there while they read). Eleven rail entries plus up to eleven chips is real interface weight for
+ * one screen, but it is two different questions ("where in the order am I" versus "show me only
+ * this"), not one question asked twice, so both stay; the fix here is the overlap, not the count.
  *
  * **Touch targets, and the one place this pass departs from the database's 48dp rule on
  * purpose.** [AmberChip] and every other tap target on this screen keeps

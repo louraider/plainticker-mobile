@@ -7,11 +7,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The trap this task's brief names by name, twice ("Round" starved to one letter a line;
- * "no wallet connected" clipped mid-character to "no wallet c"), pinned the way
- * [com.plainticker.mobile.ui.vote.VoteScreenTest] pins the fix for the first one: there is no
- * layout test on a plain JVM that can measure a real render, so what is pinned is the row's own
- * source, read past comments and literal contents the way [KotlinScan] reads any other screen.
+ * The trap this task's brief names by name, a third time ("Round" starved to one letter a line;
+ * "no wallet connected" clipped mid-character to "no wallet c"; now the company name cut to
+ * "Meta Pl…" on the device), pinned the way [com.plainticker.mobile.ui.vote.VoteScreenTest] pins
+ * the fix for the first one: there is no layout test on a plain JVM that can measure a real
+ * render, so what is pinned is the row's own source, read past comments and literal contents the
+ * way [KotlinScan] reads any other screen.
  */
 class AmberTickerRowTest {
 
@@ -41,6 +42,51 @@ class AmberTickerRowTest {
         // AmberTickerRow's own left group (ticker, company) and right group (figure, context) are
         // each sized by their content, so there is nothing here for either to clip against.
         assertFalse("a fixed-width modifier is exactly the trap this row was built not to repeat", ".width(" in row)
+    }
+
+    // ---- The device bug: an unweighted meta column claimed the row before the name saw a budget -
+
+    /**
+     * The actual device bug ("META x  Meta Pl…", "GOOGL x  Alphab…"), and what the test above did
+     * not catch: absence of a literal `.width(` does not mean neither side has priority. Before this
+     * fix, the outer [Row]'s meta column (figure, context) carried no weight, so Compose measured it
+     * first, with the *entire* row available, and a long `context` clause claimed most of that width
+     * before the weighted name group (ticker, company) ever saw a budget — a fixed-width sibling in
+     * effect, just not in literal syntax. Both groups now carry a weight, which the test above could
+     * not have distinguished from the old, broken shape, since neither shape contains `.width(`.
+     */
+    @Test
+    fun `the meta column also carries a weight, so it cannot claim the row before the name group does`() {
+        val row = body("fun AmberTickerRow(")
+        // Not "Row(\n    modifier...": the source is read from disk with its own CRLF line
+        // endings, so a pattern that embeds a literal "\n" between two lines never matches: it
+        // is a full clause on one line instead.
+        assertTrue(
+            "the name group (ticker, company) must be weighted",
+            "modifier = Modifier.weight(NameWeight)" in row,
+        )
+        val metaColumnStart = row.indexOf("if (figure != null || context != null)")
+        val metaColumn = row.substring(metaColumnStart, row.indexOf("verticalArrangement", metaColumnStart))
+        assertTrue(
+            "the meta column (figure, context) must also be weighted, or it is measured before " +
+                "the name group with the whole row available to it, which is the device bug",
+            "modifier = Modifier.weight(MetaWeight)" in metaColumn,
+        )
+    }
+
+    @Test
+    fun `the name group's weight outweighs the meta group's, so the identity wins a real squeeze`() {
+        val nameWeight = Regex("""private const val NameWeight = (\d+(?:\.\d+)?)f""").find(source)
+            ?.groupValues?.get(1)?.toDouble()
+        val metaWeight = Regex("""private const val MetaWeight = (\d+(?:\.\d+)?)f""").find(source)
+            ?.groupValues?.get(1)?.toDouble()
+        assertTrue("NameWeight must be declared", nameWeight != null)
+        assertTrue("MetaWeight must be declared", metaWeight != null)
+        assertTrue(
+            "the name (ticker, company) is the row's identity and must outrank the meta line " +
+                "(figure, context), which is supplementary and already wraps gracefully",
+            nameWeight!! > metaWeight!!,
+        )
     }
 
     @Test
@@ -91,5 +137,19 @@ class AmberTickerRowTest {
         // actual longest pair in the catalog it will be asked to draw, not an invented one.
         assertTrue(longestSymbol.length == 8)
         assertTrue(longestCompany.length == 54)
+    }
+
+    /**
+     * The actual worst case that broke the row on the device: not company alone, but company
+     * *and* a long meta clause competing for the same row at once. `list_row_meta_join` joins the
+     * thin-pool sentence and the age ("$2.7k behind, too thin" + " · " + "2 d old"), which is what
+     * the Stocks list drew beside "Meta Platforms, Inc." when the report was filed. Recorded here,
+     * beside the catalog's own worst case above, because it was the *pair* the old, unweighted
+     * design never accounted for.
+     */
+    @Test
+    fun `the real worst-case meta clause is exactly what the weighted split above sizes against`() {
+        val longestMeta = "$2.7k behind, too thin · 2 d old"
+        assertTrue(longestMeta.length == 32)
     }
 }

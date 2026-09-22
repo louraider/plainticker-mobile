@@ -23,6 +23,7 @@ import com.plainticker.mobile.watchlist.WatchlistFacts
 import com.plainticker.mobile.watchlist.WatchlistScheduler
 import java.time.Instant
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -223,9 +224,21 @@ class WatchlistViewModel(
 
     /**
      * Blocks 1, 3 and 4 (docs/design-research-2026-09-21.md section 3): the venue line, Tracked
-     * today and Next up. One join, once per load, over `/summary`, the catalog and Jupiter's
-     * prices, the same three sources `ListViewModel`'s own join reads, so "22 of 160" here and
-     * Stocks' coverage counts can never print two different numbers.
+     * today and Next up. One join, once per load, over `/summary`, the catalog, Jupiter's prices
+     * and the leaderboard, the same sources `ListViewModel`'s own join reads, so "22 of 160" here
+     * and Stocks' coverage counts can never print two different numbers.
+     *
+     * **Four network reads, not run one after another.** `/summary`, the catalog and the
+     * leaderboard ([nextUpRepo]) answer three unrelated questions and none needs another's result
+     * to be *asked*, only Jupiter's prices do (a mint list built from `/summary` joined against the
+     * catalog): read one after another, four round trips cost their sum; the device's own "Tracked
+     * today" skeleton and this block's venue line sitting undrawn for several seconds after launch
+     * (this task's brief, "one more thing") was that sum. [summaryDeferred], [catalogDeferred] and
+     * the leaderboard read below start together with [async] and are only awaited where their
+     * answers are actually needed (the leaderboard's own `await()` sits after prices, because
+     * nothing before it needs it, not because it has to happen after), so the wall time this join
+     * actually costs a reader is two round trips (the three together, then prices) rather than
+     * four, without changing one fact this block ever states.
      *
      * Never throws: a source that did not answer costs its own facts (the fields below stay at
      * their [WatchlistUiState] defaults, which is what [com.plainticker.mobile.ui.today.TodayModel.kt]'s
@@ -235,9 +248,14 @@ class WatchlistViewModel(
         todayJob?.cancel()
         _state.update { it.copy(todayLoading = true) }
         todayJob = viewModelScope.launch {
-            val summaryResult = runCatching { summaries.summary() }
-            val assets = runCatching { catalog.catalog() }.getOrNull().orEmpty()
-                .filter { it.solanaMint != null }
+            val summaryDeferred = async { runCatching { summaries.summary() } }
+            val catalogDeferred = async {
+                runCatching { catalog.catalog() }.getOrNull().orEmpty().filter { it.solanaMint != null }
+            }
+            val leaderAnswerDeferred = async { runCatching { nextUpRepo.current() }.getOrNull() as? NextUpAnswer.Open }
+
+            val summaryResult = summaryDeferred.await()
+            val assets = catalogDeferred.await()
             val rows = summaryResult.getOrNull()?.rows.orEmpty()
                 .distinctBy { it.ticker.uppercase() } // lint-allow uppercase: map key
             val byTicker = assets.associateBy { it.underlyingTicker.uppercase() } // lint-allow uppercase: map key
@@ -269,7 +287,7 @@ class WatchlistViewModel(
             val analyzedKeys = analyzed.mapTo(HashSet()) { (row, _) -> row.ticker.uppercase() } // lint-allow uppercase: map key
             val withoutAnalysisTotal = assets.count { it.underlyingTicker.uppercase() !in analyzedKeys } // lint-allow uppercase: map key
 
-            val leaderAnswer = runCatching { nextUpRepo.current() }.getOrNull() as? NextUpAnswer.Open
+            val leaderAnswer = leaderAnswerDeferred.await()
             val leaderRow = leaderAnswer?.rows?.firstOrNull()?.let { row ->
                 val raw = row.weightRaw() ?: return@let null
                 val asset = byTicker[row.ticker.trim().uppercase()] // lint-allow uppercase: map key
