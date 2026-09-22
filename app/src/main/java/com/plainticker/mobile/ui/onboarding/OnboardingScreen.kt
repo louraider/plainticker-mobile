@@ -38,9 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.AmberTickerRow
+import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-import com.plainticker.mobile.ui.components.ListRow
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.PrimaryButton
 import com.plainticker.mobile.ui.components.SheetSurface
@@ -50,7 +51,6 @@ import com.plainticker.mobile.ui.components.TopTabs
 import com.plainticker.mobile.ui.components.focusOutline
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.list.RowState
-import com.plainticker.mobile.ui.list.label
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import java.time.Instant
@@ -121,6 +121,16 @@ private fun OnboardingContent(
  * the semantics are cleared: the tabs are decorative (TopTabs with no onSelect), the You action is
  * TopBar's own picture of itself (onAction left null), the strip offers no refresh and the rows do
  * not open.
+ *
+ * The six sample rows draw through [AmberTickerRow], the same row the real List screen now draws
+ * (`ListScreen.kt`'s own `AnalyzedRow`), in [AmberTickerRowGroup]: the row count here is fixed at
+ * six, never the roughly 830-row real list, so the non-lazy group this backdrop uses is not the
+ * performance trap a real scrolling chapter would be. The composite is the figure and the
+ * disclosure sentence is the context, the same resolution `AnalyzedRow` settled on; the state word
+ * ("strong", "fair", "weak") is not drawn beside it any more, because [AmberTickerRow] has one
+ * figure and one context line, not a value plus a separately aligned sub-value (`ListRow.kt`'s own
+ * `valueSub`), and `AnalyzedRow`'s own doc comment already made that same call for the real row
+ * this one is a picture of.
  */
 @Composable
 private fun ListBackdrop(modifier: Modifier = Modifier) {
@@ -149,19 +159,19 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
         // the "Analyzed" heading the skeleton alone uses (ListScreen.kt): the backdrop's six
         // sample rows are one illustrative chapter rather than six real, differently sectored ones.
         Heading(text = BackdropSector, topPadding = 30.dp, meta = Fmt.count(BackdropRows.size))
-        BackdropRows.forEachIndexed { index, row ->
-            ListRow(
-                ticker = row.ticker,
-                company = row.company,
-                meta = stringResource(
-                    R.string.list_row_meta_join,
-                    stringResource(R.string.list_row_meta_premium, Fmt.percent(row.premiumPct)),
-                    Fmt.daysOld(row.ageDays),
-                ),
-                valueRight = Fmt.decimal(row.composite, decimals = 0),
-                valueSub = stringResource(row.state.label),
-                divider = index < BackdropRows.lastIndex,
-            )
+        AmberTickerRowGroup {
+            BackdropRows.forEach { row ->
+                AmberTickerRow(
+                    ticker = row.ticker,
+                    company = row.company,
+                    figure = Fmt.decimal(row.composite, decimals = 0),
+                    context = stringResource(
+                        R.string.list_row_meta_join,
+                        stringResource(R.string.list_row_meta_premium, Fmt.percent(row.premiumPct)),
+                        Fmt.daysOld(row.ageDays),
+                    ),
+                )
+            }
         }
     }
 }

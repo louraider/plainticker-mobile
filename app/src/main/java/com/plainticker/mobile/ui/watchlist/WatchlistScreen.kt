@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,16 +25,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
+import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-// The row component and this screen's row model share a name; the anatomy keeps an alias.
-import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.Panel
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.spoken
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.Ink
@@ -204,9 +205,15 @@ private fun DebugRunCheck(onRunCheck: () -> Unit) {
 }
 
 /**
- * One watched ticker: the token left, the next report and the premium on the meta line, "Unwatch"
- * trailing. The row opens Detail and the text action does not, so the two targets are separate and
- * both are 48dp; there is no swipe, which Pass 2 rejected for discoverability.
+ * One watched ticker: Amber's ticker row, the token on its name line, the next report and the
+ * premium joined as the meta line's context (no figure: this row never prices anything), "Unwatch"
+ * trailing through [AmberTickerRow]'s own `trailingAction`. The row opens Detail and the text
+ * action does not, so the two targets are separate and both are 48dp; there is no swipe, which
+ * Pass 2 rejected for discoverability.
+ *
+ * The divider between rows is [AmberRowDivider], not a group: Watchlist can carry as many rows as
+ * a wallet is watching, so each stays its own lazy item rather than one non-lazy group holding all
+ * of them, the same trade `VoteScreen.kt`'s own ballot makes.
  */
 @Composable
 private fun Watched(
@@ -219,17 +226,33 @@ private fun Watched(
     val report = watch.report.text()
     val tracking = watch.tracking?.text()
     val meta = tracking?.let { stringResource(R.string.list_row_meta_join, report, it) } ?: report
-    InstrumentRow(
-        ticker = watch.symbol,
-        company = watch.company,
-        meta = meta,
-        trailingAction = stringResource(R.string.action_unwatch),
-        onTrailingAction = { onUnwatch(watch.ticker) },
-        divider = !last,
-        onClick = { onOpenDetail(watch.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, watch.symbol),
-        description = sentence(watch.symbol, watch.company, report, tracking),
-    )
+    AmberRowDivider(last = last) {
+        AmberTickerRow(
+            ticker = watch.symbol,
+            company = watch.company,
+            context = meta,
+            trailingAction = stringResource(R.string.action_unwatch),
+            onTrailingAction = { onUnwatch(watch.ticker) },
+            onClick = { onOpenDetail(watch.ticker) },
+            onClickLabel = stringResource(R.string.action_open_ticker, watch.symbol),
+            description = sentence(watch.symbol, watch.company, report, tracking),
+        )
+    }
+}
+
+/**
+ * The 1dp seam between rows, drawn manually because this screen's rows are individual lazy items
+ * rather than one [com.plainticker.mobile.ui.components.AmberTickerRowGroup]: the same trade
+ * `VoteScreen.kt`'s own [com.plainticker.mobile.ui.vote.VoteScreen] carries for its ballot, read
+ * here against [com.plainticker.mobile.ui.theme.AmberColors.border].
+ */
+@Composable
+private fun AmberRowDivider(last: Boolean, content: @Composable () -> Unit) {
+    val colors = defaultAmberColors()
+    Column(Modifier.fillMaxWidth()) {
+        content()
+        if (!last) HorizontalDivider(thickness = 1.dp, color = colors.border)
+    }
 }
 
 /** The digest Panel: the time it was produced in mono meta, the digest itself under it. */
