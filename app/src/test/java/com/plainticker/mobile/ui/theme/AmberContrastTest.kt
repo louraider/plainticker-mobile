@@ -99,4 +99,64 @@ class AmberContrastTest {
             assertTrue("$label", contrast(c.textTertiary(AmberSurface.HIGH), c.surfaceHigh) >= 4.5)
         }
     }
+
+    // ---- The light `surfaceRaised` tonal-lift defect, and the `border` edge that closes it ------
+
+    /**
+     * The defect a previous pass measured and refused to fix alone: light's `surfaceRaised` over
+     * `surfaceGround` is nearly 1:1 (`#FFFFFF` on `#FFFBF2`), while dark's own step is a real,
+     * legible lift. Every tonal container that depends on this step (a grouped row, an unselected
+     * chip, a skeleton bar's fill) is close to invisible in light. Pinned here so a future edit to
+     * either primitive cannot silently regress the number this task's fix (`border`, light only)
+     * was measured against.
+     */
+    @Test
+    fun `light surfaceRaised over surfaceGround is nearly 1 to 1, the defect the light border edge closes`() {
+        val raisedOverGround = contrast(AmberLightColors.surfaceRaised, AmberLightColors.surfaceGround)
+        assertTrue("measured $raisedOverGround, expected close to 1:1 per this task's brief", raisedOverGround in 1.0..1.08)
+        // surfaceHigh's own step is healthy by comparison: the fault is specific to surfaceRaised.
+        val highOverGround = contrast(AmberLightColors.surfaceHigh, AmberLightColors.surfaceGround)
+        assertTrue("measured $highOverGround, expected the healthy ~1.15:1 the brief states", highOverGround in 1.1..1.2)
+    }
+
+    /**
+     * Dark's own `surfaceRaised` step, pinned so a future change that "fixes" light by accident
+     * changing a shared code path cannot quietly move dark's already-healthy 1.12:1 lift too.
+     */
+    @Test
+    fun `dark surfaceRaised over surfaceGround is a real lift, unlike light's`() {
+        val raisedOverGround = contrast(AmberDarkColors.surfaceRaised, AmberDarkColors.surfaceGround)
+        assertTrue("measured $raisedOverGround, expected dark's healthy ~1.12:1", raisedOverGround in 1.08..1.16)
+    }
+
+    /**
+     * The fix itself, measured rather than asserted: `border` against both the container it
+     * outlines (`surfaceRaised`) and the ground behind it, in light. Both clear the ~1.03:1 defect
+     * above by a wide margin and land close to dark's own `border`-against-`surfaceRaised` step
+     * (1.33:1), so the edge reads as real structure, not another near-invisible tone.
+     */
+    @Test
+    fun `light border reads clearly against both surfaceRaised and surfaceGround, unlike the tonal step alone`() {
+        val borderOverRaised = contrast(AmberLightColors.border, AmberLightColors.surfaceRaised)
+        val borderOverGround = contrast(AmberLightColors.border, AmberLightColors.surfaceGround)
+        assertTrue("measured $borderOverRaised", borderOverRaised in 1.35..1.45)
+        assertTrue("measured $borderOverGround", borderOverGround in 1.30..1.40)
+        val raisedOverGround = contrast(AmberLightColors.surfaceRaised, AmberLightColors.surfaceGround)
+        assertTrue("the edge must read more clearly than the tonal step it stands in for", borderOverRaised > raisedOverGround * 1.25)
+        assertTrue("the edge must read more clearly than the tonal step it stands in for", borderOverGround > raisedOverGround * 1.25)
+    }
+
+    /**
+     * Dark's own primitives, byte-identical to before this task's fix (Tokens.kt's `AmberPrimitive`
+     * is untouched; only light-gated `border` usages were added in the components that draw on
+     * `surfaceRaised`). A change to any of these values would mean the "leave dark exactly as the
+     * founder approved it" constraint was broken.
+     */
+    @Test
+    fun `dark primitives are untouched by the light-only border fix`() {
+        assertEquals(Color(0xFF16130D), AmberDarkColors.surfaceGround)
+        assertEquals(Color(0xFF221E15), AmberDarkColors.surfaceRaised)
+        assertEquals(Color(0xFF2E281C), AmberDarkColors.surfaceHigh)
+        assertEquals(Color(0xFF3A3324), AmberDarkColors.border)
+    }
 }

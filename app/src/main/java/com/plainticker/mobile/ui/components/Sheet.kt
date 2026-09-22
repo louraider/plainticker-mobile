@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
+import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.Canvas
 import com.plainticker.mobile.ui.theme.Elevated
 import com.plainticker.mobile.ui.theme.Ink
@@ -29,16 +30,21 @@ import com.plainticker.mobile.ui.theme.Muted
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * The modal sheet (swap, receipt): Elevated surface, radius 0, a 1dp Line strong top edge and a
- * 28x2dp handle instead of the Material pill, the default slide with no bounce. The scrim is
- * Canvas at 82 percent, matching the canvas mockups. The content is padded by [SheetInsets]: the
- * navigation bar and the keyboard at the bottom, the status bar once the sheet is dragged up to it.
+ * The modal sheet (swap, pass, and the onboarding panel through [SheetSurface]): a tonal surface,
+ * radius 0, a 1dp top edge and a 28x2dp handle instead of the Material pill, the default slide
+ * with no bounce. [colors] defaults to the system-following [defaultAmberColors] rather than
+ * Instrument's fixed-dark [Elevated]/[Ink]/[Canvas]: this is the surface the swap sheet and its
+ * receipt sit on, and a sheet that stayed Instrument-dark under an Amber-light Detail screen is
+ * exactly the money-flow fault this pass exists to close. The content is padded by [SheetInsets]:
+ * the navigation bar and the keyboard at the bottom, the status bar once the sheet is dragged up
+ * to it.
  */
 @Composable
 fun Sheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(),
+    colors: AmberColors = defaultAmberColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     ModalBottomSheet(
@@ -46,11 +52,11 @@ fun Sheet(
         modifier = modifier,
         sheetState = sheetState,
         shape = RectangleShape,
-        containerColor = Elevated,
-        contentColor = Ink,
+        containerColor = colors.surfaceRaised,
+        contentColor = colors.textPrimary,
         tonalElevation = 0.dp,
-        scrimColor = Canvas.copy(alpha = 0.82f),
-        dragHandle = { SheetHandle() },
+        scrimColor = colors.surfaceGround.copy(alpha = 0.82f),
+        dragHandle = { SheetHandle(colors = colors) },
         contentWindowInsets = { SheetInsets },
         content = content,
     )
@@ -58,33 +64,34 @@ fun Sheet(
 
 /** The top edge and the handle, shared by the modal sheet and the static surface. */
 @Composable
-fun SheetHandle(modifier: Modifier = Modifier) {
+fun SheetHandle(modifier: Modifier = Modifier, colors: AmberColors = defaultAmberColors()) {
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(LineStrong))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
         Box(
             Modifier
                 .padding(top = 12.dp, bottom = 8.dp)
                 .size(width = 28.dp, height = 2.dp)
-                .background(LineStrong),
+                .background(colors.border),
         )
     }
 }
 
 /**
  * The sheet's surface without the modal: the onboarding panel, a landed receipt shown inline,
- * and every preview. Same edge, same handle (optional), same Elevated fill.
+ * and every preview. Same edge, same handle (optional), same tonal fill as [Sheet].
  */
 @Composable
 fun SheetSurface(
     modifier: Modifier = Modifier,
     handle: Boolean = true,
+    colors: AmberColors = defaultAmberColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(modifier.fillMaxWidth().background(Elevated)) {
+    Column(modifier.fillMaxWidth().background(colors.surfaceRaised)) {
         if (handle) {
-            SheetHandle()
+            SheetHandle(colors = colors)
         } else {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(LineStrong))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
         }
         content()
     }

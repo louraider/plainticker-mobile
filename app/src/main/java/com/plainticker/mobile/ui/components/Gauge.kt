@@ -19,17 +19,20 @@ import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.ui.Fmt
-import com.plainticker.mobile.ui.theme.Accent
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.LineStrong
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * The tracking gauge, the signature element of Detail (DESIGN.md section 1): a 1dp Line strong
- * track between two end stops, a 1dp Muted tick at 50 percent for the reference (the NYSE close)
- * and a 2dp Accent tick for the token, placed on a stated scale. Caption left in Outfit 13, the
- * signed premium right in mono 13 Accent.
+ * The tracking gauge, the signature element of Detail (DESIGN.md section 1): a 1dp bordered track
+ * between two end stops, a 1dp tertiary tick at 50 percent for the reference (the NYSE close) and
+ * a 2dp action-coloured tick for the token, placed on a stated scale. Caption left, the signed
+ * premium right in the same action colour.
+ *
+ * [colors] defaults to the system-following [defaultAmberColors] rather than Instrument's
+ * fixed-dark Accent/Ink2/LineStrong/Muted: this is the liquidity floor's own signature element
+ * (DESIGN.md section 1.1), and it must read on Amber's light ground as correctly as on its dark
+ * one.
  *
  * The gauge is drawn only where the quote behind it means something. [TrackingQuality] is the one
  * rule, shared with the list row, and it is asked here rather than by the caller so no screen can
@@ -58,9 +61,10 @@ fun Gauge(
     tracking: TrackingQuality,
     modifier: Modifier = Modifier,
     scalePct: Double = TrackingQuality.TRACKED_SPREAD_PCT,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     val premiumPct = (tracking as? TrackingQuality.Tracked)?.premiumPct ?: return
-    GaugeTrack(referenceLabel, premiumPct, scalePct, modifier)
+    GaugeTrack(referenceLabel, premiumPct, scalePct, modifier, colors)
 }
 
 @Composable
@@ -69,6 +73,7 @@ private fun GaugeTrack(
     tokenPremiumPct: Double,
     scalePct: Double,
     modifier: Modifier,
+    colors: AmberColors,
 ) {
     val tick = gaugeTick(tokenPremiumPct, scalePct)
     val premiumText = Fmt.percent(tokenPremiumPct)
@@ -93,22 +98,37 @@ private fun GaugeTrack(
             // visibly not on the track.
             val gutter = OffScaleGap.toPx() + two
             val trackWidth = size.width - gutter * 2
-            drawRect(color = LineStrong, topLeft = Offset(gutter, 6.dp.toPx()), size = Size(trackWidth, one))
+            drawRect(color = colors.border, topLeft = Offset(gutter, 6.dp.toPx()), size = Size(trackWidth, one))
             // End stops, so the scale has a span whose ends can be seen. Without them a tick at
             // the end and a tick past the end are the same picture.
-            drawRect(color = LineStrong, topLeft = Offset(gutter, 4.dp.toPx()), size = Size(one, 6.dp.toPx()))
-            drawRect(color = LineStrong, topLeft = Offset(gutter + trackWidth - one, 4.dp.toPx()), size = Size(one, 6.dp.toPx()))
-            drawRect(color = Muted, topLeft = Offset(gutter + (trackWidth - one) / 2f, 2.dp.toPx()), size = Size(one, 10.dp.toPx()))
+            drawRect(color = colors.border, topLeft = Offset(gutter, 4.dp.toPx()), size = Size(one, 6.dp.toPx()))
+            drawRect(color = colors.border, topLeft = Offset(gutter + trackWidth - one, 4.dp.toPx()), size = Size(one, 6.dp.toPx()))
+            drawRect(
+                color = colors.textTertiary(AmberSurface.GROUND),
+                topLeft = Offset(gutter + (trackWidth - one) / 2f, 2.dp.toPx()),
+                size = Size(one, 10.dp.toPx()),
+            )
             val x = when {
                 !tick.offScale -> gutter + (trackWidth - two) * tick.fraction
                 tick.fraction > 0.5f -> size.width - two
                 else -> 0f
             }
-            drawRect(color = Accent, topLeft = Offset(x, 0f), size = Size(two, size.height))
+            drawRect(color = colors.actionText, topLeft = Offset(x, 0f), size = Size(two, size.height))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = caption, style = PlainTickerType.small, color = Ink2, modifier = Modifier.weight(1f))
-            Text(text = premiumText, style = PlainTickerType.monoSmall, color = Accent, maxLines = 1, softWrap = false)
+            Text(
+                text = caption,
+                style = PlainTickerType.small,
+                color = colors.textSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = premiumText,
+                style = PlainTickerType.monoSmall,
+                color = colors.actionText,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }

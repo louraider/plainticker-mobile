@@ -2,6 +2,7 @@ package com.plainticker.mobile.ui.components
 
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -27,7 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
 import com.plainticker.mobile.ui.theme.AmberType
 
 /**
@@ -83,7 +84,7 @@ fun AmberTickerRow(
     modifier: Modifier = Modifier,
     figure: String? = null,
     context: String? = null,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     onClick: (() -> Unit)? = null,
     onClickLabel: String = "Open $ticker",
     /** What a merged screen reader item says instead of its parts read end to end; see [ListRow]. */
@@ -197,19 +198,31 @@ private const val MetaWeight = 2f
  * whole column clipped to 16dp. DESIGN.md section 8 names the reason this is not the "cards for
  * lists" anti-pattern it resembles: no shadow, no elevation and no border drawn as a frame, which
  * was the actual ban; a shared tonal surface is what Amber's own anatomy calls for instead.
+ *
+ * **Light theme's own exception, said once.** `surfaceRaised` over `surfaceGround` is about
+ * 1.03:1 in the light set (`#FFFFFF` on `#FFFBF2`, Tokens.kt) against a healthy 1.12:1 in dark, so
+ * the whole point of this container, a group of rows reading as one tonal block, does not survive
+ * in light: the rows and the ground around them are nearly the same colour. A single 1dp
+ * [AmberColors.border] ring around the group's own already-clipped 16dp silhouette, drawn only
+ * when `colors === AmberLightColors`, is the one exception to "no border drawn as a frame" above:
+ * it outlines the group once, not each row inside it, so the anti-pattern this section still bans
+ * (a frame around every row) does not come back. Dark keeps the plain, unringed container it
+ * always drew.
  */
 @Composable
 fun AmberTickerRowGroup(
     modifier: Modifier = Modifier,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.surfaceGround),
+            .clip(shape)
+            .background(colors.surfaceGround)
+            .then(if (colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier),
         verticalArrangement = Arrangement.spacedBy(1.dp),
         content = content,
     )

@@ -102,8 +102,11 @@ class SwapSheetTest {
     @Test
     fun `the receipt leads with what happened and the sheet leads with the pair`() {
         val receiptBranch = body("if (content.isReceipt) {", "content.field?.let")
-        assertOrder("the receipt branch", receiptBranch, listOf("Phase(it, lead)", "Received(it)"))
-        assertOrder("the sheet branch", receiptBranch, listOf("Title(content, lead, actions)", "Phase(it, Modifier)"))
+        // Received(it, colors) and Title(content, lead, actions, colors): both now also carry the
+        // theme-following AmberColors this sheet reads (money must read correctly in light too),
+        // so the anatomy this test pins is the call with that fourth argument, not without it.
+        assertOrder("the receipt branch", receiptBranch, listOf("Phase(it, lead)", "Received(it, colors)"))
+        assertOrder("the sheet branch", receiptBranch, listOf("Title(content, lead, actions, colors)", "Phase(it, Modifier)"))
     }
 
     @Test
@@ -262,8 +265,10 @@ class SwapSheetTest {
 
     @Test
     fun `the debug band is drawn from the model's flag and in every state`() {
-        assertTrue("the band is not the model's", "content.debug?.let { DebugBand(it) }" in scan.code)
-        assertEquals("one band, above both anatomies", 1, count("DebugBand(it)"))
+        // DebugBand(it, colors): the band now also reads the theme-following AmberColors every
+        // other piece of this sheet does (money must read correctly in light too).
+        assertTrue("the band is not the model's", "content.debug?.let { DebugBand(it, colors) }" in scan.code)
+        assertEquals("one band, above both anatomies", 1, count("DebugBand(it, colors)"))
         assertTrue("the default is the build flag", "submitSwaps: Boolean = BuildConfig.SUBMIT_SWAPS" in scan.code)
         assertEquals("the sheet never reads the flag itself", 1, count("BuildConfig.SUBMIT_SWAPS"))
     }

@@ -15,23 +15,26 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.R
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * One F-Score signal, 44dp: the name 15 Ink 2 left, the answer in mono 14 right.
+ * One F-Score signal, 44dp: the name secondary left, the answer primary right.
  *
  * Three answers, not two. The server widened `fscore.signals` from boolean to nullable when the
  * filings behind a check are missing (docs/data-map.md), and a check nobody could evaluate is not
- * a check the company failed, so a null reads "n/a" in Muted and never "no".
+ * a check the company failed, so a null reads "n/a" in tertiary text and never "no".
+ *
+ * Part of Detail's gated F-Score list, so [colors] defaults to the system-following
+ * [defaultAmberColors] rather than Instrument's fixed-dark Ink/Ink2/Muted.
  */
 @Composable
 fun SignalRow(
     name: String,
     ok: Boolean?,
     modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     val word = stringResource(
         when (ok) {
@@ -41,6 +44,7 @@ fun SignalRow(
         },
     )
     val passed = ok == true
+    val muted = colors.textTertiary(AmberSurface.GROUND)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -53,13 +57,13 @@ fun SignalRow(
         Text(
             text = name,
             style = PlainTickerType.rowText,
-            color = if (passed) Ink2 else Muted,
+            color = if (passed) colors.textSecondary else muted,
             modifier = Modifier.weight(1f),
         )
         Text(
             text = word,
             style = PlainTickerType.monoRow,
-            color = if (passed) Ink else Muted,
+            color = if (passed) colors.textPrimary else muted,
             maxLines = 1,
         )
     }

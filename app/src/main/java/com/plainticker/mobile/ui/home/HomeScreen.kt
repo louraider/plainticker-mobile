@@ -2,6 +2,7 @@ package com.plainticker.mobile.ui.home
 
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,8 @@ import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.portfolio.PortfolioScreen
 import com.plainticker.mobile.ui.stocks.StocksScreen
+import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
 import com.plainticker.mobile.ui.today.TodayScreen
 import com.plainticker.mobile.ui.vote.VoteScreen
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
@@ -127,9 +130,15 @@ fun HomeScreen(
         previousOrdinal = AmberDestination.TODAY.ordinal
     }
 
+    // Computed once here rather than left to each component's own default: the bar, the wordmark
+    // header and the scrim all sit on the same five screens, and they must agree with each other
+    // and with the destination beneath them on every recomposition a theme switch causes, not just
+    // happen to end up with the same answer because they each asked isSystemInDarkTheme() apart.
+    val colors = if (isSystemInDarkTheme()) AmberDarkColors else AmberLightColors
+
     val header: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
-            TopBar(onTitleLongPress = onOpenGallery)
+            TopBar(onTitleLongPress = onOpenGallery, colors = colors)
             DebugActions(onOpenSpike = onOpenSpike)
         }
     }
@@ -191,14 +200,16 @@ fun HomeScreen(
                     )
                 }
             }
-            AmberBottomNav(selected = selected, onSelect = ::select)
+            AmberBottomNav(selected = selected, onSelect = ::select, colors = colors)
         }
 
         // The one thing on these five screens that does not scroll, and it is not content: the
         // band the system clock sits in, so the hero and the header dissolve under it instead of
         // colliding with it (Insets.kt). Last in the Box, so it draws over whichever destination
-        // is up.
-        TopScrim(Modifier.align(Alignment.TopCenter))
+        // is up. groundColor follows the same [colors] as the bar and the header above: Instrument's
+        // fixed-dark Canvas painted an opaque near-black band across the top of every screen
+        // regardless of theme, which read as a black bar under the clock in light.
+        TopScrim(Modifier.align(Alignment.TopCenter), groundColor = colors.surfaceGround)
     }
 }
 

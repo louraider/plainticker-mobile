@@ -16,7 +16,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 
@@ -74,7 +73,7 @@ fun AmberBottomNav(
     selected: AmberDestination,
     onSelect: (AmberDestination) -> Unit,
     modifier: Modifier = Modifier,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     destinations: List<AmberDestination> = AmberDestination.entries,
 ) {
     ShortNavigationBar(

@@ -13,7 +13,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 
@@ -46,7 +45,7 @@ fun AmberFigure(
     modifier: Modifier = Modifier,
     label: String? = null,
     context: String? = null,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
     tone: FactTone = FactTone.Neutral,
     /** False draws the figure bare, no card: Detail's plain composite cell (research 5.5's `nwc.plain`). */
     card: Boolean = true,

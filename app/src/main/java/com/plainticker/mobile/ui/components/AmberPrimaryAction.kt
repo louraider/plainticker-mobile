@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.theme.PlainTickerRippleAlpha
@@ -46,7 +45,7 @@ fun AmberPrimaryAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     if (!enabled) {
         AmberDisabledAction(label = label, modifier = modifier, colors = colors)
@@ -78,7 +77,7 @@ fun AmberPrimaryAction(
 fun AmberDisabledAction(
     label: String,
     modifier: Modifier = Modifier,
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     Box(modifier.fillMaxWidth().height(56.dp)) {
         Button(

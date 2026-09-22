@@ -37,12 +37,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
@@ -54,6 +58,7 @@ import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.SkeletonRows
@@ -186,7 +191,7 @@ internal fun ListContent(
      */
     onVote: ((ticker: String, symbol: String) -> Unit)? = null,
     header: @Composable () -> Unit = {},
-    colors: AmberColors = AmberDarkColors,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     val cold = state.isLoading && state.analyzed.isEmpty() && state.withoutAnalysis.isEmpty()
 
@@ -296,7 +301,7 @@ internal fun ListContent(
                         itemsIndexed(chapter.rows, key = { _, row -> "a:" + row.ticker }) { index, row ->
                             AnalyzedRow(
                                 row = row,
-                                modifier = groupedRowModifier(isFirst = index == 0, isLast = index == chapter.rows.lastIndex),
+                                modifier = groupedRowModifier(colors, isFirst = index == 0, isLast = index == chapter.rows.lastIndex),
                                 colors = colors,
                                 onOpenDetail = onOpenDetail,
                             )
@@ -315,7 +320,7 @@ internal fun ListContent(
                         itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
                             NextUpLeaderRow(
                                 leader = leader,
-                                modifier = groupedRowModifier(isFirst = index == 0, isLast = index == leaders.lastIndex),
+                                modifier = groupedRowModifier(colors, isFirst = index == 0, isLast = index == leaders.lastIndex),
                                 colors = colors,
                                 onOpenDetail = onOpenDetail,
                                 onVote = onVote,
@@ -333,6 +338,7 @@ internal fun ListContent(
                         AnalyzedRow(
                             row = row,
                             modifier = groupedRowModifier(
+                                colors,
                                 isFirst = index == 0,
                                 isLast = index == state.analyzed.lastIndex && state.withoutAnalysis.isEmpty(),
                             ),
@@ -344,6 +350,7 @@ internal fun ListContent(
                         PriceOnlyRow(
                             row = row,
                             modifier = groupedRowModifier(
+                                colors,
                                 isFirst = index == 0 && state.analyzed.isEmpty(),
                                 isLast = index == state.withoutAnalysis.lastIndex,
                             ),
@@ -620,8 +627,22 @@ private val JumpEntryMinHeight = 28.dp
  * sticky headers is the size where a naive list starts to show. This function draws the same
  * result, a 16dp radius on the group's own top and bottom row and a 1dp seam of the page's own
  * ground colour between rows, while keeping every row its own keyed `itemsIndexed` item.
+ *
+ * **Light theme's own edge, carried over from [AmberTickerRowGroup]'s own doc comment.**
+ * `surfaceRaised` over `surfaceGround` is about 1.03:1 in light (`#FFFFFF` on `#FFFBF2`,
+ * Tokens.kt) against 1.12:1 in dark, so a chapter of rows here loses the same structure
+ * [AmberTickerRowGroup] would, and for the same reason: Stocks is the screen with the most rows
+ * to lose it on. [AmberTickerRowGroup] draws one ring around one `Column`; there is no single
+ * `Column` here to ring, one `LazyColumn` item per row, so [groupEdge] draws the group's own
+ * outline a row at a time instead: a straight edge down each side of every row, and a straight
+ * edge across the top of the first row and the bottom of the last, never a seam between two rows
+ * (DESIGN.md section 8's surviving rule: "no border-as-frame around every row"). Every edge is
+ * inset by [corner] on whichever end this row rounds, so it lands inside the row's own clipped
+ * silhouette rather than crossing the curve as a straight chord; the last few pixels of each
+ * rounded corner are left unstroked rather than hand-rolled as an arc this task has no device to
+ * check pixel by pixel. Dark keeps the plain, unringed rows it always drew.
  */
-private fun groupedRowModifier(isFirst: Boolean, isLast: Boolean): Modifier {
+private fun groupedRowModifier(colors: AmberColors, isFirst: Boolean, isLast: Boolean): Modifier {
     val corner = 16.dp
     val top = if (isFirst) corner else 0.dp
     val bottom = if (isLast) corner else 0.dp
@@ -629,7 +650,45 @@ private fun groupedRowModifier(isFirst: Boolean, isLast: Boolean): Modifier {
         .padding(horizontal = 16.dp)
         .padding(bottom = if (isLast) 0.dp else RowGapHeight)
         .clip(RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom))
+        .then(
+            if (colors === AmberLightColors) {
+                Modifier.groupEdge(color = colors.border, corner = corner, isFirst = isFirst, isLast = isLast)
+            } else {
+                Modifier
+            },
+        )
 }
+
+/**
+ * Draws [groupedRowModifier]'s light-only edge on top of whatever this row already painted (a
+ * plain `drawWithContent` always draws after its own `drawContent()` call, regardless of where a
+ * later `.background()` sits in the caller's own modifier chain), positioned by hand rather than
+ * by re-walking the row's own clip shape: left and right run the row's full height except where
+ * [corner] itself rounds a corner, top runs only on [isFirst] and bottom only on [isLast], each
+ * inset by [corner] so it stops short of the curve instead of crossing it.
+ */
+private fun Modifier.groupEdge(color: Color, corner: Dp, isFirst: Boolean, isLast: Boolean): Modifier =
+    drawWithContent {
+        drawContent()
+        val stroke = 1.dp.toPx()
+        val half = stroke / 2f
+        val cornerPx = corner.toPx()
+        val top = if (isFirst) cornerPx else 0f
+        val bottom = if (isLast) size.height - cornerPx else size.height
+        drawLine(color, Offset(half, top), Offset(half, bottom), strokeWidth = stroke)
+        drawLine(color, Offset(size.width - half, top), Offset(size.width - half, bottom), strokeWidth = stroke)
+        if (isFirst) {
+            drawLine(color, Offset(cornerPx, half), Offset(size.width - cornerPx, half), strokeWidth = stroke)
+        }
+        if (isLast) {
+            drawLine(
+                color,
+                Offset(cornerPx, size.height - half),
+                Offset(size.width - cornerPx, size.height - half),
+                strokeWidth = stroke,
+            )
+        }
+    }
 
 private val RowGapHeight = 1.dp
 
