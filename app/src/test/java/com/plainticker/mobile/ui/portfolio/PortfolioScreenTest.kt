@@ -144,9 +144,12 @@ class PortfolioScreenTest {
 
         val swap = body("private fun Swap(", "private fun WalletActions(")
         assertTrue("a swap row must read as one sentence", "description = sentence(" in swap)
-        // DESIGN.md section 3: the amount and the ticker that came back are numerals, so they are
-        // drawn in JetBrains Mono and never in Outfit.
-        assertTrue("the received amount must be in the numeral face", "companyMono = true" in swap)
+        // DESIGN.md section 3, under Amber: a number lives in Bricolage with tabular figures, and
+        // JetBrains Mono is reserved for on-chain identifiers only, so the received amount no
+        // longer needs Instrument's `companyMono` escape hatch into the numeral face; it is drawn
+        // as the ordinary prose sentence the model already composed it as ("to 0.01364 TSLAx").
+        assertTrue("the received amount must still be drawn", "company = received" in swap)
+        assertEquals("Amber's row has no mono company slot to opt into any more", 0, count("companyMono"))
 
         val total = body("private fun Total(", "private fun Holding(")
         assertTrue("the total must be a heading", "heading()" in total)
