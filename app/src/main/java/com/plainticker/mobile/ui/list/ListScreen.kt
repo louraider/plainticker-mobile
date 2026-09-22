@@ -46,6 +46,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -557,14 +558,45 @@ private fun StocksFilterRow(
  * one screen, but it is two different questions ("where in the order am I" versus "show me only
  * this"), not one question asked twice, so both stay; the fix here is the overlap, not the count.
  *
- * **Touch targets, and the one place this pass departs from the database's 48dp rule on
- * purpose.** [AmberChip] and every other tap target on this screen keeps
- * `minimumInteractiveComponentSize()`'s full 48dp. Stacked vertically, eleven of those would run
- * to roughly 530dp, taller than the approved frame's own compact rail and, on a real phone, most
- * of the content height the list itself needs. A miss here lands on a neighbouring sector rather
- * than losing money or data, the same reasoning iOS and Android's own built-in fast-scroll
- * alphabet indices are built on, so each entry gets a smaller but still real [JumpEntryMinHeight]
- * instead of the full minimum.
+ * **Touch targets: the device measured this rail at 38 by 32dp, under the app's 48dp floor, and
+ * the "eleven 48dp entries would run to roughly 530dp" reasoning a previous pass used to justify
+ * that shortcut was wrong about what the rail's own height actually competes with.** This
+ * `Column` is a sibling of the full-height `LazyColumn` in the `Row` above ([ListContent]), not
+ * nested inside whatever the list's own scrolled content happens to draw, so its natural height
+ * is the screen's own content area, not "whatever's left of the list." The device the QA
+ * screenshots for this task were taken on is 400 by 890dp; eleven entries at the literal 48dp
+ * floor plus ten 4dp gaps between them come to 568dp, which leaves 322dp of that device's own
+ * height free even before subtracting a status bar and a navigation bar, both together typically
+ * well under 150dp on Android. The premise that eleven 48dp entries do not fit is not true on the
+ * device that found this bug, so there is nothing left to trade away: [JumpIndexWidth] and
+ * [JumpEntryMinHeight] are both the real, undiminished 48dp floor, the same
+ * `minimumInteractiveComponentSize()` every other tap target on this screen already keeps,
+ * instead of a smaller carve-out only this rail used to get.
+ *
+ * **Why this, and not the other three shapes this task's brief names.** A drag-to-scrub target
+ * covering the whole rail was not built: the tap-only interaction already reads a reader's intent
+ * correctly (see above), a continuous drag gesture is a second interaction to get right with no
+ * device here to check it against, and it would trade eleven distinct accessible nodes (each
+ * speaking its own sector's full name) for one node that would need custom accessibility actions
+ * to say the same thing. Showing fewer entries when there is not room was not built either: the
+ * arithmetic above says there is room, so shedding sectors would be giving up reach the frame
+ * does not actually require giving up. Removing the rail for the sector chips was not built for
+ * the reason [ListContent]'s own doc comment already gives: the rail relocates without narrowing
+ * and a chip narrows without relocating, two different reader intents, not one asked twice. So
+ * the fix is the plainest one available: the rail was simply drawn smaller than the floor it was
+ * always supposed to clear, and it now clears it.
+ *
+ * **The same width fix closes the font-clipping defect too.** Widening [JumpIndexWidth] from
+ * 28dp to 48dp for the touch-target floor happens to give every abbreviation, measured against
+ * the real font this rail draws with, comfortable clearance at 1.3x scale as well (see
+ * [com.plainticker.mobile.ui.stocks.StocksFilterTest]'s own fontTools measurement against
+ * `res/font/bricolage_grotesque.ttf`): "Com", the widest of the eleven, needs 33.790dp at 1.3x,
+ * 14.210dp inside the 48dp box. `overflow = TextOverflow.Ellipsis` below is a second, independent
+ * backstop for the one case the eleven authored strings cannot cover: an unmapped sector's name
+ * taken to three characters by [jumpAbbreviationRes]'s own fallback, which this measurement was
+ * never run against. A silent clip is worse than an ellipsis (this task's brief, the fifth
+ * clipping-class defect this project has hit); now a label that somehow still does not fit says
+ * so instead of dropping a character with nothing to show for it.
  */
 @Composable
 private fun StocksJumpIndex(
@@ -592,6 +624,10 @@ private fun StocksJumpIndex(
                 style = AmberType.meta,
                 color = if (isActive) colors.textPrimary else colors.textTertiary(AmberSurface.GROUND),
                 maxLines = 1,
+                // A defensive backstop only, not this pass's real fix (the doc comment above):
+                // every authored abbreviation already clears JumpIndexWidth with margin at 1.3x,
+                // so this only ever fires for jumpAbbreviationRes's own unmapped-sector fallback.
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -607,8 +643,13 @@ private fun StocksJumpIndex(
     }
 }
 
-private val JumpIndexWidth = 28.dp
-private val JumpEntryMinHeight = 28.dp
+/**
+ * The app's real 48dp touch-target floor, matching every other tap target on this screen; see
+ * [StocksJumpIndex]'s own doc comment for why this pass stopped carving out a smaller exception
+ * for this rail.
+ */
+private val JumpIndexWidth = 48.dp
+private val JumpEntryMinHeight = 48.dp
 
 // ---- Rows ---------------------------------------------------------------------------------
 
