@@ -443,6 +443,21 @@
          Never shown for Loading, NotServed or Disabled: those are not a fault to report. -->
     <string name="detail_read_unavailable">The read is unavailable</string>
 
+    <!-- Today (docs/design-research-2026-09-21.md section 3). Block 2, Yours, is the Watchlist
+         copy below, kept rather than duplicated: folding Watchlist into Today was the point. -->
+    <string name="today_venue_state_open">Open</string>
+    <string name="today_venue_state_closed">Closed</string>
+    <string name="today_venue_open">The NYSE is open, the price tracks live.</string>
+    <string name="today_venue_freshness">Analysis %1$s, prices %2$s.</string>
+    <string name="today_heading_tracked">Tracked today</string>
+    <!-- The lede (research section 3): a coverage fact, not a movement one, so it stays true
+         whether nothing has moved, everything has, or the day's first refresh has not landed. -->
+    <string name="today_tracked_lede">%1$s of %2$s analyzed can be tracked today</string>
+    <string name="today_tracked_context">vs NYSE close</string>
+    <string name="today_tracked_all">All %1$s tracked</string>
+    <string name="today_next_up_round_closes">Round %1$s closes %2$s</string>
+    <string name="today_footer_count">%1$s analyzed, %2$s without analysis</string>
+
     <!-- Watchlist. The row meta is the list's, joined by list_row_meta_join -->
     <string name="watchlist_heading_watched">Watched</string>
     <string name="watchlist_row_reports">Reports %1$s</string>
