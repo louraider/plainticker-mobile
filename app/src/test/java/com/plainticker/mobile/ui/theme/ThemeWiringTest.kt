@@ -13,11 +13,13 @@ import org.junit.Test
  * but that no screen ever reaches for.
  *
  * The fault this pins against, by name: a composable whose `colors: AmberColors` parameter
- * defaults to [AmberDarkColors] and is reached without the argument. [AmberChip.kt] is excluded
- * on purpose (another agent's lane this task was told to stay out of); [Support.kt]'s
- * `AmberPreviewCanvas` is excluded on purpose too, since a design-QA preview helper that shows the
+ * defaults to [AmberDarkColors] and is reached without the argument. [Support.kt]'s
+ * `AmberPreviewCanvas` is excluded on purpose, since a design-QA preview helper that shows the
  * dark set unless a caller asks for the light one is the documented, deliberate behaviour of a
- * preview tool, not a screen a reader opens.
+ * preview tool, not a screen a reader opens. [AmberChip.kt] was excluded for the same reason
+ * until this pass closed the seam between the motion lane and this one; it now carries the same
+ * `defaultAmberColors()` default as every other shared component and is held to this test like
+ * the rest of `ui/components`.
  */
 class ThemeWiringTest {
 
@@ -38,7 +40,7 @@ class ThemeWiringTest {
 
     @Test
     fun `no component under ui-components still defaults its AmberColors parameter to the fixed-dark set`() {
-        val outOfScope = setOf("AmberChip.kt", "Support.kt")
+        val outOfScope = setOf("Support.kt")
         val componentsDir = File(uiRoot, "components")
         val offenders = componentsDir.listFiles { f -> f.extension == "kt" }
             .orEmpty()
@@ -112,6 +114,15 @@ class ThemeWiringTest {
             assertFalse("$file still reads AmberDarkColors directly", "AmberDarkColors." in source)
             assertTrue("$file never resolves a theme-following palette", "defaultAmberColors()" in source)
         }
+    }
+
+    // ---- Today: the motion lane's own screen, closed against the same fault ---------------------
+
+    @Test
+    fun `Today no longer hardcodes AmberDarkColors, the footer and its text link resolve the live palette`() {
+        val source = read("today/TodayScreen.kt")
+        assertFalse("TodayScreen.kt still reads AmberDarkColors directly", "AmberDarkColors" in source)
+        assertTrue("TodayScreen.kt never resolves a theme-following palette", "defaultAmberColors()" in source)
     }
 
     // ---- The root: MainActivity wires Amber to the system setting, live -----------------------

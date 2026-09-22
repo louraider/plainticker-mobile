@@ -34,10 +34,11 @@ import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.SkeletonRows
+import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.rememberMotionEnabled
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.watchlist.WatchlistContent
 import com.plainticker.mobile.ui.watchlist.WatchlistUiState
@@ -273,6 +274,7 @@ private fun TodayNextUpBlock(state: WatchlistUiState, onOpenVote: (() -> Unit)?)
  */
 @Composable
 private fun TodayFooter(text: String, onBrowseStocks: (() -> Unit)?) {
+    val colors = defaultAmberColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -283,11 +285,11 @@ private fun TodayFooter(text: String, onBrowseStocks: (() -> Unit)?) {
         Text(
             text = text,
             style = AmberType.context,
-            color = AmberDarkColors.textSecondary,
+            color = colors.textSecondary,
             modifier = Modifier.weight(1f),
         )
         if (onBrowseStocks != null) {
-            AmberTextLink(text = stringResource(R.string.nav_stocks), onClick = onBrowseStocks)
+            AmberTextLink(text = stringResource(R.string.nav_stocks), onClick = onBrowseStocks, colors = colors)
         }
     }
 }
@@ -299,11 +301,16 @@ private fun TodayFooter(text: String, onBrowseStocks: (() -> Unit)?) {
  * wrapper does not earn a new shared component); see the report for the same note in full.
  */
 @Composable
-private fun AmberTextLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun AmberTextLink(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
+) {
     Text(
         text = text,
         style = AmberType.context,
-        color = AmberDarkColors.actionText,
+        color = colors.actionText,
         modifier = modifier
             .clickable(role = Role.Button, onClick = onClick)
             .defaultMinSize(minHeight = 48.dp)
