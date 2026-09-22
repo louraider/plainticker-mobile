@@ -18,13 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
@@ -33,49 +31,74 @@ import com.plainticker.mobile.ui.theme.AmberType
 
 /**
  * Amber's ticker row (docs/design-research-2026-09-21.md section 5.5): ticker 16/600, company
- * 14/400 secondary, left; figure 18/600 tnum amber and an optional context line, right; 64dp
- * minimum, matching the height every direction's anatomy table gives this row. Flat: the 16dp
- * radius and the ground-coloured 1dp seam between rows belong to the group
- * ([AmberTickerRowGroup]), not to one row, so a single-row block (Today's "Next up") still reads
- * as a rounded tonal container and a five-row block does not draw five separate radii.
+ * 14/400 secondary; figure 18/600 tnum amber and an optional context line; 64dp minimum, matching
+ * the height every direction's anatomy table gives this row (content past that floor grows it, the
+ * same way [ListRow] already does). Flat: the 16dp radius and the ground-coloured 1dp seam between
+ * rows belong to the group ([AmberTickerRowGroup]), not to one row, so a single-row block (Today's
+ * "Next up") still reads as a rounded tonal container and a five-row block does not draw five
+ * separate radii.
  *
- * **The clipping trap this task was warned about a second time, on the real device, and what was
- * actually wrong with the first fix.** The previous doc comment here argued that [ticker] and
- * [figure] were safe because they "sit beside a weighted sibling," and stopped there. That is true
- * of [ticker] beside [company] inside the *name* group, but it was the wrong pair to worry about:
- * the device drew `META x  Meta Pl…` because of the *outer* pair, name group versus meta group.
+ * **Three passes at the same clipping report, and why only this one is provable.** Pass one gave
+ * [ticker] and [figure] a weighted sibling and stopped there; the device still drew `META x  Meta
+ * Pl…`, because the pair that actually starved was the *outer* one, name group versus meta group:
  * [Row] measures a plain, unweighted child before it divides whatever is left among weighted ones,
- * regardless of source order, and the meta [Column] ([figure] plus [context]) was that unweighted
- * child. [context] is not the short, bounded content [ListRow]'s own right-hand column carries (a
- * numeral and a state word); it is a full clause ("$2.7k behind, too thin · 2 d old", 32
- * characters, `list_row_meta_join`), so an unweighted meta column claims however much single-line
- * width that clause wants, up to the *entire* row, before the weighted name group sees a budget at
- * all — a fixed-width sibling in every way that matters except that the number was computed from
- * content instead of typed as a literal `.width(Xdp)`, which is exactly why the test that only
- * grepped for `.width(` did not catch it.
+ * and the meta [Column] ([figure] plus [context], a full clause up to 32 characters,
+ * `list_row_meta_join`) was that unweighted child, claiming up to the entire row before the name
+ * group saw a budget — a fixed-width sibling in effect, invisible to a test that only grepped for
+ * `.width(`. Pass two gave *both* groups a weight, [NameWeight] to [MetaWeight] the file used to
+ * carry, 3 to 2. The device still clipped: at 60 percent of this row's ~336dp content width (the
+ * arithmetic below), the name group gets roughly 194dp, and once an 8-character worst-case ticker
+ * and its 8dp gap are taken out of that, "Meta Platforms, Inc." — 20 characters, not even the
+ * catalog's worst name — had nowhere near enough room. A wider weight split would only move the
+ * same failure to a different company length; splitting one row's width two ways between an
+ * identity (a name with no natural ceiling) and an annotation (a sentence with no natural ceiling
+ * either) cannot be tuned into working, because neither side's real worst case is bounded by the
+ * other's. That is the anatomy problem the brief names: the two groups were never supposed to
+ * compete for the same horizontal budget.
  *
- * **The anatomy, decided rather than assumed.** [ticker] and [figure] still never wrap: both are
- * short, bounded content (an 8-character symbol at most, a formatted figure) with nothing beside
- * them that can squeeze them once the fix below holds, so softWrap = false stays deliberate. The
- * identity ([ticker], [company]) outranks the annotation ([figure], [context]): a reader identifies
- * the row by its name, and a squeezed meta line still means something wrapped onto a second line,
- * while a squeezed name is the report this task exists to fix. So *both* groups now carry a weight
- * ([NameWeight] to [MetaWeight], 3 to 2) instead of one being weighted and the other left to claim
- * whatever it wants: each is bounded to its own share of the row no matter what the other one
- * contains, the name's share is the larger one, and within its own bounded share [context] falls
- * back to exactly the wrap-then-ellipsis behaviour it already had ([ListRow]'s meta line uses the
- * same fallback) instead of never needing it because nothing ever constrained it. A name and its
- * meta stay one row rather than two: research 5.5's Amber column draws the ticker row as a single
- * 64dp line, and a bounded split is enough to fix the overlap without leaving that anatomy.
+ * **The fix: two lines, not two columns.** [ticker] and [company] keep the pairing research 5.5
+ * gives them and [ListRow] already proves (an unweighted, non-wrapping [ticker] beside a
+ * `weight(1f, fill = false)` [company] that ellipsizes), but that line now owns the row's *entire*
+ * content width instead of a fraction of it. [figure] and [context] move to a second line below,
+ * built the identical, already-proven way — [context] first with `weight(1f, fill = false)`, so it
+ * claims whatever the unweighted [figure] does not, [figure] last so it still reads as the
+ * right-hand numeral a scanning list wants — and that line also owns the full width. Two identical,
+ * already-safe pairings, each given the whole row instead of half of it, in place of one splitting
+ * arrangement that could not give either side enough. [context] no longer sits right-aligned as a
+ * block under [figure]: a full sentence reads better start-aligned than right-ragged once it is not
+ * sharing a narrow column with a number, and nothing in research 5.5 ties the two together beyond
+ * "a figure's supporting line."
  *
- * Measured anyway, so none of this is a guess: the xStocks catalog's longest symbol on 2026-09-22
- * is `AUTO.GBx`, 8 characters (`app/src/main/assets/snapshot/xstocks.json`), and the longest
- * company name is 54 ("SPDR S&P Oil & Gas Exploration & Production ETF xStock"). [company] and
- * [context] are the two slots a real value can actually run long on, so both wrap or ellipsize
- * instead of clipping: [company] to one line with an ellipsis (a truncated company name is still
- * identifiable; this mirrors [ListRow]'s own proven pattern), [context] to two with an ellipsis
- * backstop past that (mirroring [ListRow]'s meta line, which this task's own brief cites as the fix
- * for the other historical bug: a numeral wraps rather than clips).
+ * **Proof, not another guess: fontTools against `res/font/bricolage_grotesque.ttf` itself**,
+ * 2026-09-22, each style instantiated at the exact `wght`/`wdth`/`opsz` [AmberType] builds it with
+ * (the same method [com.plainticker.mobile.ui.you.YouModelTest]'s own fact-cell character budget
+ * used). This row's content width is fixed by its own chrome: a 400dp frame less
+ * [AmberTickerRowGroup]'s 16dp side padding and this row's own 16dp side padding, 64dp of insets,
+ * leaves **336dp**.
+ * - **Name line.** [rowTicker] at the catalog's own worst symbol, `AUTO.GBx`
+ *   (`app/src/main/assets/snapshot/xstocks.json`, 8 characters) measures 77.30dp; less the 8dp gap,
+ *   [company] gets **250.70dp** in the worst case, more with any shorter ticker. The regression
+ *   itself, "Meta Platforms, Inc." (`app/src/main/assets/snapshot/summary.json`'s own `company`
+ *   field for `META`, 20 characters, the exact source behind the screenshot) measures 129.07dp: a
+ *   121.64dp margin, comfortably inside the budget even at 1.3x font scale computed the same
+ *   conservative way [ListRow.valueSubWidth] documents its own scale check (the real Android 14
+ *   curve compresses small text below the nominal multiplier; sizing against the uncompressed 1.3x
+ *   is the safer, worse-than-real assumption) — "Meta Platforms, Inc." at that scale measures
+ *   167.79dp against a 227.52dp budget. The catalog's own worst name, 54 characters ("SPDR S&P Oil
+ *   & Gas Exploration & Production ETF xStock", the fallback [company] on an unanalyzed row) needs
+ *   375.56dp and *does not* fit this or any single-line budget on a 400dp frame at this size; that
+ *   is expected, not a defect — [company] still ellipsizes rather than clipping, the same resolution
+ *   [ListRow] already ships, and 44 of the catalog's 928 names (4.7 percent, all past 34 characters)
+ *   share that fate. The point this row exists to fix is the other 95.3 percent, names like
+ *   "Meta Platforms, Inc." that used to clip and now do not.
+ * - **Meta line.** The widest realistic [figure] this row draws across every screen that calls it
+ *   is a worded one, `next_up_weight` ("31,209.9 SKR", 12 characters, [VoteScreen]'s own vote
+ *   weight), 113.22dp; less the 8dp gap, [context] gets **214.78dp** in that worst case. The
+ *   longest real [context], `list_row_meta_join`'s own worst join ("$2.7k behind, too thin · 2 d
+ *   old", 32 characters) measures 192.44dp: a 22.34dp margin, and at 1.3x scale against the far more
+ *   common bare-figure case ("100", the composite score this exact row draws) it still clears one
+ *   line, 250.18dp of text against a 284.97dp budget — [context]'s `maxLines = 2` stays a backstop
+ *   for a case this arithmetic says should not occur, not the thing making the row correct.
  */
 @Composable
 fun AmberTickerRow(
@@ -108,7 +131,7 @@ fun AmberTickerRow(
     } else {
         Modifier
     }
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .focusOutline(interactionSource)
@@ -119,13 +142,13 @@ fun AmberTickerRow(
             .then(spokenAs)
             .defaultMinSize(minHeight = 64.dp)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            modifier = Modifier.weight(NameWeight),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        // The name line: this row's own doc comment above has the arithmetic. Unweighted [ticker]
+        // measures first (never wraps, nothing beside it can squeeze it); weight(1f, fill = false)
+        // lets [company] claim whatever the ticker did not, up to the row's full content width now
+        // that this line no longer shares that width with the meta line below it.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = ticker,
                 style = AmberType.rowTicker,
@@ -145,22 +168,13 @@ fun AmberTickerRow(
                 )
             }
         }
+        // The meta line: the identical pairing, mirrored. [context] comes first with
+        // weight(1f, fill = false) so it claims whatever the unweighted [figure] does not, and
+        // [figure] comes last so it still reads as the row's right-hand numeral. Never right-aligned
+        // as a block any more (the old Column's horizontalAlignment = End): a full sentence with
+        // room to itself reads better start-aligned than right-ragged.
         if (figure != null || context != null) {
-            Column(
-                modifier = Modifier.weight(MetaWeight),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                if (figure != null) {
-                    Text(
-                        text = figure,
-                        style = AmberType.figureRow,
-                        color = colors.actionText,
-                        maxLines = 1,
-                        softWrap = false,
-                        textAlign = TextAlign.End,
-                    )
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (context != null) {
                     Text(
                         text = context,
@@ -168,28 +182,23 @@ fun AmberTickerRow(
                         color = colors.textSecondary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.End,
+                        modifier = Modifier.alignByBaseline().weight(1f, fill = false),
+                    )
+                }
+                if (figure != null) {
+                    Text(
+                        text = figure,
+                        style = AmberType.figureRow,
+                        color = colors.actionText,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.alignByBaseline(),
                     )
                 }
             }
         }
     }
 }
-
-/**
- * The name group's share of the row, out of [NameWeight] plus [MetaWeight]: 3 of 5, 60 percent.
- * Identity over annotation (this function's own doc comment), sized against the two real worst
- * cases together rather than either alone: at 60 percent of a roughly 340dp row (a 400dp phone
- * less this row's own padding and [AmberTickerRowGroup]'s), the name group keeps on the order of
- * 25 to 28 characters for ticker plus company after the ticker's own width, comfortably past
- * "Meta Platforms, Inc." (21) and short of needing an ellipsis for most of the catalog; the 40
- * percent left to the meta group is enough for `list_row_meta_join`'s worst case ("$2.7k behind,
- * too thin · 2 d old", 32 characters) to sit on its own two lines rather than clip.
- */
-private const val NameWeight = 3f
-
-/** The meta group's share; see [NameWeight]. */
-private const val MetaWeight = 2f
 
 /**
  * The 16dp tonal container every direction's anatomy puts a ticker row inside (research 5.5,
@@ -234,6 +243,15 @@ private fun AmberTickerRowPreview() {
     AmberPreviewCanvas {
         Column {
             AmberTickerRowGroup {
+                // The exact regression this row's own doc comment measures against: this company
+                // name, at this length, used to draw "Meta Platforms, …" on the device.
+                AmberTickerRow(
+                    ticker = "METAx",
+                    company = "Meta Platforms, Inc.",
+                    figure = "66",
+                    context = "-0.03% vs NYSE close · 2 d old",
+                    onClick = {},
+                )
                 AmberTickerRow(
                     ticker = "NVDAx",
                     company = "NVIDIA Corporation",
