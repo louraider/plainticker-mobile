@@ -108,13 +108,56 @@ class DetailScreenTest {
         assertOrder(
             "FScoreBlock",
             body("private fun FScoreBlock(", "private fun MethodBlock("),
-            listOf("fScoreNumeral", "R.plurals.detail_fscore_of", "SignalRow("),
+            // AmberFScoreNumeral (ui/detail/DetailScreen.kt), not Instrument's fScoreNumeral:
+            // extended from AmberType.figureLarge at the same 56sp, see its own doc comment.
+            listOf("AmberFScoreNumeral", "R.plurals.detail_fscore_of", "SignalRow("),
         )
         assertOrder(
             "MethodBlock",
             body("private fun MethodBlock(", "private fun SwapBlock("),
             listOf("method.age", "method.statement", "method.sources"),
         )
+    }
+
+    // ---- Hero's own slots, measured rather than guessed ----------------------------------------
+
+    /**
+     * The Amber restyle inverts Instrument's hero (small ticker, large company name, a sector
+     * line below), the biggest structural change this pass made to Detail (see [Hero]'s own doc
+     * comment). What is pinned here is the one thing that trade brings with it: the company name
+     * now draws at 34sp instead of 16sp, on the same two-line cap, so the real worst case from the
+     * catalog (already measured for `AmberTickerRow`, `AmberTickerRowTest`) is worth checking
+     * against rather than assumed to still fit.
+     */
+    @Test
+    fun `the hero's ticker stays one line and the company name is capped at two, the same bound a much larger face now has to fit`() {
+        val hero = body("private fun Hero(", "private val AmberHeroCompany")
+        assertTrue("the small ticker line above the company name never wraps", "maxLines = 1" in hero)
+        assertTrue("the company name is bounded rather than left to wrap without limit", "maxLines = 2" in hero)
+        // The xStocks catalog's own longest company name, read 2026-09-22
+        // (app/src/main/assets/snapshot/xstocks.json, the same figure AmberTickerRowTest pins
+        // for the 16sp ticker row): 54 characters. At the hero's own 34sp this is the one
+        // real-world name most likely to test the two-line cap; clipping it there (rather than
+        // wrapping to a third line) is the known, accepted cost of this restyle's larger company
+        // face, not an oversight.
+        val longestCompany = "SPDR S&P Oil & Gas Exploration & Production ETF xStock"
+        assertEquals(54, longestCompany.length)
+    }
+
+    /**
+     * The one motion this restyle pass added: the company name fades in through [SkeletonSwitch][
+     * com.plainticker.mobile.ui.components.SkeletonSwitch], the screen's cold-open arrival, applied
+     * once rather than reached for on every skeleton this screen already had. `SkeletonSwitch`
+     * itself already ties into `rememberMotionEnabled()` and snaps under reduced motion; what is
+     * pinned here is that Hero actually wires it to `company == null`, its own loading question,
+     * and that no other block on this screen was quietly given the same treatment.
+     */
+    @Test
+    fun `the hero's company name is the one place this screen fades content in, gated on its own loading question`() {
+        val hero = body("private fun Hero(", "private val AmberHeroCompany")
+        assertTrue("SkeletonSwitch drives the company name's own arrival", "SkeletonSwitch(" in hero)
+        assertTrue("gated on whether the company is actually known yet", "loading = company == null" in hero)
+        assertEquals("SkeletonSwitch is not reached for anywhere else on Detail", 1, count("SkeletonSwitch("))
     }
 
     @Test
@@ -179,7 +222,10 @@ class DetailScreenTest {
     @Test
     fun `the one banner slot and the single Swap button`() {
         assertEquals("one banner slot", 1, count("Banner("))
-        assertEquals("one Swap button on the screen", 1, count("PrimaryButton("))
+        // AmberPrimaryAction, one of the six Amber components this restyle pass names: the swap
+        // flow it opens (SwapSheet, the receipt) is untouched, only this trigger button restyled.
+        assertEquals("no Instrument PrimaryButton left on the screen", 0, count("PrimaryButton("))
+        assertEquals("one Swap button on the screen", 1, count("AmberPrimaryAction("))
         assertEquals("one sheet, opened by that button (T10, DT7)", 1, count("SwapSheet("))
         assertTrue("the button does not carry the pair", "state.swapLabel" in scan.code)
     }
