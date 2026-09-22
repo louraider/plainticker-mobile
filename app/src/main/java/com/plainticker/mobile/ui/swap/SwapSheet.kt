@@ -234,7 +234,7 @@ private fun Title(content: SheetContent, lead: Modifier, actions: SwapActions, c
             modifier = lead.semantics { heading() },
         )
         content.flip?.let {
-            TextAction(label = it.text(), onClick = actions.onFlip, contentPadding = FlipPadding)
+            TextAction(label = it.text(), onClick = actions.onFlip, color = colors.actionText, contentPadding = FlipPadding)
         }
     }
 }

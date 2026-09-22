@@ -62,8 +62,17 @@ STAT_VIEWPORT = 24
 STAT_LIVE = 20.0
 STAT_MIN_STROKE = 2.0
 
-CANVAS = "#0B0F14"
-INK = "#E8ECF1"
+# Amber's own dark-set ground and primary text (Tokens.kt AmberPrimitive.groundDark /
+# text1Dark, read through the public AmberDarkColors.surfaceGround / textPrimary), not
+# Instrument's retired Canvas (#0B0F14) and Ink (#E8ECF1): DESIGN.md section 9 found the mark's
+# arrangement survived Amber but its colour pair was reasoned entirely inside Instrument's old,
+# flat section 2 and never revisited, which left a cool tile and a cool-to-warm splash flash
+# once Amber's own theme went live. Same roles (a near-black mark, a near-white tile/splash
+# ink), Amber's own values. ACCENT stays Instrument's for now: it is used only by GAUGE/OFFSET/
+# DATUM, the three rejected 2026-09-13 candidates kept here for the record, never written to a
+# file (glyph.py only ever writes CHOSEN).
+AMBER_GROUND = "#16130D"
+AMBER_INK = "#F5EEDD"
 ACCENT = "#5AA9E6"
 WHITE = "#FFFFFF"
 
@@ -111,7 +120,7 @@ class Rect:
 
 
 class Mark:
-    def __init__(self, key, title, idea, rects, ground=CANVAS):
+    def __init__(self, key, title, idea, rects, ground=AMBER_GROUND):
         self.key = key
         self.title = title
         self.idea = idea
@@ -217,14 +226,14 @@ class Mark:
 
     def splash(self):
         """
-        The mark in Ink on transparent, for the splash screen.
+        The mark in Amber's own ink (AMBER_INK) on transparent, for the splash screen.
 
-        The splash paints Canvas and then this vector over it, so it cannot be the foreground
-        layer: the foreground is drawn for whatever ground the adaptive icon carries, and when that
-        ground is light the foreground is a near-black mark that would be invisible on Canvas. Same
-        rectangles, Ink, and nothing else.
+        The splash paints Amber's own ground (AMBER_GROUND) and then this vector over it, so it
+        cannot be the foreground layer: the foreground is drawn for whatever ground the adaptive
+        icon carries, and when that ground is light the foreground is a near-black mark that would
+        be invisible on that same ground. Same rectangles, AMBER_INK, and nothing else.
         """
-        return vector(VIEWPORT, self.rects, INK, self.header("splash"))
+        return vector(VIEWPORT, self.rects, AMBER_INK, self.header("splash"))
 
     def header(self, layer):
         x0, y0, x1, y1 = self.bounds()
@@ -260,9 +269,10 @@ class Mark:
             )
         if layer == "splash":
             return (
-                "  Splash screen icon: the mark in Ink on transparent, over the Canvas window background.\n"
-                "  The adaptive icon's own foreground is drawn for the launcher tile's ground, which is\n"
-                "  not Canvas, so the splash needs the mark in the color the splash background can show.\n"
+                "  Splash screen icon: the mark in Amber's own ink on transparent, over Amber's own\n"
+                "  ground as the window background. The adaptive icon's own foreground is drawn for the\n"
+                "  launcher tile's ground, which is not this ground, so the splash needs the mark in the\n"
+                "  color the splash background can show.\n"
                 + where
             )
         return (
@@ -275,13 +285,14 @@ def background_resource(mark):
     """
     res/values/ic_launcher_background.xml, written from the mark rather than kept beside it.
 
-    Four rejected attempts all put a Canvas tile on a near-black drawer wallpaper, where it reads
-    1.03 to 1 across its own edge and is not a tile at all. The ground is part of the mark now, so
-    it is generated from the mark, and an icon cannot be redrawn without the background following.
+    Four rejected attempts all put a Canvas tile (Instrument's own near-black, now retired) on a
+    near-black drawer wallpaper, where it read 1.03 to 1 across its own edge and was not a tile at
+    all. The ground is part of the mark now, so it is generated from the mark, and an icon cannot
+    be redrawn without the background following.
     """
-    alias = {CANVAS: "canvas", INK: "ink"}.get(mark.ground)
+    alias = {AMBER_GROUND: "amber_ground", AMBER_INK: "amber_ink"}.get(mark.ground)
     assert alias, (
-        "{}: the background layer is {}, which is not one of DESIGN.md section 2's tokens, so "
+        "{}: the background layer is {}, which is not one of Amber's own tokens, so "
         "res/values/colors.xml has no name for it and BrandAssetsTest cannot pin it to the Kotlin "
         "palette".format(mark.key, mark.ground)
     )
@@ -289,8 +300,12 @@ def background_resource(mark):
         '<?xml version="1.0" encoding="utf-8"?>\n'
         "<!--\n"
         "  The adaptive icon's background layer, DESIGN.md section 9.\n"
-        "  {} on the {} token. Measured at {} across the tile boundary in the real Seeker drawer;\n"
-        "  the Canvas ground four attempts shipped measured 1.03, which is no boundary at all.\n"
+        "  {} on the {} token. WCAG contrast {} (relative-luminance formula, matching\n"
+        "  AmberContrastTest's own pinned textPrimary-over-surfaceGround figure for this exact\n"
+        "  pair); not a fresh Seeker-drawer photo, which this task had no device to retake. The\n"
+        "  Instrument pair this replaced (Canvas on an Ink tile) measured 15.48 to 1 the same way,\n"
+        "  offline in the real drawer; the Canvas-only ground four attempts before it shipped\n"
+        "  measured 1.03, which was no boundary at all.\n"
         "  Generated by design/brand/glyph.py, do not edit by hand.\n"
         "-->\n"
         "<resources>\n"
@@ -299,8 +314,10 @@ def background_resource(mark):
     )
 
 
-# The edge this ground measures in the real drawer, from design/brand/two-corners/edge-contrast.json.
-EDGE_CONTRAST = "15.48 to 1"
+# WCAG contrast of AMBER_INK over AMBER_GROUND, computed the same way AmberContrastTest and
+# contrast.py do (see design/brand/glyph.py's own note): equal to AmberDarkColors.textPrimary
+# over AmberDarkColors.surfaceGround, which AmberContrastTest pins at 16.0:1 independently.
+EDGE_CONTRAST = "16.0 to 1"
 
 
 def vector(size, rects, override_color, comment):
@@ -330,8 +347,8 @@ GAUGE = Mark(
     "Gauge",
     "the tracking gauge at icon weight: the scale, the reference graduation under it, the token over it.",
     [
-        Rect("track", 26, 54, 82, 62, INK),
-        Rect("reference", 50, 62, 58, 76, INK),
+        Rect("track", 26, 54, 82, 62, AMBER_INK),
+        Rect("reference", 50, 62, 58, 76, AMBER_INK),
         Rect("token", 64, 32, 74, 68, ACCENT),
     ],
 )
@@ -341,8 +358,8 @@ OFFSET = Mark(
     "Offset",
     "two rules of equal length, the NYSE close and the token, and the premium the token runs past it.",
     [
-        Rect("close", 30, 39, 66, 51, INK),
-        Rect("token", 30, 57, 66, 69, INK),
+        Rect("close", 30, 39, 66, 51, AMBER_INK),
+        Rect("token", 30, 57, 66, 69, AMBER_INK),
         Rect("premium", 66, 57, 78, 69, ACCENT),
     ],
 )
@@ -352,7 +369,7 @@ DATUM = Mark(
     "Datum",
     "the quiet one: one reference rule and one reading held off it, nothing else.",
     [
-        Rect("rule", 32, 62, 76, 70, INK),
+        Rect("rule", 32, 62, 76, 70, AMBER_INK),
         Rect("reading", 60, 38, 76, 50, ACCENT),
     ],
 )
@@ -371,6 +388,22 @@ DATUM = Mark(
 # not in DESIGN.md section 2; this one is the Ink-and-Canvas pair section 2 already rates at 15.9
 # to 1, with the tile taking the Ink side, so BrandAssetsTest can pin the whole icon to the Kotlin
 # tokens. design/brand/two-corners/gallery.html carries all four with the numbers under them.
+#
+# 2026-09-22: the arrangement above still stands (nothing about the four rectangles changed), but
+# the colour pair it argued for was Canvas-and-Ink, Instrument's own flat section 2, decided over a
+# week before the founder chose Amber and never revisited once Amber's own section 2 shipped
+# (DESIGN.md section 9). That old pair is also, as of Amber, a colour nobody else in the app reads:
+# Amber's real grounds are warm (#16130D dark, #FFFBF2 light) against Instrument's cool near-black
+# and near-white, which is why the launcher tile stopped matching the app and the splash flashed
+# cool-to-warm into Amber's light ground. AMBER_GROUND and AMBER_INK above replace CANVAS and INK
+# with Amber's own dark-set values (Tokens.kt AmberPrimitive.groundDark / text1Dark) in the same
+# two roles the old pair played: the mark stays AMBER_GROUND on an AMBER_INK tile, still the
+# darker-figure-on-lighter-tile relationship the drawer measurement above picked, just carried in
+# Amber's own hex now rather than Instrument's. The off-white candidate's objection ("costs two
+# colours that are not in DESIGN.md section 2") no longer weighs against a warm option either,
+# since Amber's section 2 already has a warm surface pair, but re-running the drawer composite is
+# a founder decision against a concrete alternative, not something this fix reaches for; see
+# DESIGN.md section 9, "What this is not."
 
 TWO_CORNERS = Mark(
     "two-corners",
@@ -378,12 +411,12 @@ TWO_CORNERS = Mark(
     "two registration corners and the empty centre between them, which is the place the app keeps "
     "around a figure it has not printed.",
     [
-        Rect("top-left arm, across", 26, 26, 60, 40, CANVAS),
-        Rect("top-left arm, down", 26, 26, 40, 60, CANVAS),
-        Rect("bottom-right arm, across", 48, 68, 82, 82, CANVAS),
-        Rect("bottom-right arm, down", 68, 48, 82, 82, CANVAS),
+        Rect("top-left arm, across", 26, 26, 60, 40, AMBER_GROUND),
+        Rect("top-left arm, down", 26, 26, 40, 60, AMBER_GROUND),
+        Rect("bottom-right arm, across", 48, 68, 82, 82, AMBER_GROUND),
+        Rect("bottom-right arm, down", 68, 48, 82, 82, AMBER_GROUND),
     ],
-    ground=INK,
+    ground=AMBER_INK,
 )
 
 MARKS = {m.key: m for m in (TWO_CORNERS, GAUGE, OFFSET, DATUM)}

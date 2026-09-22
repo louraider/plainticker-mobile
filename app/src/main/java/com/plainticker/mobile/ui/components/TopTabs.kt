@@ -27,15 +27,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.plainticker.mobile.ui.theme.Accent
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Line
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * List, Vote, Portfolio, Watchlist as text tabs: 14sp Outfit, the selected one in Ink with a 2dp
- * Accent underline, the rest Muted, a hairline below. No icons, no bottom bar.
+ * List, Vote, Portfolio, Watchlist as text tabs: 14sp Outfit, the selected one in
+ * [AmberColors.textPrimary] with a 2dp [AmberColors.actionText] underline, the rest
+ * [AmberColors.textTertiary], a [AmberColors.border] hairline below. No icons, no bottom bar.
+ *
+ * [colors] defaults to the system-following [defaultAmberColors] rather than Instrument's
+ * fixed-dark `Ink`/`Accent`/`Muted`/`Line`: the onboarding backdrop below draws this live, over
+ * that screen's own [AmberColors.surfaceGround], so a fixed-dark colour here drew near-invisible
+ * text on Amber's light ground. [com.plainticker.mobile.ui.gallery.GalleryScreen] (debug builds
+ * only) passes the fixed [com.plainticker.mobile.ui.theme.AmberDarkColors] instead, matching its
+ * own permanently-dark canvas comparison rather than following the live system setting.
  *
  * Four labels at DESIGN.md's 1.3x font scale ceiling is untested by a layout test: this module's
  * unit tests run on a plain JVM with no Robolectric and no instrumentation, so nothing here can
@@ -52,6 +58,7 @@ fun TopTabs(
     selected: Int,
     onSelect: ((Int) -> Unit)?,
     modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     Column(modifier.fillMaxWidth()) {
         // 8dp row inset plus 12dp per tab puts the first label at 20dp and 24dp between labels.
@@ -93,7 +100,7 @@ fun TopTabs(
                     Text(
                         text = item,
                         style = if (on) PlainTickerType.tabSelected else PlainTickerType.tab,
-                        color = if (on) Ink else Muted,
+                        color = if (on) colors.textPrimary else colors.textTertiary(AmberSurface.GROUND),
                         maxLines = 1,
                         modifier = Modifier.padding(top = 12.dp, bottom = 14.dp),
                     )
@@ -101,19 +108,19 @@ fun TopTabs(
                         Modifier
                             .fillMaxWidth()
                             .height(2.dp)
-                            .background(if (on) Accent else Color.Transparent),
+                            .background(if (on) colors.actionText else Color.Transparent),
                     )
                 }
             }
         }
-        HorizontalDivider(thickness = 1.dp, color = Line)
+        HorizontalDivider(thickness = 1.dp, color = colors.border)
     }
 }
 
 @InstrumentPreviews
 @Composable
 private fun TopTabsPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         var selected by remember { mutableIntStateOf(0) }
         Column {
             TopTabs(items = listOf("List", "Vote", "Portfolio", "Watchlist"), selected = selected, onSelect = { selected = it })

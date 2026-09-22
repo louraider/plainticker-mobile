@@ -37,9 +37,7 @@ import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.spoken
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
@@ -215,11 +213,16 @@ internal fun WatchlistContent(
  */
 @Composable
 private fun DebugRunCheck(onRunCheck: () -> Unit) {
+    val colors = defaultAmberColors()
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
         horizontalArrangement = Arrangement.End,
     ) {
-        TextAction(label = stringResource(R.string.debug_run_watchlist_check), onClick = onRunCheck)
+        TextAction(
+            label = stringResource(R.string.debug_run_watchlist_check),
+            onClick = onRunCheck,
+            color = colors.actionText,
+        )
     }
 }
 
@@ -274,13 +277,23 @@ private fun AmberRowDivider(last: Boolean, content: @Composable () -> Unit) {
     }
 }
 
-/** The digest Panel: the time it was produced in mono meta, the digest itself under it. */
+/**
+ * The digest Panel: the time it was produced in mono meta, the digest itself under it.
+ *
+ * Reads [defaultAmberColors] rather than Instrument's fixed-dark `Ink`/`Muted`: this panel sits on
+ * Today's Yours block, the first thing a reader sees, over [com.plainticker.mobile.ui.home.HomeScreen]'s
+ * own live `AmberTheme` surface, so a fixed-dark colour here would draw near-invisible text in
+ * light mode rather than resolving with the rest of the screen.
+ */
 @Composable
 private fun Digest(record: DigestRecord) {
+    val colors = defaultAmberColors()
     val panel = digestPanel(record)
-    Panel {
-        panel.producedAt?.let { Text(text = it, style = PlainTickerType.meta, color = Muted) }
-        Text(text = panel.body.text(), style = PlainTickerType.panelBody, color = Ink)
+    Panel(colors = colors) {
+        panel.producedAt?.let {
+            Text(text = it, style = PlainTickerType.meta, color = colors.textTertiary(AmberSurface.RAISED))
+        }
+        Text(text = panel.body.text(), style = PlainTickerType.panelBody, color = colors.textPrimary)
     }
 }
 
@@ -290,6 +303,10 @@ private fun Digest(record: DigestRecord) {
  * A device that will not show notifications says so once, here, with the way to change it beside
  * the sentence. That is the whole of the app's response to a refused permission: the digest is on
  * the screen either way, and nothing asks again.
+ *
+ * Reads [defaultAmberColors] rather than Instrument's fixed-dark `Ink2`/`Muted`/`Accent` default,
+ * the same class of fault [Digest] carried: this footer sits directly on Today's Yours block, not
+ * inside a Panel, so a fixed-dark colour would draw near-invisible text on Amber's light ground.
  */
 @Composable
 private fun Footer(
@@ -298,6 +315,7 @@ private fun Footer(
     nowMillis: Long,
     onEnableNotifications: (() -> Unit)?,
 ) {
+    val colors = defaultAmberColors()
     val footer = digestFooter(record = record, notificationsOn = notificationsOn, nowMillis = nowMillis)
     Column(
         modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 16.dp),
@@ -307,14 +325,20 @@ private fun Footer(
             Text(
                 text = footer.delivery.text(),
                 style = PlainTickerType.small,
-                color = Ink2,
+                color = colors.textSecondary,
                 modifier = Modifier.weight(1f),
             )
             if (!notificationsOn && onEnableNotifications != null) {
-                TextAction(label = stringResource(R.string.action_enable), onClick = onEnableNotifications)
+                TextAction(
+                    label = stringResource(R.string.action_enable),
+                    onClick = onEnableNotifications,
+                    color = colors.actionText,
+                )
             }
         }
-        footer.checked?.let { Text(text = it.text(), style = PlainTickerType.small, color = Muted) }
+        footer.checked?.let {
+            Text(text = it.text(), style = PlainTickerType.small, color = colors.textTertiary(AmberSurface.GROUND))
+        }
     }
 }
 
@@ -322,13 +346,17 @@ private fun Footer(
  * One sentence where the rows would be, so no state of this screen is a blank column. The
  * forward action that answers it, when there is one, is its own 56dp button below (U2), never
  * drawn inline as a trailing text link.
+ *
+ * Reads [defaultAmberColors] rather than Instrument's fixed-dark `Ink2`, the same class of fault
+ * [Digest] and [Footer] carried.
  */
 @Composable
 private fun EmptyLine(text: String) {
+    val colors = defaultAmberColors()
     Text(
         text = text,
         style = PlainTickerType.body,
-        color = Ink2,
+        color = colors.textSecondary,
         modifier = Modifier.fillMaxWidth().padding(bottom = EmptyLineGap).padding(horizontal = Side),
     )
 }

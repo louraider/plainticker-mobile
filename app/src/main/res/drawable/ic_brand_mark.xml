@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Splash screen icon: the mark in Ink on transparent, over the Canvas window background.
-  The adaptive icon's own foreground is drawn for the launcher tile's ground, which is
-  not Canvas, so the splash needs the mark in the color the splash background can show.
+  Splash screen icon: the mark in Amber's own ink on transparent, over Amber's own
+  ground as the window background. The adaptive icon's own foreground is drawn for the
+  launcher tile's ground, which is not this ground, so the splash needs the mark in the
+  color the splash background can show.
   Block 26 to 82 across, 26 to 82 down.
   Furthest corner 39.60 units from the center, +0.81 units inside the
   superellipse of exponent 3 a launcher really cuts.
@@ -16,15 +17,15 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M26 26H60V40H26Z" />
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M26 26H40V60H26Z" />
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M48 68H82V82H48Z" />
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M68 48H82V82H68Z" />
 </vector>

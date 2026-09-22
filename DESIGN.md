@@ -431,8 +431,8 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `SecondaryButton` (shared, and a private `YouScreen.kt` copy) | Retired | Both replaced by one shared `AmberSecondaryAction`. |
 | `Sheet`, `SheetSurface` | Retired | Replaced by `AmberSheet`/`AmberSheetSurface` (28dp top radius, `surfaceHigh`, amber handle, versus Instrument's square, neutral one). |
 | `ListRow` | **Kept, one caller** | `GalleryScreen.kt` only (debug builds), to stay field-for-field comparable with `design/canvas/instrument.py`'s own artboards. Every product screen moved to `AmberTickerRow`. Do not add a second caller. |
-| `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, un-restyled** | Two live contexts. First, `GalleryScreen.kt`, the same canvas-validation reason as `ListRow`. Second, `OnboardingScreen.kt`'s `ListBackdrop`, drawn deliberately without a click handler as "a picture of" the app's own navigation (task U3). **This picture is now stale**: it draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and nobody has revisited it since; a reader who trusts this backdrop learns the wrong navigation. `TodayStrip` additionally has one live, functional caller: `ListScreen.kt` (Stocks) still draws it beside the Watched chip, kept on purpose because `CopyLintTest`'s `CountCopyTest` pins two literal `pluralStringResource` calls to that exact file and an isolated pass could not confirm Today's own screen (built in parallel) already carried the same content; see `ListScreen.kt`'s own class doc. |
-| `Panel` | **Kept, Instrument anatomy, un-restyled, one live product surface** | `GalleryScreen.kt` (canvas validation) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) all still read Instrument's fixed `Ink`/`Ink2`/`Muted` and `PlainTickerType` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set reached `WatchlistScreen.kt` for this; it is not documented anywhere else as a deliberate exception, so it is recorded here as an open item, not a settled one. In practice: the digest block on Today does not follow the system light/dark setting the way the rest of the screen does. |
+| `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak: `ListScreen.kt` (Stocks) draws `TodayStrip` beside the Watched chip whenever a reader has watched a ticker, directly on that screen's own `colors.surfaceGround`, and it was reading Instrument's fixed `Ink2`/`Line` there, near-invisible on Amber's light ground. The `pluralStringResource` calls behind that text still live only in `ListScreen.kt`, unmoved (`CopyLintTest`'s `CountCopyTest` pins them there; this fix only threads the screen's own `colors` through, not the copy). `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
+| `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. The digest block on Today now follows the system light/dark setting like the rest of the screen. |
 | `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept, Instrument type, Amber colour** | Anatomy and `PlainTickerType` styles unchanged; each now resolves `defaultAmberColors()` instead of a fixed dark token. Not an oversight: none of these needed a shape change to read correctly, only a colour source that follows the system theme. |
 
 ## 5. Layout
@@ -689,47 +689,57 @@ own pick from a selection gallery on 2026-09-15, over a week before Amber was ch
 registration corners on the adaptive icon's 108-unit viewport, top-left and bottom-right, on
 opposite diagonals, with an empty centre between them: "the place the app keeps around a figure it
 has not printed," the mark's own docstring says, echoing section 1.1's liquidity floor before
-either Amber or this document's own restyle existed. Four axis-aligned rectangles, `CANVAS`
-(`#0B0F14`) on an `INK` (`#E8ECF1`) tile; `BrandAssetsTest` pins both the geometry (rotationally
-symmetric about the centre, never mirror-symmetric top to bottom, so a flattened, one-colour
-silhouette still reads as itself rather than collapsing into a plus sign) and the two colours
-directly against the `Ink` and `Canvas` Kotlin tokens. The same rectangles reappear as the splash
-icon (in `Ink`, over a `Canvas` window background) and the notification icon (in white, fitted to
-the 24dp status-bar viewport).
+either Amber or this document's own restyle existed. Four axis-aligned rectangles, Amber's own
+dark-set ground (`#16130D`, `AmberDarkColors.surfaceGround`) on Amber's own dark-set primary text
+as the tile (`#F5EEDD`, `AmberDarkColors.textPrimary`); `BrandAssetsTest` pins both the geometry
+(rotationally symmetric about the centre, never mirror-symmetric top to bottom, so a flattened,
+one-colour silhouette still reads as itself rather than collapsing into a plus sign) and the two
+colours directly against `AmberDarkColors`. The same rectangles reappear as the splash icon (in
+Amber's own ink, over Amber's own ground as the window background) and the notification icon (in
+white, fitted to the 24dp status-bar viewport).
 
-**Judgement, looked at on Amber's ground rather than transcribed.** The arrangement survives: two
-registration corners around a deliberately empty centre is a shape, not a palette, and the idea it
-carries, a kept place where a figure is not printed rather than one filled with a guess, still
-reads as this product's argument regardless of which colour system sits behind it. What does not
-survive is the colour execution, and it does not survive for a reason more specific than "it looks
-different now."
+**Judgement, looked at on Amber's ground rather than transcribed, and since fixed (2026-09-22).**
+The arrangement survives: two registration corners around a deliberately empty centre is a shape,
+not a palette, and the idea it carries, a kept place where a figure is not printed rather than one
+filled with a guess, still reads as this product's argument regardless of which colour system sits
+behind it. What did not survive was the colour execution, and it did not survive for a reason more
+specific than "it looks different now."
 
-`Ink` and `Canvas` are Instrument's own tokens, deliberately left untouched by every pass of this
-redesign (section 2: "`BrandAssetsTest` pins the launcher icon to them... every existing composable
-still reads them"). They are also, as of this restyle, colours that appear nowhere else the app
-draws: Amber's actual grounds are warm, `#16130D` dark and `#FFFBF2` light, against Instrument's
-cool near-black `#0B0F14` and cool near-white `#E8ECF1`. The choice of `Ink` over `Canvas` was
-argued carefully at the time, but the argument was made entirely inside Instrument's old, flat
-nine-token section 2: four ground treatments were composited into a real drawer screenshot and
-measured across the tile edge (`Canvas` 1.04:1, an accent field 7.23:1, a cool off-white field
-16.79:1, `Ink` 15.48:1), and the off-white option, the one closest in spirit to Amber's own warm
-light ground, was rejected specifically because it "costs two colours that are not in DESIGN.md
-section 2," a constraint that no longer describes the palette this document now governs. Amber's
-own two-tier system already has a warm surface pair with exactly this kind of contrast headroom;
-the reason a warmer mark was passed over does not hold against the palette actually shipping today.
+`Ink` and `Canvas`, the pair this section used to name here, are Instrument's own tokens, and were,
+as of this restyle, colours that appeared nowhere else the app drew: Amber's actual grounds are
+warm, `#16130D` dark and `#FFFBF2` light, against Instrument's cool near-black `#0B0F14` and cool
+near-white `#E8ECF1`. The choice of `Ink` over `Canvas` was argued carefully at the time, but the
+argument was made entirely inside Instrument's old, flat nine-token section 2: four ground
+treatments were composited into a real drawer screenshot and measured across the tile edge
+(`Canvas` 1.04:1, an accent field 7.23:1, a cool off-white field 16.79:1, `Ink` 15.48:1), and the
+off-white option, the one closest in spirit to Amber's own warm light ground, was rejected
+specifically because it "costs two colours that are not in DESIGN.md section 2," a constraint that
+no longer described the palette this document now governs.
 
-This shows up at two points a reader, not just a test, actually encounters, not only as an
-abstract mismatch. First, on the launcher itself: the icon sits on a cool `Ink` tile with cool
-`Canvas` corners, and every screen it opens into is now warm, dark or light. Second, at cold
-launch: `Theme.PlainTicker.Starting` and `Theme.PlainTicker` both still set `android:windowBackground`
-to `@color/canvas`, Instrument's cool near-black, regardless of the system's light or dark setting,
-while the Compose content that appears a moment later paints `AmberTheme`'s live `surfaceGround`,
-which in light mode is a warm cream. That produces a visible cool-to-warm flash between the splash
-window and the first Compose frame in light mode, a seam that did not exist before Amber's light
-theme went live (`MainActivity` now resolves `isSystemInDarkTheme()` and wires `AmberTheme`
-directly) and that nobody has revisited since; `MainActivity`'s own class doc names the mark as
-"explicitly not this task's scope" for the pass that wired the live theme, which is an honest
-scope note, not a verdict that the exclusion is still the right one.
+**The fix.** The mark itself was not touched, only which two Kotlin colours the same two roles
+(mark fill, tile ground) read: Amber's own dark-set `surfaceGround` (`#16130D`) replaces `Canvas`,
+and Amber's own dark-set `textPrimary` (`#F5EEDD`) replaces `Ink`, in exactly the pairing the 2026-
+09-15 drawer measurement picked (a near-black figure on a near-white tile), now in Amber's own warm
+hex rather than Instrument's cool one. `res/values/colors.xml` carries them as `amber_ground` and
+`amber_ink` (`design/brand/marks.py`'s `AMBER_GROUND`/`AMBER_INK`, the same names `glyph.py`
+regenerates `ic_launcher_foreground.xml`, `ic_brand_mark.xml` and `ic_launcher_background.xml`
+from), and `Theme.PlainTicker`/`Theme.PlainTicker.Starting` in `themes.xml` now paint
+`@color/amber_ground` instead of `@color/canvas` for the plain window background and the splash,
+so the launcher tile, the splash and the first Compose frame all agree on one pair rather than the
+splash and the plain window background staying on Instrument's cool near-black while the live
+`AmberTheme` content painted a warm one a moment later. That was the cool-to-warm flash in light
+mode section 9 used to describe here: `AmberTheme`'s light `surfaceGround` is a warm cream, and a
+splash window still painted in Instrument's cool near-black flashed into it rather than resolving
+with it. `BrandAssetsTest` now pins the launcher, the splash and both starting-theme colour items
+against `AmberDarkColors.surfaceGround`/`textPrimary` instead of the retired `Canvas`/`Ink` Kotlin
+tokens, so a future edit to either can no longer leave the icon behind the way this one did.
+
+The new pair's own contrast, computed the same WCAG relative-luminance way `AmberContrastTest`
+computes every other ratio in this document, is 16.0:1 (`AmberDarkColors.textPrimary` over
+`AmberDarkColors.surfaceGround`, the same figure that test already pins independently for that
+exact pair) — not a fresh photograph of the real Seeker drawer the way the 2026-09-15 figures
+above were, since this fix had no device to retake one with, but the same formula every other
+number in this section already answers to.
 
 **One more fact, unrelated to colour but worth stating beside it** because it bears on any future
 revision: the mark's own corners
@@ -742,11 +752,9 @@ much room a future revision has to move these corners at all, whatever it does w
 **What this is not.** Not a recommendation to redraw it: that is a judgement about identity and
 cost the founder should make deliberately, against a concrete replacement, the same way section 10
 asks for `1.5.0-alpha` to be decided against a concrete component rather than reached for by
-default. What is recorded here is narrower and, this document believes, not really in dispute: the
-arrangement still works, the specific colour pair does not, for a reason (Instrument's now-retired
-section 2) that stopped applying the day Amber's own section 2 shipped, and the mismatch is visible
-today at the launcher, at cold launch in light mode, and nowhere else, because nothing inside the
-app itself reads these two tokens any more.
+default. What changed here is narrower: the arrangement still works and now the colour pair does
+too, on Amber's own values instead of Instrument's retired ones, closing the mismatch that used to
+be visible at the launcher and at cold launch in light mode.
 
 ## 10. Material3 Expressive: what 1.4.0 actually has
 
@@ -791,6 +799,7 @@ it to build on.
 **Since this paragraph was first written**, every item above but one has been built: `AmberTheme`
 is now the app's live theme, wired to the system light/dark setting (`MainActivity`); the
 components, layout and motion the paragraph deferred are what sections 4, 5 and 6 now describe, in
-full, against the shipped code rather than a plan for it. The one holdout is the brand mark:
-section 9 no longer calls it simply not-yet-done, and instead records why its arrangement still
-works and why its colour pair no longer does.
+full, against the shipped code rather than a plan for it. The brand mark was the one holdout:
+section 9 recorded why its arrangement still worked and why its colour pair, as shipped, did not,
+and on 2026-09-22 the colour pair was moved onto Amber's own ground values (the shape is still the
+founder's, untouched) so the launcher, the splash and the first Compose frame agree.

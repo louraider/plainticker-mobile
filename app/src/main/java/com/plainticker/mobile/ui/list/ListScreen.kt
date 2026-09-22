@@ -404,7 +404,7 @@ private fun StocksChrome(
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
                 .semantics { heading() },
         )
-        if (state.watched > 0) TodayStrip(text = todayText(state))
+        if (state.watched > 0) TodayStrip(text = todayText(state), colors = colors)
         state.banner?.let { StateBanner(banner = it, onRetry = onRetry) }
         Spacer(Modifier.height(SearchTopGap))
         SearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)

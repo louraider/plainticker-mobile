@@ -94,8 +94,8 @@ fun GalleryScreen(
     ) {
         TopBar(action = "Watch", onAction = {}, onTitleLongPress = onBack, colors = AmberDarkColors)
         Banner(text = "Debug gallery, sample data from the canvas", action = "Close", onAction = onBack, colors = AmberDarkColors)
-        TopTabs(items = GallerySamples.tabs, selected = tab, onSelect = { tab = it })
-        TodayStrip(text = GallerySamples.TODAY)
+        TopTabs(items = GallerySamples.tabs, selected = tab, onSelect = { tab = it }, colors = AmberDarkColors)
+        TodayStrip(text = GallerySamples.TODAY, colors = AmberDarkColors)
 
         // Detail: hero, price row, gauge, live bar.
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)) {
