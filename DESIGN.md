@@ -183,12 +183,34 @@ The shared information architecture (Today, Stocks, Vote, Portfolio, You; the li
 section 3. Detail's own layout order does not change in any direction the research drew, Amber
 included; only the tokens and components under it do.
 
-## 6. Motion — not yet restyled
+## 6. Motion — the two pieces the calendar cut, now built
 
-Amber's motion language (one orchestrated cold-start moment, a spring-based indicator, a spring
-sheet entry; section 5.3) is not built in this pass. It is deliberately out of this pass's scope:
-the build list for this foundation was tokens, type, theme, the tertiary rule and a contrast test,
-and motion tokens belong with the components that will use them.
+Section 7's calendar named exactly two pieces of Amber's motion that would not land in the
+research's eight-day slice: chip morphing and staggered entry. Both are now built, once the
+founder decided the calendar had room after all; everything else section 5.3 draws under Motion
+(the bar pill morphing width, a spring sheet entry) is still not built, for the same reason it
+never was: it is components-and-motion-token work that belongs with the component that will use
+it, and neither the bar nor the sheet was touched in this pass.
+
+**Chip morphing** (`AmberChip.kt`, `shapeFor`). The corner radius animates from 8dp to full (16dp,
+the same radius `CircleShape` draws at the chip's fixed 32dp height) with a spring
+(`Spring.StiffnessMediumLow`, no bounce), gated by `rememberMotionEnabled()` the same way the two
+screens below already gate theirs; `snap()` replaces the spring at animator scale 0. Built without
+`1.5.0-alpha`: that library exists to morph shapes whose vertex topology disagrees (a star into a
+circle), and this chip's two states are the same rectangle disagreeing on one corner value, so a
+plain `animateDpAsState` over that one `Dp` reads identically on a phone at this size. Section
+5.3's own risk line names the alpha as the exact temptation to refuse here; this is that refusal,
+not an oversight. See `AmberChip.kt`'s doc on `shapeFor` for the full reasoning, and the report for
+what would actually justify the dependency later.
+
+**Staggered entry** (`TodayScreen.kt`, `amberBlockEntrance`). Today's blocks 1, 3, 4 and 5 (venue,
+tracked, next up, footer) fade in and rise 8dp into place once, the first time each has something
+to draw, 40ms apart, with the same no-bounce spring and the same `rememberMotionEnabled()` gate
+YouScreen's identity reveal and PortfolioScreen's Total already use. Block 2, Yours, is
+deliberately left still: it is `WatchlistContent`'s shared, per-ticker list, the shape of thing a
+stagger reads wrong on even at a handful of rows, and the same composable a 830-row list elsewhere
+in the app would generalize from if a per-item stagger habit started here. Nothing on Today depends
+on motion to be legible: every block's un-animated state is already its settled one.
 
 ## 7. Copy and content rules
 

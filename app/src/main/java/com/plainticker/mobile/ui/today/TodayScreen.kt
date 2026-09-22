@@ -2,6 +2,10 @@ package com.plainticker.mobile.ui.today
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,9 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -25,6 +34,7 @@ import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.SkeletonRows
+import com.plainticker.mobile.ui.components.rememberMotionEnabled
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberDarkColors
@@ -32,6 +42,7 @@ import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.watchlist.WatchlistContent
 import com.plainticker.mobile.ui.watchlist.WatchlistUiState
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
+import kotlinx.coroutines.delay
 
 /**
  * Today (docs/design-research-2026-09-21.md section 3): the new home, replacing the endless list
@@ -71,6 +82,20 @@ import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
  * block 1 now drawn above Yours, a notification tap would land above it rather than on it, but
  * wiring a scroll-to-anchor is `ui/home` and `ui/nav` work (the digest's `EXTRA_TAB` is read and
  * consumed in [com.plainticker.mobile.ui.home.HomeScreen]), outside this task's file set.
+ *
+ * **The one orchestrated moment, filled in.** Section 5.3's motion line ("Today's blocks settle in
+ * with a spring, 40ms stagger") and section 7's calendar (staggered entry did not land in the
+ * research's eight-day slice) named this screen by name. [amberBlockEntrance] gives blocks 1, 3, 4
+ * and 5 ([TodayVenueBlock], [TodayTrackedBlock], [TodayNextUpBlock], [TodayFooter]) a single
+ * fade-and-rise settle, staggered 40ms apart, the first time each has something to draw. Block 2,
+ * Yours, is deliberately left still: [WatchlistContent] draws it, shared with the still-Instrument
+ * [com.plainticker.mobile.ui.watchlist.WatchlistScreen], and it is a per-ticker list, the exact
+ * shape of thing this task's brief warns a stagger is wrong for even at a handful of rows, let
+ * alone the roughly 830-row list [com.plainticker.mobile.ui.list.ListScreen] draws; see the report
+ * for the full reasoning. Every entrance is gated by [rememberMotionEnabled]: at animator scale 0
+ * (the smoke script's own setting) each block is at its settled, fully opaque, untranslated state
+ * on the next frame rather than mid-animation, so nothing here is ever readable only because it
+ * finished animating.
  */
 @Composable
 fun TodayScreen(
@@ -149,7 +174,9 @@ private fun TodayVenueBlock(state: WatchlistUiState) {
     AmberFigure(
         figure = stateWord,
         context = contextText,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .amberBlockEntrance(step = VenueEntranceStep),
     )
 }
 
@@ -184,28 +211,30 @@ private fun TodayTrackedBlock(
     onBrowseStocks: (() -> Unit)?,
 ) {
     if (!state.todayLoading && state.analyzedTotal <= 0) return
-    AmberSectionHead(
-        title = stringResource(R.string.today_heading_tracked),
-        meta = if (state.todayLoading) null else Fmt.count(state.tracked.size),
-        lede = trackedLede(state.tracked.size, state.analyzedTotal)?.text(),
-    )
-    when {
-        state.todayLoading -> SkeletonRows(count = TrackedSkeletonCount)
-        state.tracked.isNotEmpty() -> {
-            AmberTickerRowGroup {
-                state.tracked.take(TrackedPreviewCount).forEach { row ->
-                    AmberTickerRow(
-                        ticker = row.display,
-                        company = row.company,
-                        figure = row.figure,
-                        context = stringResource(R.string.today_tracked_context),
-                        onClick = { onOpenDetail(row.ticker) },
-                        onClickLabel = stringResource(R.string.action_open_ticker, row.display),
-                    )
+    Column(modifier = Modifier.fillMaxWidth().amberBlockEntrance(step = TrackedEntranceStep)) {
+        AmberSectionHead(
+            title = stringResource(R.string.today_heading_tracked),
+            meta = if (state.todayLoading) null else Fmt.count(state.tracked.size),
+            lede = trackedLede(state.tracked.size, state.analyzedTotal)?.text(),
+        )
+        when {
+            state.todayLoading -> SkeletonRows(count = TrackedSkeletonCount)
+            state.tracked.isNotEmpty() -> {
+                AmberTickerRowGroup {
+                    state.tracked.take(TrackedPreviewCount).forEach { row ->
+                        AmberTickerRow(
+                            ticker = row.display,
+                            company = row.company,
+                            figure = row.figure,
+                            context = stringResource(R.string.today_tracked_context),
+                            onClick = { onOpenDetail(row.ticker) },
+                            onClickLabel = stringResource(R.string.action_open_ticker, row.display),
+                        )
+                    }
                 }
-            }
-            if (onBrowseStocks != null) {
-                AmberTextLink(text = trackedAllCopy(state.tracked.size).text(), onClick = onBrowseStocks)
+                if (onBrowseStocks != null) {
+                    AmberTextLink(text = trackedAllCopy(state.tracked.size).text(), onClick = onBrowseStocks)
+                }
             }
         }
     }
@@ -219,19 +248,21 @@ private fun TodayTrackedBlock(
 @Composable
 private fun TodayNextUpBlock(state: WatchlistUiState, onOpenVote: (() -> Unit)?) {
     val leader = state.nextUpLeader ?: return
-    AmberSectionHead(
-        title = stringResource(R.string.next_up_label),
-        lede = nextUpRoundLede(state.voteRound)?.text(),
-    )
-    AmberTickerRowGroup {
-        AmberTickerRow(
-            ticker = leader.display,
-            company = leader.company,
-            figure = leader.weight.text(),
-            context = leader.votersContext.text(),
-            onClick = onOpenVote,
-            onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
+    Column(modifier = Modifier.fillMaxWidth().amberBlockEntrance(step = NextUpEntranceStep)) {
+        AmberSectionHead(
+            title = stringResource(R.string.next_up_label),
+            lede = nextUpRoundLede(state.voteRound)?.text(),
         )
+        AmberTickerRowGroup {
+            AmberTickerRow(
+                ticker = leader.display,
+                company = leader.company,
+                figure = leader.weight.text(),
+                context = leader.votersContext.text(),
+                onClick = onOpenVote,
+                onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
+            )
+        }
     }
 }
 
@@ -243,7 +274,10 @@ private fun TodayNextUpBlock(state: WatchlistUiState, onOpenVote: (() -> Unit)?)
 @Composable
 private fun TodayFooter(text: String, onBrowseStocks: (() -> Unit)?) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .amberBlockEntrance(step = FooterEntranceStep),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -278,3 +312,49 @@ private fun AmberTextLink(text: String, onClick: () -> Unit, modifier: Modifier 
 }
 
 private const val TrackedSkeletonCount = 3
+
+/**
+ * The settle this screen's class doc names: a block fades in and rises [EntranceRise] into place,
+ * once, the first time it has something to draw, staggered by [step] positions of
+ * [StaggerStepMillis] each. `remember`'s state lives with the call site, so a block that starts as
+ * a skeleton and later gets real rows (Tracked today while [WatchlistUiState.todayLoading] flips)
+ * settles once on that arrival rather than replaying on every later recomposition, the same way the
+ * `revealed` flag in [com.plainticker.mobile.ui.you.YouScreen]'s identity reveal and
+ * [com.plainticker.mobile.ui.portfolio.PortfolioScreen]'s Total does.
+ *
+ * Damping is [Spring.DampingRatioNoBouncy] on purpose: this is a settle, not a bounce, and a
+ * bouncy alpha can overshoot past fully opaque and read as a flicker on a small block.
+ *
+ * [motionEnabled] defaults to [rememberMotionEnabled] so a caller can thread one read through
+ * several blocks; at animator scale 0 the delay is skipped and `snap()` replaces the spring, so the
+ * block is at alpha 1, untranslated, on the very next frame rather than part-way through settling,
+ * which is what keeps this legible under the smoke script's own animator-scale-0 pass and on any
+ * phone with animations turned off.
+ */
+@Composable
+private fun Modifier.amberBlockEntrance(step: Int, motionEnabled: Boolean = rememberMotionEnabled()): Modifier {
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (motionEnabled) delay(step * StaggerStepMillis)
+        settled = true
+    }
+    val progress by animateFloatAsState(
+        targetValue = if (settled) 1f else 0f,
+        animationSpec = if (motionEnabled) EntranceSpring else snap(),
+        label = "today-block-entrance-$step",
+    )
+    return this.graphicsLayer {
+        alpha = progress
+        translationY = (1f - progress) * EntranceRise.toPx()
+    }
+}
+
+private val EntranceSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+private const val StaggerStepMillis = 40L
+private val EntranceRise = 8.dp
+
+/** Stagger order: blocks 1, 3, 4, 5 (research section 3's numbering); block 2, Yours, stays still. */
+private const val VenueEntranceStep = 0
+private const val TrackedEntranceStep = 1
+private const val NextUpEntranceStep = 2
+private const val FooterEntranceStep = 3

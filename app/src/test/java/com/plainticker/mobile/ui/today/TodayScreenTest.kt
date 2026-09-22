@@ -2,6 +2,7 @@ package com.plainticker.mobile.ui.today
 
 import com.plainticker.mobile.lint.KotlinScan
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -114,5 +115,53 @@ class TodayScreenTest {
     fun `the text link this screen needed beyond the five named components declares a role`() {
         val fn = body("private fun AmberTextLink(", "private const val TrackedSkeletonCount")
         assertTrue("Role.Button" in fn)
+    }
+
+    // ---- The orchestrated moment: blocks 1, 3, 4, 5 settle in, block 2 (Yours) stays still ------
+
+    @Test
+    fun `blocks 1, 3, 4 and 5 each carry the entrance modifier, staggered in the research's block order`() {
+        val block1 = body("private fun TodayVenueBlock(", "private fun TodayAfterContent(")
+        val block3 = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
+        val block4 = body("private fun TodayNextUpBlock(", "private fun TodayFooter(")
+        val block5 = body("private fun TodayFooter(", "private fun AmberTextLink(")
+        assertTrue("block 1 (venue) settles in", "amberBlockEntrance(step = VenueEntranceStep)" in block1)
+        assertTrue("block 3 (tracked) settles in", "amberBlockEntrance(step = TrackedEntranceStep)" in block3)
+        assertTrue("block 4 (next up) settles in", "amberBlockEntrance(step = NextUpEntranceStep)" in block4)
+        assertTrue("block 5 (footer) settles in", "amberBlockEntrance(step = FooterEntranceStep)" in block5)
+        val order = listOf("VenueEntranceStep = 0", "TrackedEntranceStep = 1", "NextUpEntranceStep = 2", "FooterEntranceStep = 3")
+            .map { source.indexOf(it) }
+        assertTrue("all four stagger steps are declared", order.all { it >= 0 })
+        assertEquals(order, order.sorted())
+    }
+
+    @Test
+    fun `block 2, Yours, is never wrapped in the entrance modifier, TodayScreen itself never calls it`() {
+        val fn = body("fun TodayScreen(", "private fun TodayVenueBlock(")
+        assertFalse("Yours is WatchlistContent's shared, per-ticker list; a stagger belongs to the block, not the row", "amberBlockEntrance" in fn)
+    }
+
+    @Test
+    fun `the entrance settles once per block, not once per row, the modifier is called exactly once in Tracked today`() {
+        val trackedBlock = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
+        val calls = Regex("amberBlockEntrance\\(").findAll(trackedBlock).count()
+        assertEquals("a per-row stagger inside the tracked rows' forEach is the shape this task's brief warns against", 1, calls)
+    }
+
+    @Test
+    fun `the entrance is gated by rememberMotionEnabled and snaps instantly when motion is off`() {
+        val fn = body("private fun Modifier.amberBlockEntrance(", "private val EntranceSpring")
+        assertTrue("rememberMotionEnabled" in fn)
+        assertTrue("snap()" in fn)
+        assertTrue("EntranceSpring" in fn)
+        assertTrue(
+            "settled starts false and the coroutine flips it without a user gesture, so it always reaches 1f on its own",
+            "targetValue = if (settled) 1f else 0f" in fn,
+        )
+    }
+
+    @Test
+    fun `the settle is a spring with no bounce, so alpha and translation cannot overshoot`() {
+        assertTrue("private val EntranceSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy" in source)
     }
 }
