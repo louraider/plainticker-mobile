@@ -206,6 +206,11 @@ private fun VoteCell.factCell(): FactCell {
         value = value.text(),
         span = span,
         valueSize = if (span > 1) 28.sp else 18.sp,
+        // Every VoteCell that carries something to copy (the signature, the collector) is an
+        // on-chain identifier drawn from Fmt.shortKey; the weight and the fee, which never carry
+        // one, are numbers. [copied] already distinguishes exactly this for the screen's own tap
+        // handling, so it doubles as the signal FactCell.valueMono needs.
+        valueMono = copied != null,
         onTap = if (copied == null) {
             null
         } else {

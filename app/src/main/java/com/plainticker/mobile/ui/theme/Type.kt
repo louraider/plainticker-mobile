@@ -213,4 +213,18 @@ object AmberType {
     val figureRow: TextStyle = bricolage(18.sp, FontWeight.SemiBold, 22.sp, tabularNumerals = true)
     /** A numeral set inside a sentence ("22 of 160", "+0.62%"): 14/400 tnum, opsz 14. */
     val figureInline: TextStyle = bricolage(14.sp, FontWeight.Normal, 18.sp, tabularNumerals = true)
+
+    /**
+     * A [com.plainticker.mobile.ui.components.FactGrid] cell's value, 22 to 32sp depending on the
+     * cell's own prominence ([com.plainticker.mobile.ui.components.FactCell.valueSize]), tnum on
+     * (every real value is a percent, a multiplier, a count or a short state word, never a
+     * sentence). No single fixed size in this object covers that range the way [figureLarge] and
+     * [figureRow] cover their own one anatomy each, so this is built the same way
+     * [PlainTickerType.factValueAt] was: one function, optical size doing the work per call the
+     * way every other Amber style already does. Bold throughout, matching [figureLarge] rather
+     * than [figureRow]'s SemiBold: a fact grid's value is the one thing each cell states, the same
+     * role a card's headline figure plays, and every call site's own size (22 to 32) sits closer
+     * to figureLarge's 34 than to figureRow's 18.
+     */
+    fun factValueAt(size: TextUnit): TextStyle = bricolage(size, FontWeight.Bold, size * 1.1f, tabularNumerals = true)
 }

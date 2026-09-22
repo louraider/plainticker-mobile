@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
+import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.Banner
-import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 // The row component and this screen's row model share a name; the anatomy keeps an alias.
 import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
@@ -138,7 +138,7 @@ internal fun WatchlistContent(
             }
         }
         item(key = "watched") {
-            Heading(text = stringResource(R.string.watchlist_heading_watched))
+            AmberSectionHead(title = stringResource(R.string.watchlist_heading_watched))
         }
 
         when {
@@ -171,7 +171,7 @@ internal fun WatchlistContent(
         }
 
         item(key = "digest") {
-            Heading(text = stringResource(R.string.watchlist_heading_digest))
+            AmberSectionHead(title = stringResource(R.string.watchlist_heading_digest))
         }
         item(key = "digest-panel") { Digest(state.digest) }
         item(key = "digest-footer") {
