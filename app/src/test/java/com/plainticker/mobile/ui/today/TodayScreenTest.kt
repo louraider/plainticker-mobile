@@ -79,8 +79,24 @@ class TodayScreenTest {
     @Test
     fun `block 3's meta count is never drawn while still loading, and the section itself is undrawn once settled with nothing analyzed`() {
         val fn = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        assertTrue("no state before the join has run", "if (!state.todayLoading && state.analyzedTotal <= 0) return" in fn)
-        assertTrue("the count is null, never a guess, while loading", "if (state.todayLoading) null else Fmt.count(state.tracked.size)" in fn)
+        assertTrue("no state before the fast half of the join has run", "if (!state.todayLoading && state.analyzedTotal <= 0) return" in fn)
+        assertTrue("the count is null, never a guess, while prices are still out", "if (state.trackedLoading) null else Fmt.count(state.tracked.size)" in fn)
+    }
+
+    /**
+     * The animator-zero stall (docs/qa-checklist.md, 2026-09-22): the block's skeleton-versus-rows
+     * choice, and its lede and meta, gate on [state.trackedLoading][com.plainticker.mobile.ui.watchlist.WatchlistUiState.trackedLoading],
+     * which only Jupiter's price fetch flips, never on [state.todayLoading][com.plainticker.mobile.ui.watchlist.WatchlistUiState.todayLoading],
+     * which the venue line and Next up also read and which settles well before prices do
+     * ([WatchlistViewModel.loadToday]'s own doc). Pinning this the other way round, gating the
+     * skeleton on `todayLoading`, is exactly the regression that reintroduces the stall.
+     */
+    @Test
+    fun `block 3's skeleton and rows gate on trackedLoading, the price-fetch flag, not todayLoading`() {
+        val fn = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
+        assertTrue("the lede is never a guess while prices are still out", "if (state.trackedLoading) null else trackedLede(" in fn)
+        assertTrue("the skeleton shows only while prices are out", "state.trackedLoading -> SkeletonRows(" in fn)
+        assertFalse("todayLoading must not gate the skeleton; it settles before prices ever answer", "state.todayLoading -> SkeletonRows(" in fn)
     }
 
     @Test

@@ -260,7 +260,11 @@ class WatchlistViewModelTest {
         val vm = viewModel()
 
         vm.state.test {
-            val state = awaitUntil { !it.todayLoading }
+            // The tracked rows are what prices answers, so this waits for trackedLoading, not
+            // todayLoading: todayLoading now settles before prices are even asked (see
+            // WatchlistViewModel.loadToday's own doc), and state.tracked would still be empty at
+            // that point.
+            val state = awaitUntil { !it.trackedLoading }
             assertEquals("AAPL, TSLA and THIN all classify against a matching xStock", 3, state.analyzedTotal)
             assertEquals("NOPRICEx is the one catalog asset with no classification", 1, state.withoutAnalysisTotal)
             assertEquals("THIN's pool is below the floor, so it is not a tracked row", 2, state.tracked.size)
@@ -283,6 +287,8 @@ class WatchlistViewModelTest {
         val vm = viewModel()
 
         vm.state.test {
+            // Next up reads no price, so it is on state as soon as todayLoading settles, not
+            // trackedLoading: this is the fast half of the join.
             val state = awaitUntil { !it.todayLoading }
             val leader = requireNotNull(state.nextUpLeader)
             assertEquals("AMDx", leader.display)
@@ -310,7 +316,10 @@ class WatchlistViewModelTest {
         val vm = viewModel()
 
         vm.state.test {
-            val state = awaitUntil { !it.todayLoading }
+            // pricesFetchedAtMillis is trackedLoading's own field, published once prices answer,
+            // not todayLoading's: waiting for the fuller settle is what this assertion on both
+            // ages actually needs.
+            val state = awaitUntil { !it.trackedLoading }
             assertTrue("the venue's own trading block says the session is on", state.market?.regularSession == true)
             assertEquals(MarketSource.VENUE, state.market?.source)
             assertTrue("the analysis age is read off generatedAt", state.analysisGeneratedAtMillis != null)
@@ -334,17 +343,24 @@ class WatchlistViewModelTest {
     }
 
     /**
-     * The "one more thing" this task's brief flagged: "Tracked today" showing its skeleton, and
-     * the venue line undrawn, for several seconds after launch while the data the tree eventually
-     * reports was already settled. The cause was [WatchlistViewModel.loadToday] reading `/summary`,
-     * the catalog, Jupiter's prices and the leaderboard one after another, though only prices
-     * actually depends on the first two's answers. This test holds prices open and checks that the
-     * leaderboard call has already gone out and come back regardless: in the old, sequential shape
-     * it could not have, since the leaderboard was the last read and nothing after a held gate ever
-     * runs.
+     * The animator-zero stall (docs/qa-checklist.md, 2026-09-22): Today's venue card and "Tracked
+     * today" sat undrawn or skeletal for three to four seconds after launch at normal motion, eight
+     * to eleven with every animator scale forced to zero. A motion agent's `amberBlockEntrance` was
+     * innocent - it already snaps to its settled state on the next frame when motion is off, which
+     * `TodayScreenTest` pins directly - so animation being off could not be *why* the screen took
+     * longer to read. The actual cause was here, one step further than the fix this test used to
+     * pin: [WatchlistViewModel.loadToday] already asked `/summary`, the catalog and the leaderboard
+     * concurrently, but it published every field from the join, including the venue line and Next
+     * up, in the one `_state.update` at the very end, after awaiting Jupiter's own paced price
+     * fetch (several seconds by [PriceRepository]'s own design), even though neither block reads a
+     * price. This test holds prices open and checks that the fast half - [todayLoading], [market]
+     * (by way of the catalog), [nextUpLeader] - is already on state regardless: in the coupled
+     * shape this test used to pin, [todayLoading] stayed true until the held gate released, which
+     * is the bug reproduced in a unit test rather than on a phone. Only [trackedLoading] (Tracked
+     * today's own rows, the one thing that does need a price) may still be true here.
      */
     @Test
-    fun `today's join asks the leaderboard while prices are still out, not after them`() = runTest {
+    fun `today's venue and Next up settle while prices are still out, not after them`() = runTest {
         serving("AAPL")
         nextUp.answer = Result.success(
             NextUpAnswer.Open(rows = listOf(NextUpRow(ticker = "AAPL", weight = "1", voters = 1)), round = null, previous = null),
@@ -370,7 +386,12 @@ class WatchlistViewModelTest {
         advanceUntilIdle()
 
         assertEquals("the price fetch is out but held", 1, heldPrices.calls)
-        assertTrue("today's join has not settled while prices are held", vm.state.value.todayLoading)
+        val holding = vm.state.value
+        assertFalse("the venue and Next up half does not wait behind prices", holding.todayLoading)
+        assertEquals("AAPLx", holding.nextUpLeader?.display)
+        assertTrue("the venue reads a market the catalog alone already answered", holding.market != null)
+        assertTrue("Tracked today's own rows are the one thing still out", holding.trackedLoading)
+        assertTrue("nothing is tracked yet, because prices have not answered", holding.tracked.isEmpty())
         assertEquals(
             "the leaderboard does not depend on prices and must not wait behind them",
             1,
@@ -382,6 +403,7 @@ class WatchlistViewModelTest {
 
         val settled = vm.state.value
         assertFalse(settled.todayLoading)
+        assertFalse("prices have now answered too", settled.trackedLoading)
         assertEquals("AAPLx", settled.nextUpLeader?.display)
     }
 
