@@ -17,7 +17,7 @@ data class OnboardingUiState(
     /** True once the flag is stored; the host navigates on. */
     val completed: Boolean = false,
 ) {
-    /** The button's enabled state: a PrimaryButton while true, a DisabledButton while false. */
+    /** The button's enabled state: AmberPrimaryAction's filled state while true, its disabled one while false. */
     val canContinue: Boolean get() = accepted && !completed
 }
 

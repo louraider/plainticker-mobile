@@ -46,4 +46,35 @@ class AmberSheetTest {
     fun `it is a real ModalBottomSheet, which is what exposes the dismiss, expand and collapse semantics`() {
         assertTrue("ModalBottomSheet(" in source)
     }
+
+    /**
+     * `ModalBottomSheet` wraps whatever `dragHandle` draws in a plain `clickable` `Box` with no
+     * minimum size of its own (confirmed against the pinned `material3` 1.4.0 sources), so
+     * [AmberSheetHandle]'s own measured height is the drag handle's whole touch target: 23dp
+     * above and below the 2dp bar reaches the 48dp floor this task's brief calls a hard rule, the
+     * same total `BottomSheetDefaults.DragHandle` reaches with 22dp around its own 4dp bar.
+     */
+    @Test
+    fun `the handle's touch target reaches the 48dp floor, not just its 2dp visible bar`() {
+        val fn = source.substring(source.indexOf("fun AmberSheetHandle("), source.indexOf("fun AmberSheetSurface("))
+        assertTrue("the bar is still 2dp, research 5.5's own anatomy", "HandleBarHeight = 2.dp" in source)
+        assertTrue("23 + 2 + 23 = 48", "HandleTouchPadding = 23.dp" in source)
+        assertTrue("the padding actually wraps the bar", "padding(vertical = HandleTouchPadding)" in fn)
+        assertTrue("the bar itself reads the height constant", "height = HandleBarHeight" in fn)
+    }
+
+    /**
+     * The onboarding panel (`OnboardingScreen.kt`'s `ConsentPanel`, migrated off Instrument's
+     * retired `SheetSurface`) sits over a 25 percent backdrop and draws no handle, so it needs the
+     * same 1dp top edge the retired component fell back to instead of drawing nothing.
+     */
+    @Test
+    fun `AmberSheetSurface without a handle still draws the 1dp top edge, never a bare gap`() {
+        val fn = source.substring(source.indexOf("fun AmberSheetSurface("))
+        assertTrue("the handle branch is still conditional", "if (handle) {" in fn)
+        assertTrue(
+            "no handle must still draw a border-token edge, not nothing",
+            ".fillMaxWidth().height(1.dp).background(colors.border)" in fn,
+        )
+    }
 }

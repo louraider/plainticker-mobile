@@ -114,8 +114,12 @@ class SwapSheetTest {
         assertEquals("one modal surface", 1, count("onDismissRequest ="))
         assertEquals("one grid", 1, count("FactGrid("))
         assertEquals("one text field", 1, count("Field("))
-        assertEquals("one primary and one secondary", 1, count("PrimaryButton("))
-        assertEquals(1, count("SecondaryButton("))
+        // Instrument's PrimaryButton/SecondaryButton retired in this pass in favour of Amber's own
+        // anatomy (docs/design-research-2026-09-21.md section 5.5), the same restyle VoteSheet.kt
+        // and PassSheet.kt already went through: the markers below name the components actually on
+        // screen now, not the ones this sheet drew before this fix.
+        assertEquals("one primary and one secondary", 1, count("AmberPrimaryAction("))
+        assertEquals(1, count("AmberSecondaryAction("))
         assertEquals("the direction is the only text action", 1, count("TextAction("))
     }
 

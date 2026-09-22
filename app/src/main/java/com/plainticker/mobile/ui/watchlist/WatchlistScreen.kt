@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.InstrumentPreviews
@@ -31,7 +32,6 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.ListRow as InstrumentRow
 import com.plainticker.mobile.ui.components.Panel
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.spoken
@@ -149,7 +149,7 @@ internal fun WatchlistContent(
                 item(key = "empty") { EmptyLine(stringResource(R.string.watchlist_empty)) }
                 if (onBrowseList != null) {
                     item(key = "browse-action") {
-                        SecondaryButton(
+                        AmberSecondaryAction(
                             label = stringResource(R.string.action_browse_analyzed),
                             onClick = onBrowseList,
                             modifier = Modifier.padding(horizontal = Side, vertical = ButtonTop),
