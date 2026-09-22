@@ -16,6 +16,7 @@ import com.plainticker.mobile.ui.components.valueSubWidth
 import com.plainticker.mobile.ui.detail.DetailBanner
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -78,28 +79,32 @@ class ListFinishedScreenTest {
     }
 
     @Test
-    fun `the row gives the number its own alignment and the list keeps it open`() {
+    fun `the fix survives on Instrument's own ListRow, still read by other screens`() {
         val row = source("ui/components/ListRow.kt")
         assertTrue("the word must sit in a column of its own", ".width(valueSubWidth(" in row)
         assertTrue("the column must follow the reader's font scale", "LocalDensity.current.fontScale" in row)
         assertTrue("a row with no word must be able to keep the column", "reserveValueSub" in row)
+    }
 
-        // Every analyzed row keeps it open, including one with no state word, because the
-        // composites under that heading are one column to the reader scanning them.
+    /**
+     * Stocks' own row ([com.plainticker.mobile.ui.components.AmberTickerRow]) resolves the same
+     * class of bug a different way (its own doc comment): there is no second, separately aligned
+     * state-word cell to jog in the first place, because [AmberTickerRow] has one figure and one
+     * context line, not a value plus a sub-value. The composite is the figure and the row's own
+     * disclosure sentence ([rowMeta], unchanged by this pass) is the context, so the word this
+     * finding was about is not drawn on the row at all any more (Detail still carries it).
+     */
+    @Test
+    fun `Stocks' analyzed row carries the composite and the disclosure line, and reserves no state-word column`() {
         val screen = source("ui/list/ListScreen.kt")
         val analyzed = screen.substring(
             screen.indexOf("private fun AnalyzedRow("),
             screen.indexOf("private fun PriceOnlyRow("),
         )
-        assertTrue("an analyzed row must reserve the word's column", "reserveValueSub = true" in analyzed)
-
-        // The untracked tail is its own section of prices with no word at all, so it stays flush
-        // right rather than carrying an empty column it never fills.
-        val priceOnly = screen.substring(screen.indexOf("private fun PriceOnlyRow("))
-        assertTrue(
-            "a price-only row must not reserve a column it never fills",
-            "reserveValueSub" !in priceOnly.substringBefore("private fun "),
-        )
+        assertTrue("the composite is the row's figure", "figure = row.composite" in analyzed)
+        assertTrue("the row's context is its own disclosure sentence", "context = rowMeta(row)" in analyzed)
+        assertFalse("no reserved state-word column on the Amber row", "reserveValueSub" in analyzed)
+        assertFalse("no fixed-width state-word cell on the Amber row", "valueSubWidth" in analyzed)
     }
 
     // ---- Finding 8: the caveat Detail pays and the List did not ---------------------------------

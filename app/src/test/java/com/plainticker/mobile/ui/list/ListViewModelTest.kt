@@ -1071,6 +1071,30 @@ class ListViewModelTest {
     }
 
     /**
+     * The Stocks screen's Watched filter chip (`com.plainticker.mobile.ui.stocks.StocksFilter.Watched`)
+     * asks per row whether its ticker is in this set; [ListUiState.watched] only ever answers how
+     * many, so the two are read off the same flow rather than the chip trusting a second source
+     * that could disagree with the count beside it.
+     */
+    @Test
+    fun `watchedTickers carries the same tickers watched counts, live`() = runTest {
+        val watchlist = InMemoryWatchlistStore(setOf("AAPL", "TSLA"))
+        val vm = viewModel(watchlist = watchlist)
+
+        vm.state.test {
+            val first = awaitUntil { !it.refreshing }
+            assertEquals(setOf("AAPL", "TSLA"), first.watchedTickers)
+            assertEquals(first.watched, first.watchedTickers.size)
+
+            watchlist.remove("AAPL")
+            val after = awaitUntil { "AAPL" !in it.watchedTickers }
+            assertEquals(setOf("TSLA"), after.watchedTickers)
+            assertEquals(1, after.watched)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
      * The strip names the nearest report out of the digest the daily check stored, which can be a
      * day old, so it names it only while that ticker is still watched. Without the guard the List
      * would go on naming a company for up to a day after the reader took it off the watchlist.
