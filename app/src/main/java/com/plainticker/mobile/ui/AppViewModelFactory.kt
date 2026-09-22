@@ -76,6 +76,12 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.digestNotifier,
             container.watchlistScheduler,
             container.clock,
+            // Today's other blocks (docs/design-research-2026-09-21.md section 3): the same
+            // repositories ListViewModel above joins against.
+            container.summaryRepository,
+            container.catalogRepository,
+            container.priceRepository,
+            container.nextUpRepository,
         )
     }
     initializer {

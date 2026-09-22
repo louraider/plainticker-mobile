@@ -326,7 +326,9 @@ class CopyLintTest {
     @Test
     fun `every literal color under ui is a token`() {
         val allowed = tokenColors()
-        assertEquals("Tokens.kt declares seven opaque colors", 7, allowed.size)
+        // 7 Instrument (DESIGN.md's old palette, still read by every existing composable) plus
+        // Amber's 19 (10 dark, 9 light; docs/design-research-2026-09-21.md section 5.3): 26.
+        assertEquals("Tokens.kt declares 26 opaque colors", 26, allowed.size)
         assertClean(colorFindings(uiFiles.filter { it.path != tokensPath }, allowed))
     }
 

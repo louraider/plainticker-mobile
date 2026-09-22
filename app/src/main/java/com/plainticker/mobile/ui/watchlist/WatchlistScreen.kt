@@ -109,6 +109,15 @@ internal fun WatchlistContent(
     onRunCheck: (() -> Unit)? = null,
     onEnableNotifications: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
+    /**
+     * Today (docs/design-research-2026-09-21.md section 3) hosts this same content as its Yours
+     * block, inside its own single scroll container rather than a second, nested `LazyColumn`:
+     * [com.plainticker.mobile.ui.today.TodayScreen] calls this function directly and uses these
+     * two slots for the blocks that sit above and below Yours, so nothing here was rewritten to
+     * make that move, only these two empty-by-default seams were added.
+     */
+    beforeContent: @Composable () -> Unit = {},
+    afterContent: @Composable () -> Unit = {},
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -116,6 +125,7 @@ internal fun WatchlistContent(
         contentPadding = WindowInsets.navigationBars.asPaddingValues(),
     ) {
         item(key = "header") { header() }
+        item(key = "before-yours") { beforeContent() }
         item(key = "chrome") {
             Column(Modifier.fillMaxWidth()) {
                 state.banner?.let {
@@ -174,6 +184,7 @@ internal fun WatchlistContent(
         }
         // Debug builds only, behind the same gate as the component gallery and the wallet spike.
         onRunCheck?.let { run -> item(key = "debug-run") { DebugRunCheck(run) } }
+        item(key = "after-yours") { afterContent() }
     }
 }
 

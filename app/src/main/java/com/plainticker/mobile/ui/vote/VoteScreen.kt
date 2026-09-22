@@ -1,7 +1,6 @@
 package com.plainticker.mobile.ui.vote
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,8 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
@@ -30,9 +28,10 @@ import com.plainticker.mobile.data.plainticker.PreviousRoundStatus
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.receipts.VoteReceipt
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.AmberSectionHead
+import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.Field
-import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 // The row component and this package's row model share a name; the anatomy keeps an alias, the
 // same one ListScreen and PortfolioScreen already carry.
@@ -43,10 +42,9 @@ import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.list.NextUpLeader
 import com.plainticker.mobile.ui.list.skrWeight
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberType
 import java.math.BigInteger
 
 /**
@@ -61,6 +59,12 @@ import java.math.BigInteger
  * apart from a real failure) replaces every section after the explainer with one honest line
  * rather than an error banner, exactly as the plan asks: nothing below the explainer describes a
  * round the server does not run.
+ *
+ * Restyled to Amber (docs/design-research-2026-09-21.md section 5.3, DESIGN.md section 4): the
+ * round header, every section head and the ticker rows this screen owns now read [AmberType] and
+ * [AmberDarkColors] instead of Instrument's tokens. What has no Amber component yet (the leader
+ * row's inline vote action beside a figure, the ballot search field) is called out at its own
+ * definition rather than forked quietly; see [LeaderRow] and [BallotSearchField].
  */
 @Composable
 fun VoteScreen(
@@ -133,8 +137,8 @@ internal fun VoteTabContent(
 
                 if (state.leaders.isNotEmpty()) {
                     item(key = "leaders-heading") {
-                        Heading(
-                            text = stringResource(R.string.vote_tab_heading_leaders),
+                        AmberSectionHead(
+                            title = stringResource(R.string.vote_tab_heading_leaders),
                             meta = Fmt.count(state.leaders.size),
                         )
                     }
@@ -152,8 +156,8 @@ internal fun VoteTabContent(
 
                 if (state.myVotes.isNotEmpty()) {
                     item(key = "my-votes-heading") {
-                        Heading(
-                            text = stringResource(R.string.vote_tab_heading_your_votes),
+                        AmberSectionHead(
+                            title = stringResource(R.string.vote_tab_heading_your_votes),
                             meta = Fmt.count(state.myVotes.size),
                         )
                     }
@@ -165,14 +169,14 @@ internal fun VoteTabContent(
 
                 state.previous?.let { previous ->
                     item(key = "last-round-heading") {
-                        Heading(text = stringResource(R.string.vote_tab_heading_last_round))
+                        AmberSectionHead(title = stringResource(R.string.vote_tab_heading_last_round))
                     }
                     item(key = "last-round") { LastRoundRow(previous = previous, onOpenDetail = onOpenDetail) }
                 }
 
                 item(key = "ballot-heading") {
-                    Heading(
-                        text = stringResource(R.string.list_heading_without_analysis),
+                    AmberSectionHead(
+                        title = stringResource(R.string.list_heading_without_analysis),
                         meta = if (state.ballotLoaded) Fmt.count(state.ballot.size) else null,
                     )
                 }
@@ -221,54 +225,79 @@ internal fun VoteTabContent(
 @Composable
 private fun Explainer() {
     Column(Modifier.fillMaxWidth().padding(horizontal = Side, vertical = 2.dp)) {
-        Text(text = stringResource(R.string.vote_tab_explainer_what), style = PlainTickerType.body, color = Ink, modifier = Modifier.padding(top = 12.dp))
-        Text(text = stringResource(R.string.vote_tab_explainer_how), style = PlainTickerType.body, color = Ink, modifier = Modifier.padding(top = 10.dp))
-        Text(text = stringResource(R.string.vote_gameable), style = PlainTickerType.small, color = Muted, modifier = Modifier.padding(top = 10.dp))
+        Text(
+            text = stringResource(R.string.vote_tab_explainer_what),
+            style = AmberType.body,
+            color = AmberDarkColors.textPrimary,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        Text(
+            text = stringResource(R.string.vote_tab_explainer_how),
+            style = AmberType.body,
+            color = AmberDarkColors.textPrimary,
+            modifier = Modifier.padding(top = 10.dp),
+        )
+        Text(
+            text = stringResource(R.string.vote_gameable),
+            style = AmberType.context,
+            color = AmberDarkColors.textSecondary,
+            modifier = Modifier.padding(top = 10.dp),
+        )
     }
 }
 
 /**
- * "Round" and its number on one line, the close time on its own beneath: its own small anatomy
- * rather than [Heading], because [Heading] gives its title a `weight(1f)` and its meta the rest
- * of the row at the meta's own natural width. A short count in that meta slot (Leaders, Your
- * votes, the ballot) never asks for more than a few digits, so the title barely notices; a full
- * clause like "1, closes 21 Sep 2026 00:00 UTC" asked for nearly the whole row's width instead,
- * which starved the title down to one letter of "Round" per line, R-o-u-n-d, top to bottom,
- * about a fifth of the screen tall. This is not that division: the round's number sits beside the
- * word at the word's own size, in the mono face DESIGN.md section 3 keeps for every numeral, and
- * the close time is a second, quieter line with no row to starve.
+ * "Round" and its number, now drawn through [AmberSectionHead] instead of the bespoke anatomy
+ * this function used to carry.
+ *
+ * The bug this anatomy exists to keep shut: [Heading][com.plainticker.mobile.ui.components.Heading]
+ * gives its title a `weight(1f)` and its meta the rest of the row at the meta's own natural
+ * width. A short count (Leaders, Your votes, the ballot) never asks for more than a few digits,
+ * so the title barely notices; a full clause like "1, closes 21 Sep 2026 00:00 UTC" asked for
+ * nearly the whole row's width instead, which starved the title down to one letter of "Round" per
+ * line, R-o-u-n-d, top to bottom, about a fifth of the screen tall, on-device at 1.3x on the
+ * Seeker. The earlier fix was a private anatomy that never routed the close time through a
+ * shared-width slot at all.
+ *
+ * [AmberSectionHead] is Amber's own section head (`ui/components/AmberSectionHead.kt`), and its
+ * own doc comment names this exact function as one of the two cases its design generalizes: its
+ * title is capped at `maxLines = 2` rather than left to wrap without a bound, so a short
+ * [AmberSectionHead.meta] can never squeeze it past readable. The round id is exactly the short
+ * count that slot is built for ([roundId], never more than a few digits), and the close time
+ * moves to [AmberSectionHead.lede], which the component draws full width on its own line below
+ * the title, never squeezed beside it. `AmberSectionHeadTest` and `AmberTickerRowTest` already pin
+ * that component's own anti-starvation behaviour; what is pinned here, in [VoteScreenTest], is
+ * that this call site actually hands it a short meta and a full-width lede, and how long each one
+ * can really get.
  */
 @Composable
 private fun RoundHeader(round: VoteRound) {
     val roundId = Fmt.count(round.id)
     val closesText = round.closesAtInstant()?.let { stringResource(R.string.vote_tab_round_closes, Fmt.utc(it)) }
-    // One rhythm (U6): the same 32dp above, 14dp below Heading itself defaults to, kept as a
-    // literal because this block cannot use Heading (see the doc comment above).
-    Column(Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 32.dp, bottom = 14.dp)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.semantics(mergeDescendants = true) { heading() },
-        ) {
-            Text(
-                text = stringResource(R.string.vote_tab_round_heading),
-                style = PlainTickerType.heading,
-                color = Ink,
-                modifier = Modifier.alignByBaseline(),
-            )
-            Text(
-                text = roundId,
-                style = PlainTickerType.trackValue,
-                color = Ink,
-                modifier = Modifier.alignByBaseline(),
-            )
-        }
-        if (closesText != null) {
-            Text(text = closesText, style = PlainTickerType.monoSmall, color = Muted, modifier = Modifier.padding(top = 4.dp))
-        }
-    }
+    AmberSectionHead(
+        title = stringResource(R.string.vote_tab_round_heading),
+        meta = roundId,
+        lede = closesText,
+    )
 }
 
-/** One leader: the token and its company left, the voters on the meta line, the weight right. */
+/**
+ * One leader: the token and its company left, its voters as Amber's ticker-row context, the
+ * weight right, an inline "Vote" action when [onVote] is offered.
+ *
+ * **Stays on the Instrument [InstrumentRow] on purpose, not restyled.** Amber's own ticker row
+ * (`AmberTickerRow`) has exactly one slot on its right: a figure with an optional context line
+ * under it, which is where the vote weight and the voter count already belong. It has no third,
+ * independent slot for a trailing action beside that figure, and this row genuinely needs one at
+ * the same time: the weight is the reason "Leaders" exists, and the vote action is a real,
+ * frequently used affordance on this exact row, not decoration. Composing a `TextAction` over the
+ * figure column would sit it on top of the weight number rather than beside it; there is nowhere
+ * else in `AmberTickerRow`'s anatomy to put it without extending the component, which is `ui/
+ * components/` work this task's brief keeps out of its lane. [MyVoteRow] and [BallotRow] below use
+ * `AmberTickerRow` directly, because neither of them has this collision: the wallet's own votes
+ * never carry a trailing action, and the ballot's rows carry one only when they carry no figure at
+ * all.
+ */
 @Composable
 private fun LeaderRow(
     leader: NextUpLeader,
@@ -289,24 +318,31 @@ private fun LeaderRow(
     )
 }
 
-/** One vote this device recorded: the token left, when it landed on the meta line, the weight right. */
+/**
+ * One vote this device recorded: the token in Amber's ticker row, the weight as its figure, when
+ * it landed as the context line under it. A clean fit for [AmberTickerRow] because this row never
+ * carries a trailing action.
+ */
 @Composable
 private fun MyVoteRow(receipt: VoteReceipt, last: Boolean, onOpenDetail: (String) -> Unit) {
-    InstrumentRow(
-        ticker = receipt.symbol,
-        company = null,
-        meta = stringResource(R.string.vote_tab_your_vote_meta, Fmt.utc(receipt.landedAtMillis)),
-        valueRight = stringResource(R.string.next_up_weight, skrWeight(BigInteger.valueOf(receipt.weightRaw))),
-        divider = !last,
-        onClick = { onOpenDetail(receipt.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, receipt.symbol),
-    )
+    AmberRowDivider(last = last) {
+        AmberTickerRow(
+            ticker = receipt.symbol,
+            company = null,
+            figure = stringResource(R.string.next_up_weight, skrWeight(BigInteger.valueOf(receipt.weightRaw))),
+            context = stringResource(R.string.vote_tab_your_vote_meta, Fmt.utc(receipt.landedAtMillis)),
+            onClick = { onOpenDetail(receipt.ticker) },
+            onClickLabel = stringResource(R.string.action_open_ticker, receipt.symbol),
+        )
+    }
 }
 
 /**
- * The previous round's winner: the sentence naming its status first, in Ink, above the figures
- * that qualify it (DESIGN.md section 1.1's rule, applied here as it is on Detail below the
- * liquidity floor). Clickable only once published, into the Detail the loop closes on.
+ * The previous round's winner: the sentence naming its status first, in Amber's primary text,
+ * above the figures that qualify it (DESIGN.md section 1.1's rule, applied here as it is on
+ * Detail below the liquidity floor). Clickable only once published, into the Detail the loop
+ * closes on. A status sentence plus a meta clause is not a ticker row or a figure, so this stays
+ * its own small block of [AmberType] text rather than reaching for a component built for either.
  */
 @Composable
 private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) -> Unit) {
@@ -329,9 +365,14 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
             .let { base -> if (clickable) base.clickable(onClickLabel = openLabel, role = Role.Button) { onOpenDetail(previous.ticker) } else base }
             .padding(horizontal = Side, vertical = 12.dp),
     ) {
-        Text(text = statusText, style = PlainTickerType.body, color = Ink)
+        Text(text = statusText, style = AmberType.body, color = AmberDarkColors.textPrimary)
         if (meta != null) {
-            Text(text = meta, style = PlainTickerType.meta, color = Muted, modifier = Modifier.padding(top = 3.dp))
+            Text(
+                text = meta,
+                style = AmberType.meta,
+                color = AmberDarkColors.textTertiary(AmberSurface.GROUND),
+                modifier = Modifier.padding(top = 3.dp),
+            )
         }
     }
 }
@@ -342,7 +383,15 @@ private fun statusStringRes(status: PreviousRoundStatus): Int = when (status) {
     PreviousRoundStatus.UNCOVERABLE -> R.string.vote_tab_last_round_uncoverable
 }
 
-/** One token without analysis: the same anatomy the List's own uncovered rows carry, muted. */
+/**
+ * One token without analysis: Amber's ticker row, muted only by carrying no figure of its own,
+ * with the "Vote" action composed over its empty right column when [onVote] is offered. A clean
+ * fit, unlike [LeaderRow]: this row never draws a figure, so the overlaid action has nothing to
+ * collide with. [InstrumentRow]'s `muted` flag (a dimmer ticker and company colour for an
+ * uncovered row) has no `AmberTickerRow` equivalent; the row still reads as lower priority from
+ * its section (under "Without analysis") and from carrying no figure, so this is accepted rather
+ * than forked.
+ */
 @Composable
 private fun BallotRow(
     entry: BallotEntry,
@@ -350,16 +399,40 @@ private fun BallotRow(
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
 ) {
-    InstrumentRow(
-        ticker = entry.display,
-        company = entry.company,
-        trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
-        onTrailingAction = if (onVote == null) null else ({ onVote(entry.ticker, entry.display) }),
-        muted = true,
-        divider = !last,
-        onClick = { onOpenDetail(entry.ticker) },
-        onClickLabel = stringResource(R.string.action_open_ticker, entry.display),
-    )
+    AmberRowDivider(last = last) {
+        Box(Modifier.fillMaxWidth()) {
+            AmberTickerRow(
+                ticker = entry.display,
+                company = entry.company,
+                onClick = { onOpenDetail(entry.ticker) },
+                onClickLabel = stringResource(R.string.action_open_ticker, entry.display),
+            )
+            if (onVote != null) {
+                TextAction(
+                    label = stringResource(R.string.vote_action_row),
+                    onClick = { onVote(entry.ticker, entry.display) },
+                    color = AmberDarkColors.actionText,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The 1dp seam [AmberTickerRow] leaves to its group ([com.plainticker.mobile.ui.components.
+ * AmberTickerRowGroup]), drawn here instead: the ballot can run to the hundreds of rows this
+ * app's own catalogue carries without analysis, so its rows stay individual lazy items rather
+ * than one non-lazy group holding all of them. A manual divider between items is the same trade
+ * [InstrumentRow] itself makes (`divider: Boolean = !last`), read here against
+ * [AmberDarkColors.border] instead of Instrument's Line.
+ */
+@Composable
+private fun AmberRowDivider(last: Boolean, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        content()
+        if (!last) HorizontalDivider(thickness = 1.dp, color = AmberDarkColors.border)
+    }
 }
 
 @Composable
@@ -381,8 +454,8 @@ private fun Footnote(text: String, muted: Boolean = true) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Side), verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = text,
-            style = if (muted) PlainTickerType.small else PlainTickerType.body,
-            color = if (muted) Muted else Ink2,
+            style = if (muted) AmberType.context else AmberType.body,
+            color = if (muted) AmberDarkColors.textTertiary(AmberSurface.GROUND) else AmberDarkColors.textSecondary,
             modifier = Modifier.weight(1f).padding(vertical = if (muted) 8.dp else EmptyLineGap),
         )
     }

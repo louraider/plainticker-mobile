@@ -4,6 +4,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.TextUnit
@@ -129,4 +130,87 @@ object PlainTickerType {
 
     /** Fact values run 22 to 32 sp depending on the cell; line height is 1.1 times the size. */
     fun factValueAt(size: TextUnit): TextStyle = mono(size, FontWeight.Medium, size * 1.1f, (-0.01).em)
+}
+
+// =================================================================================================
+// Amber (docs/design-research-2026-09-21.md section 5.3): Bricolage Grotesque, a real variable font
+// (fvar axes opsz 12-96, wght 200-800, wdth 75-100; confirmed 2026-09-22 with fontTools against
+// res/font/bricolage_grotesque.ttf, the actual variable instance from google/fonts, not the static
+// Regular-weight file the mockup canvas used to draw the approved artboards). Its GSUB carries
+// `tnum`, also confirmed with fontTools, so numbers stay in Bricolage; the research's Manrope
+// fallback is not needed. JetBrains Mono above remains for on-chain identifiers only (section 4);
+// numbers never fall back to it under Amber.
+// =================================================================================================
+
+/**
+ * One physical font, referenced once per call with its own [FontVariation.Settings]: width held
+ * at 100 (no research finding calls for a width change), weight at whatever [weight] is, and
+ * optical size set to the style's own point size, which is the actual point of bundling a
+ * variable font ("optical size doing the work between 34 and 14sp", section 5.3), rather than a
+ * handful of fixed static weights.
+ *
+ * `tnum` is a font feature, not a variation axis, and this face widens the comma and the period
+ * under it (section 5.3's type note, confirmed on the mockup canvas with fontTools), so
+ * [tabularNumerals] defaults to false and only a number style below turns it on.
+ */
+private fun bricolage(
+    size: TextUnit,
+    weight: FontWeight,
+    lineHeight: TextUnit,
+    tracking: TextUnit = TextUnit.Unspecified,
+    tabularNumerals: Boolean = false,
+): TextStyle = TextStyle(
+    fontFamily = FontFamily(
+        Font(
+            R.font.bricolage_grotesque,
+            weight = weight,
+            variationSettings = FontVariation.Settings(
+                FontVariation.weight(weight.weight),
+                FontVariation.width(100f),
+                FontVariation.opticalSizing(size),
+            ),
+        ),
+    ),
+    fontWeight = weight,
+    fontSize = size,
+    lineHeight = lineHeight,
+    letterSpacing = tracking,
+    fontFeatureSettings = if (tabularNumerals) TABULAR_NUMERALS else null,
+    platformStyle = NoFontPadding,
+    lineHeightStyle = CenteredLines,
+)
+
+/**
+ * Amber's type scale. Sizes and weights are the ones docs/design-research-2026-09-21.md section
+ * 5.5 states for the anatomy it measured (the ticker row, a number with its context line, the
+ * section head). [body], [button] and [meta] are not individually sized by the research; they
+ * use the sizes every direction in section 5.5 converges on. Colour is applied at the call site,
+ * same as [PlainTickerType]; no style here carries one.
+ */
+object AmberType {
+    // Words: tnum stays off. Section 5.3's type note is explicit that the feature belongs on
+    // number styles only, because it widens the comma and the period in this face.
+    /** Section head: 22/700, opsz 22 (5.5, "Section head"). */
+    val sectionHead: TextStyle = bricolage(22.sp, FontWeight.Bold, 27.sp)
+    /** Ticker row's ticker: 16/600, opsz 16 (5.5, "Ticker row"). */
+    val rowTicker: TextStyle = bricolage(16.sp, FontWeight.SemiBold, 20.sp)
+    /** Ticker row's company name: 14/400 (5.5, "company 14"). */
+    val rowCompany: TextStyle = bricolage(14.sp, FontWeight.Normal, 18.sp)
+    /** A figure's supporting line ("vs NYSE close", "of 100, fair"): 14/400 secondary (5.5). */
+    val context: TextStyle = bricolage(14.sp, FontWeight.Normal, 18.sp)
+    /** Prose: Method, disclaimers. Held at the 15sp body every direction in 5.5 shares. */
+    val body: TextStyle = bricolage(15.sp, FontWeight.Normal, 22.sp)
+    /** Primary action label. */
+    val button: TextStyle = bricolage(16.sp, FontWeight.SemiBold, 20.sp)
+    /** Smallest supporting text: state words, timestamps written as words. */
+    val meta: TextStyle = bricolage(12.sp, FontWeight.Normal, 16.sp)
+
+    // Numbers: tnum on. Colour (amber action.text/state.live) is applied at the call site, per
+    // the foundation rule in section 4: direction is never a second colour.
+    /** A card's headline figure: 34/700 tnum, opsz 34 (5.5, "Number with context"). */
+    val figureLarge: TextStyle = bricolage(34.sp, FontWeight.Bold, 38.sp, tabularNumerals = true)
+    /** Ticker row's right-hand figure: 18/600 tnum, opsz 18 (5.5, "figure 18 amber tnum"). */
+    val figureRow: TextStyle = bricolage(18.sp, FontWeight.SemiBold, 22.sp, tabularNumerals = true)
+    /** A numeral set inside a sentence ("22 of 160", "+0.62%"): 14/400 tnum, opsz 14. */
+    val figureInline: TextStyle = bricolage(14.sp, FontWeight.Normal, 18.sp, tabularNumerals = true)
 }

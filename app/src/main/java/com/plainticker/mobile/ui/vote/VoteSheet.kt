@@ -38,31 +38,30 @@ import androidx.compose.ui.unit.sp
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteSummary
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSheet
+import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.PrimaryButton
 import com.plainticker.mobile.ui.components.SecondaryButton
-import com.plainticker.mobile.ui.components.Sheet
-import com.plainticker.mobile.ui.components.SheetSurface
 import com.plainticker.mobile.ui.text
-import com.plainticker.mobile.ui.theme.Elevated
-import com.plainticker.mobile.ui.theme.Ink
-import com.plainticker.mobile.ui.theme.Ink2
-import com.plainticker.mobile.ui.theme.Muted
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberType
 import kotlinx.coroutines.launch
 
 /**
- * The vote sheet: the same [Sheet] surface the swap uses, drawing whatever [VoteSheetContent] the
- * machine's state resolved to. It decides nothing, computes nothing, and states no figure the
- * model did not hand it.
+ * The vote sheet: the same [AmberSheet] surface the swap and pass reach for (once they restyle to
+ * it), drawing whatever [VoteSheetContent] the machine's state resolved to. It decides nothing,
+ * computes nothing, and states no figure the model did not hand it.
  *
  * There is no new component family here. The action that opens it is a [TextAction][
  * com.plainticker.mobile.ui.components.TextAction] on a row and on Detail, and what it opens is
- * the bar, the grid and the two buttons every other wallet flow in this app is made of.
+ * Amber's sheet, [FactGrid] (still Instrument's, see [VoteSheetBody]'s own note) and
+ * [AmberPrimaryAction].
  *
  * Only the signing round-trip holds the sheet open. The wallet has the transaction and the call
  * cannot be taken back, so a swipe or a back press during it would hide the receipt for a vote
@@ -81,7 +80,7 @@ fun VoteSheet(state: VoteState, actions: VoteActions, modifier: Modifier = Modif
     val sheetState = rememberModalBottomSheetState(
         confirmValueChange = remember { { target: SheetValue -> target != SheetValue.Hidden || !held.value } },
     )
-    Sheet(
+    AmberSheet(
         onDismissRequest = { if (!content.holdsOpen) actions.onClose() },
         modifier = modifier,
         sheetState = sheetState,
@@ -93,6 +92,16 @@ fun VoteSheet(state: VoteState, actions: VoteActions, modifier: Modifier = Modif
 /**
  * The sheet's anatomy without the modal around it, so the component gallery and the previews
  * compose the real thing over a real state instead of keeping a second copy of the layout.
+ *
+ * **[FactGrid] stays Instrument's own component, not restyled here.** It is not one of the six
+ * Amber components this task's brief names (the ticker row, `AmberFigure`, the section head, the
+ * primary action, the sheet, chips), and its cell text colours are internal to `ui/components/
+ * FactGrid.kt`, outside this task's `ui/vote/` lane. What is exposed and safe to set from here is
+ * its `surface` parameter, so the cells at least sit on [AmberDarkColors.surfaceHigh], the same
+ * fill [AmberSheet] gives the sheet around them, rather than Instrument's Elevated.
+ * [SecondaryButton] is the same kind of leftover: there is no Amber secondary action among the
+ * six named components, so the "Close" button below stays Instrument's bordered button rather
+ * than a forked one-off.
  */
 @Composable
 internal fun ColumnScope.VoteSheetBody(
@@ -115,8 +124,8 @@ internal fun ColumnScope.VoteSheetBody(
 
     Text(
         text = content.title.text(),
-        style = PlainTickerType.sheetTitle,
-        color = Ink,
+        style = AmberSheetTitle,
+        color = AmberDarkColors.textPrimary,
         maxLines = 1,
         softWrap = false,
         modifier = (if (content.bar == null) lead else Modifier)
@@ -127,30 +136,34 @@ internal fun ColumnScope.VoteSheetBody(
 
     // What is in flight, always as a sentence. This app draws no spinners (DESIGN.md section 8),
     // so the phase is the only thing that says a round-trip is happening, and it has to say which.
-    content.phase?.let { Sentence(it.text(), PlainTickerType.body, Ink2, PhaseTop) }
+    content.phase?.let { Sentence(it.text(), AmberType.body, AmberDarkColors.textSecondary, PhaseTop) }
 
     if (content.cells.isNotEmpty()) {
         Spacer(Modifier.height(GridTop))
         FactGrid(
             cells = content.cells.map { it.factCell() },
-            surface = Elevated,
+            surface = AmberDarkColors.surfaceHigh,
             minCellHeight = CellHeight,
         )
     }
 
-    content.notice?.let { Sentence(it.text(), PlainTickerType.body, Ink2, NoticeTop) }
+    content.notice?.let { Sentence(it.text(), AmberType.body, AmberDarkColors.textSecondary, NoticeTop) }
 
     // The weakness of a balance-weighted vote, set in the metadata face under the figure it is
-    // about. It is Muted and never Caution: DESIGN.md section 2 keeps that colour for an issuer
-    // control the mint actually carries, and this is a property of the mechanism, not a flag.
-    content.disclosure?.let { Sentence(it.text(), PlainTickerType.small, Muted, DisclosureTop) }
+    // about. It is never [AmberDarkColors.stateCaution]: DESIGN.md section 7 keeps that colour
+    // for an issuer control the mint actually carries, and this is a property of the mechanism,
+    // not a flag. `textTertiary(HIGH)` promotes to `textSecondary` on this sheet's own surface,
+    // so the contrast rule holds without the call site having to know that.
+    content.disclosure?.let {
+        Sentence(it.text(), AmberType.meta, AmberDarkColors.textTertiary(AmberSurface.HIGH), DisclosureTop)
+    }
 
     Column(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),
         verticalArrangement = Arrangement.spacedBy(ActionGap),
     ) {
         content.primary?.let {
-            PrimaryButton(label = it.label.text(), onClick = actions.of(it.kind))
+            AmberPrimaryAction(label = it.label.text(), onClick = actions.of(it.kind))
         }
         content.secondary?.let {
             SecondaryButton(label = it.label.text(), onClick = actions.of(it.kind))
@@ -235,6 +248,14 @@ private val SheetBottom = 40.dp
 private val CellHeight = 84.dp
 
 /**
+ * The sheet title ("Vote to cover NFLXx"), the size Instrument's own `sheetTitle` (22sp) drew it
+ * at: a word style, not [com.plainticker.mobile.ui.components.AmberFigure]'s tabular
+ * [AmberType.figureLarge], because a ticker beside ordinary words is a phrase, not a number.
+ * `AmberType.sectionHead` is 22sp already; reused as is rather than declaring a near-duplicate.
+ */
+private val AmberSheetTitle: TextStyle = AmberType.sectionHead
+
+/**
  * The measured stake of the wallet the SKR read was proved with on 2026-09-13: 31,209.870777 SKR
  * of principal, which is exactly what the forwarder returned through its 8-byte slice.
  */
@@ -264,7 +285,7 @@ private fun VoteSheetPreview() {
     PreviewCanvas {
         Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
             PreviewStates.forEach { state ->
-                SheetSurface {
+                AmberSheetSurface {
                     state.sheet()?.let { VoteSheetBody(content = it, actions = PreviewActions, takeFocus = false) }
                 }
             }

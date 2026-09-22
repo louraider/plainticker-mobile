@@ -66,13 +66,25 @@
 **Priority:** P3
 **Depends on:** the keyless decision failing in practice.
 
-### Light theme (behind an accessibility pass)
+### Light theme (behind a device QA pass)
 
-**What:** Add a light variant of the Instrument tokens (cool off-white canvas, never cream; same single blue accent; same hierarchy) to the Compose theme, honoring the system setting, after a contrast pass on the mobile type scale (13sp labels, 12sp mono meta) and a second full `/qa` run.
+**What:** Instrument is retired (`DESIGN.md`, 2026-09-22); the redesign is Amber, and its light
+colour scheme, type and Material wiring already exist as of that date: `AmberLightColors` and
+`AmberLightColorScheme` in `ui/theme/`, pinned by `AmberContrastTest`. What is still open is wiring
+`AmberTheme` in as the app's active theme (behind the system setting or a flag; `MainActivity`
+still calls `PlainTickerTheme`), restyling every screen's components to read `AmberColors` /
+`AmberType` instead of Instrument's tokens, and a device QA pass on the mobile type scale in both
+themes.
 
-**Why:** The hackathon build is dark-first by decision (plan §13 Pass 8): the Seeker is an OLED phone opened from a dark wallet, and one theme is all the schedule can QA. Daylight reading is the most likely first request after launch; shipping light as a token swap without the contrast pass would put unreadable muted text in front of users.
+**Why:** The hackathon build is dark-first by decision (plan §13 Pass 8): the Seeker is an OLED
+phone opened from a dark wallet, and the restyle calendar (`docs/design-research-2026-09-21.md`
+section 7) does not land a light-theme device pass by the 29 Sept freeze either. Daylight reading
+is the most likely first request after launch; shipping light without the device pass would put
+unreadable text in front of users the same way it would have under Instrument.
 
-**Context:** `DESIGN.md` section 2 states the constraints for a light variant. Start in `ui/theme/` by adding the light `colorScheme` behind a flag, then a contrast table, then QA.
+**Context:** `DESIGN.md` section 2 states Amber's light values and their measured contrast ratios.
+Start in `ui/theme/` from what already exists (`AmberLightColorScheme`), restyle one screen's
+components onto it, then QA.
 
 **Effort:** M
 **Priority:** P3

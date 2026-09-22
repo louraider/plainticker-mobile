@@ -1,129 +1,315 @@
-# Design System: PlainTicker Mobile, "Instrument"
+# Design System: PlainTicker Mobile, "Amber"
 
-Decided 2026-09-11 after the taste-skill audit of the first canvas (which inherited PlainTicker web's warm paper, Geist and numbered section labels and read as the web product). The mobile app now has its own visual language. PlainTicker web's `DESIGN.md` is no longer the source of truth for this repo; product rules that are shared (no verdict words, trust first, neutral descriptive values) are restated here. Canvas of record: design/canvas/instrument.py (regenerate the artboards from it). Published canvas: https://claude.ai/code/artifact/e58d956f-3e18-4ce0-90c6-415f796c3bbd
+Decided 2026-09-22. The founder rejected "Instrument" (this document's previous revision)
+outright after reading it against the shipped build and four new proposals, and picked **Amber**
+out of the four: `docs/design-research-2026-09-21.md`, section 5.3, is its source of truth, and
+this document defers to it on every number. The research's own author recommended a different
+direction ("Ink"); the founder's pick overrides that recommendation, and Amber is what this
+document and this codebase now build toward. Full scope, nothing cut, including the light theme
+Instrument had deferred.
 
-## 1. Visual theme and atmosphere
+Instrument is withdrawn as a visual authority the same way it withdrew PlainTicker web's system
+before it. What follows is a full replacement, except for one kind of rule: content and legal
+rules that came from the founder's own backtests and from legal exposure, not from taste. Those
+are restated here in the same sections they held before, because `CopyLintTest` enforces some of
+them directly from disk and a renumbering would only cost the reader something for no reason.
+Section 1 (the liquidity floor and the app's own record) and section 7 (copy and content rules)
+are that content. Sections 2 and 3 (colour, typography) are Amber's, built in this pass. Sections
+4, 5, 6 and 9 (components, layout, motion, the brand mark) are **not yet restyled**: the
+composables that implement them today still run Instrument's anatomy, on purpose, because
+building the token and type foundation first is what lets the next pass restyle every component
+against one set of names instead of guessing. Section 8 (anti-patterns) is rewritten, because
+Amber's own research overturns two or three of Instrument's specific bans by name.
 
-A reading instrument, not a trading terminal and not a website. Cold near-black canvas as the default (the Seeker is an OLED phone opened from a dark wallet), quiet secondary text, one blue accent that means "interactive or live", and every number in a monospace face. Density is that of a daily app (Level 5): a first viewport shows one idea and its evidence, never a dashboard. Layout variance is moderate (Level 5): left-aligned stacks, an asymmetric hero (giant ticker, price below), blueprint grids for facts. Motion is minimal (Level 3): the only continuous motion on a screen is the live bar, and it stops when the data is not live.
+Where this document says a thing is "not yet restyled," treat the components as they are: correct
+for what they draw today, not a template for new work. Read `Tokens.kt`, `Type.kt` and `Theme.kt`
+for what is actually built; this document explains why they look the way they do.
 
-The memorable things: the tracking gauge (a hairline with the NYSE close tick and the token tick), the breathing live bar beside "Live from the mint", the 64px monospace ticker, and the 1px blueprint grid that holds the token's facts.
+## 1. The liquidity floor and the app's own record
+
+Unchanged in substance from Instrument. This is product and data-disclosure logic, not taste, and
+nothing about the redesign touches it.
 
 ### 1.1 The liquidity floor
 
-A tracking figure is drawn only where the pool behind it can carry one. Measured live on 2026-09-12 (docs/data-map.md): of the 157 analyzed xStocks on the list Jupiter priced 55; the 13 pools at or above $100k all tracked the NYSE close within 0.8 percent; the 6 between $10k and $100k deviated plausibly (NFLXx -2.34 percent on $12.5k, XOMx -1.58 percent on $18.8k); below $10k the quoted premium was arithmetic off a dead pool (UBERx +152.13 percent on a pool of $80, APPx +89.34 percent on $34). The floor is **$10,000**, and it lives in exactly one place, `TrackingQuality` in the data layer, so the list row and the gauge can never disagree about it.
+A tracking figure is drawn only where the pool behind it can carry one. Measured live on
+2026-09-12 (`docs/data-map.md`): of the 157 analyzed xStocks on the list Jupiter priced 55; the 13
+pools at or above $100k all tracked the NYSE close within 0.8 percent; the 6 between $10k and
+$100k deviated plausibly; below $10k the quoted premium was arithmetic off a dead pool. The floor
+is **$10,000**, and it lives in exactly one place, `TrackingQuality` in the data layer, so the
+list row and the gauge can never disagree about it.
 
-Above the floor nothing changes: the row keeps the signed premium against the NYSE close, Detail draws the gauge. Below it neither is drawn and the surface states the pool instead, in one short sentence a person can act on: "Pool holds $34, too thin to track" on the row's single meta line, "Pool holds $34, too thin to track the NYSE close" on Detail. When Jupiter prices a token without reporting any depth, the honest reading is unknown rather than deep, so the premium is withheld there too and the line reads "Pool depth not reported" (on Detail, "Pool depth not reported, tracking cannot be checked"). Money in these sentences is `Fmt.compactMoney`: "$34", "$12.5k", "$1.3M".
+Above the floor nothing changes: the row keeps the signed premium against the NYSE close, Detail
+draws the gauge. Below it neither is drawn and the surface states the pool instead, in one short
+sentence a person can act on: "Pool holds $34, too thin to track" on the row's single meta line,
+"Pool holds $34, too thin to track the NYSE close" on Detail. When Jupiter prices a token without
+reporting any depth, the honest reading is unknown rather than deep, so the premium is withheld
+there too and the line reads "Pool depth not reported." Money in these sentences is
+`Fmt.compactMoney`.
 
-This is disclosure, not curation. Nothing is filtered out, no section is added and the sort is unchanged. The sentence is Muted on the row and Ink on Detail, never Caution: a shallow pool is a fact about the token, and section 2 keeps Caution for explicit issuer-control risk. The rule sits here rather than in section 7 because it decides whether the signature element of the product is drawn at all; section 7 governs how a sentence is worded, this governs whether a number exists on the screen.
-
-**Withholding a number is a property of the whole screen, not of the number.** Read on the device on 2026-09-13, the shipped v0.2.0 Detail for APPx withheld the premium correctly and then printed the token at 40sp Ink directly above the NYSE close at 20sp Ink 2, with the pool sentence at 13sp between them, smaller than either figure. A reader subtracts $611.56 and $323.00 and arrives at the +89.34 percent unaided. Three things follow, and they are the rule on Detail below the floor:
-
-- **The sentence is read first.** It stands above the pair, at body 15 in Ink, not under it in a caption. A caveat that arrives after the number it qualifies is not a caveat.
-- **Neither figure leads.** Both are set at the reference's 20 mono, the token in Ink and the close in Ink 2, so colour separates them and size no longer stages a comparison. The 40sp hero price is for a quote the pool can carry.
-- **The token's figure is named for what it is.** "Pool quote", not "Token price". By the floor's own argument, a reading off a $34 pool is not a price of the company; the label says so in the one place a reader is looking.
-
-The gauge slot is then empty, and the screen is shorter. That is correct: there is nothing to draw there, and the same sentence in two places is how it drifts back under the pair.
+This is disclosure, not curation. Nothing is filtered out, no section is added and the sort is
+unchanged. The sentence is drawn in a descriptive text role, never in the caution role: a shallow
+pool is a fact about the token, not an issuer-control risk. On Detail below the floor, three rules
+hold: the sentence is read first, above the figures, not under them in a caption; neither figure
+leads (both are set at the same reference weight so colour separates them and size no longer
+stages a comparison); the token's own figure is named for what it is ("Pool quote", not "Token
+price"), because a reading off a thin pool is not a price of the company.
 
 ### 1.2 The app's own record, where the chain has said nothing
 
-The wallet session does not survive process death: the MWA auth token lives in the adapter's memory and the authorized account with it, so every cold open finds no wallet and never asks the chain. Read on the device on 2026-09-13, that left the Portfolio, the screen carrying the one piece of evidence this product actually owns, showing "Connect your wallet to see the xStocks in it." under its "Holdings" heading, while the real holding bought through the app, 0.01362917 TSLAx, sat 500dp further down filed under "Recent swaps" as a transaction.
+The wallet session does not survive process death: the MWA auth token lives in the adapter's
+memory, so every cold open finds no wallet and never asks the chain. Where the chain has told the
+screen nothing, the app's own record stands in the holdings slot, under four rules:
 
-What the app still knows is what it did. It writes a receipt the moment a swap lands, and those receipts net out to a quantity. So **where the chain has told the screen nothing, the app's own record stands in the holdings slot**, under four rules:
+- **It is drawn only where nothing was read.** A connected wallet the chain answered for, empty
+  or not, draws what the chain said; the chain is the authority on what a wallet holds. What is
+  left is the two states where no read happened: no wallet session, and a wallet whose chain read
+  failed.
+- **The sentence is read first**, above the figures: "What this app recorded when its own swaps
+  landed. The wallet itself has not been read."
+- **It carries a quantity and never a value.** No price is applied to it and it is not summed into
+  the total. A recorded quantity multiplied by a live quote is half a chain read wearing the other
+  half's clothes.
+- **It never claims a confirmation.** A fill the execute answer did not report adds nothing rather
+  than the quote it was estimated at, and the unreported fill is disclosed once, on the swap row,
+  never twice.
 
-- **It is drawn only where nothing was read.** A connected wallet with positions draws the positions. A connected wallet the chain answered for and found empty draws the empty sentence, because the chain is the authority on what a wallet holds and a receipt is history, not a contradiction of it. What is left is the two states where no read happened at all: no wallet session, and a wallet whose chain read failed.
-- **The sentence is read first**, above the figures, at body 15 in Ink: "What this app recorded when its own swaps landed. The wallet itself has not been read." That is section 1.1's rule, applied to a different screen for the same reason.
-- **It carries a quantity and never a value.** No price is applied to it and it is not summed into the total. A recorded quantity multiplied by a live quote is half a chain read wearing the other half's clothes.
-- **It never claims a confirmation.** A fill the execute answer did not report adds nothing rather than the quote it was estimated at, and the unreported fill is disclosed once, on the swap row under "Recent swaps", never twice.
+Persisting the session was the alternative and was not taken: the auth token is a bearer grant for
+signing authority, and writing it to disk to make a screen look better is a security decision
+taken for a cosmetic reason. The app's own record needs no network, no consent and no wallet, and
+it is the only thing on a cold-open screen the app can vouch for itself.
 
-Persisting the session was the alternative and was not taken, for two reasons rather than one. The auth token is a bearer grant for signing authority, and writing it to disk to make a screen look better is a security decision taken for a cosmetic reason. Persisting only the account address and reading the chain for it silently would show real data, but it would read a wallet that has not authorized this launch and leave the screen unable to say whether it is connected. The record needs no network, no consent and no wallet, and it is the only thing on the screen the app can vouch for itself.
+## 2. Colour: Amber's tokens
 
-## 2. Color palette and roles
+Two tiers now, where Instrument had one flat list of nine. The research's diagnosis
+(`docs/design-research-2026-09-21.md` section 2) is exactly why: nine primitives with no semantic
+tier is how Instrument's `Accent` came to mean five different roles — tab indicator, text action,
+button fill, live bar, gauge tick — at once, with nothing in the type system to stop a sixth.
 
-- **Canvas** `#0B0F14`: page background. Cool near-black, never pure black.
-- **Elevated** `#121820`: sheets, the onboarding panel, the digest panel. The only second surface.
-- **Ink** `#E8ECF1`: primary text and numerals.
-- **Ink 2** `#B4BCC8`: secondary text, labels of facts, body copy.
-- **Muted** `#7F8A99`: metadata, placeholders, disabled text, inactive tabs.
-- **Line** `rgba(232,236,241,0.10)`: hairlines, grid gaps, row dividers.
-- **Line strong** `rgba(232,236,241,0.22)`: field underlines, sheet top edge, secondary button border, gauge track.
-- **Accent** `#5AA9E6`: every interactive text action, the active tab indicator, the primary button fill, the live bar, the token tick on the gauge. Nothing else.
-- **Caution** `#D9A441`: only the value of an explicit issuer-control risk (permanent delegate present, transfers pausable). Never on prices, premiums, scores or list rows.
+**Primitives** (`Tokens.kt`, `AmberPrimitive`, private): the raw hex from section 5.3's Dark and
+Light columns, transcribed and cross-checked on 2026-09-22 against `gen.py`'s own `"amber"` dict
+and against `contrast.py`'s own `"Amber"` dict (the mockup generator and the research's contrast
+calculator). All three agree on every value; there was nothing to reconcile.
 
-Rules: exactly one accent. No green or red for price direction anywhere; direction is a signed monospace number in Ink. No gradients, no shadows, no glass. Contrast: Ink on Canvas 15.9:1, Ink 2 on Canvas 9.6:1, Muted on Canvas 5.1:1, Canvas text on Accent 7.9:1.
+**Semantic roles** (`Tokens.kt`, `AmberColors`, one instance per theme): named for what a thing
+is, never for its colour, so a surface cannot be reached for as if it were an accent.
 
-A light variant is deferred (TODOS.md). If it is ever built it must keep the hierarchy above, not invert it: the accent stays `#5AA9E6`-adjacent, the canvas becomes a cool off-white, never cream.
+| Role | Dark | Light | What it is |
+|---|---|---|---|
+| `surfaceGround` | `#16130D` | `#FFFBF2` | Page background |
+| `surfaceRaised` | `#221E15` | `#FFFFFF` | Cards, tonal containers, the status card |
+| `surfaceHigh` | `#2E281C` | `#F3EBD6` | The highest surface: a selected chip, a sheet |
+| `textPrimary` | `#F5EEDD` (16.0:1) | `#1F1A0E` (16.8:1) | Primary text and figures |
+| `textSecondary` | `#C6BCA4` (9.8:1) | `#5A5240` (7.5:1) | Secondary text, context lines |
+| `textTertiary(on)` | `#948B74` (5.5:1) | `#7A7059` (4.7:1) | Metadata; see the rule below |
+| `border` | `#3A3324` | `#E2D9C2` | Hairlines, an active chip's border |
+| `actionFill` / `actionOnFill` | `#FFC247` / `#3B2800` (8.8:1) | `#7A5600` / `#FFFFFF` (6.65:1) | Primary button fill and its text |
+| `actionText`, `stateLive` | `#FFC247` (11.5:1) | `#7A5600` (6.4:1) | Text actions, the active tab, the live bar |
+| `stateCaution` | `#FF6B57` (6.6:1) | `#B4220C` (6.4:1) | The only red-orange anywhere; never on a number |
 
-## 3. Typography
+Ratios are WCAG against `surfaceGround` (against `actionFill` for `actionOnFill`), pinned by
+`AmberContrastTest` against the same relative-luminance formula `contrast.py` uses. `actionText`
+and `stateLive` share one value in every set the research drew; that is stated, not an oversight.
 
-- **UI face:** Outfit (400, 500, 600). Words, labels, buttons, headings.
-- **Numeral face:** JetBrains Mono (400, 500) with tabular numerals. Every number, every ticker symbol, every wallet or signature fragment, every timestamp. Numbers never appear in Outfit.
-- Scale (sp): hero ticker 64 mono 500 tracking -0.035em · hero price 40 mono 500 -0.03em · big value (total, received) 40 mono 500 · section heading 20 Outfit 600 -0.01em · fact value 22 to 32 mono 500 · track value 20 mono 500 · list ticker 18 mono 500 · body 15 Outfit 400 line-height 23 · label 13 Outfit 500 Muted · meta 12 mono 400 Muted · button 16 Outfit 600 · text action 14 Outfit 600 Accent.
-- No uppercase transforms, no positive letter-spacing labels, no section numbers, no em or en dashes in any visible string (use a period, comma, colon or hyphen). Sentence case everywhere. Font scale honored to 1.3x; numerals never wrap (single line, autosize down on the hero row only).
+**One disagreement between section 5.3's prose table and its own calculator, found running
+`contrast.py` on 2026-09-22**: the light `action.fill` / `actionOnFill` pair (`#7A5600` on
+`#FFFFFF`) prints as 6.7:1 in the prose table and as 6.65:1 out of `contrast.py` itself. Every
+other ratio in both tables agrees with the calculator to within rounding. Per instruction, the
+calculator is the source of truth here; the table above and `AmberContrastTest` both use 6.65:1.
 
-Fonts are bundled as resources on Android (Outfit and JetBrains Mono, SIL Open Font License). On the canvas they load from Google Fonts. Bundled versions, upstream sources and license files are listed in docs/fonts.md; the OFL texts ship in app/src/main/assets/licenses/.
+**The rule the research measured and every direction had to obey**: text.tertiary never sits on
+surface.high. It measures 4.32:1 dark and 4.12:1 light there, both inside the "4.1 to 4.4:1"
+section 4 states and both under the 4.5:1 AA floor for normal text. `AmberColors.textTertiary(on:
+AmberSurface)` is the only way to read that colour out of the class, and it promotes to
+`textSecondary` when `on == AmberSurface.HIGH`, so the violation cannot happen by forgetting a
+rule; it can only happen by not calling the function at all, and every colour-scheme slot and
+every future component is expected to.
 
-## 4. Components (Compose names)
+Instrument's nine tokens (`Canvas`, `Elevated`, `Ink`, `Ink2`, `Muted`, `Line`, `LineStrong`,
+`Accent`, `Caution`) are untouched: `BrandAssetsTest` pins the launcher icon to them and every
+existing composable still reads them. Retiring them is restyle work, one composable at a time, not
+a global repaint done once here.
 
-- **TopBar** 56dp after the status inset: "PlainTicker" 15/600 left; one text action right (Watch, wallet fragment). Scrolls away, never sticky.
-- **TopScrim** the only thing over a scrolling surface that does not scroll, and it is not content: full Canvas across the status bar inset, then a 16dp fall to nothing. It draws no text, takes no touch and has no semantics, so the header still scrolls away and nothing is sticky. It is Canvas over Canvas, so at rest it is invisible; it appears only when something that is not the page background passes under the clock. Read on the device on 2026-09-13, the 64sp Ink hero and the white system clock were drawing in the same pixels, "NVDAx" over "11:40", because the canvas artboards are 890dp content frames with no system bars in them and the state was never looked at. One scrim per scrolling surface: the three tabs share it through their host, Detail owns its own.
-- **TopTabs** List · Portfolio · Watchlist, 14 Outfit, active Ink with a 2dp Accent underline, inactive Muted, hairline below.
-- **TodayStrip** one line of Outfit 13/500 Ink 2 under the tabs ("Today: 3 watched, next report TSLAx on Oct 22"), hidden when nothing is watched.
-- **Gauge** hairline track between two 1dp Line strong end stops, 1dp Muted tick at 50% for the reference, 2dp Accent tick for the token on a stated scale; caption left in Outfit 13, value right in mono 13 Accent. The default scale is **plus or minus 2.5%**, which is the spread the tracked set actually produced (section 1.1 and `TrackingQuality.TRACKED_SPREAD_PCT`), not a figure chosen on the canvas: at 0.5% the shipped build pinned NVDAx, the deepest pool in the catalogue, against the left end on an ordinary day. A premium past the scale stands its tick 6dp clear of the end of the track and the caption reads "past the 2.5% scale". The gauge never rests a tick on an end: a gauge that saturates silently states a wrong number confidently, which is worse than no gauge. Below the liquidity floor the gauge draws nothing at all; the price block above it has already stated the pool.
-- **LiveBar** 2dp Accent vertical bar, breathing 2.4 s while live, static when landed or stale; label 14/600 Accent, meta 12 mono Muted.
-- **FactGrid** two columns, 1dp Line gaps and border, cells on Canvas: label 13 Muted, value mono, sub line 13 Ink 2 (mono 12 when it carries numbers); the first cell may span both columns. Exactly as many cells as facts.
-- **Track** label 15 Ink 2, value mono 20 and state word 13 Muted right, hairline track with a 2dp Ink marker. Never a filled bar.
-- **SignalRow** 44dp, name 15 Ink 2 left, "yes" or "no" in mono 14 right.
-- **ListRow** 64dp, ticker mono 18 + company 13 left with a mono 12 meta line, value mono 18 right; one Line divider between rows; text action trailing when needed. The value and the state word are two columns, not one right-aligned group: the word is set at the start of a 40dp column (the widest of "strong", "weak" and "fair" is 37.3dp, measured on the device) and grows with the reader's font scale, so the number's right edge is the same on every row. Right-aligned as a group, the word's width decided where the number began: "84" ended at x1004, "79" at x1053 and "72" at x1024 on the Seeker, a 16dp jog down the one column a reader scans. A section where some rows carry no word keeps the column open anyway (`reserveValueSub`), so the odd row lines up with its neighbours.
-- **Field** label above (13 Muted), value mono 36 or Outfit 16, 1dp Line strong underline, Accent underline on focus, one text action right (Max, Clear). No placeholder-as-label.
-- **PrimaryButton** 56dp, Accent fill, Canvas text 16/600, radius 0. **SecondaryButton** Line strong border, Ink text. **DisabledButton** Line border, Muted text.
-- **Sheet** Elevated surface, 1dp Line strong top edge, 28x2dp Line strong handle, radius 0.
-- **Panel** Elevated with a Line border (digest, onboarding). The only card-like container; used for one grouped message, never for lists.
-- **Skeleton** Elevated bars with a 200 ms fade to content. Never a spinner.
-- **Banner** one slot under the TopBar, Elevated, Outfit 13/500; priority offline > stale > hours > device. The hours tier is drawn on the List as well as on Detail, out of the same four strings and decided from the same `MarketHours`: the List prints a premium "vs NYSE close" on every tracked row, so it owes the same caveat the screen one tap away pays, and until 2026-09-13 it paid nothing. The List reads the venue from the first catalog asset carrying a `trading` block, since every block describes the one exchange, and clears the halt flag on the way: a halt is one issuer stopping one token and is Detail's to state, never a sentence about 157 rows.
+## 3. Typography: Amber's pairing
 
-Shape lock: radius 0 on everything. Touch targets 48dp minimum; list rows 64dp; text actions get 14dp vertical padding.
+Bricolage Grotesque, one real variable font (`res/font/bricolage_grotesque.ttf`, the actual
+variable instance from `google/fonts`, not the static Regular-weight file the mockup canvas
+originally used to draw the approved artboards). Confirmed 2026-09-22 with fontTools against the
+bundled file itself, not against the mockup's file: `fvar` axes `opsz` 12 to 96, `wght` 200 to 800,
+`wdth` 75 to 100; GSUB carries `tnum`. JetBrains Mono stays bundled for on-chain identifiers only
+(section 4's foundation rule); Amber's numbers stay in Bricolage.
 
-## 5. Layout principles
+`AmberType` (`Type.kt`) builds one `FontVariation.Settings` per style rather than a handful of
+fixed static weights, because optical size doing real work between 34sp and 14sp is the actual
+reason to bundle a variable font at all. Width is held at 100 everywhere; nothing in the research
+calls for a width change. Weight runs 400, 600 or 700.
 
-- Portrait, single column, side padding 20dp, content width 360dp on the Seeker. The device was measured on 2026-09-12: 1200x2670 physical at 480dpi, which is 400dp wide and 890dp tall. Everything here was drawn against a 412dp frame before that, so a layout tuned to the old 372dp content width has 12dp less room than its mockup. Previews at 360 and 412 bracket the real width.
-- Sections are separated by headings and space (32dp above, 14dp below), not by rules; hairlines live inside grids and lists only.
-- Detail order is fixed: header, hero (ticker, company), the verdict (a caption and its classification, blurred to a placeholder until a pass is held), price row with the NYSE close, gauge, live bar, Backing and controls (FactGrid), Against the sector (three Tracks + FactGrid), F-Score (numeral + SignalRows), Method (body), then the single Swap button with a mono cost line. Nothing is sticky.
-- First viewport of Detail ends inside "Against the sector" so the frame is full; never a blank bottom on a phone-height frame.
-- One layout family per section: hero, gauge, grid, tracks, signal list, prose. No section repeats its neighbour's layout.
+`tnum` is a font feature, not a variation axis, and this face widens the comma and the period
+under it (confirmed on the mockup canvas with fontTools). So it is set on number styles only —
+`figureLarge`, `figureRow`, `figureInline` — and never on a word style; `AmberThemeTest` pins that
+split for every style `AmberType` exposes.
 
-## 6. Motion and interaction
+| Style | Size / weight | tnum | What it is |
+|---|---|---|---|
+| `sectionHead` | 22/700 | no | Section head |
+| `rowTicker` | 16/600 | no | A ticker row's ticker |
+| `rowCompany` | 14/400 | no | A ticker row's company name |
+| `context` | 14/400 | no | A figure's supporting line |
+| `body` | 15/400 | no | Prose: Method, disclaimers |
+| `button` | 16/600 | no | Primary action label |
+| `meta` | 12/400 | no | Smallest supporting text |
+| `figureLarge` | 34/700 | **yes** | A card's headline figure |
+| `figureRow` | 18/600 | **yes** | A ticker row's right-hand figure |
+| `figureInline` | 14/400 | **yes** | A numeral inside a sentence |
 
-- LiveBar breathes (opacity 1 to 0.45, 2.4 s ease-in-out) only while data is live; the Receipt's bar is static.
-- Skeleton to content 200 ms ease-out; Track marker settles 400 ms cubic-bezier(.2,.8,.2,1); sheet uses the default slide, no bounce.
-- Pressed state: Elevated background plus an Accent ripple at 10%. Focus (keyboard or switch access): 2dp Accent outline, never removed.
-- Reduced motion (animator scale 0): breathing off, marker instant.
-- One haptic (Confirm) when a swap lands. No sound.
+`body`, `button` and `meta` are not individually sized by the research; they hold the sizes every
+direction in section 5.5 converges on. Every other size and weight is transcribed from section 5.5
+directly (the ticker row, a number with its context, the section head).
+
+## 4. Components — not yet restyled
+
+Instrument's anatomy (ListRow, FactGrid, Track, Gauge, Sheet, the buttons) is what `ui/components`
+still draws. Its radius-0 shape lock and its "every number in mono" rule are Instrument's, not
+Amber's; do not carry them into new work. Amber's own shape and component language is in
+`docs/design-research-2026-09-21.md` sections 5.3 and 5.5 (radii by hierarchy: 8dp chips, 16dp
+list containers, 28dp for a status card or a sheet's top radius; `AmberShapes` in `Theme.kt`
+already carries these). Restyling each component to read `AmberColors` and `AmberType` instead of
+Instrument's tokens is the next phase's work.
+
+## 5. Layout — not yet restyled
+
+The shared information architecture (Today, Stocks, Vote, Portfolio, You; the liquidity floor's
+`Tracked today` block; chapters replacing infinite scroll) is `docs/design-research-2026-09-21.md`
+section 3. Detail's own layout order does not change in any direction the research drew, Amber
+included; only the tokens and components under it do.
+
+## 6. Motion — not yet restyled
+
+Amber's motion language (one orchestrated cold-start moment, a spring-based indicator, a spring
+sheet entry; section 5.3) is not built in this pass. It is deliberately out of this pass's scope:
+the build list for this foundation was tokens, type, theme, the tertiary rule and a contrast test,
+and motion tokens belong with the components that will use them.
 
 ## 7. Copy and content rules
 
-- Sentence case; buttons are verb plus object ("Swap USDC to TSLAx", "Read the list", "View in Portfolio").
-- Never BUY, SELL, HOLD or AVOID as words on any surface, including the swap sheet: the direction flip is "TSLAx to USDC". "Swap" is the only trading verb.
-- Descriptive values stay in Ink; Caution only on explicit issuer-control risk. The premium is a signed mono number, never colored.
-- At most one middle dot per line; prefer commas, periods and line breaks. No exclamation marks, no emoji, no icons drawn by hand; if an icon is ever needed it comes from one library (Phosphor) at one stroke width.
-- Numbers formatted by one Fmt object (en-US): prices 2dp (4dp under $1), percents signed 2dp, counts with commas, token amounts up to 6dp trimmed, absolute times in UTC, relative times "2 s ago", "3 h ago", "2 d old".
-- Banned words: seamless, powerful, unlock, empower, journey, insights, supercharge, effortless, all-in-one, welcome to.
+Unchanged in substance from Instrument, restated here because `CopyLintTest` reads
+`app/src/main/res/values/strings.xml` and every Kotlin source under `ui` (the verdict-word rule
+reads every Kotlin source under `src/main` and `src/test`) straight from disk on every test run,
+and because these came from the founder's own backtests and from legal exposure, never from taste.
 
-## 8. Anti-patterns (never)
+- **No buy, sell, hold or avoid**, as words, on any surface, including the swap sheet: the
+  direction flip is "TSLAx to USDC". "Swap" is the only trading verb.
+- **No verdict words.** The product classifies against a fixed rule; it does not tell a reader
+  what to do. A composite score or a sector rank is a fact stated once, never staged as a grade.
+- **No emoji, no pictographs** standing in for words: no arrows, dingbats, check marks or dots
+  drawn instead of the word they mean.
+- **No intensifiers.** Banned outright: seamless, powerful, unlock, empower, journey, insights,
+  supercharge, effortless, all-in-one, welcome to.
+- **No exclamation marks**, anywhere in `strings.xml`.
+- **No em or en dash**, anywhere in `strings.xml` or a UI string literal; use a period, comma,
+  colon or hyphen.
+- **At most one middle dot per line.**
+- **Sentence case.** No word of four or more capitals outside a short initialism list (NYSE,
+  NASDAQ, USDC, EDGAR, XBRL), no uppercase transform, no small-caps font feature.
+- **A count of one is phrased as one.** A summary sentence spells out the word ("One held, one
+  watched," `docs/design-research-2026-09-21.md` section 3's Today draft), not the numeral; a
+  count with its own unit stays numeric ("1 voter," "22 of 160").
+- **Every visible string lives in `strings.xml`.** Nothing user-facing is a Kotlin literal under
+  `ui`; `KotlinScan` (`CopyLintTest`) reads every literal under `ui` specifically because a string
+  that lives there instead has skipped every rule above it.
+- **The product refuses to be a tipster, on purpose.** The founder's own backtests are what
+  Detail's classification rule is built from, and a system that backtested well is exactly the one
+  most tempting to state as a forecast; stating it as a forecast is also the one framing that
+  creates real legal exposure (a securities-adjacent surface reviewed under Solana dApp Store
+  policy, `TODOS.md`'s review-survival kit). So the product states a classification and stops:
+  it never tells a reader what to do with it, and it never states a probability of being right.
+- **The classification is a rule, not a prediction.** `PlainTickerModels.kt`'s
+  `Method.isPrediction` is hardcoded false and `PlainTickerApiTest` pins it; the method statement
+  itself says so ("We classify the company against its sector by a fixed rule. This is not a price
+  forecast or investment advice.," `detail_method_body`). Rewording that sentence to sound more
+  confident, or dropping it from a new screen, is a legal regression, not a copy edit.
 
-Cream or paper backgrounds; Geist or Inter; numbered section labels; uppercase tracked eyebrows; em dashes; cards for lists; three equal tiles; filled progress bars; red and green price blocks; colored dots as decoration; gradients, shadows, glass, purple; spinners; snackbars; bottom navigation bars; sticky headers; hover-only states; text-only pages when a real number could be shown.
+## 8. Anti-patterns
 
-## 9. Brand mark
+Rewritten. Two of Instrument's specific bans are what Amber's own research overturns by name, and
+carrying them forward unexamined would put a false rule in a document meant to be trusted.
 
-The mark is **Two corners**: two registration corners on the 108 adaptive icon viewport, top-left and bottom-right, and an empty centre between them. Four rectangles, radius 0, no accent. `x=26 y=26 w=34 h=14` and `x=26 y=26 w=14 h=34` for the top-left corner; `x=48 y=68 w=34 h=14` and `x=68 y=48 w=14 h=34` for the bottom-right. It is the founder's own choice out of their selection gallery, cell 4a, and the geometry is transcribed rather than derived. What it says is the thing the product does that nothing else in the drawer does: the place is kept and the figure is not printed, which is section 1.1's liquidity floor as a picture. It replaces the tracking gauge, which replaced the JetBrains Mono "P" shipped in DT3.
+**Overturned by name**, so they are not banned any more:
+- *Bottom navigation bars.* Instrument banned them; the research's own first finding is that the
+  founder's instinct for a bottom bar was right, and all four directions, Amber included, specify
+  `ShortNavigationBar`.
+- *Sticky headers.* Instrument banned them; the shared information architecture specifically uses
+  a `stickyHeader` sector chapter on Stocks so chapters can replace infinite scroll.
+- *Cream or paper backgrounds.* Instrument's own light variant would have stayed a cool off-white
+  "never cream"; Amber's light ground (`#FFFBF2`) is warm by design, the same way its dark ground
+  is warm, and that warmth is the point of the direction, not an accident to correct.
+- *Cards for lists*, loosely: Amber's own anatomy sets a ticker row inside a 16dp tonal container,
+  which reads as a grouped surface even though it is not a Material `Card`. The rule that survives
+  is Instrument's original reason for banning cards (no shadow, no elevation, no border-as-frame
+  around every row) rather than the flat "never a container" reading.
 
-The tile is **Ink and the mark on it is Canvas**, which is the part four rejected icons got wrong. Every one of them put a Canvas tile on the Seeker's near-black drawer wallpaper, where it has no boundary at all: three pixels inside the launcher's own mask against three pixels outside it measures **1.03 to 1**, and a tile at 1.03 is not an object, it is a mark floating on the wallpaper. The same four rectangles were built on four grounds and every one composited into the real drawer and measured by `design/brand/attempt-five/composite5.py`: Canvas **1.04**, an Accent field with the mark knocked out **7.23**, a cool off-white field **16.79**, and this one **15.48**, against Photos at **18.06** for the top of the scale. The off-white reads a point and a third higher and costs two colours section 2 does not have; the Ink tile is the Ink-and-Canvas pair section 2 already rates at 15.9 to 1 with the tile taking the Ink side, so `BrandAssetsTest` can pin the whole icon to the Kotlin tokens. Inverting the accent buys an edge and pays for it by flattening the mark into a silhouette, and it was measured rather than argued about.
+**Still banned, repo-wide, unrelated to which of the four directions had won**: purple, and
+frosted glass or glow ("Purple is banned by repo convention; frosted glass and glow are on the
+slop list," `docs/design-research-2026-09-21.md` section 2). Gradients and drop shadows are not
+called for by any of the four directions' shape language and stay off by the same convention.
+Spinners (skeletons instead), snackbars, hover-only states (there is no hover on a phone, but a
+future two-pane layout should not add one as its only affordance), and a text-only surface where a
+real number could be shown instead, all stay banned; none of the four directions asked for any of
+them and the research's own account of why the current build reads as generated does not implicate
+them.
 
-Three rules decide the drawing and all three were learned by getting it wrong. The first is size, not composition. A launcher shows the central 72 of the 108 viewport, so one viewport unit is 0.667dp at 48dp, where an icon is actually read; on the Seeker's real 60.7dp tile it is 0.84dp. The mark shipped in DT3 put its only distinguishing detail at 1.3dp and it was invisible on a launcher grid. So no shape is thinner than 6 units, which is 4dp at 48dp; the thinnest arm here is 14 units, 11.8dp on the Seeker's tile.
+**What "looks generated" named, so a restyle does not walk back into it** (research section 1):
+broadsheet hairlines with nothing else to organise a screen; a single undifferentiated column
+where a caveat, a heading and a number all carry the same visual weight; one interactive colour
+asked to mean five different roles because there is no semantic tier to stop it; middle-dot-joined
+meta strings past the one-per-line limit above. Amber's whole point — varied surfaces, a real
+shape hierarchy, a semantic token tier, a warm identity instead of a tinted near-black — is a
+direct answer to that list, and a future edit that quietly re-flattens it back toward one of these
+markers is the regression this section exists to name.
 
-The second rule is that a mark may not mirror itself top to bottom. The gauge as first drawn on 2026-09-13 centred all three of its rectangles on y 54, and in colour that read as a gauge because the Accent tick pulled away from the Ink ones. The monochrome layer and the 24 notification icon have no colour to pull with, and both read as a plus sign, which is the most overloaded glyph on a phone. Colour can separate two shapes; a silhouette can only be separated by where its shapes point. Two corners passes that rule by being symmetric the other way: turned 180 degrees about the centre it is itself, flipped top to bottom it is not. The rejected drawing is frozen at `design/brand/candidates/crossed_*.xml`.
+## 9. Brand mark — not yet restyled
 
-The third rule is the mask, and it changed for this mark. Every earlier mark was asserted inside the central 66 circle, radius 33, on the grounds that a launcher might cut a circle. These corners sit **39.60** units out, so that rule would refuse the founder's choice. The circle was always a proxy: the mask on the phone this ships to was lifted off a neighbouring tile in a drawer screenshot and fits a superellipse of exponent **3.05**, and the assertion is now that superellipse rounded down to 3.0, because the smaller exponent is the tighter shape. The corners clear it by **0.81 of a unit**, two device pixels and two thirds of a dp on the Seeker's real tile, so this mark sits at the edge of the mask and must not be pushed out any further. A launcher that cuts a true circle clips about **2%** of the mark and takes the outer right-angle point off both corners, leaving two bevelled chevrons; no Pixel-family launcher cuts one, the cost is accepted rather than discovered, and it is drawn at `design/brand/two-corners/gallery.html`.
+Unchanged. The launcher and notification icons (`design/brand/marks.py`, `design/brand/glyph.py`)
+are pinned to Instrument's `Ink` and `Canvas` tokens by `BrandAssetsTest`, and this pass does not
+touch them: repainting the icon is a decision for whoever owns it next, not a side effect of a
+token foundation. See `docs/fonts.md`'s Brand mark section for how the icon is generated.
 
-The monochrome layer is the same four rectangles in one colour and never the field they sit on: a themed icon is one colour on a plate the launcher supplies, so the only thing that can carry the mark is the mark. The 24 notification icon is those rectangles scaled to the 20dp live area rather than a redrawn simplification, so the silhouette cannot drift from the launcher art. The splash needs a third layer, `ic_brand_mark`, because the foreground is drawn in Canvas for a light tile and Canvas on the Canvas splash background is nothing; it is the same paths in Ink, written by the same generator.
+## 10. Material3 Expressive: what 1.4.0 actually has
 
-Implementation: `design/brand/marks.py` holds the geometry and its assertions (the mask, the 4dp floor, at most one accent, the mirror rule, and the ground the tile carries), `design/brand/glyph.py` writes `res/drawable/ic_launcher_foreground.xml`, `ic_launcher_monochrome.xml`, `ic_brand_mark.xml`, `ic_stat_plainticker.xml` and `res/values/ic_launcher_background.xml` from the mark named by `marks.CHOSEN`, and `design/brand/two-corners/measure.py` puts every ground in the real drawer and measures it into `design/brand/two-corners/gallery.html`. `res/mipmap-anydpi-v26/` holds the two adaptive icons over `@color/ic_launcher_background`, an alias of Ink; no bitmap icons ship. The splash is `Theme.PlainTicker.Starting` (core-splashscreen): Canvas background, `ic_brand_mark`, no branding image, then `Theme.PlainTicker`. `BrandAssetsTest` checks all of this from disk, including the 4dp floor, the mask, the mirror rule on every layer, and that the mark's fill differs from the ground it is drawn on.
+Checked directly against `material3-android-1.4.0.aar` in this machine's Gradle cache (unpacked
+and read as class listings, not trusted from a web search or from the research doc's own account
+of it), because the research doc's finding here was itself a correction of web summaries that had
+placed these APIs in alpha.
+
+**Present in 1.4.0, no experimental opt-in annotation on any of them**: `ShortNavigationBar` and
+its item and defaults classes; `MaterialExpressiveTheme`; `expressiveLightColorScheme()`.
+`AmberDarkColorScheme` and `AmberLightColorScheme` (`Theme.kt`) do not use `MaterialExpressiveTheme`
+or the expressive colour-scheme function, for a reason the research did not have occasion to check:
+`expressiveLightColorScheme()` takes no parameters at all, so it cannot carry Amber's own palette,
+and there is no `expressiveDarkColorScheme()` in this jar at any visibility. Amber's colour schemes
+are built the same way `PlainTickerColorScheme` already is, with the stable `darkColorScheme` and
+`lightColorScheme` constructors and every slot mapped by hand. This costs no new dependency and
+uses nothing experimental.
+
+**Absent from 1.4.0, confirmed by class listing**: `ButtonGroup`, `LoadingIndicator`,
+`FlexibleBottomAppBar`, and any shape-morphing class. These exist only in `1.5.0-alpha` (alpha28,
+2026-09-09).
+
+**Nothing in this foundation pass needed any of the absent APIs.** If a later restyle pass wants a
+chip that morphs shape on selection, or `LoadingIndicator`, or `ButtonGroup`, that is the moment to
+decide about `1.5.0-alpha`, not now: this is a minified release build seven days from a feature
+freeze, and an alpha dependency there is a real gamble that should be a founder decision made
+against a concrete component, not a default reached for because it was convenient. Recorded here,
+not acted on.
+
+## 11. Status, as of this document
+
+Built in this pass, both themes: `AmberDarkColors` / `AmberLightColors` (semantic colour tokens),
+`AmberType` (the type scale), `AmberDarkColorScheme` / `AmberLightColorScheme` / `AmberShapes` /
+`AmberTheme` (the M3 wiring). `AmberContrastTest` pins every ratio section 2 states and the
+tertiary-on-high rule; `AmberThemeTest` pins the colour-scheme mapping and the type scale.
+
+**Not built in this pass, on purpose**: `AmberTheme` is not yet the app's active theme
+(`MainActivity` still calls `PlainTickerTheme`); motion tokens; the restyle of any existing
+component or screen; the brand mark. Each is a later phase's work, once this foundation exists for
+it to build on.

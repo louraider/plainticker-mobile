@@ -20,25 +20,52 @@ import org.junit.Test
  * 1. **The Pro fact is a single word, for every state [com.plainticker.mobile.ui.portfolio.ProModelTest]
  *    already proves the full sentence for.**
  * 2. **The button matrix (plan section 1.2) is exhaustive and never offers two Accent fills.**
- * 3. **No FactGrid value on this screen exceeds the half-width mono slot's character budget**
- *    (v0.12.0 fix: "no wallet connected" clipped to "no wallet c"), for every state each cell can
- *    take, fixed string or composed.
+ * 3. **No FactGrid value on this screen exceeds its card's character budget, recomputed for
+ *    Amber** (v0.12.0's original fix: "no wallet connected" clipped to "no wallet c"; DESIGN.md's
+ *    Amber pass changes the face and the size the v0.12.0 fix was measured against, so the old
+ *    10-character budget is wrong and is redone below against the real font file), for every
+ *    state each cell can take, fixed string or composed.
  */
 class YouModelTest {
 
     /**
-     * FactCellView draws a cell's value `maxLines = 1, softWrap = false` (FactGrid.kt), so
-     * anything past what the mono glyphs fit clips mid-character rather than wrapping. At You's
-     * default 24sp valueSize, a half-width cell on the Seeker's 400dp frame has roughly 146.5dp of
-     * inner content (400dp minus the FactGrid's 20dp outer padding on each side, its 1dp border
-     * plus 1dp inset on each side, one 1dp inter-cell gap, halved, minus the cell's own 16dp
-     * padding on each side) and JetBrains Mono's ~0.6em advance width puts about 10.2 characters
-     * in that space at 24sp. "no wallet connected" (20 characters) clipped to "no wallet c" on the
-     * Seeker at default font scale: 10 whole characters plus a fragment of the 11th, matching the
-     * arithmetic. 10 is kept here, one character under the computed fit, because the number above
-     * is arithmetic and not a device reading.
+     * YouScreen.kt's `FactCardView` draws a cell's value `maxLines = 1, softWrap = false`, so
+     * anything past what the glyphs fit clips mid-character rather than wrapping, the same trap
+     * v0.12.0 hit. Amber changes both the face (JetBrains Mono, monospace, to Bricolage Grotesque,
+     * proportional) and the size (24sp to 18sp, [com.plainticker.mobile.ui.theme.AmberType.figureRow]'s
+     * own size), so the old budget's arithmetic no longer applies and is redone here from the real
+     * geometry and the real font file, not assumed.
+     *
+     * **The two cards are genuinely different widths**, because `FactGrid` (YouScreen.kt) lays out
+     * each group as N equal-weight 16dp-radius cards in one row (8dp gaps, 12dp horizontal padding
+     * per card) rather than Instrument's always-two-per-row blueprint grid: the Pro/Staked SKR pair
+     * is two cards, On this device is three, and a narrower row of three leaves each card less
+     * room. On the Seeker's 400dp frame, 20dp screen margin on each side:
+     * - Two cards: (400 − 2×20 − 1×8) ÷ 2 − 2×12 = **152dp** of inner content per card.
+     * - Three cards: (400 − 2×20 − 2×8) ÷ 3 − 2×12 = **90.67dp** of inner content per card.
+     *
+     * **Measured against `res/font/bricolage_grotesque.ttf` itself** (fontTools, 2026-09-22,
+     * instantiated at `wght` 600 `wdth` 100 `opsz` 18, the exact variation coordinates
+     * `AmberType.figureRow` builds): every glyph a real fixed value or a plausible composed count
+     * can contain, at 18sp.
+     * - Word values (no tabular feature; [com.plainticker.mobile.ui.you.YouScreen]'s
+     *   `FactValueWordStyle`): the widest of the real fixed strings below averages 9.905dp per
+     *   character ("Not open", 79.24dp over 8 characters); 152dp ÷ 9.905dp ≈ 15.34, kept one
+     *   character under the computed fit, the same margin the original budget kept: **14**.
+     * - Tabular digits (`tnum` on, [AmberType.figureRow] itself): every digit is 11.03dp wide
+     *   under `tnum` (`,` is 3.24dp, cheaper, so counting every character as a full digit only
+     *   underestimates how much actually fits); 90.67dp ÷ 11.03dp ≈ 8.22, kept one character
+     *   under the computed fit: **7**, which lands exactly on "999,999" (7 characters), the
+     *   largest count this file's own synthetic ceiling below already probes.
+     *
+     * Both real card widths end up with *more* headroom than Instrument's one ~145.5dp estimate,
+     * not less: Amber's own value style is smaller (18sp against 24sp) by more than the pair card
+     * loses to the trio card's tighter share of the row.
      */
-    private val maxFactValueLength = 10
+    private val maxFactWordValueLength = 14
+
+    /** See [maxFactWordValueLength]'s own comment: the On this device row's three-card budget. */
+    private val maxFactCountValueLength = 7
 
     private fun words(copy: Copy): Int = (copy as Copy.Words).id
 
@@ -137,7 +164,7 @@ class YouModelTest {
         assertTrue(
             "the worst-case figure (\"$figure\", ${figure.length} chars) is expected to exceed the " +
                 "value budget, which is exactly why it lives in the sub line and not the value",
-            figure.length > maxFactValueLength,
+            figure.length > maxFactWordValueLength,
         )
     }
 
@@ -204,9 +231,9 @@ class YouModelTest {
         assertEquals(R.string.watchlist_notifications_off, words(notificationLine(false)))
     }
 
-    // ---- The FactGrid value budget (v0.12.0 fix) ---------------------------------------------
+    // ---- The FactGrid value budget (v0.12.0 fix, recomputed for Amber) -----------------------
 
-    /** Every strings.xml value a You FactGrid cell can draw at the default 24sp value size. */
+    /** Every strings.xml word value a You FactGrid cell can draw, at Amber's 18sp figureRow size. */
     private val factValueNames = listOf(
         "state_loading",
         "you_pro_disabled",
@@ -221,31 +248,32 @@ class YouModelTest {
     )
 
     @Test
-    fun `every fixed FactGrid value on You fits the half-width mono slot`() {
+    fun `every fixed FactGrid word value on You fits its card`() {
         factValueNames.forEach { name ->
             val text = ShippedCopy.strings.getValue(name)
             assertTrue(
-                "$name (\"$text\", ${text.length} chars) exceeds the $maxFactValueLength-character " +
+                "$name (\"$text\", ${text.length} chars) exceeds the $maxFactWordValueLength-character " +
                     "FactGrid value budget; move the detail to the sub line instead of widening the cell",
-                text.length <= maxFactValueLength,
+                text.length <= maxFactWordValueLength,
             )
         }
     }
 
     @Test
-    fun `the composed On this device counts stay inside the budget too`() {
+    fun `the composed On this device counts stay inside the trio card's budget`() {
         // Swaps and votes are capped at 200 (FileReceiptStore.MAX_RECEIPTS, FileVoteReceiptStore's
         // own copy); the watchlist has no such cap, but the whole xStocks catalog this app can
         // ever watch from is in the low hundreds today (DESIGN.md section 1.1), so a six-digit
-        // watchlist is already generations past plausible. Comma grouping only adds one character
-        // per three digits, so the budget does not run out until eight digits either way.
+        // watchlist is already generations past plausible: 999,999 is this file's own synthetic
+        // ceiling and it is also the exact string maxFactCountValueLength's own comment derives
+        // the budget from, so this list stays the largest count this test still expects to fit.
         listOf(0, 1, 200, 9_999, 999_999).forEach { count ->
             val facts = deviceFacts(YouUiState(swapsRecorded = count, votesCast = count, stocksWatched = count))
             listOf(facts.swaps, facts.votes, facts.watched).forEach { text ->
                 assertTrue(
                     "Fmt.count($count) = \"$text\" (${text.length} chars) exceeds the " +
-                        "$maxFactValueLength-character FactGrid value budget",
-                    text.length <= maxFactValueLength,
+                        "$maxFactCountValueLength-character FactGrid count budget",
+                    text.length <= maxFactCountValueLength,
                 )
             }
         }

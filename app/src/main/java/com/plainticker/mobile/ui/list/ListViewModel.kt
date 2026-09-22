@@ -163,6 +163,15 @@ data class ListUiState(
     /** How many tickers are watched, for the Today strip; the strip is hidden at zero. */
     val watched: Int = 0,
     /**
+     * The watched tickers themselves, uppercase (the same normal form [WatchlistStore] keeps),
+     * for the Stocks screen's Watched filter chip
+     * ([com.plainticker.mobile.ui.stocks.StocksFilter.Watched]): a chip needs to ask "is this
+     * row's own ticker in the set" and [watched] only ever answers "how many". Read from the same
+     * flow as [watched] so the two can never name a different count, and left off outside
+     * ui/stocks and this class on purpose: nothing else on this screen filters by it.
+     */
+    val watchedTickers: Set<String> = emptySet(),
+    /**
      * The nearest report among the watched tickers, as the last daily check found it. It comes
      * from the digest the check stored rather than from a call of this screen's own: the report
      * date lives in the per-ticker analysis payload, and fetching one per watched ticker on the
@@ -293,7 +302,9 @@ class ListViewModel(
     private val clock: Clock = WallClock,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ListUiState(isLoading = true, watched = watchlist.tickers.value.size))
+    private val _state = MutableStateFlow(
+        ListUiState(isLoading = true, watched = watchlist.tickers.value.size, watchedTickers = watchlist.tickers.value),
+    )
     val state: StateFlow<ListUiState> = _state.asStateFlow()
 
     // ---- What each source has contributed so far ----------------------------------------
@@ -329,9 +340,9 @@ class ListViewModel(
     init {
         viewModelScope.launch {
             combine(watchlist.tickers, digests.record) { watched, digest ->
-                watched.size to digest.nextReport?.takeIf { it.ticker in watched }
-            }.collect { (count, report) ->
-                _state.update { it.copy(watched = count, nextReport = report) }
+                watched to digest.nextReport?.takeIf { it.ticker in watched }
+            }.collect { (watched, report) ->
+                _state.update { it.copy(watched = watched.size, nextReport = report, watchedTickers = watched) }
             }
         }
         load(userAsked = false)
