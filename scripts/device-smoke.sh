@@ -9,11 +9,13 @@
 #
 # What it does
 #   Installs the debug APK if told to, clears app state so the walk is reproducible, then walks:
-#   launch and onboarding, the list, one Detail for a token with a deep pool and one for a token
-#   under the $10,000 liquidity floor, the watchlist including watching a ticker and firing the
-#   daily check, and the swap button as far as a debug build honestly goes (the wallet handoff;
-#   nothing is signed and no money moves, BuildConfig.SUBMIT_SWAPS is false in debug). Then a
-#   second pass at font scale 1.3 and a third with the animator scale at 0.
+#   launch and onboarding, Today (the new home, docs/design-research-2026-09-21.md section 3) and
+#   Stocks, one Detail for a token with a deep pool and one for a token under the $10,000 liquidity
+#   floor, watching a ticker and firing the daily check from Today (Watchlist folded into Today's
+#   Yours block, so it is no longer a destination of its own), and the swap button as far as a
+#   debug build honestly goes (the wallet handoff; nothing is signed and no money moves,
+#   BuildConfig.SUBMIT_SWAPS is false in debug). Then a second pass at font scale 1.3 and a third
+#   with the animator scale at 0.
 #   It asserts rather than screenshots: a failed assertion names the screen, what it expected and
 #   what it found, and the script exits non-zero.
 #
@@ -808,22 +810,38 @@ sleep 0.5
 tap_center onboarding 11 'Read the list'
 sleep 2
 
-step "list"
-dump_until list "^($SECTOR_HEADINGS)\$" || lost "the list never drew a sector chapter heading"
+step "today"
+# Today is the new home (docs/design-research-2026-09-21.md section 3), replacing the List tab as
+# the app's first screen. "Daily digest" is an unconditional heading in Today's Yours block (folded
+# in from the old Watchlist screen), so it is on screen whether or not anything is watched yet: the
+# same landmark the pre-rewrite watchlist step used, now met on first launch instead of on a tab.
+dump_until today '^Daily digest$' || lost "the app never landed on Today after onboarding"
 wait_quiet 20
-dump_screen list
-assert_lint list
-assert_labels list
-assert_geometry list
-assert_row_shape list
-assert_sector_chapters list
-for _tab in List Portfolio Watchlist; do
-  screen_has list "^$_tab\$" || fail "the three tabs" "no tab named $_tab"
+dump_screen today
+assert_lint today
+assert_labels today
+assert_geometry today
+for _tab in Today Stocks Vote Portfolio You; do
+  screen_has today "^$_tab\$" || fail "the five bar destinations" "no destination named $_tab"
 done
-pass "the three tabs are drawn"
+pass "the five bar destinations are drawn"
+screen_has today '^Watched$' \
+  || fail "the Yours block, folded in from the watchlist" "$(screen_text today | head -8 | tr '\n' ';')"
+
+step "stocks"
+tap_center today 11 Stocks
+sleep 1
+dump_until stocks "^($SECTOR_HEADINGS)\$" || lost "Stocks never drew a sector chapter heading"
+wait_quiet 20
+dump_screen stocks
+assert_lint stocks
+assert_labels stocks
+assert_geometry stocks
+assert_row_shape stocks
+assert_sector_chapters stocks
 
 step "detail, deep pool ($DEEP_X)"
-open_detail list "$DEEP_X" deep
+open_detail stocks "$DEEP_X" deep
 assert_lint deep-top
 assert_labels deep-top
 assert_geometry deep-top
@@ -902,13 +920,18 @@ assert_live_bar_ticks deep-top deep-top-again
 step "detail, under the liquidity floor ($THIN_X)"
 sh_ input keyevent KEYCODE_BACK
 sleep 1.5
-dump_screen thin-list
-clear_list_search thin-list
-open_detail thin-list "$THIN_X" thin
+dump_screen thin-stocks
+clear_list_search thin-stocks
+open_detail thin-stocks "$THIN_X" thin
 assert_lint thin-top
 assert_labels thin-top
 assert_geometry thin-top
-screen_has thin-top 'too thin to track the NYSE close$' \
+# Fixed 2026-09-22: this checked wording from before detail_gauge_thin's current copy ("Pool holds
+# $34, too thin to track the NYSE close") and would have failed on every real run since, because
+# that sentence was never shipped; the copy that is shipped is detail_gauge_thin's own fixed
+# fragment below (the formatted "$34 behind this price" half of that string is not stable, which is
+# why the match is a substring rather than the whole sentence).
+screen_has thin-top 'too little for the token to follow the NYSE close' \
   || fail "the pool sentence where the gauge would be, because $THIN_X sits under the \$10,000 floor \
 (pass another ticker with --thin if this pool has since grown)" \
           "$(screen_text thin-top | grep -iE 'pool|vs NYSE' | tr '\n' ';' || echo 'neither a pool sentence nor a gauge')"
@@ -919,7 +942,7 @@ fi
 assert_trust_rows thin-top
 pass "the pool sentence stands where the gauge would be, and no premium is drawn"
 
-step "watchlist"
+step "today, watching a ticker"
 _jobs_before="$(jobs_for_app)"
 tap_center thin-top 11 Watch
 sleep 1.2
@@ -943,26 +966,30 @@ pass "$THIN_X is watched"
 
 sh_ input keyevent KEYCODE_BACK
 sleep 1.5
-tap_center thin-list 11 Watchlist
+# Watchlist is no longer a destination of its own (docs/design-research-2026-09-21.md section 3):
+# it folded into Today's Yours block, so the way back to it is the bottom bar's Today item, not a
+# tab named "Watchlist". thin-stocks is reused for its coordinates the same way the pre-rewrite
+# script reused a pre-watch dump: the bar's position does not depend on the search state on screen.
+tap_center thin-stocks 11 Today
 sleep 1.5
-dump_until watchlist '^Daily digest$' || lost "the watchlist never drew its digest panel"
-assert_lint watchlist
-assert_labels watchlist
-assert_geometry watchlist
-screen_has watchlist '^Watched$' || fail "the 'Watched' heading" "$(screen_text watchlist | head -6 | tr '\n' ';')"
-screen_has watchlist "^$THIN_X\$" || fail "a row for the ticker just watched" "$(screen_text watchlist | tr '\n' ';')"
-screen_has watchlist '^Unwatch$' || fail "an Unwatch action on the row" "$(screen_text watchlist | tr '\n' ';')"
-screen_has watchlist '^No digest yet\.' \
-  || fail "the digest panel to say there is no digest yet" "$(screen_text watchlist | grep -i digest | tr '\n' ';')"
-screen_has watchlist '^Run the check now$' \
-  || fail "the debug action that fires the daily check" "$(screen_text watchlist | tail -4 | tr '\n' ';')"
+dump_until today-watched '^Daily digest$' || lost "Today never drew its digest panel"
+assert_lint today-watched
+assert_labels today-watched
+assert_geometry today-watched
+screen_has today-watched '^Watched$' || fail "the 'Watched' heading" "$(screen_text today-watched | head -6 | tr '\n' ';')"
+screen_has today-watched "^$THIN_X\$" || fail "a row for the ticker just watched" "$(screen_text today-watched | tr '\n' ';')"
+screen_has today-watched '^Unwatch$' || fail "an Unwatch action on the row" "$(screen_text today-watched | tr '\n' ';')"
+screen_has today-watched '^No digest yet\.' \
+  || fail "the digest panel to say there is no digest yet" "$(screen_text today-watched | grep -i digest | tr '\n' ';')"
+screen_has today-watched '^Run the check now$' \
+  || fail "the debug action that fires the daily check" "$(screen_text today-watched | tail -4 | tr '\n' ';')"
 _jobs_watched="$(jobs_for_app)"
 [ "$_jobs_watched" -gt "$_jobs_before" ] \
   || fail "watching a ticker to schedule the daily check with the job scheduler" \
           "dumpsys jobscheduler mentions $PKG $_jobs_watched times, $_jobs_before before the watch"
 pass "the daily check is scheduled"
 
-tap_center watchlist 11 'Run the check now'
+tap_center today-watched 11 'Run the check now'
 sleep 3
 dump_until digest '^Checked ' || lost "the digest panel never reported a check"
 assert_lint digest
@@ -996,14 +1023,21 @@ sh_ am force-stop "$PKG" >/dev/null || true
 sh_ am start -W -n "$PKG/$ACTIVITY" >/dev/null
 sleep 2
 wait_quiet 20
-dump_until big-list "^($SECTOR_HEADINGS)\$" || lost "the list never came back at font scale ${FONT_SCALE_PCT}%"
-assert_lint big-list
-assert_labels big-list
-assert_geometry big-list
-assert_row_shape big-list
-assert_numerals_scaled list big-list
+dump_until big-today '^Daily digest$' || lost "Today never came back at font scale ${FONT_SCALE_PCT}%"
+assert_lint big-today
+assert_labels big-today
+assert_geometry big-today
 
-open_detail big-list "$DEEP_X" big
+tap_center big-today 11 Stocks
+sleep 1
+dump_until big-stocks "^($SECTOR_HEADINGS)\$" || lost "Stocks never came back at font scale ${FONT_SCALE_PCT}%"
+assert_lint big-stocks
+assert_labels big-stocks
+assert_geometry big-stocks
+assert_row_shape big-stocks
+assert_numerals_scaled stocks big-stocks
+
+open_detail big-stocks "$DEEP_X" big
 assert_lint big-top
 assert_labels big-top
 assert_geometry big-top
@@ -1036,8 +1070,11 @@ sh_ am force-stop "$PKG" >/dev/null || true
 sh_ am start -W -n "$PKG/$ACTIVITY" >/dev/null
 sleep 2
 wait_quiet 20
-dump_until still-list "^($SECTOR_HEADINGS)\$" || lost "the list never came back at animator scale 0"
-open_detail still-list "$DEEP_X" still
+dump_until still-today '^Daily digest$' || lost "Today never came back at animator scale 0"
+tap_center still-today 11 Stocks
+sleep 1
+dump_until still-stocks "^($SECTOR_HEADINGS)\$" || lost "Stocks never came back at animator scale 0"
+open_detail still-stocks "$DEEP_X" still
 assert_lint still-top
 assert_geometry still-top
 screen_has still-top '^Live from the mint$'   || fail "the live bar on the screen, or 'static' means nothing"           "$(screen_text still-top | head -6 | tr '\n' ';')"

@@ -98,7 +98,7 @@ class TopScrimTest {
 
     @Test
     fun `every surface that scrolls under the status bar draws exactly one scrim`() {
-        // The three tab screens share one host, so the host owns the scrim once and the three
+        // The five bar destinations share one host, so the host owns the scrim once and the five
         // cannot drift apart. Detail is its own surface and owns its own.
         listOf("ui/home/HomeScreen.kt", "ui/detail/DetailScreen.kt").forEach { path ->
             assertEquals("$path draws no scrim over its scroll", 1, count(source(path), "TopScrim("))
@@ -108,6 +108,8 @@ class TopScrimTest {
             "ui/vote/VoteScreen.kt",
             "ui/portfolio/PortfolioScreen.kt",
             "ui/watchlist/WatchlistScreen.kt",
+            "ui/today/TodayScreen.kt",
+            "ui/stocks/StocksScreen.kt",
         ).forEach { path ->
             assertEquals("$path must leave the scrim to its host", 0, count(source(path), "TopScrim("))
         }

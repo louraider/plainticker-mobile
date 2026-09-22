@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,26 +21,34 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
+import com.plainticker.mobile.ui.components.AmberBottomNav
+import com.plainticker.mobile.ui.components.AmberDestination
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopScrim
-import com.plainticker.mobile.ui.components.TopTabs
-import com.plainticker.mobile.ui.list.ListScreen
 import com.plainticker.mobile.ui.portfolio.PortfolioScreen
+import com.plainticker.mobile.ui.stocks.StocksScreen
+import com.plainticker.mobile.ui.today.TodayScreen
 import com.plainticker.mobile.ui.vote.VoteScreen
-import com.plainticker.mobile.ui.vote.VoteTabViewModel
-import com.plainticker.mobile.ui.vote.VoteViewModel
-import com.plainticker.mobile.ui.watchlist.WatchlistScreen
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
 import com.plainticker.mobile.ui.you.YouScreen
 
 /**
- * List, Vote, Portfolio, Watchlist, the order docs/plan-monetisation-2026-09-19.md section 1.5
- * settles, then You, appended last (docs/plan-app-uiux-2026-09-21.md, task U1). You is a home tab
- * rather than a nav route, exactly like the other four, but it sits outside the tab row: it is
- * reached only from the TopBar's action (DESIGN.md section 4) and TopTabs never draws a fifth
- * label for it. [WATCHLIST]'s ordinal is unmoved, which is what lets the digest notification's
- * stored `EXTRA_TAB` keep pointing at the same screen (HomeTabTest pins all five).
+ * The pre-Amber destinations, kept only as a stable ordinal namespace for the paths that still
+ * address a screen by number rather than by [AmberDestination] directly: the digest
+ * notification's stored `EXTRA_TAB` (com.plainticker.mobile.watchlist.WatchlistNotifications), a
+ * landed swap's "View in Portfolio" (ui/nav/AppNavHost.kt), and You's own device-fact cells
+ * (ui/you/YouScreen.kt, left untouched by this task, which still calls `onOpenTab(tab.ordinal)`
+ * with a [HomeTab]). [HomeTabTest] pins every ordinal exactly because a silent renumbering here
+ * would send one of those stored or hardcoded ordinals to the wrong screen.
+ *
+ * Nothing composes against this enum directly any more: [toAmberDestination] is the one place a
+ * [HomeTab] ordinal becomes the [AmberDestination] the shell actually draws
+ * (docs/design-research-2026-09-21.md section 3). LIST and WATCHLIST both resolve to TODAY: LIST
+ * because the app's home is Today now (LIST.ordinal was always only ever used as the "no tab
+ * named" default, never as an explicit deep-link target), and WATCHLIST because Watchlist folded
+ * into Today's Yours block rather than staying a destination of its own. VOTE, PORTFOLIO and YOU
+ * are unchanged, since the research kept those three as peers.
  */
 enum class HomeTab(@StringRes val label: Int) {
     LIST(R.string.tab_list),
@@ -52,12 +59,44 @@ enum class HomeTab(@StringRes val label: Int) {
 }
 
 /**
- * The four tab screens under one wordmark: the real TopBar and TopTabs (Muted inactive labels
- * and a 2dp Accent indicator, not the Material TabRow the placeholder carried), handed to the
- * selected screen as a header it draws at the top of its own scroll. That is what makes the
- * header scroll away instead of sitting sticky over the content (DESIGN.md sections 4 and 5).
+ * Which [AmberDestination] a [HomeTab] ordinal now opens; see [HomeTab]'s own doc for why two of
+ * the five collapse onto one destination. [HomeTabDestinationTest] pins this mapping, including
+ * the two-to-one collapse, so it cannot drift from the research without a test noticing.
+ */
+fun HomeTab.toAmberDestination(): AmberDestination = when (this) {
+    HomeTab.LIST -> AmberDestination.TODAY
+    HomeTab.VOTE -> AmberDestination.VOTE
+    HomeTab.PORTFOLIO -> AmberDestination.PORTFOLIO
+    HomeTab.WATCHLIST -> AmberDestination.TODAY
+    HomeTab.YOU -> AmberDestination.YOU
+}
+
+/**
+ * A [HomeTab] ordinal from outside this screen (a stored intent extra, a route argument), read
+ * defensively the way the pre-Amber code coerced an out-of-range `initialTab` into range: an
+ * ordinal this build does not recognise falls back to [HomeTab.LIST], the same "no tab named"
+ * default the nav graph itself declares (ui/nav/AppNavHost.kt's `Routes.ARG_TAB` default).
+ */
+private fun homeTabFrom(ordinal: Int): HomeTab = HomeTab.entries.getOrElse(ordinal) { HomeTab.LIST }
+
+/**
+ * The shell: five bar destinations under one [AmberBottomNav], docs/design-research-2026-09-21.md
+ * section 3: Today, Stocks, Vote, Portfolio, You. The top tab row is gone entirely, and so is the
+ * TopBar's own You action: You is one of the five peers now, reached the same way the other four
+ * are.
  *
- * The ViewModels are scoped to the home back-stack entry, so switching tabs keeps their state.
+ * Today and Stocks are this task's own scaffolding ([TodayScreen], [StocksScreen]); Vote,
+ * Portfolio and You are untouched screens this task only re-hosts. Every ViewModel is scoped to
+ * this back-stack entry through [factory], so switching destinations keeps their state exactly as
+ * the four-tab shell did.
+ *
+ * **Back.** The old cabinet made back from You return to the tab the reader had left, because You
+ * sat outside the tab row and every other tab was reached only by tapping it directly. With five
+ * equal peers there is no "outside" any more, so the rule generalises: back from any destination
+ * but Today (the home) returns to whichever destination was selected immediately before it, and
+ * that return is consumed once, resetting the memory to Today, so a second back press keeps
+ * unwinding toward the home instead of ping-ponging between the same two destinations. Back from
+ * Today itself is the system's own back: Today has nothing under it to return to.
  */
 @Composable
 fun HomeScreen(
@@ -68,103 +107,97 @@ fun HomeScreen(
     onOpenGallery: (() -> Unit)? = null,
     initialTab: Int = HomeTab.LIST.ordinal,
 ) {
-    var selected by rememberSaveable { mutableIntStateOf(initialTab.coerceIn(HomeTab.entries.indices)) }
-    // The tab You returns to on back: the last of the four real tabs that was actually selected,
-    // never You itself, so a cold start straight onto You (a deep link naming HomeTab.YOU.ordinal)
-    // still has somewhere honest to go back to.
-    var previousTab by rememberSaveable { mutableIntStateOf(HomeTab.LIST.ordinal) }
-    val tabs = HomeTab.entries
-    // You sits outside the tab row (DESIGN.md section 4): TopTabs draws only the four real tabs,
-    // in the same order and at the same indices selected already uses, so no remapping is needed.
-    val realTabs = tabs.filterNot { it == HomeTab.YOU }
-    val realLabels = realTabs.map { stringResource(it.label) }
+    val initialDestination = homeTabFrom(initialTab).toAmberDestination()
+    var selectedOrdinal by rememberSaveable { mutableIntStateOf(initialDestination.ordinal) }
+    var previousOrdinal by rememberSaveable { mutableIntStateOf(AmberDestination.TODAY.ordinal) }
+    val destinations = AmberDestination.entries
+    val selected = destinations.getOrElse(selectedOrdinal) { AmberDestination.TODAY }
 
-    LaunchedEffect(selected) {
-        if (tabs[selected] != HomeTab.YOU) previousTab = selected
+    fun select(destination: AmberDestination) {
+        if (destination.ordinal != selectedOrdinal) previousOrdinal = selectedOrdinal
+        selectedOrdinal = destination.ordinal
     }
-    // Back from You returns to the tab left, rather than leaving the app or falling through to
-    // whatever the system back stack holds beneath home (plan U1: "Back from You returns to the
-    // previous tab").
-    BackHandler(enabled = tabs[selected] == HomeTab.YOU) {
-        selected = previousTab
+
+    // You's device-fact cells still hand back a HomeTab ordinal (YouScreen.kt, left untouched by
+    // this task); translated the same way a stored deep link is.
+    fun selectTab(tabOrdinal: Int) = select(homeTabFrom(tabOrdinal).toAmberDestination())
+
+    BackHandler(enabled = selected != AmberDestination.TODAY) {
+        selectedOrdinal = previousOrdinal
+        previousOrdinal = AmberDestination.TODAY.ordinal
     }
 
     val header: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
-            TopBar(
-                action = stringResource(R.string.you_action),
-                onAction = { selected = HomeTab.YOU.ordinal },
-                onTitleLongPress = onOpenGallery,
-            )
-            TopTabs(items = realLabels, selected = selected, onSelect = { selected = it })
-            DebugActions(onOpenSpike = onOpenSpike)
-        }
-    }
-    // You's own header: the TopBar alone, its action slot empty (plan U1: "empty on You"), and no
-    // TopTabs, since You is not one of the four tabs it would otherwise highlight.
-    val youHeader: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth()) {
             TopBar(onTitleLongPress = onOpenGallery)
+            DebugActions(onOpenSpike = onOpenSpike)
         }
     }
 
     Box(modifier.fillMaxSize()) {
-        when (tabs[selected]) {
-            HomeTab.LIST -> ListScreen(
-                viewModel = viewModel(factory = factory),
-                // Scoped to the home entry like every other ViewModel here, so a vote that is
-                // mid-flight survives a tab switch and comes back to its own sheet.
-                voteViewModel = viewModel(factory = factory),
-                onOpenDetail = onOpenDetail,
-                header = header,
-            )
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f)) {
+                when (selected) {
+                    AmberDestination.TODAY -> {
+                        val watchlistViewModel: WatchlistViewModel = viewModel(factory = factory)
+                        TodayScreen(
+                            watchlistViewModel = watchlistViewModel,
+                            onOpenDetail = onOpenDetail,
+                            // Nothing watched yet is the common first state, and the one place to
+                            // fix it is Stocks now, not List.
+                            onBrowseStocks = { select(AmberDestination.STOCKS) },
+                            // The same gate the gallery and the wallet spike sit behind.
+                            onRunCheck = if (BuildConfig.DEBUG) watchlistViewModel::runCheckNow else null,
+                            header = header,
+                        )
+                    }
 
-            HomeTab.VOTE -> VoteScreen(
-                viewModel = viewModel(factory = factory),
-                // The same sheet the List's rows and Detail's action open: scoped to this home
-                // entry like every ViewModel here, so a vote mid-flight survives a tab switch.
-                voteViewModel = viewModel(factory = factory),
-                onOpenDetail = onOpenDetail,
-                header = header,
-            )
+                    AmberDestination.STOCKS -> StocksScreen(
+                        viewModel = viewModel(factory = factory),
+                        // Scoped to the home entry like every other ViewModel here, so a vote that
+                        // is mid-flight survives a destination switch and comes back to its sheet.
+                        voteViewModel = viewModel(factory = factory),
+                        onOpenDetail = onOpenDetail,
+                        header = header,
+                    )
 
-            HomeTab.PORTFOLIO -> PortfolioScreen(
-                viewModel = viewModel(factory = factory),
-                onOpenDetail = onOpenDetail,
-                // A wallet holding no xStock is offered the list rather than a dead end; the tab
-                // is the host's to select, so the screen asks for it rather than navigating.
-                onBrowseList = { selected = HomeTab.LIST.ordinal },
-                header = header,
-            )
+                    AmberDestination.VOTE -> VoteScreen(
+                        viewModel = viewModel(factory = factory),
+                        // The same sheet Stocks' rows and Detail's action open: scoped to this
+                        // home entry like every ViewModel here, so a vote mid-flight survives a
+                        // destination switch.
+                        voteViewModel = viewModel(factory = factory),
+                        onOpenDetail = onOpenDetail,
+                        header = header,
+                    )
 
-            HomeTab.YOU -> YouScreen(
-                viewModel = viewModel(factory = factory),
-                // Scoped to the home entry like every other ViewModel here, so a payment mid
-                // flight and this device's entitlement survive a tab switch (the same instance
-                // PortfolioScreen used to request; only where it is asked from moved).
-                passViewModel = viewModel(factory = factory),
-                onOpenTab = { tab -> selected = tab },
-                header = youHeader,
-            )
+                    AmberDestination.PORTFOLIO -> PortfolioScreen(
+                        viewModel = viewModel(factory = factory),
+                        onOpenDetail = onOpenDetail,
+                        // A wallet holding no xStock is offered Stocks rather than a dead end; the
+                        // destination is the host's to select, so the screen asks for it rather
+                        // than navigating.
+                        onBrowseList = { select(AmberDestination.STOCKS) },
+                        header = header,
+                    )
 
-            HomeTab.WATCHLIST -> {
-                val watchlist: WatchlistViewModel = viewModel(factory = factory)
-                WatchlistScreen(
-                    viewModel = watchlist,
-                    onOpenDetail = onOpenDetail,
-                    // Nothing watched yet is the common first state, and the one place to fix it
-                    // is the list. The tab is the host's to select, so the screen asks for it.
-                    onBrowseList = { selected = HomeTab.LIST.ordinal },
-                    // The same gate the gallery and the wallet spike sit behind.
-                    onRunCheck = if (BuildConfig.DEBUG) watchlist::runCheckNow else null,
-                    header = header,
-                )
+                    AmberDestination.YOU -> YouScreen(
+                        viewModel = viewModel(factory = factory),
+                        // Scoped to the home entry like every other ViewModel here, so a payment
+                        // mid flight and this device's entitlement survive a destination switch.
+                        passViewModel = viewModel(factory = factory),
+                        onOpenTab = ::selectTab,
+                        header = header,
+                    )
+                }
             }
+            AmberBottomNav(selected = selected, onSelect = ::select)
         }
 
-        // The one thing on these four screens that does not scroll, and it is not content: the
-        // band the system clock sits in, so the hero and the tabs dissolve under it instead of
-        // colliding with it (Insets.kt). Last in the Box, so it draws over whichever tab is up.
+        // The one thing on these five screens that does not scroll, and it is not content: the
+        // band the system clock sits in, so the hero and the header dissolve under it instead of
+        // colliding with it (Insets.kt). Last in the Box, so it draws over whichever destination
+        // is up.
         TopScrim(Modifier.align(Alignment.TopCenter))
     }
 }
