@@ -1,0 +1,55 @@
+{
+  "_fixture_note": "REAL, unedited. Live GET https://api.jup.ag/swap/v2/order?inputMint=USDC&outputMint=TSLAx&amount=5000000&taker=HzrE...wo1f on 2026-09-23, the request shape JupiterSwapApi sends. Taker is the public validator identity the web repo's own mainnet-simulation test uses as its payer (lib/pass/__tests__/build-mainnet-simulate.test.ts); the seekerdev address is redacted from this repository. JupiterZ RFQ fill: the market maker is account 0 and pays the fees, the taker is the second required signer. Nothing was signed. The parser ignores this key.",
+  "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  "inAmount": "5000000",
+  "outAmount": "1313934",
+  "otherAmountThreshold": "1313934",
+  "swapMode": "ExactIn",
+  "slippageBps": 0,
+  "priceImpactPct": "-0.005769862297847703",
+  "routePlan": [
+    {
+      "percent": 100,
+      "bps": 10000,
+      "usdValue": 4.999590665083135,
+      "swapInfo": {
+        "ammKey": "2Cq2RNFFxxPXL7teNQAji1beA2vFbBDYW5BGPBFvoN9m",
+        "label": "JupiterZ",
+        "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+        "inAmount": "5000000",
+        "outAmount": "1313934"
+      }
+    }
+  ],
+  "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "feeBps": 10,
+  "transaction": "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIACA4R42CVsFE67UNXG2dI3IC+RI7kLWbTb80oqLXcSqMssPyMxZ7aEZMVfpUdU1k3qMAwQrpX8g99+XZzBG7OTlzuIIXrbpwU22XtclJ081ReD6sW3OECcdV9R8my3SWCK4tbSTTNwgT7saOVQDOvaWIHv7maWoD5F/53dC9FV8iK+Zp6JJEPP/s5hXViUaSWaA4VCA4asdtvgOxo2hdOkvU23ngu0pLRIGrmVfFviEVVLgWeZmaNi2N1JHU1Dh3XLv0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKkG3fbh7nWP3hhCXbzkbM3athr8TYO5DSf+vfko2KGL/AfoNYJBH+oUgvCZS4CqUSqXyU8l3yg77Fpno4H8hitKSlhJ+3Kju+kf3FsOalf2PFoctFsgZ6btDKzTY5XIoQKMlyWPTiSJ8bs9ECkUjg2DC1oTmdr/EIQEjnvY2+n4Wcb6evO+2606PWXzaqvJdDGxu+TC0vbg5HymAgNFL11h2ZUnB9n4NveXIC+NFMISz4snp4AtDsQ6pd5301iBzmUEBwAJA+hSAAAAAAAABwAFAkANAwAMBgEDAQoGCQEBCwsBAAQCAwUNCAoJBiWoYLejXAoooEBLTAAAAAAAjgwUAAAAAAA57LJqAAAAAAoAAAAAAA==",
+  "gasless": true,
+  "jitOptimized": false,
+  "signatureFeeLamports": 10000,
+  "signatureFeePayer": "2Cq2RNFFxxPXL7teNQAji1beA2vFbBDYW5BGPBFvoN9m",
+  "prioritizationFeeLamports": 4245,
+  "prioritizationFeePayer": "2Cq2RNFFxxPXL7teNQAji1beA2vFbBDYW5BGPBFvoN9m",
+  "rentFeeLamports": 1488440,
+  "rentFeePayer": "HzrEstnLfzsijhaD6z5frkSE2vWZEH5EUfn3bU9swo1f",
+  "requestId": "01a0cae9-efc9-70be-8afb-d87618f260b0",
+  "swapType": "rfq",
+  "router": "jupiterz",
+  "guaranteedPrice": true,
+  "quoteId": "8837f452-df88-52f0-9657-daa8a21b1f9d",
+  "maker": "2Cq2RNFFxxPXL7teNQAji1beA2vFbBDYW5BGPBFvoN9m",
+  "taker": "HzrEstnLfzsijhaD6z5frkSE2vWZEH5EUfn3bU9swo1f",
+  "expireAt": "1790110777",
+  "platformFee": {
+    "feeBps": 10,
+    "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  "inUsdValue": 4.999590665083135,
+  "outUsdValue": 4.9707437154,
+  "swapUsdValue": 4.999590665083135,
+  "priceImpact": -0.5769862297847703,
+  "mode": "ultra",
+  "totalTime": 77
+}

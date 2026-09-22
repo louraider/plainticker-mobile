@@ -14,6 +14,7 @@ import com.plainticker.mobile.data.receipts.VoteReceipt
 import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.repo.RpcRepository
+import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
@@ -233,6 +234,20 @@ class VoteViewModel(
             return refuse(ticker, symbol, reason)
         } catch (e: Exception) {
             debugLog.raw("vote/build threw ${e::class.simpleName}: ${e.message}")
+            return refuse(ticker, symbol, VoteRefusal.UNAVAILABLE)
+        }
+
+        // Read the bytes against the ticker asked for and the pinned collector before the
+        // confirm step exists, so a transaction that does anything but this vote is never offered
+        // for approval (security audit, finding 2).
+        val unsigned = build.transactionBytes()
+        val verdict = if (unsigned == null) {
+            TransactionGuard.Verdict.Refuse("no transaction bytes")
+        } else {
+            TransactionGuard.checkVote(unsigned, voter, ticker, build.summary)
+        }
+        if (verdict is TransactionGuard.Verdict.Refuse) {
+            debugLog.raw("vote/build transaction refused before the wallet: ${verdict.reason}")
             return refuse(ticker, symbol, VoteRefusal.UNAVAILABLE)
         }
 

@@ -13,6 +13,7 @@ import com.plainticker.mobile.data.jupiter.SwapOrder
 import com.plainticker.mobile.data.receipts.ReceiptStore
 import com.plainticker.mobile.data.receipts.SwapReceipt
 import com.plainticker.mobile.repo.RpcRepository
+import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
@@ -215,6 +216,22 @@ class SwapViewModel(
             val unsigned = quote.transaction?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
             if (unsigned == null) {
                 debugLog.raw("order ${quote.requestId} carried no transaction this app could read")
+                return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
+            }
+
+            // ---- The bytes against the request (security audit, finding 2). The sheet's figures
+            // are Jupiter's JSON; what the wallet signs is the transaction. Both are read against
+            // what was asked for before the wallet opens, and a mismatch is nothing to approve.
+            val verdict = TransactionGuard.checkSwap(
+                bytes = unsigned,
+                wallet = funds.owner,
+                order = order,
+                inputMint = leg.input.mint,
+                outputMint = leg.output.mint,
+                amount = input.raw,
+            )
+            if (verdict is TransactionGuard.Verdict.Refuse) {
+                debugLog.raw("order ${quote.requestId} refused before the wallet: ${verdict.reason}")
                 return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
             }
 

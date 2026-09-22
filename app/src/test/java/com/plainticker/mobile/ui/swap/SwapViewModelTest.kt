@@ -11,6 +11,7 @@ import com.plainticker.mobile.data.MockApi
 import com.plainticker.mobile.data.bodyText
 import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.jupiter.SwapError
+import com.plainticker.mobile.data.jupiter.SwapOrder
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.receipts.FakeReceiptStore
 import com.plainticker.mobile.data.respondJson
@@ -18,6 +19,7 @@ import com.plainticker.mobile.data.rpc.TokenBalance
 import com.plainticker.mobile.repo.FakeRpcRepository
 import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
+import com.plainticker.mobile.wallet.WireMessage
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.testAccount
 import io.ktor.http.HttpMethod
@@ -62,15 +64,34 @@ class SwapViewModelTest {
         now
     }
 
-    /** The golden 2026-09-12 order: 5 USDC into TSLAx, rentFeeLamports 1,488,440, no expiry. */
+    /**
+     * A REAL Jupiter transaction (the 2026-09-23 taker-pays Metis order for 5 USDC into TSLAx) with
+     * its taker key swapped for [seeker]'s, so the bytes are ones [TransactionGuard] reads as this
+     * wallet's own. The golden order below carried "REDACTED" in place of a transaction, which the
+     * guard now refuses before the wallet (security audit, finding 2), as it must.
+     */
+    private val unsignedBase64: String = WireMessage.parseBase64(
+        Fixtures.read("jupiter/order-usdc-tslax-5-metis-taker-pays.json")
+            .let { HttpClientFactory.json.decodeFromString(SwapOrder.serializer(), it) }.transaction!!,
+    ).replaceKey(REAL_TAKER, seeker.address).base64()
+
+    /** The golden order's own transaction line, as this file serves it. */
+    private val transactionField = """"transaction": "$unsignedBase64","""
+
+    /**
+     * The golden 2026-09-12 order: 5 USDC into TSLAx, rentFeeLamports 1,488,440, no expiry, with
+     * the redacted transaction and taker filled in for [seeker] (see [unsignedBase64]).
+     */
     private var orderResponse = Fixtures.read("jupiter/order-usdc-tslax-5-rent.json")
+        .replace(REDACTED_TRANSACTION_FIELD, transactionField)
+        .replace(REDACTED_TAKER_FIELD, """"taker": "${seeker.address}",""")
     private var orderStatus = HttpStatusCode.OK
 
     /** Answers for /execute in order; the last one repeats once the list runs out. */
     private var executePlan: List<Pair<String, HttpStatusCode>> = listOf(LANDED to HttpStatusCode.OK)
     private var executeIndex = 0
 
-    private val unsignedBytes: ByteArray = Base64.getDecoder().decode("UkVEQUNURUQ=")
+    private val unsignedBytes: ByteArray = Base64.getDecoder().decode(unsignedBase64)
     private val signedBytes: ByteArray = "SIGNED-BY-THE-WALLET".encodeToByteArray()
 
     private val receipts = FakeReceiptStore()
@@ -602,7 +623,7 @@ class SwapViewModelTest {
 
     @Test
     fun `bytes this app cannot decode fail before the wallet is ever opened`() = runTest {
-        orderResponse = orderResponse.replace(TRANSACTION_FIELD, """"transaction": "not base64 !!",""")
+        orderResponse = orderResponse.replace(transactionField, """"transaction": "not base64 !!",""")
         val mock = jupiter()
         val wallet = wallet()
         val vm = viewModel(mock, wallet)
@@ -620,7 +641,7 @@ class SwapViewModelTest {
 
     @Test
     fun `an order with no transaction to sign is a failure, not an approval`() = runTest {
-        orderResponse = orderResponse.replace(""""transaction": "UkVEQUNURUQ=",""", """"transaction": null,""")
+        orderResponse = orderResponse.replace(transactionField, """"transaction": null,""")
         val mock = jupiter()
         val wallet = wallet()
         val vm = viewModel(mock, wallet)
@@ -632,6 +653,37 @@ class SwapViewModelTest {
             assertEquals(SwapFailure.NO_TRANSACTION, failed.reason)
             assertEquals(0, wallet.callCount)
             cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an order whose bytes are not the requested swap fails before the wallet is ever opened`() = runTest {
+        // Security audit, finding 2. Each case changes one thing the sheet cannot see: the JSON's
+        // amount, the JSON's mint, or an Approve slipped into the bytes.
+        val approve = WireMessage.parseBase64(unsignedBase64)
+            .plus(KnownPrograms.TOKEN, listOf(REAL_TAKER, REAL_TAKER, seeker.address), byteArrayOf(4, -1, -1, -1, -1, -1, -1, -1, 127))
+            .base64()
+        val golden = orderResponse
+        val cases = listOf(
+            golden.replace(""""inAmount": "5000000",""", """"inAmount": "4000000","""),
+            golden.replace(""""outputMint": "${KnownMints.TSLAX}",""", """"outputMint": "${KnownMints.SKR}","""),
+            golden.replace(transactionField, """"transaction": "$approve","""),
+        )
+        for (case in cases) {
+            assertTrue("the case must differ from the golden order", case != golden)
+            orderResponse = case
+            val mock = jupiter()
+            val wallet = wallet()
+            val vm = viewModel(mock, wallet)
+            vm.state.test {
+                awaitItem()
+                submitFive(vm, this)
+                val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+                assertEquals(SwapFailure.NO_TRANSACTION, failed.reason)
+                assertEquals("the wallet is never opened for it", 0, wallet.callCount)
+                assertTrue(mock.executes().isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
     }
 
@@ -870,8 +922,14 @@ class SwapViewModelTest {
         /** 88 characters of base58 padding, a placeholder and never a real signature. */
         val SIGNATURE = "1".repeat(88)
 
-        /** The 2026-09-12 fixture's own two fields, so a test can take one away by name. */
-        const val TRANSACTION_FIELD = """"transaction": "UkVEQUNURUQ=","""
+        /** The 2026-09-12 fixture's redacted transaction and taker, filled in for the test wallet. */
+        const val REDACTED_TRANSACTION_FIELD = """"transaction": "UkVEQUNURUQ=","""
+        const val REDACTED_TAKER_FIELD = """"taker": "11111111111111111111111111111111","""
+
+        /** The taker of the real 2026-09-23 order whose bytes stand in for the redacted ones. */
+        const val REAL_TAKER = "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"
+
+        /** The 2026-09-12 fixture's own field, so a test can take it away by name. */
         const val THRESHOLD_FIELD = """"otherAmountThreshold": "1346933","""
 
         /** The same line under a key the parser ignores, which is how a field is taken away. */

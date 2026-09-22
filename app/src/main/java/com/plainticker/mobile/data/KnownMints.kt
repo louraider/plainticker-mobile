@@ -5,6 +5,9 @@ object KnownMints {
     /** Circle USDC, 6 decimals, classic Token program. The swap sheet's input side. */
     const val USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 
+    /** Tether USDT, 6 decimals, classic Token program. A pass is accepted in it at the same amount as USDC. */
+    const val USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+
     /** Tesla xStock. Token-2022 with the scaledUiAmount extension; multiplier currently 1. */
     const val TSLAX = "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
 

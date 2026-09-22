@@ -6,6 +6,7 @@ import com.plainticker.mobile.MainDispatcherRule
 import com.plainticker.mobile.awaitUntil
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.MockApi
+import com.plainticker.mobile.data.PinnedAddresses
 import com.plainticker.mobile.data.bodyText
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.VoteApi
@@ -18,6 +19,7 @@ import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.repo.FakeRpcRepository
 import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
+import com.plainticker.mobile.wallet.ServerBuilt
 import com.plainticker.mobile.wallet.WalletAccount
 import com.plainticker.mobile.wallet.WalletOutcome
 import io.ktor.http.HttpStatusCode
@@ -60,12 +62,18 @@ class VoteViewModelTest {
 
     private val voter = WalletAccount(ByteArray(32) { 7 }, "Seeker")
 
-    private val collector = "8rUvvKhaNqDVdGjBpkB4XoTBrmMPfsVZJSLQPUHzZyEC"
+    // The real collector: TransactionGuard now reads the transaction against this pin before the
+    // confirm step (security audit, finding 2), so a placeholder collector, or a placeholder
+    // transaction ("REDACTED") it cannot read, would be refused.
+    private val collector = PinnedAddresses.VOTE_COLLECTOR
+
+    /** The transaction lib/vote/build.ts would build for [voter] and NFLX. */
+    private val unsigned: String = ServerBuilt.vote(voter.address, "NFLX").base64()
 
     /** 31,209.870777 SKR: what the production forwarder returned for a staking wallet, 2026-09-13. */
     private val measuredStake = 31_209_870_777L
 
-    private val body = """{"transaction":"UkVEQUNURUQ=","summary":""" +
+    private val body = """{"transaction":"$unsigned","summary":""" +
         """{"ticker":"NFLX","lamports":5000,"collector":"$collector"}}"""
 
     private fun wallet(connected: Boolean = true) = FakeWalletSession().apply {
@@ -301,6 +309,26 @@ class VoteViewModelTest {
         assertTrue(operations.sendRequests.isEmpty())
     }
 
+
+    @Test
+    fun `a transaction that is not the vote the sheet shows never reaches the wallet`() = runTest {
+        // Security audit, finding 2: the summary says NFLX to the pinned collector; the bytes vote
+        // for another ticker, or send the transfer somewhere else. Neither is ever offered.
+        val otherTicker = ServerBuilt.vote(voter.address, "AAPL").base64()
+        val otherCollector = ServerBuilt.vote(voter.address, "NFLX", collector = "8rUvvKhaNqDVdGjBpkB4XoTBrmMPfsVZJSLQPUHzZyEC").base64()
+        for (tx in listOf(otherTicker, otherCollector)) {
+            val tampered = MockApi {
+                respondJson("""{"transaction":"$tx","summary":{"ticker":"NFLX","lamports":5000,"collector":"$collector"}}""")
+            }
+            val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64)))
+            val session = wallet().apply { this.operations = operations }
+
+            assertEquals(VoteRefusal.UNAVAILABLE, refusalOf(settle(machine(tampered, session))))
+            assertTrue(operations.sendRequests.isEmpty())
+            assertTrue(operations.signRequests.isEmpty())
+        }
+    }
+
     @Test
     fun `a wallet that already voted is told so, and it is an answer rather than a retry`() = runTest {
         val voted = MockApi {
@@ -334,7 +362,7 @@ class VoteViewModelTest {
     // ---- The expiry -----------------------------------------------------------------------------------
 
     /** The published 200, with the server's own weight and an expiry at [at]. */
-    private fun bodyExpiring(at: Long) = """{"transaction":"UkVEQUNURUQ=","summary":""" +
+    private fun bodyExpiring(at: Long) = """{"transaction":"$unsigned","summary":""" +
         """{"ticker":"NFLX","lamports":5000,"collector":"$collector","weight":123456000000,"alreadyVoted":false},""" +
         """"expiresAt":"${Instant.ofEpochMilli(at)}"}"""
 

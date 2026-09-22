@@ -1,0 +1,12 @@
+{
+  "_fixture_note": "ASSEMBLED, not captured: no serialized pass or vote transaction exists in either repository, and running the web repo's builder was not permitted in this session. Built byte for byte to the instruction lists of FinanceAnalyst lib/pass/build.ts buildPassTransaction and lib/vote/build.ts buildVoteTransaction (commit 8fe1210), compiled the way @solana/web3.js compileToV0Message orders keys; the instruction order and per-instruction accounts equal what lib/pass/__tests__/build.test.ts and lib/vote/__tests__/build.test.ts assert. Payer: the public validator identity the web repo's mainnet-simulation tests use. Treasury, collector, USDC mint and the derived token accounts are the real mainnet addresses. Blockhash is a fixed placeholder and the codeHash is not any device's. Nothing here was signed. The parser ignores this key.",
+  "transaction": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAFCfyMxZ7aEZMVfpUdU1k3qMAwQrpX8g99+XZzBG7OTlzumnokkQ8/+zmFdWJRpJZoDhUIDhqx22+A7GjaF06S9TbfoFSctN8ob12c6qrklHsRDlMtBqJNU+OZR5YrWWsUM8FEtUBaqgz7OYN6RaAuhzOk4kO2r2IJqNEqIcWeVAWvjJclj04kifG7PRApFI4NgwtaE5na/xCEBI572Nvp+FnG+nrzvtutOj1l82qryXQxsbvkwtL24OR8pgIDRS9dYQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKkFSlNamSkhBk0k6HFg2jh8fDW13bySu4HkH6hAQQVEjeMy2vkvq+zotj/3pEAF5f39mvoVh1a2HFqV+QSzuNCBBQQGAAEABQYHAQEEBgACAwUGBwEBBwMBAgAJAwAbtwAAAAAABgIAAwwCAAAAAAAAAAAAAAAIAEhQVC1QQVNTOmI2N2YyZTVjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAA",
+  "summary": {
+    "mint": "USDC",
+    "amount": 12000000,
+    "destination": "G3wiPxjNtaKEtpAZ1zfvq3yCGDrUtaBXNCVbb6eAui74",
+    "treasury": "E1STBTGEYpHanVG4HWUJHfzEu6eGbnE9mnGX9KnAmJdL",
+    "lamports": 4083560
+  },
+  "expiresAt": "2026-09-23T12:00:45.000Z"
+}
