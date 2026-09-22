@@ -521,6 +521,18 @@
     <string name="you_open_tab">Open %1$s</string>
     <string name="you_version">Version %1$s</string>
 
+    <!-- Amber's bottom navigation bar (docs/design-research-2026-09-21.md section 3): the
+         redesign's own five destinations, Today, Stocks, Vote, Portfolio, You, not the current
+         four-tab-plus-You shape com.plainticker.mobile.ui.home.HomeTab still names. Vote and
+         Portfolio happen to read the same as tab_vote and tab_portfolio above; kept as their own
+         resources anyway; wiring a screen to this bar is the next phase's work, and that phase
+         should not have to touch a string this bar owns to change what a tab elsewhere says. -->
+    <string name="nav_today">Today</string>
+    <string name="nav_stocks">Stocks</string>
+    <string name="nav_vote">Vote</string>
+    <string name="nav_portfolio">Portfolio</string>
+    <string name="nav_you">You</string>
+
     <!-- Debug builds only -->
     <string name="debug_open_wallet_spike">Open the wallet spike</string>
     <string name="debug_run_watchlist_check">Run the check now</string>

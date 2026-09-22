@@ -16,6 +16,9 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.Accent
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberDarkColors
+import com.plainticker.mobile.ui.theme.AmberTheme
 import com.plainticker.mobile.ui.theme.Canvas
 import com.plainticker.mobile.ui.theme.PlainTickerTheme
 
@@ -30,6 +33,19 @@ annotation class InstrumentPreviews
 fun PreviewCanvas(content: @Composable () -> Unit) {
     PlainTickerTheme {
         Box(Modifier.fillMaxWidth().background(Canvas)) { content() }
+    }
+}
+
+/**
+ * Every Amber component preview renders inside [AmberTheme] on its own [AmberColors.surfaceGround],
+ * not Instrument's [Canvas]: Amber's ground is a warm near-black, not Instrument's cool one
+ * (DESIGN.md section 2), and previewing a new component against the palette it was not drawn from
+ * would hide a contrast problem [AmberContrastTest] cannot see from a colour pair alone.
+ */
+@Composable
+fun AmberPreviewCanvas(colors: AmberColors = AmberDarkColors, content: @Composable () -> Unit) {
+    AmberTheme(useDarkTheme = colors === AmberDarkColors) {
+        Box(Modifier.fillMaxWidth().background(colors.surfaceGround)) { content() }
     }
 }
 
