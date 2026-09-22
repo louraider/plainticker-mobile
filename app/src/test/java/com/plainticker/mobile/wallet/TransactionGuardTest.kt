@@ -10,6 +10,8 @@ import com.plainticker.mobile.data.plainticker.PassBuild
 import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.wallet.TransactionGuard.Verdict
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -139,6 +141,47 @@ class TransactionGuardTest {
             voteBuild("plainticker/vote-build-jef.json").transactionBytes(),
             ServerBuilt.vote(simPayer, "JEF").transaction(),
         )
+    }
+
+    // ---- The server's own builder output --------------------------------------------------
+
+    /** The `inputs` block FinanceAnalyst's mobile-fixtures tests write beside each real build. */
+    private fun inputsOf(path: String) =
+        json.parseToJsonElement(Fixtures.read(path)).jsonObject.getValue("inputs").jsonObject
+            .mapValues { it.value.jsonPrimitive.content }
+
+    @Test
+    fun `the real server pass builds are allowed, both token accounts existing and neither`() = runTest {
+        for (path in listOf("server/pass-build-usdc.json", "server/pass-build-usdc-create-atas.json")) {
+            val build = passBuild(path)
+            val inputs = inputsOf(path)
+            assertEquals("the fixture pays the pinned treasury", PinnedAddresses.TREASURY, inputs.getValue("treasury"))
+            assertAllowed(
+                TransactionGuard.checkPass(build.transactionBytes()!!, inputs.getValue("payer"), build.summary, inputs.getValue("codeHash")),
+            )
+        }
+        // The first-payment path: the payer and the treasury both have no USDC account yet, so both
+        // creates ship and the lamports shown carry both rents.
+        val fresh = WireMessage.parseTransaction(passBuild("server/pass-build-usdc-create-atas.json").transactionBytes()!!)
+        assertEquals(2, fresh.instructions.count { fresh.keys[it.program] == KnownPrograms.ASSOCIATED_TOKEN })
+        assertEquals(5_000L + 2 * TransactionGuard.TOKEN_ACCOUNT_RENT_LAMPORTS, passBuild("server/pass-build-usdc-create-atas.json").summary.lamports)
+    }
+
+    @Test
+    fun `the real server vote build is allowed`() = runTest {
+        val path = "server/vote-build-jef.json"
+        val build = voteBuild(path)
+        val inputs = inputsOf(path)
+        assertEquals(PinnedAddresses.VOTE_COLLECTOR, inputs.getValue("collector"))
+        assertAllowed(TransactionGuard.checkVote(build.transactionBytes()!!, inputs.getValue("voter"), inputs.getValue("ticker"), build.summary))
+    }
+
+    @Test
+    fun `the real server builds and this suite's assembled fixtures are the same bytes`() {
+        for (name in listOf("pass-build-usdc.json", "pass-build-usdc-create-atas.json")) {
+            assertArrayEquals(name, passBuild("server/$name").transactionBytes(), passBuild("plainticker/$name").transactionBytes())
+        }
+        assertArrayEquals(voteBuild("server/vote-build-jef.json").transactionBytes(), voteBuild("plainticker/vote-build-jef.json").transactionBytes())
     }
 
     private val pass = "plainticker/pass-build-usdc.json"
