@@ -20,6 +20,8 @@ import com.plainticker.mobile.repo.FakeCatalogRepository
 import com.plainticker.mobile.repo.FakeNextUpRepository
 import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeSummaryRepository
+import com.plainticker.mobile.repo.Gate
+import com.plainticker.mobile.repo.HeldPriceRepository
 import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.price
 import com.plainticker.mobile.repo.xStock
@@ -32,6 +34,7 @@ import com.plainticker.mobile.watchlist.WatchlistFacts
 import com.plainticker.mobile.watchlist.WatchlistScheduler
 import java.time.Duration
 import java.time.LocalDate
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -328,6 +331,58 @@ class WatchlistViewModelTest {
             assertEquals(before + 1, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    /**
+     * The "one more thing" this task's brief flagged: "Tracked today" showing its skeleton, and
+     * the venue line undrawn, for several seconds after launch while the data the tree eventually
+     * reports was already settled. The cause was [WatchlistViewModel.loadToday] reading `/summary`,
+     * the catalog, Jupiter's prices and the leaderboard one after another, though only prices
+     * actually depends on the first two's answers. This test holds prices open and checks that the
+     * leaderboard call has already gone out and come back regardless: in the old, sequential shape
+     * it could not have, since the leaderboard was the last read and nothing after a held gate ever
+     * runs.
+     */
+    @Test
+    fun `today's join asks the leaderboard while prices are still out, not after them`() = runTest {
+        serving("AAPL")
+        nextUp.answer = Result.success(
+            NextUpAnswer.Open(rows = listOf(NextUpRow(ticker = "AAPL", weight = "1", voters = 1)), round = null, previous = null),
+        )
+        val jupiterGate = Gate()
+        val heldPrices = HeldPriceRepository(
+            jupiterGate,
+            FakePriceRepository(Result.success(mapOf("mint-AAPL" to price(usd = 232.54, reference = 232.52)))),
+        )
+        val vm = WatchlistViewModel(
+            watchlist = InMemoryWatchlistStore(),
+            facts = WatchlistFacts(summaries, catalog, prices),
+            digests = digests,
+            notifier = notifier,
+            scheduler = scheduler,
+            clock = clock,
+            summaries = summaries,
+            catalog = catalog,
+            prices = heldPrices,
+            nextUpRepo = nextUp,
+        )
+
+        advanceUntilIdle()
+
+        assertEquals("the price fetch is out but held", 1, heldPrices.calls)
+        assertTrue("today's join has not settled while prices are held", vm.state.value.todayLoading)
+        assertEquals(
+            "the leaderboard does not depend on prices and must not wait behind them",
+            1,
+            nextUp.currentCalls,
+        )
+
+        jupiterGate.release()
+        advanceUntilIdle()
+
+        val settled = vm.state.value
+        assertFalse(settled.todayLoading)
+        assertEquals("AAPLx", settled.nextUpLeader?.display)
     }
 
     private companion object {
