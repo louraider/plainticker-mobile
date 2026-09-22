@@ -568,7 +568,11 @@
     <string name="you_fact_watched">Stocks watched</string>
     <string name="you_fact_sub_portfolio">Listed under Portfolio</string>
     <string name="you_fact_sub_vote">Listed under Vote</string>
-    <string name="you_fact_sub_watchlist">Listed under Watchlist</string>
+    <!-- Was "Listed under Watchlist": Watchlist folded into Today (HomeTab.WATCHLIST maps to
+         AmberDestination.TODAY, HomeScreen.kt's toAmberDestination), so the tap here already
+         opens Today and the resource id stays (only the You screen reads it) while the copy is
+         corrected to the destination it actually opens. -->
+    <string name="you_fact_sub_watchlist">Listed under Today</string>
     <string name="you_open_tab">Open %1$s</string>
     <string name="you_version">Version %1$s</string>
 
