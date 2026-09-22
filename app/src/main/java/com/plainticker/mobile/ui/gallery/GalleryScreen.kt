@@ -32,8 +32,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.ui.components.AmberDisabledAction
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
+import com.plainticker.mobile.ui.components.AmberSheet
+import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.Banner
-import com.plainticker.mobile.ui.components.DisabledButton
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.Gauge
@@ -43,10 +47,6 @@ import com.plainticker.mobile.ui.components.ListRow
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.Panel
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.PrimaryButton
-import com.plainticker.mobile.ui.components.SecondaryButton
-import com.plainticker.mobile.ui.components.Sheet
-import com.plainticker.mobile.ui.components.SheetSurface
 import com.plainticker.mobile.ui.components.SignalRow
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.SkeletonSwitch
@@ -93,7 +93,7 @@ fun GalleryScreen(
             .navigationBarsPadding(),
     ) {
         TopBar(action = "Watch", onAction = {}, onTitleLongPress = onBack, colors = AmberDarkColors)
-        Banner(text = "Debug gallery, sample data from the canvas", action = "Close", onAction = onBack)
+        Banner(text = "Debug gallery, sample data from the canvas", action = "Close", onAction = onBack, colors = AmberDarkColors)
         TopTabs(items = GallerySamples.tabs, selected = tab, onSelect = { tab = it })
         TodayStrip(text = GallerySamples.TODAY)
 
@@ -171,10 +171,10 @@ fun GalleryScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            PrimaryButton(label = "Swap USDC to TSLAx", onClick = { sheetOpen = true }, colors = AmberDarkColors)
+            AmberPrimaryAction(label = "Swap USDC to TSLAx", onClick = { sheetOpen = true }, colors = AmberDarkColors)
             Text(text = GallerySamples.COST_LINE, style = PlainTickerType.meta, color = Muted)
-            SecondaryButton(label = "View in Portfolio", onClick = {}, colors = AmberDarkColors)
-            DisabledButton(label = "Read the list", colors = AmberDarkColors)
+            AmberSecondaryAction(label = "View in Portfolio", onClick = {}, colors = AmberDarkColors)
+            AmberDisabledAction(label = "Read the list", colors = AmberDarkColors)
         }
 
         // List: search field, analyzed rows, price-only rows, with the skeleton in front.
@@ -283,7 +283,7 @@ fun GalleryScreen(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp),
         )
         Heading(text = "Receipt, landed")
-        SheetSurface(colors = AmberDarkColors) {
+        AmberSheetSurface(colors = AmberDarkColors) {
             SwapSheetBody(content = receiptContent(), actions = GalleryNoActions, takeFocus = false)
         }
         Spacer(Modifier.height(48.dp))
@@ -291,7 +291,7 @@ fun GalleryScreen(
 
     if (sheetOpen) {
         // The real sheet over a real state, so a cell the product drops cannot live on here.
-        Sheet(onDismissRequest = { sheetOpen = false }, colors = AmberDarkColors) {
+        AmberSheet(onDismissRequest = { sheetOpen = false }, colors = AmberDarkColors) {
             SwapSheetBody(
                 content = amountContent(amount),
                 actions = GalleryNoActions.copy(

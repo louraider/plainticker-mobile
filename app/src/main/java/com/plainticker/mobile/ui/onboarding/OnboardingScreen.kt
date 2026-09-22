@@ -38,12 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.Heading
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.ListRow
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.PrimaryButton
-import com.plainticker.mobile.ui.components.SheetSurface
 import com.plainticker.mobile.ui.components.TodayStrip
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopTabs
@@ -167,8 +167,10 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
 }
 
 /**
- * The gate: Elevated with the 1dp Line strong top edge (SheetSurface without its handle), the
- * wordmark, the headline, the three paragraphs, the self-certification and the one button.
+ * The gate: [AmberColors.surfaceHigh] with the 1dp [AmberColors.border] top edge
+ * ([com.plainticker.mobile.ui.components.AmberSheetSurface] without its handle, the sheet family's
+ * own static surface, migrated off Instrument's retired `SheetSurface`), the wordmark, the
+ * headline, the three paragraphs, the self-certification and the one button.
  *
  * The promise scrolls, the button does not. The panel grows to at most the window height, and
  * when the copy no longer fits (a 360dp frame at font scale 1.3 needs more than a short phone
@@ -189,7 +191,7 @@ private fun ConsentPanel(
     // fixed-dark Ink/Ink2/Accent/LineStrong: this is the gate every reader passes through once,
     // and it must read on Amber's light ground as correctly as on its dark one.
     val colors = defaultAmberColors()
-    SheetSurface(modifier = modifier, handle = false) {
+    AmberSheetSurface(modifier = modifier, handle = false, colors = colors) {
         Column(
             modifier = Modifier
                 // The navigation bar, or 40dp of ground, whichever is deeper.
@@ -238,7 +240,7 @@ private fun ConsentPanel(
                 }
                 ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange, colors = colors)
             }
-            PrimaryButton(
+            AmberPrimaryAction(
                 label = stringResource(R.string.onboarding_continue),
                 onClick = onContinue,
                 enabled = enabled,

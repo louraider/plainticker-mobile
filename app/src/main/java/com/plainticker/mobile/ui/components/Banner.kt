@@ -15,13 +15,17 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.plainticker.mobile.ui.theme.Elevated
-import com.plainticker.mobile.ui.theme.Ink2
+import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
- * The one state slot under the TopBar: Elevated, Outfit 13/500, one optional text action
- * (Retry). Priority is the caller's: offline, then stale, then hours, then device.
+ * The one state slot under the TopBar: [AmberColors.surfaceRaised] (Instrument's fixed
+ * [com.plainticker.mobile.ui.theme.Elevated] before this fix; the same class of fault this pass
+ * looks for in every one of its six components,
+ * this one just had no `colors` parameter at all rather than one that defaulted dark), Outfit
+ * 13/500 in [AmberColors.textSecondary], one optional text action (Retry) in
+ * [AmberColors.actionText]. Priority is the caller's: offline, then stale, then hours, then device.
+ * [colors] defaults to the system-following [defaultAmberColors] like every other shared component.
  */
 @Composable
 fun Banner(
@@ -29,11 +33,12 @@ fun Banner(
     modifier: Modifier = Modifier,
     action: String? = null,
     onAction: (() -> Unit)? = null,
+    colors: AmberColors = defaultAmberColors(),
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(Elevated)
+            .background(colors.surfaceRaised)
             .padding(horizontal = 20.dp)
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically,
@@ -42,13 +47,14 @@ fun Banner(
         Text(
             text = text,
             style = PlainTickerType.label,
-            color = Ink2,
+            color = colors.textSecondary,
             modifier = Modifier.weight(1f).padding(vertical = 12.dp),
         )
         if (action != null && onAction != null) {
             TextAction(
                 label = action,
                 onClick = onAction,
+                color = colors.actionText,
                 contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 0.dp, bottom = 12.dp),
             )
         }
@@ -58,7 +64,7 @@ fun Banner(
 @InstrumentPreviews
 @Composable
 private fun BannerPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Banner(text = "Offline, data as of 14:55")
             Banner(text = "Analysis list unavailable", action = "Retry", onAction = {})

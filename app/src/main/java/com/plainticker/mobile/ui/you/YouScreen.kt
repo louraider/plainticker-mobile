@@ -6,7 +6,6 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,7 +14,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -26,8 +24,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -57,6 +52,7 @@ import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactTone
@@ -236,9 +232,13 @@ private fun YouAction.handler(onConnect: () -> Unit, onPay: () -> Unit): () -> U
 
 /**
  * Exactly one 56dp button per state (plan section 1.2), never two Accent fills:
- * [AmberPrimaryAction] for the primary slot, [AmberSecondaryAction] (this file's own small
- * Amber-styled analogue of Instrument's `SecondaryButton`; no shared Amber equivalent exists yet)
- * for the one case that pairs Connect wallet with Pay for Pro.
+ * [AmberPrimaryAction] for the primary slot, [AmberSecondaryAction][
+ * com.plainticker.mobile.ui.components.AmberSecondaryAction] for the one case that pairs Connect
+ * wallet with Pay for Pro. Until this pass [AmberSecondaryAction][
+ * com.plainticker.mobile.ui.components.AmberSecondaryAction] was a private copy living only in this
+ * file ("no shared Amber equivalent exists yet"); it is now the shared component `SecondaryButton`
+ * retired in favour of, so this call site and the swap, pass and vote sheets reach for the same
+ * function rather than two that mean the same thing.
  */
 @Composable
 private fun ActionButtons(actions: YouActions, onConnect: () -> Unit, onPay: () -> Unit, colors: AmberColors) {
@@ -251,29 +251,6 @@ private fun ActionButtons(actions: YouActions, onConnect: () -> Unit, onPay: () 
         }
         actions.secondary?.let {
             AmberSecondaryAction(label = it.label.text(), onClick = it.handler(onConnect, onPay), colors = colors)
-        }
-    }
-}
-
-/**
- * The one bordered action Amber has not built a shared component for
- * (docs/design-research-2026-09-21.md section 5.5 lists a primary action only): the same 56dp,
- * 16dp-radius frame [AmberPrimaryAction] uses, transparent with a 1dp [AmberColors.border] and
- * [AmberColors.textPrimary] text, so it reads as a real button beside the filled one rather than a
- * dimmer copy of it.
- */
-@Composable
-private fun AmberSecondaryAction(label: String, onClick: () -> Unit, colors: AmberColors, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(56.dp)) {
-        OutlinedButton(
-            onClick = onClick,
-            modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent, contentColor = colors.textPrimary),
-            border = BorderStroke(1.dp, colors.border),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp),
-        ) {
-            Text(text = label, style = AmberType.button, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

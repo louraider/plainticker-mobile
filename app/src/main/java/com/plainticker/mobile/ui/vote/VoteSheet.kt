@@ -39,6 +39,7 @@ import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteSummary
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSheet
 import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.FactCell
@@ -46,7 +47,6 @@ import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.SecondaryButton
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberSurface
@@ -54,9 +54,9 @@ import com.plainticker.mobile.ui.theme.AmberType
 import kotlinx.coroutines.launch
 
 /**
- * The vote sheet: the same [AmberSheet] surface the swap and pass reach for (once they restyle to
- * it), drawing whatever [VoteSheetContent] the machine's state resolved to. It decides nothing,
- * computes nothing, and states no figure the model did not hand it.
+ * The vote sheet: the same [AmberSheet] surface the swap and pass now also reach for, drawing
+ * whatever [VoteSheetContent] the machine's state resolved to. It decides nothing, computes
+ * nothing, and states no figure the model did not hand it.
  *
  * There is no new component family here. The action that opens it is a [TextAction][
  * com.plainticker.mobile.ui.components.TextAction] on a row and on Detail, and what it opens is
@@ -98,10 +98,10 @@ fun VoteSheet(state: VoteState, actions: VoteActions, modifier: Modifier = Modif
  * primary action, the sheet, chips). Its surface and its cell text now both read a theme-following
  * `AmberColors` by default (`ui/components/FactGrid.kt`), and this call site still pins its own
  * `surface` explicitly to [colors]' own `surfaceHigh`, the same fill [AmberSheet] gives the sheet
- * around them, rather than Instrument's Elevated. [LiveBar] and [SecondaryButton] read the same
- * theme-following default now too. [SecondaryButton] itself is still the same kind of leftover
- * anatomy-wise: there is no Amber secondary action among the six named components, so the "Close"
- * button below stays Instrument's bordered button rather than a forked one-off.
+ * around them, rather than Instrument's Elevated. [LiveBar] and [AmberSecondaryAction] read the
+ * same theme-following default. [AmberSecondaryAction] itself used to be a private copy in
+ * `YouScreen.kt`; the "Close" button below now reaches for the shared one rather than Instrument's
+ * retired `SecondaryButton` or a forked one-off.
  */
 @Composable
 internal fun ColumnScope.VoteSheetBody(
@@ -168,7 +168,7 @@ internal fun ColumnScope.VoteSheetBody(
             AmberPrimaryAction(label = it.label.text(), onClick = actions.of(it.kind))
         }
         content.secondary?.let {
-            SecondaryButton(label = it.label.text(), onClick = actions.of(it.kind))
+            AmberSecondaryAction(label = it.label.text(), onClick = actions.of(it.kind))
         }
     }
 }

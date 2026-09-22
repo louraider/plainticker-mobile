@@ -58,10 +58,53 @@ class AmberPrimaryActionTest {
     fun `the label never wraps unbounded and always has an overflow strategy`() {
         assertTrue(source.count { it == '\n' } > 0)
         val calls = Regex("""Text\(([^)]*)\)""").findAll(source).map { it.groupValues[1] }.toList()
-        assertTrue("expected at least the enabled and disabled label Text calls", calls.size >= 2)
+        assertTrue("expected at least the enabled, disabled and secondary label Text calls", calls.size >= 3)
         calls.forEach { call ->
             assertTrue("maxLines = 1" in call)
             assertTrue("TextOverflow.Ellipsis" in call)
         }
+    }
+
+    // ---- AmberSecondaryAction, retiring Instrument's SecondaryButton --------------------------
+
+    @Test
+    fun `AmberSecondaryAction is a real bordered button, transparent fill, textPrimary content`() {
+        assertTrue("fun AmberSecondaryAction(" in source)
+        val fn = source.substring(source.indexOf("fun AmberSecondaryAction("))
+        assertTrue("OutlinedButton(" in fn)
+        assertTrue("containerColor = Color.Transparent" in fn)
+        assertTrue("contentColor = colors.textPrimary" in fn)
+        assertTrue("BorderStroke(1.dp, colors.border)" in fn)
+        assertFalse("a secondary action is a real button, not a text link", "TextAction(" in fn)
+    }
+
+    @Test
+    fun `AmberSecondaryAction shares the primary action's 56dp, 16dp-radius frame`() {
+        val fn = source.substring(source.indexOf("fun AmberSecondaryAction("), source.indexOf("fun AmberActionFrame("))
+        assertTrue("AmberActionFrame(" in fn)
+        assertTrue("shape = AmberActionShape" in fn)
+    }
+
+    // ---- The focus ring every enabled action keeps, the one thing the retired ButtonFrame drew --
+
+    @Test
+    fun `AmberPrimaryAction and AmberSecondaryAction both wrap their Button in the shared focus frame`() {
+        val primary = source.substring(source.indexOf("fun AmberPrimaryAction("), source.indexOf("fun AmberDisabledAction("))
+        val secondary = source.substring(source.indexOf("fun AmberSecondaryAction("), source.indexOf("fun AmberActionFrame("))
+        listOf(primary, secondary).forEach { fn ->
+            assertTrue("AmberActionFrame(" in fn)
+            assertTrue("focusColor = colors.actionText" in fn)
+        }
+    }
+
+    @Test
+    fun `the shared frame draws a 2dp ring on the button's own radius, and AmberDisabledAction never takes it`() {
+        val frame = source.substring(source.indexOf("fun AmberActionFrame("))
+        assertTrue("the ring must follow the 16dp radius, not a plain rectangle", ".border(2.dp, focusColor, AmberActionShape)" in frame)
+        val disabled = source.substring(source.indexOf("fun AmberDisabledAction("), source.indexOf("fun AmberSecondaryAction("))
+        assertFalse(
+            "a disabled Button takes no focus, same as the retired Instrument DisabledButton",
+            "AmberActionFrame(" in disabled,
+        )
     }
 }

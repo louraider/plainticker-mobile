@@ -51,8 +51,11 @@ class ThemeWiringTest {
     }
 
     @Test
-    fun `the bar, the header and the skeleton all default to the system-following palette`() {
-        listOf("AmberBottomNav.kt", "TopBar.kt", "Skeleton.kt").forEach { file ->
+    fun `the bar, the header, the skeleton and the banner all default to the system-following palette`() {
+        // Banner.kt added by the chrome restyle pass: it had no colors parameter at all before,
+        // fixed dark Elevated and Ink2 unconditionally, the same fault this test already caught
+        // for the other three files if a caller forgot the theme-following default.
+        listOf("AmberBottomNav.kt", "TopBar.kt", "Skeleton.kt", "Banner.kt").forEach { file ->
             val source = read("components/$file")
             assertTrue("$file has no defaultAmberColors() default", "defaultAmberColors()" in source)
         }
