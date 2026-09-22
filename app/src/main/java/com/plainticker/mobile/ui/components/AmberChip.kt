@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 
@@ -40,6 +41,14 @@ import com.plainticker.mobile.ui.theme.AmberType
  * to [AmberColors.surfaceHigh] with a 1dp [AmberColors.border] ring, DESIGN.md section 2's "the
  * selected chip once it morphs to full radius" description of what [AmberColors.surfaceHigh] and
  * [AmberColors.actionFill] are for.
+ *
+ * **The unselected ring, light theme only.** `surfaceRaised` sits about 1.03:1 over
+ * `surfaceGround` in the light set (`#FFFFFF` on `#FFFBF2`, both in Tokens.kt) against a healthy
+ * 1.12:1 in dark, so an unselected chip drawn on the ground it sits on (the stocks filter row,
+ * every sector chip) is nearly invisible there; dark's own 1.12:1 step already reads. The same
+ * [AmberColors.border] ring [selected] already carries now also draws unselected, gated on
+ * `colors === AmberLightColors` rather than a repaint of the light palette itself: dark keeps
+ * drawing exactly the un-ringed chip it always has.
  *
  * **The morph, filled in at the seam the earlier pass left.** Section 5.3 calls for the corner
  * radius itself to morph from 8dp to full as a chip is selected; [shapeFor] now animates that one
@@ -74,7 +83,7 @@ fun AmberChip(
             .focusOutline(interactionSource)
             .clip(shape)
             .background(background)
-            .then(if (selected) Modifier.border(1.dp, colors.border, shape) else Modifier)
+            .then(if (selected || colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,

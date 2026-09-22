@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,12 +23,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
 
 /**
  * One bar standing in for a line of text, on [colors]' own [AmberColors.surfaceRaised]: a skeleton
  * built for a dark ground (Instrument's fixed [com.plainticker.mobile.ui.theme.Elevated]) read as a
  * row of near-black blocks on Amber's light ground, exactly the "built for a dark ground" fault
  * this pass looks for, so the fill now follows [defaultAmberColors] like every other shared piece.
+ *
+ * **The light-only ring.** Light's `surfaceRaised` (`#FFFFFF`) sits about 1.03:1 over
+ * `surfaceGround` (`#FFFBF2`), so this fill was reading as a blank gap on white even after the
+ * fix above, first-paint's own placeholder and (`DetailScreen.kt`'s `VerdictBlock.Locked`) a
+ * gated classification's locked state alike. A 1dp [AmberColors.border] ring, gated on
+ * `colors === AmberLightColors`, gives it an edge exactly where the tone alone does not; dark's
+ * 1.12:1 step already reads and keeps its plain fill, unringed.
  */
 @Composable
 fun SkeletonBar(
@@ -36,7 +45,12 @@ fun SkeletonBar(
     height: Dp = 14.dp,
     colors: AmberColors = defaultAmberColors(),
 ) {
-    Box(modifier.size(width = width, height = height).background(colors.surfaceRaised))
+    Box(
+        modifier
+            .size(width = width, height = height)
+            .background(colors.surfaceRaised)
+            .then(if (colors === AmberLightColors) Modifier.border(1.dp, colors.border) else Modifier),
+    )
 }
 
 /** [count] placeholder list rows at 64dp with dividers; announced once as "Loading". */

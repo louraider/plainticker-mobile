@@ -83,6 +83,23 @@ class AmberChipTest {
         assertTrue("border(1.dp, colors.border, shape)" in source)
     }
 
+    // ---- The light-only edge on an unselected chip (DESIGN.md section 8's added exception) -----
+
+    /**
+     * Light's `surfaceRaised` (`#FFFFFF`) sits about 1.03:1 over `surfaceGround` (`#FFFBF2`,
+     * `AmberContrastTest`'s own pinned number), so an unselected chip drawn on the ground it sits
+     * on was reading as nearly invisible in light while dark's 1.12:1 step already worked. The
+     * same ring [selected] already carries now also draws unselected, gated on the light palette
+     * only: dark must keep drawing the plain, unringed chip it always has.
+     */
+    @Test
+    fun `an unselected chip also takes the border in light, gated on the light palette rather than a repaint`() {
+        assertTrue(
+            "the unselected ring must be gated on colors === AmberLightColors, not drawn unconditionally",
+            "selected || colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier" in source,
+        )
+    }
+
     // ---- The 48dp touch target on a 32dp visual chip -------------------------------------------
 
     @Test

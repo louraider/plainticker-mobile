@@ -152,4 +152,25 @@ class AmberTickerRowTest {
         val longestMeta = "$2.7k behind, too thin · 2 d old"
         assertTrue(longestMeta.length == 32)
     }
+
+    // ---- AmberTickerRowGroup's own light-only edge (DESIGN.md section 8's added exception) -----
+
+    /**
+     * Light's `surfaceRaised` sits about 1.03:1 over `surfaceGround` (`AmberContrastTest`'s own
+     * pinned number) against dark's healthy 1.12:1, so a group of rows here loses the tonal
+     * separation its whole point depends on: reading as one shared block distinct from the page.
+     * The group's own already-clipped 16dp silhouette takes a single `border` ring in light,
+     * which outlines the group once rather than framing each row inside it, so DESIGN.md section
+     * 8's surviving rule ("no border-as-frame around every row") still holds.
+     */
+    @Test
+    fun `AmberTickerRowGroup takes a light-only border around its own clipped shape, never in dark`() {
+        val fn = body("fun AmberTickerRowGroup(")
+        assertTrue("val shape = RoundedCornerShape(16.dp)" in fn)
+        assertTrue(".clip(shape)" in fn)
+        assertTrue(
+            "the ring must be gated on colors === AmberLightColors and match the group's own clip shape",
+            ".then(if (colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier)" in fn,
+        )
+    }
 }

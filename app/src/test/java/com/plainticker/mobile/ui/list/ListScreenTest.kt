@@ -71,4 +71,71 @@ class ListScreenTest {
         // sibling needs none, since the Row's own verticalAlignment centers it.
         assertFalse(".align(" in jumpCall)
     }
+
+    // ---- Stocks' own grouped rows, light-only edge (DESIGN.md section 8's added exception) ------
+
+    /**
+     * Stocks is the screen with the most rows to lose the tonal-lift defect on (roughly 830 of
+     * them), and it is exactly the screen [AmberTickerRowGroup]'s own single-`Column` border does
+     * not fit: one `LazyColumn` item per row for real recycling, not one non-lazy group per
+     * chapter (this file's own doc comment on [groupedRowModifier]). So the light-only edge is
+     * drawn a row at a time by [groupEdge] instead: every call site must thread [colors] through
+     * so the function can gate the edge on the light palette, and the edge itself must never draw
+     * a full frame around a middle row, or the seam-between-rows anti-pattern DESIGN.md section 8
+     * still bans comes back.
+     */
+    @Test
+    fun `groupedRowModifier takes colors and gates its own edge on the light palette`() {
+        val fn = body("private fun groupedRowModifier(", "private fun Modifier.groupEdge(")
+        assertTrue(
+            "groupedRowModifier must take colors so it can gate the light-only edge",
+            fn.startsWith("private fun groupedRowModifier(colors: AmberColors, isFirst: Boolean, isLast: Boolean): Modifier"),
+        )
+        assertTrue(
+            "the edge must be gated on colors === AmberLightColors, not drawn in both themes",
+            "if (colors === AmberLightColors) {" in fn,
+        )
+        assertTrue("Modifier.groupEdge(color = colors.border, corner = corner, isFirst = isFirst, isLast = isLast)" in fn)
+    }
+
+    /**
+     * [groupEdge] draws the left and right edges unconditionally (every row shares those sides
+     * with its neighbours, so they need no `isFirst`/`isLast` gate), but the top edge only under
+     * `isFirst` and the bottom edge only under `isLast`, which is the whole mechanism that keeps a
+     * middle row from getting a horizontal line of its own, i.e. a frame.
+     */
+    @Test
+    fun `groupEdge draws a top edge only on the first row and a bottom edge only on the last, never a frame per row`() {
+        val fn = body("private fun Modifier.groupEdge(", "private val RowGapHeight")
+        assertTrue("drawWithContent" in fn)
+        assertTrue("drawContent()" in fn)
+        val ifFirstIndex = fn.indexOf("if (isFirst) {")
+        val ifLastIndex = fn.indexOf("if (isLast) {")
+        assertTrue("groupEdge must gate its top edge on isFirst", ifFirstIndex >= 0)
+        assertTrue("groupEdge must gate its bottom edge on isLast", ifLastIndex >= 0)
+        // The two conditional edges must be the only place drawLine appears past the always-drawn
+        // left/right pair: exactly 4 drawLine calls total (left, right, top-if-first, bottom-if-last).
+        assertTrue(Regex("drawLine\\(").findAll(fn).count() == 4)
+    }
+
+    @Test
+    fun `every groupedRowModifier call site threads colors through, all four rows this screen groups`() {
+        // "= groupedRowModifier(" excludes the function's own definition ("private fun
+        // groupedRowModifier(..."), matching only the four `modifier = groupedRowModifier(...)`
+        // call sites below.
+        val callSites = Regex("= groupedRowModifier\\(").findAll(source).toList()
+        assertTrue(
+            "expected the four grouped-row call sites this screen draws (chapter rows, next-up " +
+                "leaders, the flat analyzed search results, the flat price-only search results)",
+            callSites.size == 4,
+        )
+        callSites.forEach { call ->
+            val afterOpenParen = source.substring(call.range.last + 1).trimStart()
+            assertTrue(
+                "call site must pass colors as groupedRowModifier's first argument: " +
+                    afterOpenParen.take(40),
+                afterOpenParen.startsWith("colors,"),
+            )
+        }
+    }
 }

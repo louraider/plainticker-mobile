@@ -270,6 +270,20 @@ carrying them forward unexamined would put a false rule in a document meant to b
   is Instrument's original reason for banning cards (no shadow, no elevation, no border-as-frame
   around every row) rather than the flat "never a container" reading.
 
+  **One narrow, light-only exception, added 2026-09-22.** `surfaceRaised` over `surfaceGround`
+  measures about 1.03:1 in the light set (`#FFFFFF` on `#FFFBF2`) against a healthy 1.12:1 in
+  dark, so a light grouped row, an unselected chip and a skeleton bar's fill were all reading as
+  nearly invisible on white: the tonal step Amber's own structure depends on simply is not there
+  in light. `AmberChip`, `SkeletonBar`, `AmberTickerRowGroup` and `ListScreen.kt`'s own lazy
+  chapters now draw one 1dp `border` edge around each of those containers, gated on the light
+  palette. The rule above still holds for what it actually bans: this edge outlines a group once
+  (or a single chip, or a single skeleton bar), never a frame around every row inside a group, and
+  dark is untouched, byte-identical, still the founder's approved palette. `AmberChipTest`,
+  `SkeletonTest`, `AmberTickerRowTest` and `ListScreenTest` each pin that their own component's
+  edge exists in light and is absent in dark; `AmberContrastTest` pins the measured contrast
+  (light `border` over `surfaceRaised` and over `surfaceGround`) and dark's own untouched
+  primitives, so a future palette edit cannot silently reintroduce the flat look.
+
 **Still banned, repo-wide, unrelated to which of the four directions had won**: purple, and
 frosted glass or glow ("Purple is banned by repo convention; frosted glass and glow are on the
 slop list," `docs/design-research-2026-09-21.md` section 2). Gradients and drop shadows are not
