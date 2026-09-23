@@ -42,6 +42,11 @@
     <string name="value_no">No</string>
     <string name="value_none">None</string>
     <string name="value_missing">-</string>
+    <!-- The Pro-numbers lock (founder decision 2026-09-23): what stands in a figure slot the
+         server withheld from a free, non-AAPL caller, everywhere that slot is too small for a
+         full sentence (Stocks' own row, an axis on Detail's "Against the sector"). Never
+         value_missing's dash: a dash reads as no data collected, and this is data withheld. -->
+    <string name="pro_locked_value">Pro</string>
     <string name="state_loading">Loading</string>
     <string name="banner_offline">Offline, data as of %1$s</string>
 
@@ -201,6 +206,10 @@
     <string name="detail_fact_supply_sub">%1$s tokens at %2$s decimals</string>
     <string name="detail_heading_sector">Against the sector</string>
     <string name="detail_composite">composite %1$s</string>
+    <!-- The Pro-numbers lock (2026-09-23): what the section head's meta reads instead of
+         detail_composite when the server withheld the percentile from a free, non-AAPL caller,
+         told apart from a payload that simply carries none by the two axes' own locked flag. -->
+    <string name="detail_composite_locked">composite, Pro</string>
     <string name="detail_track_quality">Quality</string>
     <string name="detail_track_valuation">Valuation</string>
     <string name="detail_track_momentum">Momentum</string>

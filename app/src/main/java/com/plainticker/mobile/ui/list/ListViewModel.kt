@@ -66,6 +66,16 @@ data class ListRow(
      * sector for, which is grouped under a trailing chapter rather than dropped.
      */
     val sector: String? = null,
+    /**
+     * True when [composite] came back null under the Pro-numbers lock (founder decision
+     * 2026-09-23) rather than because this row has no analysis: `/summary` lists only classified
+     * tickers, so an analyzed row's own composite is never null for any other reason
+     * ([SummaryRow.toListRow]'s own doc comment has the exact signal). Always false on a
+     * price-only row, where [composite] is null because there is no analysis to withhold in the
+     * first place. Reused everywhere [ListRow] itself is: a row rebuilt by [withPrice] or
+     * [carryingPriceFrom] keeps whatever this field already was, the same way it keeps [analyzed].
+     */
+    val locked: Boolean = false,
 ) {
     /** What the row shows left: the token symbol once the catalog is known, else the ticker. */
     val display: String get() = symbol ?: ticker
@@ -760,6 +770,7 @@ class ListViewModel(
         poolUsd = null,
         analyzed = true,
         sector = sector,
+        locked = isProLocked(),
     )
 
     private fun XStockAsset.toPriceOnlyRow() = ListRow(
@@ -805,6 +816,25 @@ class ListViewModel(
         const val SNAPSHOT_BANNER_GRACE_MS = 1_500L
     }
 }
+
+/**
+ * The one ticker `/summary` never locks (`lib/billing/gate.ts`'s `OPEN_EXAMPLE_TICKER`, the same
+ * name and the same value): the founder's permanent, fully open example, so a reader always has
+ * one real composite to look at even with no code presented.
+ */
+internal const val OPEN_EXAMPLE_TICKER = "AAPL"
+
+/**
+ * True when [SummaryRow.composite] came back null because the Pro-numbers lock withheld it, not
+ * because this ticker carries no analysis: `/summary` (`SummaryResponse`'s own doc comment) lists
+ * only tickers PlainTicker has classified, so a served row's composite is otherwise never null.
+ * The server nulls `composite`, `tone`, `headline` and `setup_score` together on every locked row
+ * and leaves [OPEN_EXAMPLE_TICKER] (AAPL) and a Pro caller's own response untouched, so this same
+ * combination cannot arise any other way; the app has no separate signal for "is this device Pro"
+ * to check instead, and does not need one.
+ */
+internal fun SummaryRow.isProLocked(): Boolean =
+    composite == null && (tone == null || headline == null) && !ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true)
 
 /**
  * True when a whole payload's composites are the 0 to 1 fraction the v1 fixture and the design

@@ -229,6 +229,15 @@ padding and the row's own 16dp are taken out):
 | `context`, Vote leader row (figure + trailingAction) | `context` 14/400 | 167.92dp of 289.14dp total | "9,999 voters", 83.16dp | 84.76dp (16.59dp) | not reached at realistic content |
 | `context`, Watchlist row (trailingAction, no figure) | `context` 14/400 | 263.19dp | realistic join (39 chars), 246.57dp | 16.62dp at 1.0x, wraps at 1.3x | wraps to 2 lines |
 
+**The Pro-numbers lock's own figure marker, added 2026-09-23.** Stocks' `AnalyzedRow` draws
+`pro_locked_value` ("Pro") in the `figure` slot in place of the composite the server withheld from
+a free, non-AAPL caller. Measured the same way, fontTools against `res/font/bricolage_grotesque.ttf`
+at `figureRow`'s exact instantiation (18sp, `wght` 600, `wdth` 100, `opsz` 18): "Pro" is 29.862dp,
+shorter than every figure this row's own budget table above is already proven against (the shortest
+being "9,999 voters" at 83.16dp of *context*, beside a figure), so it can only widen the context
+budget it competes with, never narrow it, at 1.0x or at 1.3x (38.82dp). `AmberTickerRowTest` pins
+this arithmetic.
+
 `AmberTickerRowGroup` is the 16dp tonal container a run of rows sits inside (`surfaceGround` behind
 a 1dp seam, each row's own `surfaceRaised`). It is a non-lazy `Column`, so it fits a small, fixed
 run (Today's "Next up," the onboarding backdrop's six sample rows) and not a list that must stay a

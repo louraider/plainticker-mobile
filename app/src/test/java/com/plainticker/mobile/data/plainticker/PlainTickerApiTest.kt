@@ -235,6 +235,77 @@ class PlainTickerApiTest {
         assertEquals(Tone.POSITIVE, verdict.tone)
     }
 
+    // ---- The Pro-numbers lock (founder decision 2026-09-23, lib/api/locked-numbers.ts) -----
+
+    @Test
+    fun `a locked axis decodes with value, position, state, label and tone all null, scale kept`() {
+        val payload = HttpClientFactory.json.decodeFromString(
+            AnalysisPayload.serializer(),
+            """{"ticker":"AAPL","composite_percentile":null,"axes":{
+                "quality":{"value":8.0,"scale":"0-9","position":0.8889,"state":"strong","label_en":"Strong","tone":"positive"},
+                "valuation":{"value":null,"scale":"0-100","position":null,"state":null,"label_en":null,"tone":null,"locked":true},
+                "momentum":{"value":null,"scale":"0-1","position":null,"state":null,"label_en":null,"tone":null,"locked":true}
+            }}""",
+        )
+        assertNull(payload.compositePercentile)
+
+        val quality = payload.axes.quality!!
+        assertFalse("quality is never withheld by this lock", quality.locked)
+        assertEquals(8.0, quality.value!!, 1e-9)
+
+        val valuation = payload.axes.valuation!!
+        assertTrue(valuation.locked)
+        assertNull(valuation.value)
+        assertNull(valuation.position)
+        assertNull(valuation.state)
+        assertNull(valuation.labelEn)
+        assertNull(valuation.tone)
+        assertEquals("scale is kept even when the axis is locked", "0-100", valuation.scale)
+
+        val momentum = payload.axes.momentum!!
+        assertTrue(momentum.locked)
+        assertEquals("0-1", momentum.scale)
+    }
+
+    @Test
+    fun `an unlocked axis decodes the value, and locked defaults to false with no key on the wire`() {
+        val payload = HttpClientFactory.json.decodeFromString(
+            AnalysisPayload.serializer(),
+            """{"ticker":"AAPL","axes":{"valuation":{"value":51.0,"scale":"0-100","position":0.51,"state":"fair","label_en":"Moderate","tone":"caution"}}}""",
+        )
+        val valuation = payload.axes.valuation!!
+        assertFalse(valuation.locked)
+        assertEquals(51.0, valuation.value!!, 1e-9)
+        assertEquals("Moderate", valuation.labelEn)
+        assertEquals(Tone.CAUTION, valuation.tone)
+    }
+
+    @Test
+    fun `the shipped fixture's axes carry no locked flag, the shape a server before this lock always sent`() = runTest {
+        val payload = api(MockApi { respondJson(Fixtures.read("plainticker/analysis-aapl.json")) }).getAnalysis("AAPL")
+        assertFalse(payload.axes.quality!!.locked)
+        assertFalse(payload.axes.valuation!!.locked)
+        assertFalse(payload.axes.momentum!!.locked)
+    }
+
+    /**
+     * `forward.score` and `forward.raw`'s four growth figures are also nulled by this lock
+     * (`lib/api/locked-numbers.ts`), but neither is modelled ([Forward]'s own doc comment: they
+     * "stay off the hackathon build by decision"), so a payload carrying them null, locked or not,
+     * must still decode cleanly with everything this app does model intact.
+     */
+    @Test
+    fun `a locked forward block decodes without failing, even though this app models none of it`() {
+        val payload = HttpClientFactory.json.decodeFromString(
+            AnalysisPayload.serializer(),
+            """{"ticker":"AAPL","forward":{"score":null,"raw":{
+                "nextEarningsDate":"2026-10-28",
+                "revenueGrowthTTMYoy":null,"epsGrowthTTMYoy":null,"epsCagr3y":null,"epsGrowthShort":null
+            }}}""",
+        )
+        assertEquals("2026-10-28", payload.forward!!.raw!!.nextEarningsDate)
+    }
+
     @Test
     fun `ageDays counts whole days since as_of`() {
         val payload = AnalysisPayload(ticker = "T", asOf = "2026-09-08T13:25:30.278Z")

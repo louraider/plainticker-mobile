@@ -275,6 +275,102 @@ class ListViewModelTest {
         }
     }
 
+    // ---- The Pro-numbers lock (founder decision 2026-09-23) --------------------------------
+
+    /**
+     * The exact shape `/api/v1/summary` sends a free, non-AAPL caller under the lock
+     * (`app/api/v1/summary/route.ts`'s `withholdVerdictInputs`): composite, tone, headline and
+     * setup_score all null together, on an otherwise served, classified row.
+     */
+    private fun SummaryRow.locked() = copy(composite = null, tone = null, headline = null, setupScore = null)
+
+    @Test
+    fun `isProLocked reads the server's own withheld shape, direct on the row`() {
+        val open = SummaryRow(ticker = "AAPL", composite = null, tone = null, headline = null, stale = false)
+        assertFalse("the one gate rule: AAPL is never read as locked", open.isProLocked())
+        assertFalse("lowercase aapl is still the same ticker", open.copy(ticker = "aapl").isProLocked())
+
+        val full = SummaryRow(ticker = "JPM", composite = 0.66, tone = Tone.POSITIVE, headline = "h", stale = false)
+        assertFalse("a fully served row is not locked", full.isProLocked())
+
+        val locked = SummaryRow(ticker = "JPM", composite = null, tone = null, headline = null, stale = false)
+        assertTrue(locked.isProLocked())
+        // Either null alone, together with a null composite, is already the locked signal (task
+        // instruction: "a null composite together with a null tone or headline").
+        assertTrue(locked.copy(headline = "kept").isProLocked())
+        assertTrue(locked.copy(tone = Tone.POSITIVE).isProLocked())
+        // A non-null composite is never locked, whatever else is null: /summary only lists rows
+        // it has classified, so a genuinely unclassified ticker never reaches this function at all.
+        assertFalse(locked.copy(composite = 0.5).isProLocked())
+    }
+
+    @Test
+    fun `a row the server locked draws as locked, and the one it left open does not`() = runTest {
+        val payload = summary().let { it.copy(rows = listOf(it.rows[0], it.rows[1].locked())) }
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(payload)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing }
+            val aapl = state.analyzed.single { it.ticker == "AAPL" }
+            val jpm = state.analyzed.single { it.ticker == "JPM" }
+            assertFalse("AAPL is the one gate rule's permanent example, never locked", aapl.locked)
+            assertEquals(71.0, aapl.composite!!, 1e-9)
+            assertTrue("composite, tone and headline all null on a served row is the lock's own shape", jpm.locked)
+            assertNull(jpm.composite)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `AAPL itself is never read as locked even with a null composite, the one gate rule`() = runTest {
+        val payload = summary().let { it.copy(rows = listOf(it.rows[0].locked())) }
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(payload)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing }
+            // A shape that should never actually arrive from the server (one-gate-rule: AAPL is
+            // always full), but the client's own signal is ticker equality, not blind trust that
+            // the server never sends this combination, so it is asserted directly.
+            assertFalse(state.analyzed.single { it.ticker == "AAPL" }.locked)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a row without analysis is never read as locked - there was nothing to withhold`() = runTest {
+        val vm = viewModel()
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing }
+            assertTrue(state.withoutAnalysis.isNotEmpty())
+            assertTrue("no price-only row is ever locked", state.withoutAnalysis.none { it.locked })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Sorting on nulls must be stable and must not imply rank (task instruction): every locked row
+     * ties on a null composite, so the join's existing composite-desc-nulls-last-then-ticker
+     * comparator falls back to alphabetical order among them rather than a leaderboard position no
+     * caller was actually shown. This is the same comparator the unlocked rows already sorted by;
+     * the lock changes what value composite carries, not how the list orders it.
+     */
+    @Test
+    fun `locked rows tie on a null composite and settle alphabetically, never implying a rank`() = runTest {
+        val payload = summary().let {
+            it.copy(rows = listOf(it.rows[0], it.rows[1].locked().copy(ticker = "TSLA"), it.rows[1].locked().copy(ticker = "JPM")))
+        }
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(payload)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing }
+            // AAPL's own real composite still sorts first; the two locked tickers tie at null and
+            // fall back to ticker order (JPM before TSLA), not to the order the server happened to
+            // list them in (TSLA, then JPM, above).
+            assertEquals(listOf("AAPL", "JPM", "TSLA"), state.analyzed.map { it.ticker })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `no rendered string comes from the Ukrainian headline`() = runTest {
         assertTrue("the fixture carries a Cyrillic headline", cyrillic.containsMatchIn(ukrainianHeadline))

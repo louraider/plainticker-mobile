@@ -10,6 +10,12 @@ import kotlinx.serialization.Serializable
  * read" and [nextSteps] feeds "What to check next". `sectorTable` and `methodHistory` are on the
  * wire too but no screen in this build reads them, so they are left for `ignoreUnknownKeys` to
  * drop rather than modelled here.
+ *
+ * The Pro-numbers lock (founder decision 2026-09-23) nulls `sectorTable.own.revenueYoy` and
+ * `methodHistory.latest.composite` for a free, non-AAPL caller (`lib/api/read-payload.ts`). Since
+ * neither block is modelled above, the lock changes nothing this class parses or a screen draws
+ * either: there is no rendered field for it to withhold yet, only unknown keys `ignoreUnknownKeys`
+ * already dropped before this lock existed.
  */
 @Serializable
 data class TickerReadResponse(
