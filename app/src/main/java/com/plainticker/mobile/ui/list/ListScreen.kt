@@ -733,13 +733,24 @@ private fun Modifier.groupEdge(color: Color, corner: Dp, isFirst: Boolean, isLas
 
 private val RowGapHeight = 1.dp
 
-/** Ticker and company left, the composite as an integer with the row's disclosure line right. */
+/**
+ * Ticker and company left, the composite as an integer with the row's disclosure line right.
+ *
+ * [ListRow.locked] draws [R.string.pro_locked_value] in the figure slot instead: the composite
+ * `/summary` withheld under the Pro-numbers lock never reaches this app to round or print, so
+ * there is no number behind this word, the same "nothing here to blur" [row.composite] already
+ * being null gives the unlocked branch when there is genuinely no analysis. Measured against the
+ * real font, this word is the shortest content this slot ever draws
+ * (`AmberTickerRowTest`'s own "Pro" arithmetic), so it always clears the figure budget the row's
+ * own worst-case figure ("31,209.9 SKR") already proves.
+ */
 @Composable
 private fun AnalyzedRow(row: ListRow, modifier: Modifier = Modifier, colors: AmberColors, onOpenDetail: (String) -> Unit) {
+    val figure = if (row.locked) stringResource(R.string.pro_locked_value) else row.composite?.let { Fmt.decimal(it, decimals = 0) }
     AmberTickerRow(
         ticker = row.display,
         company = row.company,
-        figure = row.composite?.let { Fmt.decimal(it, decimals = 0) },
+        figure = figure,
         context = rowMeta(row),
         colors = colors,
         onClick = { onOpenDetail(row.ticker) },

@@ -634,15 +634,16 @@ private fun FundamentalsBlock(state: DetailUiState) {
 
     AmberSectionHead(title = stringResource(R.string.detail_heading_sector), meta = state.compositeMeta?.text())
     state.tracks.forEach { row ->
-        if (row.value != null) {
-            Track(
+        when {
+            row.locked -> LockedRow(row.label.text())
+            row.value != null -> Track(
                 label = row.label.text(),
                 value = row.value,
                 state = row.state,
                 positionPct = row.positionPct,
             )
-        } else {
-            AbsentRow(row.label.text())
+
+            else -> AbsentRow(row.label.text())
         }
     }
 
@@ -905,6 +906,32 @@ private fun AbsentRow(label: String) {
         Text(text = label, style = AmberType.body, color = colors.textSecondary, modifier = Modifier.weight(1f))
         Text(
             text = stringResource(R.string.detail_not_available_filer),
+            style = AmberType.context,
+            color = colors.textTertiary(AmberSurface.GROUND),
+        )
+    }
+}
+
+/**
+ * An axis the Pro-numbers lock withheld (founder decision 2026-09-23): the same anatomy as
+ * [AbsentRow], on purpose, because both are "a track with no marker to draw," but never its
+ * sentence. [R.string.pro_locked_value] says entitlement, not absence, so a reader who already
+ * saw "not available for this filer" on quality (an unlikely, foreign-filer case) never mistakes
+ * a withheld valuation or momentum axis for the same fact about the company.
+ */
+@Composable
+private fun LockedRow(label: String) {
+    val colors = defaultAmberColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = Side, end = Side, top = 14.dp, bottom = 6.dp)
+            .semantics(mergeDescendants = true) {},
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(text = label, style = AmberType.body, color = colors.textSecondary, modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.pro_locked_value),
             style = AmberType.context,
             color = colors.textTertiary(AmberSurface.GROUND),
         )

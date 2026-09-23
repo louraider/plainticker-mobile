@@ -93,6 +93,10 @@ class ListFinishedScreenTest {
      * context line, not a value plus a sub-value. The composite is the figure and the row's own
      * disclosure sentence ([rowMeta], unchanged by this pass) is the context, so the word this
      * finding was about is not drawn on the row at all any more (Detail still carries it).
+     *
+     * The Pro-numbers lock (2026-09-23) adds one condition ahead of that figure, never a second
+     * column: [ListRow.locked] swaps the composite for [R.string.pro_locked_value], in the exact
+     * same slot, rather than opening a place beside it for a lock marker to jog against.
      */
     @Test
     fun `Stocks' analyzed row carries the composite and the disclosure line, and reserves no state-word column`() {
@@ -101,7 +105,11 @@ class ListFinishedScreenTest {
             screen.indexOf("private fun AnalyzedRow("),
             screen.indexOf("private fun PriceOnlyRow("),
         )
-        assertTrue("the composite is the row's figure", "figure = row.composite" in analyzed)
+        assertTrue("the composite still feeds the figure once unlocked", "row.composite" in analyzed)
+        assertTrue(
+            "a locked row draws the shared Pro marker in that same slot, never the composite",
+            "row.locked" in analyzed && "R.string.pro_locked_value" in analyzed,
+        )
         assertTrue("the row's context is its own disclosure sentence", "context = rowMeta(row)" in analyzed)
         assertFalse("no reserved state-word column on the Amber row", "reserveValueSub" in analyzed)
         assertFalse("no fixed-width state-word cell on the Amber row", "valueSubWidth" in analyzed)

@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.MultiplierSource
 import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.data.plainticker.Axes
 import com.plainticker.mobile.data.plainticker.Axis
 import com.plainticker.mobile.data.xstocks.MarketSource
 import com.plainticker.mobile.data.xstocks.PriceLabel
@@ -116,9 +117,16 @@ data class TrustFact(
 )
 
 /**
- * One axis of "Against the sector". A [value] of null is a SEC-derived field the filer does not
- * publish (a foreign 20-F filer, a young one): the row says it is not available for this filer and
- * draws no marker, because a marker at zero would be a claim the payload never made.
+ * One axis of "Against the sector". A [value] of null is, ordinarily, a SEC-derived field the
+ * filer does not publish (a foreign 20-F filer, a young one): the row says it is not available for
+ * this filer and draws no marker, because a marker at zero would be a claim the payload never made.
+ *
+ * [locked] is the other, unrelated reason [value] can be null: the Pro-numbers lock (founder
+ * decision 2026-09-23) withholds valuation and momentum from a free, non-AAPL caller, and the
+ * sector actually has a value there, the server simply did not send it. The two must never draw
+ * the same sentence: "not available for this filer" is a fact about the filer, [locked] is a fact
+ * about entitlement, and screen has to tell them apart or it would claim data was never collected
+ * when it was only withheld.
  */
 data class TrackRow(
     val label: Copy,
@@ -126,6 +134,8 @@ data class TrackRow(
     /** The server's own state word, lowercased. Empty when the payload sent none. */
     val state: String,
     val positionPct: Float,
+    /** True when [Axis.locked] withheld this axis; see this class's own doc comment. */
+    val locked: Boolean = false,
 )
 
 /** One F-Score signal in the fixed order of docs/data-map.md. [ok] is null for "n/a". */
@@ -514,9 +524,27 @@ private fun unreadCell(label: Copy): TrustFact = TrustFact(
     sub = words(R.string.detail_chain_unread_sub),
 )
 
-/** "composite 51", from the percentile the payload carries; absent when it carries none. */
+/**
+ * True while the Pro-numbers lock is withholding this payload's composite and axes (founder
+ * decision 2026-09-23): read off [Axis.locked] on the two axes the server actually locks, since
+ * [AnalysisPayload.compositePercentile] carries no lock flag of its own on the wire. [Axes.quality]
+ * is never locked, so it is not consulted here.
+ */
+private val Axes.proNumbersLocked: Boolean get() = valuation?.locked == true || momentum?.locked == true
+
+/**
+ * "composite 51" from the percentile the payload carries; "composite, Pro" when the lock withheld
+ * it instead of a payload that simply carries none, told apart by [Axes.proNumbersLocked]; absent
+ * when there is no composite and no lock either (a server that predates the lock, or one with
+ * monetization off, on a payload with nothing to report).
+ */
 val DetailUiState.compositeMeta: Copy?
-    get() = analysis?.compositePercentile?.let { words(R.string.detail_composite, Fmt.decimal(it, decimals = 0)) }
+    get() {
+        val payload = analysis ?: return null
+        val value = payload.compositePercentile
+        if (value != null) return words(R.string.detail_composite, Fmt.decimal(value, decimals = 0))
+        return if (payload.axes.proNumbersLocked) words(R.string.detail_composite_locked) else null
+    }
 
 /**
  * Quality, valuation and momentum, in that order, each with the server's own state word lowercased.
@@ -538,6 +566,7 @@ private fun trackRow(@StringRes label: Int, axis: Axis?): TrackRow = TrackRow(
     value = axis?.value?.takeIf { it.isFinite() }?.let { axisValue(it, axis.scale) },
     state = (axis?.labelEn ?: axis?.state).orEmpty().lowercase(),
     positionPct = ((axis?.position ?: 0.0) * 100.0).toFloat(),
+    locked = axis?.locked == true,
 )
 
 /**

@@ -310,6 +310,42 @@ class AmberTickerRowTest {
         )
     }
 
+    // ---- Proof by arithmetic: the Pro-numbers lock's own figure marker (2026-09-23) -------------
+
+    /**
+     * Stocks' `AnalyzedRow` (`ListScreen.kt`) draws `pro_locked_value` ("Pro") in this row's own
+     * [figure] slot in place of the composite the server withheld from a free, non-AAPL caller
+     * (task DESIGN.md section 4's own clipping rule: this slot's marker must fit at 1.0x and 1.3x,
+     * the same rule the figures measured above already answer to). fontTools against
+     * `res/font/bricolage_grotesque.ttf`, 2026-09-22, [figureRow][AmberType.figureRow]'s exact
+     * instantiation (18sp, `wght` 600, `wdth` 100, `opsz` 18): "Pro" measures 29.862dp, well under
+     * every figure width this file's own tests above already prove the row tolerates, so it can
+     * only ever widen the [context] budget beside it, never narrow it past what is already proven.
+     */
+    @Test
+    fun `the locked figure marker is comfortably the shortest content this slot ever draws, at 1_0x and 1_3x`() {
+        val proMarkerWidthDp = 29.862
+
+        // The context budget test above already proves 113.220dp of figure content (the widest
+        // real figure this row draws anywhere) still leaves context 214.780dp; "Pro" leaves it
+        // strictly more room than that, so the budget it competes with only ever gets wider.
+        val worstRealFigureWidthDp = 113.220
+        assertTrue(
+            "the locked marker ($proMarkerWidthDp dp) must be no wider than the worst real figure " +
+                "this row already tolerates ($worstRealFigureWidthDp dp), or it could narrow a " +
+                "budget this file's own tests above have already proven",
+            proMarkerWidthDp <= worstRealFigureWidthDp,
+        )
+
+        // At 1.3x it stays the shortest content on the line: even the app's own widest figure
+        // grown to 1.3x (147.186dp, the leader-row test above) is still wider than "Pro" grown the
+        // same way.
+        val proMarkerWidthAt13xDp = proMarkerWidthDp * 1.3
+        assertEquals(38.821, proMarkerWidthAt13xDp, 0.01)
+        val worstRealFigureWidthAt13xDp = worstRealFigureWidthDp * 1.3
+        assertTrue(proMarkerWidthAt13xDp <= worstRealFigureWidthAt13xDp)
+    }
+
     // ---- Proof by arithmetic: trailingAction's own budget, at 1.0x and at 1.3x --------------------
 
     /**

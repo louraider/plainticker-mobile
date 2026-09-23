@@ -562,6 +562,49 @@ class DetailModelTest {
         assertNull(served(analysis = AnalysisState.Served(payload(composite = null))).compositeMeta)
     }
 
+    // ---- The Pro-numbers lock (founder decision 2026-09-23) --------------------------------------
+
+    private fun lockedAxes() = Axes(
+        quality = Axis(value = 8.0, scale = "0-9", position = 0.8889, state = "strong", labelEn = "Strong"),
+        valuation = Axis(scale = "0-100", locked = true),
+        momentum = Axis(scale = "0-1", locked = true),
+    )
+
+    @Test
+    fun `a locked axis draws no value and no state word, told apart from quality which stays free`() {
+        val state = served(analysis = AnalysisState.Served(payload(axes = lockedAxes(), composite = null)))
+        val (quality, valuation, momentum) = state.tracks
+
+        assertFalse("quality is never locked by the server", quality.locked)
+        assertEquals("8/9", quality.value)
+
+        assertTrue(valuation.locked)
+        assertNull("no real number behind the lock", valuation.value)
+        assertEquals("", valuation.state)
+
+        assertTrue(momentum.locked)
+        assertNull(momentum.value)
+    }
+
+    @Test
+    fun `the composite meta reads as locked only when an axis says so, never for a payload that simply has none`() {
+        val locked = served(analysis = AnalysisState.Served(payload(axes = lockedAxes(), composite = null)))
+        assertEquals(R.string.detail_composite_locked, label(locked.compositeMeta))
+        assertEquals(emptyList<String>(), args(locked.compositeMeta))
+
+        // The pre-existing case (no lock in play): unchanged by this task, still null rather than
+        // borrowing the locked sentence for an ordinary missing composite.
+        val ordinary = served(analysis = AnalysisState.Served(payload(composite = null)))
+        assertNull(ordinary.compositeMeta)
+    }
+
+    @Test
+    fun `an unlocked axis renders exactly as it always did, the Pro path unchanged`() {
+        val state = served()
+        assertTrue(state.tracks.none { it.locked })
+        assertEquals(R.string.detail_composite, label(state.compositeMeta))
+    }
+
     // ---- F-Score ----------------------------------------------------------------------------------
 
     @Test

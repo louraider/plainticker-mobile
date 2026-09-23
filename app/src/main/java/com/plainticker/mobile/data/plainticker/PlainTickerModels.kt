@@ -53,6 +53,14 @@ data class AnalysisPayload(
     @SerialName("as_of") val asOf: String? = null,
     val axes: Axes = Axes(),
     val fscore: FScore? = null,
+    /**
+     * A paid element under the Pro-numbers lock (founder decision 2026-09-23,
+     * `lib/api/locked-numbers.ts`): null for a free, non-AAPL caller while it withholds
+     * [Axes.valuation]/[Axes.momentum] too, unlocked and unaffected for AAPL or an entitled
+     * caller. Carries no `locked` flag of its own on the wire; [DetailModel]'s `compositeMeta`
+     * reads the two axes' own [Axis.locked] to tell this apart from a payload that simply has no
+     * percentile.
+     */
     @SerialName("composite_percentile") val compositePercentile: Double? = null,
     val setup: Setup? = null,
     val forward: Forward? = null,
@@ -93,6 +101,13 @@ data class AnalysisPayload(
  * the hackathon build by decision, and `forward.score` never reaches a screen at all; both are
  * recorded in docs/data-map.md. `raw` itself is null when the provider call failed, and every
  * field inside it may be null on its own, so nothing here has a default that invents a date.
+ *
+ * The Pro-numbers lock (founder decision 2026-09-23) also nulls `forward.score` and four
+ * `forward.raw` growth figures (`revenueGrowthTTMYoy`, `epsGrowthTTMYoy`, `epsCagr3y`,
+ * `epsGrowthShort`) for a free, non-AAPL caller. None of the five is modelled here, by the same
+ * decision recorded above, so none of them is a field this app can find null either way; the lock
+ * changes nothing this class parses or a screen draws. `ignoreUnknownKeys` drops all five like any
+ * other key this class does not name.
  */
 @Serializable
 data class Forward(
@@ -113,10 +128,24 @@ data class Axes(
     val momentum: Axis? = null,
 )
 
+/**
+ * One stratum of "Against the sector". [value], [position], [state], the labels and [tone] are a
+ * paid element for [valuation] and [momentum] under the Pro-numbers lock (founder decision
+ * 2026-09-23, `lib/api/locked-numbers.ts`'s `lockAxis`): a free, non-AAPL caller's `valuation`
+ * value IS the composite (`computePerspective`), so leaving it free let a caller estimate the
+ * withheld verdict closely. [quality] is not locked (it is the F-Score stratum, already public and
+ * not one of the verdict's own inputs), so this field defaults to false and only ever turns true on
+ * the two axes the server actually withholds.
+ *
+ * The shape mirrors [Verdict.locked] on purpose: every field above but [scale] and [locked] itself
+ * comes back null while [locked] comes back true, [scale] is kept (`lockAxis`'s own comment: "scale
+ * kept"), and a server that predates this lock, or has monetization off, never sends the key at
+ * all, so [locked] defaults to false and this class draws exactly as it always did.
+ */
 @Serializable
 data class Axis(
     val value: Double? = null,
-    /** Human scale of [value], e.g. "0-9", "0-100", "0-1". */
+    /** Human scale of [value], e.g. "0-9", "0-100", "0-1". Kept even when [locked]. */
     val scale: String? = null,
     /** [value] normalised into 0..1 for drawing. */
     val position: Double? = null,
@@ -124,6 +153,8 @@ data class Axis(
     val state: String? = null,
     @SerialName("label_en") val labelEn: String? = null,
     val tone: Tone? = null,
+    /** True while this axis is withheld by the Pro-numbers lock. Additive; absent decodes false. */
+    val locked: Boolean = false,
 )
 
 /**
