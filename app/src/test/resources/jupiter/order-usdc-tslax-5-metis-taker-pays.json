@@ -1,0 +1,53 @@
+{
+  "_fixture_note": "REAL, unedited. Live GET https://api.jup.ag/swap/v2/order?inputMint=USDC&outputMint=TSLAx&amount=5000000&taker=5tzF...uAi9&excludeRouters=jupiterz on 2026-09-23, the aggregator retry shape JupiterSwapApi sends. Taker is a widely published exchange hot wallet chosen only because it holds both SOL and USDC, which a non-gasless order needs; the seekerdev address is redacted from this repository. gasless false: the taker is account 0, the only signer, and pays the fees. Metis route, route_v2 instruction. Nothing was signed. The parser ignores this key.",
+  "swapType": "aggregator",
+  "inAmount": "5000000",
+  "outAmount": "1319474",
+  "otherAmountThreshold": "1306280",
+  "swapMode": "ExactIn",
+  "slippageBps": 100,
+  "priceImpactPct": "-0.001582428435921767",
+  "routePlan": [
+    {
+      "percent": 100,
+      "bps": 10000,
+      "usdValue": 4.999613620161165,
+      "swapInfo": {
+        "ammKey": "9p7abUFv31ycgu9kckvnoqMMvBy67dqTDM2m6HP9xokN",
+        "label": "Whirlpool",
+        "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+        "inAmount": "5000000",
+        "outAmount": "1320795"
+      }
+    }
+  ],
+  "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "feeBps": 10,
+  "platformFee": {
+    "feeBps": 10,
+    "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  "taker": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+  "gasless": false,
+  "jitOptimized": false,
+  "signatureFeeLamports": 5000,
+  "signatureFeePayer": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+  "prioritizationFeeLamports": 395,
+  "prioritizationFeePayer": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+  "rentFeeLamports": 0,
+  "rentFeePayer": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9",
+  "transaction": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQACCEjAG1BZAFRV2dywxrzs3LT7Wy6rwamoK1c5K6qkDwTmFUcyDNSmX/e6Wdt/pUBjqRFIsFGtebUa8LOOClKNJDklGqF1JV9zUbrKlBiATi3Q9VnYZKOXyBDWuJBY8ZiBWtJgy9R8qyHCBsxAPePXA56Af+WQUIXwlV7GzNP7zbmP3sTeRGTwuXxew5/kivghLMd/7RlS2oFJdI1UTmJL6wAHj8Qi1NbNEs5ahQc4HEd6WmnkqHY2o4ETPYkRXtYuNgMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnVW/IxwG7udMVuzmgVB/2xst6j9I5RArHNola8E4+cYy0BHhEIXxZ+UBDb9QWNGIWwfscpflDkb9B/fW/coAMGAAUC6TMBAAYACQOKEwAAAAAAAAccAAQFDhQQEQcNBwgTERASAAsUDgUKBAkDAQIMDym7ZPrMMcSvFEBLTAAAAAAAMyIUAAAAAABkAAoAAAABAAAALwAAECcAAQIpv5UHKk+/BN9xdZPnOLzMIScoFcJHGoDZ+fVVsNSEJQExBQAoAhQVwXGnJio1ksmZC7b/J8QPnNZybXRpuG6sUzJE4GHfgL8EzMvG0QN0ysQ=",
+  "lastValidBlockHeight": "427533725",
+  "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  "router": "metis",
+  "guaranteedPrice": false,
+  "requestId": "01a0caea-5af1-73db-8e14-21bf20e2da0f",
+  "inUsdValue": 4.999613620161165,
+  "outUsdValue": 4.9917020894,
+  "swapUsdValue": 4.999613620161165,
+  "priceImpact": -0.15824284359217672,
+  "mode": "manual",
+  "totalTime": 72
+}

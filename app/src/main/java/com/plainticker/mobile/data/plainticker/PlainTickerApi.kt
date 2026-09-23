@@ -16,8 +16,17 @@ class PlainTickerApi(
     private val client: HttpClient,
     private val baseUrl: String = BASE_URL,
 ) {
-    /** The whole leaderboard in one call. Cached 5 min at the edge, stale rows included. */
-    suspend fun getSummary(): SummaryResponse = client.get("$baseUrl/summary").bodyOrThrow()
+    /**
+     * The whole leaderboard in one call, stale rows included. The route is entitlement-aware: with
+     * monetization on, `headline`, `tone` and `setup_score` come back only for a [code] that
+     * resolves to Pro (answered private, no-store), and as nulls for everyone else. [code] travels
+     * exactly as [getAnalysis] sends it: in the `X-PT-Code` header only, never in the URL, and
+     * nothing here logs it. This client keeps no HTTP cache (no OkHttp `Cache`, no Ktor
+     * `HttpCache`), so an anonymous answer is never replayed to a device that has since become Pro.
+     */
+    suspend fun getSummary(code: String? = null): SummaryResponse = client.get("$baseUrl/summary") {
+        if (!code.isNullOrBlank()) header(EntitlementApi.HEADER_CODE, code)
+    }.bodyOrThrow()
 
     /**
      * Full classification for one ticker. [code] is this device's own code, in the clear, the same

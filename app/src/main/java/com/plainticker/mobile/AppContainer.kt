@@ -154,7 +154,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }
     override val rpcApi: SolanaRpcApi by lazy { SolanaRpcApi(httpClient) }
 
-    override val summaryRepository: SummaryRepository by lazy { PlainTickerSummaryRepository(plainTickerApi) }
+    override val summaryRepository: SummaryRepository by lazy { PlainTickerSummaryRepository(plainTickerApi) { devicePassStore.code() } }
     override val nextUpRepository: NextUpRepository by lazy { CachedNextUpRepository(nextUpApi, clock) }
     // cacheDir, not filesDir: the catalog is a copy of something the network can always serve
     // again, so the system is welcome to reclaim it. Losing it costs one refetch.

@@ -16,8 +16,16 @@ interface SummaryRepository {
     suspend fun analysis(ticker: String, code: String? = null): AnalysisPayload
 }
 
-/** Pass-through: both routes are edge-cached server-side (5 min), so the app adds no cache of its own yet. */
-class PlainTickerSummaryRepository(private val api: PlainTickerApi) : SummaryRepository {
-    override suspend fun summary(): SummaryResponse = api.getSummary()
+/**
+ * Pass-through, with no cache of its own. [code] is read on every [summary] call and sent as
+ * `X-PT-Code`, so the row fields a Pro device is owed (the tone dot among them) arrive on the
+ * very next request after it becomes Pro; there is no stored anonymous body to outlive that.
+ * Null (the default, and what tests use) asks unauthenticated.
+ */
+class PlainTickerSummaryRepository(
+    private val api: PlainTickerApi,
+    private val code: () -> String? = { null },
+) : SummaryRepository {
+    override suspend fun summary(): SummaryResponse = api.getSummary(code())
     override suspend fun analysis(ticker: String, code: String?): AnalysisPayload = api.getAnalysis(ticker, code)
 }

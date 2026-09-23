@@ -18,6 +18,7 @@ import com.plainticker.mobile.data.receipts.PassReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.repo.RpcRepository
+import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
@@ -290,6 +291,20 @@ class PassViewModel(
             return refuse(reason)
         } catch (e: Exception) {
             debugLog.raw("pass/build threw ${e::class.simpleName}: ${e.message}")
+            return refuse(PassRefusal.UNAVAILABLE)
+        }
+        // The sheet's figures are the server's JSON; what the wallet would sign is the bytes. They
+        // are read against each other, and against this app's own pinned treasury, before the
+        // confirm step is ever shown, so a transaction that does anything but the one transfer on
+        // the screen is never offered for approval at all (security audit, finding 2).
+        val unsigned = build.transactionBytes()
+        val verdict = if (unsigned == null) {
+            TransactionGuard.Verdict.Refuse("no transaction bytes")
+        } else {
+            TransactionGuard.checkPass(unsigned, payer, build.summary, devicePassStore.codeHash())
+        }
+        if (verdict is TransactionGuard.Verdict.Refuse) {
+            debugLog.raw("pass/build transaction refused before the wallet: ${verdict.reason}")
             return refuse(PassRefusal.UNAVAILABLE)
         }
         _state.value = PassState.Ready(payer, build, refreshed = refreshed)

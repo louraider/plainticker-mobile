@@ -19,6 +19,9 @@ import com.plainticker.mobile.data.respondJson
 import com.plainticker.mobile.data.rpc.SkrStake
 import com.plainticker.mobile.data.rpc.SkrStakeAccount
 import com.plainticker.mobile.prefs.InMemoryDevicePassStore
+import com.plainticker.mobile.data.PinnedAddresses
+import com.plainticker.mobile.wallet.ServerBuilt
+import kotlinx.coroutines.runBlocking
 import com.plainticker.mobile.repo.FakeRpcRepository
 import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
@@ -77,11 +80,17 @@ class PassViewModelTest {
     }
 
     private val payer = WalletAccount(ByteArray(32) { 7 }, "Seeker")
-    private val destination = "8rUvvKhaNqDVdGjBpkB4XoTBrmMPfsVZJSLQPUHzZyEC"
-    private val treasury = "E1STBTGEYpHanVG4HWUJHfzEu6eGbnE9mnGX9KnAmJdL"
+    // The real treasury and its real USDC account: TransactionGuard now reads the transaction
+    // against these pins before the confirm step, so a placeholder destination would be refused
+    // (security audit, finding 2), and a placeholder transaction ("REDACTED") could not be read.
+    private val destination = PinnedAddresses.TREASURY_USDC_ACCOUNT
+    private val treasury = PinnedAddresses.TREASURY
     private val devicePassStore = InMemoryDevicePassStore("ABCDE12345")
 
-    private val buildBody = """{"transaction":"UkVEQUNURUQ=","summary":
+    /** The transaction lib/pass/build.ts would build for [payer] and this device's code hash. */
+    private val unsigned: String = runBlocking { ServerBuilt.pass(payer.address, devicePassStore.codeHash()).base64() }
+
+    private val buildBody = """{"transaction":"$unsigned","summary":
         {"mint":"USDC","amount":12000000,"destination":"$destination","treasury":"$treasury","lamports":5000}}"""
 
     private val confirmBody = """{"pro":true,"source":"pass","until":"2026-10-19T12:00:00.000Z"}"""
@@ -303,6 +312,25 @@ class PassViewModelTest {
         assertTrue(operations.sendRequests.isEmpty())
     }
 
+
+    @Test
+    fun `a transaction that is not the payment the sheet shows never reaches the wallet`() = runTest {
+        // Security audit, finding 2: the summary says 12 USDC to the pinned treasury; the bytes
+        // pay a different amount, or carry another device's memo. Neither is ever offered.
+        val summary = """{"mint":"USDC","amount":12000000,"destination":"$destination","treasury":"$treasury","lamports":5000}"""
+        val wrongAmount = ServerBuilt.pass(payer.address, devicePassStore.codeHash(), amount = 1_000_000_000L).base64()
+        val wrongMemo = ServerBuilt.pass(payer.address, "f".repeat(64)).base64()
+        for (tx in listOf(wrongAmount, wrongMemo)) {
+            val tampered = passMock(build = """{"transaction":"$tx","summary":$summary}""")
+            val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64)))
+            val session = wallet().apply { this.operations = operations }
+
+            assertEquals(PassRefusal.UNAVAILABLE, refusalOf(settle(machine(pass = tampered, wallet = session))))
+            assertTrue(operations.sendRequests.isEmpty())
+            assertTrue(operations.signRequests.isEmpty())
+        }
+    }
+
     @Test
     fun `an approval that came back with no signature sent no payment, and never calls confirm`() = runTest {
         val session = wallet()
@@ -324,7 +352,7 @@ class PassViewModelTest {
 
     // ---- The expiry --------------------------------------------------------------------------
 
-    private fun bodyExpiring(at: Long) = """{"transaction":"UkVEQUNURUQ=","summary":
+    private fun bodyExpiring(at: Long) = """{"transaction":"$unsigned","summary":
         {"mint":"USDC","amount":12000000,"destination":"$destination","treasury":"$treasury","lamports":5000},
          "expiresAt":"${Instant.ofEpochMilli(at)}"}"""
 

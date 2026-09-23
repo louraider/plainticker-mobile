@@ -1,0 +1,53 @@
+{
+  "_fixture_note": "REAL, unedited. Live GET https://api.jup.ag/swap/v2/order?inputMint=USDC&outputMint=TSLAx&amount=5000000&taker=<treasury> on 2026-09-23, the request shape JupiterSwapApi sends. Taker is PlainTicker's own public treasury address (PinnedAddresses.TREASURY): the seekerdev address is redacted from this repository by scripts/redaction-guard.sh, so a public address already pinned here stands in. It holds USDC and no SOL, so Jupiter answered gasless: its gas payer gasTzr94... is account 0 and the taker is the second required signer. Metis route, route_v2 instruction. Nothing was signed. The parser ignores this key.",
+  "swapType": "aggregator",
+  "router": "metis",
+  "guaranteedPrice": false,
+  "requestId": "01a0cae9-be89-751f-a7f0-16fda5527373",
+  "inAmount": "5000000",
+  "outAmount": "1270874",
+  "otherAmountThreshold": "1258116",
+  "swapMode": "ExactIn",
+  "slippageBps": 100,
+  "priceImpactPct": "-0.038352586947224855",
+  "routePlan": [
+    {
+      "percent": 100,
+      "bps": 10000,
+      "usdValue": 4.999590665083135,
+      "swapInfo": {
+        "ammKey": "9p7abUFv31ycgu9kckvnoqMMvBy67dqTDM2m6HP9xokN",
+        "label": "Whirlpool",
+        "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+        "inAmount": "5000000",
+        "outAmount": "1320750"
+      }
+    }
+  ],
+  "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "feeBps": 378,
+  "platformFee": {
+    "feeBps": 10,
+    "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  "taker": "E1STBTGEYpHanVG4HWUJHfzEu6eGbnE9mnGX9KnAmJdL",
+  "gasless": true,
+  "jitOptimized": false,
+  "signatureFeeLamports": 10000,
+  "signatureFeePayer": "gasTzr94Pmp4Gf8vknQnqxeYxdgwFjbgdJa4msYRpnB",
+  "prioritizationFeeLamports": 490,
+  "prioritizationFeePayer": "gasTzr94Pmp4Gf8vknQnqxeYxdgwFjbgdJa4msYRpnB",
+  "rentFeeLamports": 1559560,
+  "rentFeePayer": "gasTzr94Pmp4Gf8vknQnqxeYxdgwFjbgdJa4msYRpnB",
+  "transaction": "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAIBAwoKI/LW57XKxPlrnBnjR8pwJqlB8IMXoWShoopBSd7LSMFEtUBaqgz7OYN6RaAuhzOk4kO2r2IJqNEqIcWeVAWvFUcyDNSmX/e6Wdt/pUBjqRFIsFGtebUa8LOOClKNJDklGqF1JV9zUbrKlBiATi3Q9VnYZKOXyBDWuJBY8ZiBWsexQVd+VbPHzXadlPE34+Cg0kRpQO/i5SRYDs8+Vj320mDL1HyrIcIGzEA949cDnoB/5ZBQhfCVXsbM0/vNuY/foFSctN8ob12c6qrklHsRDlMtBqJNU+OZR5YrWWsUM4yXJY9OJInxuz0QKRSODYMLWhOZ2v8QhASOe9jb6fhZAwZGb+UhFzL/7K26csOb57yM5bvF9xJrLEObOkAAAAAEedVb8jHAbu50xW7OaBUH/bGy3qP0jlECsc2iVrwTj7xuoc4gXK4lWVrgFPpdi1n0n0HGe9xOju8+fZliMykbBAgABQJHZwEACAAJA8gUAAAAAAAABwYABAEXDxQBAQkcAQYEERcTFAkQCQoWFBMVAQ0XEQQMBgsFAgMOEim7ZPrMMcSvFEBLTAAAAAAAKWQTAAAAAABkAHoBAAABAAAALwAAECcAAQIpv5UHKk+/BN9xdZPnOLzMIScoFcJHGoDZ+fVVsNSEJQE1BhMAKAEUFcFxpyYqNZLJmQu2/yfED5zWcm10abhurFMyROBh34C/BMzLxtEDdMrE",
+  "lastValidBlockHeight": "427533573",
+  "inUsdValue": 4.999590665083135,
+  "outUsdValue": 4.8078434294,
+  "swapUsdValue": 4.999590665083135,
+  "priceImpact": -3.8352586947224854,
+  "mode": "ultra",
+  "totalTime": 163
+}
