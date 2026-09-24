@@ -101,7 +101,17 @@ data class TokenBalance(
     val uiAmountString: String?,
     /** Token program that owns the account (classic or Token-2022). */
     val programId: String,
+    /**
+     * The account's own state as jsonParsed names it: "initialized", or "frozen" when the mint's
+     * freeze authority has frozen it. A frozen account cannot send, so its balance is held but not
+     * spendable. Null when the node did not say, which reads as not frozen: a closed account is
+     * never listed at all.
+     */
+    val state: String? = null,
 ) {
+    /** True when the freeze authority has frozen this account, so nothing in it can be swapped. */
+    val frozen: Boolean get() = state == STATE_FROZEN
+
     /** raw / 10^decimals * [multiplier]; the multiplier is the xStocks scaledUiAmount value (1 unless split). */
     fun quantity(multiplier: Double = 1.0): Double = amountRaw / Math.pow(10.0, decimals.toDouble()) * multiplier
 }
@@ -118,8 +128,12 @@ fun KeyedAccount.toTokenBalance(): TokenBalance? {
         decimals = (amount["decimals"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0,
         uiAmountString = (amount["uiAmountString"] as? JsonPrimitive)?.contentOrNull,
         programId = account.owner,
+        state = (info["state"] as? JsonPrimitive)?.contentOrNull,
     )
 }
+
+/** jsonParsed's word for a token account its mint's freeze authority has frozen. */
+const val STATE_FROZEN = "frozen"
 
 /** One SKR stake account of a wallet, read through the pinned getProgramAccounts (dataSlice 105/8). */
 data class SkrStakeAccount(

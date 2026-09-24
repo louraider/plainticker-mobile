@@ -12,11 +12,17 @@ import com.plainticker.mobile.data.rpc.toTokenBalance
 
 /** On-chain reads the app needs, all through PlainTicker's bounded RPC forwarder. */
 interface RpcRepository {
-    /** SOL balance of [owner] in lamports. */
-    suspend fun lamports(owner: String): Long
+    /**
+     * SOL balance of [owner] in lamports. [minContextSlot], when given, is a slot the answer must
+     * be at least as new as: the slot a swap just landed in, so the read cannot predate it.
+     */
+    suspend fun lamports(owner: String, minContextSlot: Long? = null): Long
 
-    /** Non-empty token accounts of [owner] under the classic and the Token-2022 programs. */
-    suspend fun tokenBalances(owner: String): List<TokenBalance>
+    /**
+     * Non-empty token accounts of [owner] under the classic and the Token-2022 programs, each with
+     * its own state (a frozen one is listed, and says so). [minContextSlot] as on [lamports].
+     */
+    suspend fun tokenBalances(owner: String, minContextSlot: Long? = null): List<TokenBalance>
 
     /** One account, or null when it does not exist. */
     suspend fun accountInfo(pubkey: String, encoding: RpcEncoding = RpcEncoding.BASE64): RpcAccount?
@@ -36,12 +42,13 @@ interface RpcRepository {
 
 class ForwarderRpcRepository(private val api: SolanaRpcApi) : RpcRepository {
 
-    override suspend fun lamports(owner: String): Long = api.getBalance(owner).value ?: 0L
+    override suspend fun lamports(owner: String, minContextSlot: Long?): Long =
+        api.getBalance(owner, minContextSlot).value ?: 0L
 
-    override suspend fun tokenBalances(owner: String): List<TokenBalance> {
+    override suspend fun tokenBalances(owner: String, minContextSlot: Long?): List<TokenBalance> {
         // Sequential on purpose: the forwarder rate-limits per IP.
-        val classic = api.getTokenAccountsByOwner(owner, KnownPrograms.TOKEN).value.orEmpty()
-        val token2022 = api.getTokenAccountsByOwner(owner, KnownPrograms.TOKEN_2022).value.orEmpty()
+        val classic = api.getTokenAccountsByOwner(owner, KnownPrograms.TOKEN, minContextSlot).value.orEmpty()
+        val token2022 = api.getTokenAccountsByOwner(owner, KnownPrograms.TOKEN_2022, minContextSlot).value.orEmpty()
         return (classic + token2022).mapNotNull { it.toTokenBalance() }.filter { it.amountRaw > 0L }
     }
 

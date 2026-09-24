@@ -4,6 +4,7 @@ import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.ShippedCopy
+import com.plainticker.mobile.ui.words
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -475,8 +476,32 @@ class SwapSheetModelTest {
         SwapFailure.entries.forEach { reason ->
             val content = SwapState.Failed(leg, funds, amount(), reason, quote, false, timing).shown()
             assertEquals(reason.name, reason.text, id(content.notice))
-            assertEquals(reason.name, SheetActionKind.Edit, content.primary?.kind)
+            // Every failure now offers the one way on its own outcome allows (2026-09-24), where
+            // it used to offer "Back to the amount" for all of them, including the one failure
+            // where going back and swapping again could be a second swap over a first that landed.
+            val expected = when (reason.next) {
+                FailureNext.NONE -> null
+                FailureNext.EDIT -> SheetActionKind.Edit
+                FailureNext.RETRY, FailureNext.NEW_QUOTE -> SheetActionKind.Retry
+                FailureNext.PORTFOLIO -> SheetActionKind.ViewPortfolio
+            }
+            assertEquals(reason.name, expected, content.primary?.kind)
+            assertEquals(reason.name, SheetActionKind.Close, content.secondary?.kind)
         }
+    }
+
+    @Test
+    fun `an outcome nobody has reported never offers a second attempt`() {
+        val unknown = SwapFailure.entries.filter { it.outcome == FailureOutcome.UNKNOWN }
+        assertEquals(listOf(SwapFailure.SUBMIT_UNAVAILABLE), unknown)
+        val content = SwapState.Failed(leg, funds, amount(), SwapFailure.SUBMIT_UNAVAILABLE, quote, false, timing).shown()
+        val offered = listOfNotNull(content.primary, content.secondary, content.extra).map { it.kind }
+        assertFalse("a retry over a swap that may have landed is two swaps", SheetActionKind.Retry in offered)
+        assertFalse("and so is going back to submit the same amount", SheetActionKind.Edit in offered)
+        assertEquals(SheetActionKind.ViewPortfolio, content.primary?.kind)
+        assertEquals(ResultTone.Pending, content.result?.tone)
+        assertEquals(R.string.result_pending, id(content.result?.headline))
+        assertEquals("Sent, not confirmed yet", ShippedCopy.render(content.result!!.headline))
     }
 
     @Test
@@ -525,7 +550,7 @@ class SwapSheetModelTest {
             )
             assertTrue(
                 "$name offers more than the two buttons the sheet has",
-                listOfNotNull(content.primary, content.secondary).size <= 2,
+                listOfNotNull(content.primary, content.secondary, content.extra).size <= 2,
             )
         }
     }
@@ -542,5 +567,163 @@ class SwapSheetModelTest {
         states.forEach {
             assertEquals(listOf("USDC", "TSLAx"), args(it.shown().title))
         }
+    }
+
+    // ---- The result, 2026-09-24 -----------------------------------------------------------------
+
+    @Test
+    fun `a landing is its own moment, the headline, the fill as the hero, what arrived and how fast`() {
+        val content = landed().shown()
+        val result = requireNotNull(content.result) { "a landing must lead with its result" }
+        assertEquals(ResultTone.Landed, result.tone)
+        assertEquals("Swap landed", ShippedCopy.render(result.headline))
+        assertEquals("the executed fill, never the estimate", "0.013609", raw(result.figure))
+        assertEquals(R.string.result_received_in, id(result.detail))
+        assertEquals("TSLAx received, confirmed in 3.1 s", ShippedCopy.render(requireNotNull(result.detail)))
+        assertEquals(
+            "TalkBack hears the headline and what arrived, once",
+            listOf("Swap landed", "Received 0.013609 TSLAx"),
+            result.announcement.map { ShippedCopy.render(it) },
+        )
+    }
+
+    @Test
+    fun `a landing whose fill was not reported says so in the result, and claims no amount`() {
+        val result = requireNotNull(landed(fill.copy(outAmountRaw = null)).shown().result)
+        assertEquals(R.string.value_missing, id(result.figure))
+        assertEquals(
+            listOf("Swap landed", "The amount of TSLAx received was not reported"),
+            result.announcement.map { ShippedCopy.render(it) },
+        )
+    }
+
+    @Test
+    fun `a fresh receipt offers the way back, worded as a direction and never a verb`() {
+        val content = landed().shown()
+        assertNull("still no primary on a receipt", content.primary)
+        assertEquals(SheetActionKind.ViewPortfolio, content.secondary?.kind)
+        assertEquals(SheetActionKind.SwapBack, content.extra?.kind)
+        assertEquals("Swap back to USDC", ShippedCopy.render(requireNotNull(content.extra).label))
+    }
+
+    @Test
+    fun `each failure's headline says what is certain about the money, in the failure tone`() {
+        SwapFailure.entries.forEach { reason ->
+            val result = requireNotNull(SwapState.Failed(leg, funds, amount(), reason, quote, false, timing).shown().result)
+            val (tone, headline) = when (reason.outcome) {
+                FailureOutcome.NOTHING_SENT -> ResultTone.Failed to "Nothing was swapped"
+                FailureOutcome.NOT_LANDED -> ResultTone.Failed to "The swap did not land"
+                FailureOutcome.UNKNOWN -> ResultTone.Pending to "Sent, not confirmed yet"
+            }
+            assertEquals(reason.name, tone, result.tone)
+            assertEquals(reason.name, headline, ShippedCopy.render(result.headline))
+            assertEquals("the reason is the failure's own one line", reason.text, id(result.detail))
+            assertNull("a failure has no hero figure", result.figure)
+            assertEquals(2, result.announcement.size)
+        }
+    }
+
+    @Test
+    fun `the failures a person meets map to plain reasons and the right way on`() {
+        fun failed(reason: SwapFailure) = SwapState.Failed(leg, funds, amount(), reason, quote, false, timing).shown()
+        // Expired quote, slippage: a fresh quote, worded as one.
+        listOf(SwapFailure.QUOTE_EXPIRED, SwapFailure.SLIPPAGE, SwapFailure.QUOTE_GONE).forEach {
+            assertEquals(it.name, "Get a new quote", ShippedCopy.render(requireNotNull(failed(it).primary).label))
+        }
+        // Network: try again. Guard refusal: try again, and the reason names what happened.
+        assertEquals("Try again", ShippedCopy.render(requireNotNull(failed(SwapFailure.QUOTE_UNAVAILABLE).primary).label))
+        assertEquals(
+            "The transaction did not match this swap, so it never reached the wallet",
+            ShippedCopy.render(requireNotNull(failed(SwapFailure.GUARD_REFUSED).result?.detail)),
+        )
+        // Dust: back to the amount, because the same amount will return nothing again.
+        assertEquals(SheetActionKind.Edit, failed(SwapFailure.QUOTE_DUST).primary?.kind)
+        // Wallet changed: nothing to retry with, only Close.
+        assertNull(failed(SwapFailure.WALLET_CHANGED).primary)
+        // No failure's copy uses the one word the sheet reserves for the worst-case line.
+        SwapFailure.entries.forEach {
+            assertFalse(it.name, "slippage" in ShippedCopy.render(words(it.text)).lowercase())
+        }
+    }
+
+    @Test
+    fun `a sheet still in progress has no result, and landing says what is true right now`() {
+        listOf(
+            SwapState.Opening(leg, timing),
+            SwapState.Amount(leg, funds, amount()),
+            SwapState.Quoting(leg, funds, amount(), requote = false, timing = timing),
+            SwapState.AwaitingWallet(leg, funds, amount(), quote, requote = false, timing = timing),
+            SwapState.Landing(leg, funds, amount(), quote, requoted = false, timing = timing),
+        ).forEach { assertNull(it.javaClass.simpleName, it.shown().result) }
+        val landing = SwapState.Landing(leg, funds, amount(), quote, requoted = false, timing = timing).shown()
+        assertEquals("Signed and sent. Waiting for the network to confirm it.", ShippedCopy.render(requireNotNull(landing.notice)))
+    }
+
+    // ---- The reverse direction and the Token-2022 multiplier ------------------------------------
+
+    private val out = SwapLeg.outOf(tslax)
+    private val holding = funds.copy(tokenRaw = 264_600L)
+
+    @Test
+    fun `swap to USDC names the pair the other way and spends the xStock balance`() {
+        val content = SwapState.Amount(out, holding, SwapAmount.parse("", 8, holding.tokenRaw)).shown()
+        assertEquals(listOf("TSLAx", "USDC"), args(content.title))
+        assertEquals(listOf("TSLAx"), args(content.field?.label))
+        assertEquals(listOf("0.002646", "TSLAx"), args(content.field?.balance))
+        assertEquals(listOf("TSLAx", "USDC"), args(content.primary?.label))
+    }
+
+    @Test
+    fun `a wallet with none of the xStock is told that before any amount is typed`() {
+        val content = SwapState.Amount(out, funds, SwapAmount.parse("", 8, 0L)).shown()
+        assertEquals("No TSLAx in this wallet", ShippedCopy.render(requireNotNull(content.notice)))
+        assertFalse(content.primary!!.enabled)
+    }
+
+    @Test
+    fun `a frozen account says it is frozen, not empty, and cannot be submitted`() {
+        val frozen = funds.copy(tokenRaw = 0L, frozenMints = setOf(KnownMints.TSLAX))
+        val state = SwapState.Amount(out, frozen, SwapAmount.parse("1", 8, 0L))
+        val content = state.shown()
+        assertEquals(
+            "The TSLAx account in this wallet is frozen by its issuer, so it cannot be swapped",
+            ShippedCopy.render(requireNotNull(content.notice)),
+        )
+        assertFalse(state.canSubmit)
+        assertFalse(content.primary!!.enabled)
+    }
+
+    @Test
+    fun `a split xStock is shown as the wallet shows it, raw times the multiplier`() {
+        // NFLXx, read 2026-09-24: raw 272,557,048,309 at 8 decimals and an effective multiplier
+        // of 10, which the node itself renders as 27255.7048309.
+        val nflx = SwapToken("XsEH7wWfJJu2ZT3UCFeVfALnVA6CP5ur7Ee11KmzVpL", "NFLXx", 8, java.math.BigDecimal.TEN)
+        val split = SwapLeg.outOf(nflx)
+        val wallet = funds.copy(tokenRaw = 272_557_048_309L)
+        val content = SwapState.Amount(split, wallet, AmountInput.EMPTY).shown()
+        assertEquals(listOf("27,255.704831", "NFLXx"), args(content.field?.balance))
+
+        // And the forward estimate of a split token is scaled the same way: 1,360,437 raw is
+        // 0.1360437 shares at a multiplier of 10, not 0.013604.
+        val forward = SwapState.AwaitingWallet(SwapLeg.into(nflx), funds, amount(), quote, requote = false, timing = timing).shown()
+        assertEquals(listOf("0.136044", "NFLXx"), args(cell(forward, R.string.swap_you_receive).value))
+    }
+
+    @Test
+    fun `an unknown multiplier states no quantity at all rather than guessing one`() {
+        val unknown = SwapToken(KnownMints.TSLAX, "TSLAx", 8, multiplier = null)
+        val content = SwapState.Amount(SwapLeg.outOf(unknown), holding, AmountInput.EMPTY).shown()
+        assertEquals(listOf("-", "TSLAx"), args(content.field?.balance))
+    }
+
+    @Test
+    fun `the reverse receipt shows USDC received and the xStock paid, and offers the way back`() {
+        val reverseQuote = quote.copy(inAmountRaw = 264_600L, outAmountRaw = 996_503L, worstCaseOutRaw = 986_438L)
+        val reverseFill = fill.copy(inAmountRaw = 264_600L, outAmountRaw = 996_812L)
+        val content = SwapState.Landed(out, reverseQuote, reverseFill, false, timing.copy(landingMillis = 500L)).shown()
+        assertEquals("0.996812", raw(content.result?.figure))
+        assertEquals("USDC received, confirmed in 0.5 s", ShippedCopy.render(requireNotNull(content.result?.detail)))
+        assertEquals(listOf("0.002646", "TSLAx"), args(cell(content, R.string.receipt_paid).value))
+        assertEquals("Swap back to TSLAx", ShippedCopy.render(requireNotNull(content.extra).label))
     }
 }

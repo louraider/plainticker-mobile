@@ -84,14 +84,14 @@ class SwapSheetTest {
             listOf(
                 "ConfirmOnLanded(",
                 "content.debug",
-                "content.isReceipt",
+                "content.result",
                 "Title(content",
                 "content.field",
                 "Field(",
                 "field.balance",
                 "content.notice",
                 "content.costNotice",
-                "FactGrid(",
+                "AmberFactRows(",
                 "content.primary",
                 "content.secondary",
                 "content.footnote",
@@ -100,19 +100,77 @@ class SwapSheetTest {
     }
 
     @Test
-    fun `the receipt leads with what happened and the sheet leads with the pair`() {
-        val receiptBranch = body("if (content.isReceipt) {", "content.field?.let")
-        // Received(it, colors) and Title(content, lead, actions, colors): both now also carry the
-        // theme-following AmberColors this sheet reads (money must read correctly in light too),
-        // so the anatomy this test pins is the call with that fourth argument, not without it.
-        assertOrder("the receipt branch", receiptBranch, listOf("Phase(it, lead)", "Received(it, colors)"))
-        assertOrder("the sheet branch", receiptBranch, listOf("Title(content, lead, actions, colors)", "Phase(it, Modifier)"))
+    fun `a finished attempt leads with its result and a sheet in progress leads with the pair`() {
+        // 2026-09-24: the receipt led with a small static "Landed" live bar and a monospace
+        // figure, and the founder could not tell whether the swap had worked. Every finished
+        // attempt (landed, failed, not yet known) now leads with one result block, which takes
+        // the focus the sheet asks for on open; a sheet still in progress leads with the pair.
+        val branch = body("val result = content.result", "content.field?.let")
+        assertOrder(
+            "the lead branch",
+            branch,
+            listOf("if (result != null)", "ResultBlock(result = result, pair = content.title, lead = lead, colors = colors)"),
+        )
+        assertOrder("the sheet branch", branch, listOf("Title(content, lead, actions, colors)", "Phase(it, Modifier)"))
+        assertEquals("the old receipt headline is gone", 0, count("Received("))
+    }
+
+    @Test
+    fun `the result is one merged heading, announced once as a polite live region`() {
+        val block = body("private fun ResultBlock(", "private fun ResultMark(")
+        assertTrue("the block is not one node", "semantics(mergeDescendants = true)" in block)
+        assertTrue("the result is not a heading", "heading()" in block)
+        assertTrue("the result is never announced", "liveRegion = LiveRegionMode.Polite" in block)
+        assertTrue("TalkBack hears the model's words, not the drawing", "contentDescription = announcement" in block)
+        assertTrue("the result does not take the sheet's focus", "modifier = lead" in block)
+    }
+
+    @Test
+    fun `the result's motion is Amber's own tokens, and gated so it can be read without it`() {
+        val block = body("private fun ResultBlock(", "private fun ResultMark(")
+        assertTrue("motion is not gated", "rememberMotionEnabled()" in block)
+        // With animator scale 0 the first frame is the settled one, not a snap a frame later.
+        assertTrue("the settled state is not the starting state without motion", "mutableStateOf(!motion)" in block)
+        assertEquals("both animations snap without motion", 2, block.split("else snap()").size - 1)
+        assertTrue("the ring is not on the settle spring", "if (motion) RingSettle" in block)
+        assertTrue(
+            "the settle spring is not Amber's no-bounce medium-low one",
+            "spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)" in scan.code,
+        )
+        assertTrue("the figure is not on the quick token", "tween(durationMillis = QUICK_MILLIS, easing = LinearOutSlowInEasing)" in block)
+        assertTrue("the quick token is not 150ms", "private const val QUICK_MILLIS = 150" in scan.code)
+    }
+
+    @Test
+    fun `failure is drawn in the caution colour and never with a glyph`() {
+        val block = body("private fun ResultBlock(", "private fun ResultMark(")
+        assertTrue(
+            "a failure's headline is not the caution colour",
+            "if (result.tone == ResultTone.Failed) colors.stateCaution else colors.textPrimary" in block,
+        )
+        val mark = body("private fun ResultMark(", "private fun DebugBand(")
+        assertTrue("the mark is not drawn", "Canvas(" in mark)
+        assertEquals("the mark has no text of its own", 0, mark.split("Text(").size - 1)
+        assertTrue("the failure mark is not the caution colour", "color = caution" in mark)
+        assertTrue("the landing ring does not close with the settle", "sweepAngle = 360f * progress" in mark)
+    }
+
+    @Test
+    fun `no figure on the sheet is set in monospace any more`() {
+        // DESIGN.md section 3: Amber's numbers are Bricolage with tnum. The Instrument styles this
+        // sheet used (bigValue, sheetTitle, factValueAt, the mono meta) are gone from it entirely;
+        // the one mono face left is AmberFactRows' own, for the signature, an on-chain key.
+        listOf("PlainTickerType", "JetBrainsMono", "bigValue", "sheetTitle", "FactGrid(").forEach {
+            assertEquals("SwapSheet.kt still draws $it", 0, count(it))
+        }
+        assertTrue("the hero figure is not Amber's large figure", "style = AmberType.figureLarge" in scan.code)
+        assertTrue("only the copied cell is an identifier", "identifier = copied != null" in scan.code)
     }
 
     @Test
     fun `the sheet has one surface, one grid, one field and two buttons`() {
         assertEquals("one modal surface", 1, count("onDismissRequest ="))
-        assertEquals("one grid", 1, count("FactGrid("))
+        assertEquals("one run of Amber rows", 1, count("AmberFactRows("))
         assertEquals("one text field", 1, count("Field("))
         // Instrument's PrimaryButton/SecondaryButton retired in this pass in favour of Amber's own
         // anatomy (docs/design-research-2026-09-21.md section 5.5), the same restyle VoteSheet.kt
@@ -120,6 +178,9 @@ class SwapSheetTest {
         // screen now, not the ones this sheet drew before this fix.
         assertEquals("one primary and one secondary", 1, count("AmberPrimaryAction("))
         assertEquals(1, count("AmberSecondaryAction("))
+        // The receipt's "Swap back" is drawn through that same one call site, never a second
+        // primary: a sheet asks for one decision at a time.
+        assertTrue("listOfNotNull(content.secondary, content.extra).forEach" in scan.code)
         assertEquals("the direction is the only text action", 1, count("TextAction("))
     }
 
@@ -204,7 +265,7 @@ class SwapSheetTest {
 
     @Test
     fun `the sheet takes focus when it opens`() {
-        val focus = body("private fun leadFocus(", "private fun SheetCell.factCell(")
+        val focus = body("private fun leadFocus(", "private fun SheetCell.fact(")
         assertTrue("no focus requester", "FocusRequester()" in focus)
         assertTrue("the requester is never attached to a node", "focusRequester(opened)" in focus)
         assertTrue("a node that is not focusable cannot take focus", ".focusable()" in focus)

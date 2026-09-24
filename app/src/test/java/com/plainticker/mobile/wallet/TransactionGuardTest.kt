@@ -344,7 +344,7 @@ class TransactionGuardTest {
         Case("jupiter/order-usdc-tslax-5-metis-taker-pays.json", "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"),
     )
 
-    private fun checkSwap(
+    private suspend fun checkSwap(
         order: SwapOrder,
         bytes: ByteArray,
         wallet: String,
@@ -356,7 +356,7 @@ class TransactionGuardTest {
     private fun bytesOf(o: SwapOrder) = java.util.Base64.getDecoder().decode(o.transaction!!)
 
     @Test
-    fun `swap - all three real orders are allowed, gasless or not`() {
+    fun `swap - all three real orders are allowed, gasless or not`() = runTest {
         for (c in swaps) {
             val o = order(c.path)
             assertAllowed(checkSwap(o, bytesOf(o), c.taker))
@@ -366,7 +366,7 @@ class TransactionGuardTest {
     }
 
     @Test
-    fun `swap - a wallet that is not a required signer is refused`() {
+    fun `swap - a wallet that is not a required signer is refused`() = runTest {
         for (c in swaps) {
             val o = order(c.path)
             assertRefused(checkSwap(o.copy(taker = null), bytesOf(o), attacker), "signer")
@@ -374,7 +374,7 @@ class TransactionGuardTest {
     }
 
     @Test
-    fun `swap - a swapped mint is refused`() {
+    fun `swap - a swapped mint is refused`() = runTest {
         for (c in swaps) {
             val o = order(c.path)
             assertRefused(checkSwap(o, bytesOf(o), c.taker, input = KnownMints.TSLAX, output = KnownMints.USDC), "mint")
@@ -383,7 +383,7 @@ class TransactionGuardTest {
     }
 
     @Test
-    fun `swap - a wrong amount is refused, in the JSON and in the instruction bytes`() {
+    fun `swap - a wrong amount is refused, in the JSON and in the instruction bytes`() = runTest {
         for (c in swaps) {
             val o = order(c.path)
             assertRefused(checkSwap(o, bytesOf(o), c.taker, amount = 4_000_000L), "amount")
@@ -398,7 +398,7 @@ class TransactionGuardTest {
     }
 
     @Test
-    fun `swap - an Approve or SetAuthority to anyone but the wallet is refused`() {
+    fun `swap - an Approve or SetAuthority to anyone but the wallet is refused`() = runTest {
         for (c in swaps) {
             val o = order(c.path)
             val m = WireMessage.parseTransaction(bytesOf(o))
@@ -417,7 +417,7 @@ class TransactionGuardTest {
     }
 
     @Test
-    fun `swap - an unknown program, a top-level transfer, or lamports out of the wallet are refused`() {
+    fun `swap - an unknown program, a top-level transfer, or lamports out of the wallet are refused`() = runTest {
         for (c in swaps) {
             val o = order(c.path)
             val m = WireMessage.parseTransaction(bytesOf(o))
@@ -433,14 +433,14 @@ class TransactionGuardTest {
     }
 
     @Test
-    fun `swap - an order built for another taker is refused`() {
+    fun `swap - an order built for another taker is refused`() = runTest {
         val c = swaps[2]
         val o = order(c.path)
         assertRefused(checkSwap(o.copy(taker = attacker), bytesOf(o), c.taker), "taker")
     }
 
     @Test
-    fun `swap - when the wallet pays, a priority fee above the order's own is refused`() {
+    fun `swap - when the wallet pays, a priority fee above the order's own is refused`() = runTest {
         val c = swaps[2]
         val o = order(c.path)
         assertEquals("the real order's priority fee is the one its compute budget computes", o.prioritizationFeeLamports, 395L)
@@ -451,7 +451,7 @@ class TransactionGuardTest {
     }
 
     @Test
-    fun `swap - a transaction with no Jupiter instruction is refused`() {
+    fun `swap - a transaction with no Jupiter instruction is refused`() = runTest {
         val c = swaps[2]
         val o = order(c.path)
         val m = WireMessage.parseTransaction(bytesOf(o))

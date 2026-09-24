@@ -2,6 +2,7 @@ package com.plainticker.mobile.ui.swap
 
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.math.RoundingMode
 
 /**
  * The typed amount, converted and refused, with no network call and no floating point.
@@ -23,7 +24,19 @@ object SwapAmount {
      * trailing decimal point is completed, and everything else that is not a plain decimal is
      * [AmountProblem.NOT_A_NUMBER].
      */
-    fun parse(text: String, decimals: Int, balanceRaw: Long): AmountInput {
+    fun parse(
+        text: String,
+        decimals: Int,
+        balanceRaw: Long,
+        /**
+         * The token's scaled UI multiplier ([SwapToken.multiplier]). What a person types is what
+         * their wallet shows, raw / 10^decimals x multiplier, so the raw amount sent is the typed
+         * value / multiplier x 10^decimals. One, for USDC and every unsplit xStock, keeps the exact
+         * integer rule above; any other value rounds the base units DOWN, so this app never sends
+         * more than was typed, by less than one base unit.
+         */
+        multiplier: BigDecimal = BigDecimal.ONE,
+    ): AmountInput {
         val cleaned = clean(text)
         if (cleaned.isEmpty()) return AmountInput(text, 0L, AmountProblem.EMPTY)
 
@@ -31,8 +44,15 @@ object SwapAmount {
             ?: return AmountInput(text, 0L, AmountProblem.NOT_A_NUMBER)
         if (value.signum() <= 0) return AmountInput(text, 0L, AmountProblem.NOT_ABOVE_ZERO)
 
-        val exact: BigInteger = runCatching { value.movePointRight(decimals).toBigIntegerExact() }.getOrNull()
-            ?: return AmountInput(text, 0L, AmountProblem.TOO_PRECISE)
+        val exact: BigInteger = if (multiplier.compareTo(BigDecimal.ONE) == 0) {
+            runCatching { value.movePointRight(decimals).toBigIntegerExact() }.getOrNull()
+                ?: return AmountInput(text, 0L, AmountProblem.TOO_PRECISE)
+        } else {
+            if (multiplier.signum() <= 0) return AmountInput(text, 0L, AmountProblem.NOT_A_NUMBER)
+            val units = value.movePointRight(decimals).divide(multiplier, 0, RoundingMode.DOWN).toBigInteger()
+            if (units.signum() <= 0) return AmountInput(text, 0L, AmountProblem.BELOW_ONE_UNIT)
+            units
+        }
 
         // Past Long.MAX_VALUE there is no balance that could cover it, so it is over the balance
         // rather than unreadable; the raw value stays 0 so nothing downstream can use it.
@@ -47,9 +67,10 @@ object SwapAmount {
      * back to exactly the same base units. No grouping commas, so this is not [com.plainticker.mobile.ui.Fmt];
      * Fmt writes numbers for reading, this one writes a number for typing.
      */
-    fun maxText(balanceRaw: Long, decimals: Int): String {
+    fun maxText(balanceRaw: Long, decimals: Int, multiplier: BigDecimal = BigDecimal.ONE): String {
         if (balanceRaw <= 0L) return "0"
-        return BigDecimal.valueOf(balanceRaw).movePointLeft(decimals).stripTrailingZeros().toPlainString()
+        return BigDecimal.valueOf(balanceRaw).movePointLeft(decimals).multiply(multiplier)
+            .stripTrailingZeros().toPlainString()
     }
 
     private fun clean(text: String): String {

@@ -199,6 +199,9 @@ fun HomeScreen(
                         // than navigating.
                         onBrowseList = { select(AmberDestination.STOCKS) },
                         header = header,
+                        // "Swap to USDC" on a holding: scoped to this home entry like every
+                        // ViewModel here, so a swap mid flight survives a destination switch.
+                        swapViewModel = viewModel(factory = factory),
                     )
 
                     AmberDestination.YOU -> YouScreen(

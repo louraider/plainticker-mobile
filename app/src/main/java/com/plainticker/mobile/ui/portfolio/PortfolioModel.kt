@@ -7,7 +7,9 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.raw
+import com.plainticker.mobile.ui.swap.SwapToken
 import com.plainticker.mobile.ui.words
+import java.math.BigDecimal
 
 /**
  * What the Portfolio screen says, decided away from the composition (task T11, design task DT8).
@@ -171,16 +173,18 @@ private fun trackingCopy(quality: TrackingQuality?): Copy? = when (quality) {
  */
 fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
     signature = receipt.signature,
+    // What the wallet showed on each side: raw scaled by the multiplier recorded at the landing,
+    // so a split xStock reads as its wallet reads, not ten times smaller.
     paid = words(
         R.string.portfolio_row_quantity,
-        Fmt.tokenAmount(receipt.inputAmountRaw, receipt.inputDecimals),
+        Fmt.tokenAmount(receipt.inputUi()),
         receipt.inputSymbol,
     ),
-    received = receipt.outputAmountRaw
+    received = receipt.outputUi()
         ?.let {
             words(
                 R.string.portfolio_swap_row_received,
-                Fmt.tokenAmount(it, receipt.outputDecimals),
+                Fmt.tokenAmount(it),
                 receipt.outputSymbol,
             )
         }
@@ -250,6 +254,25 @@ fun recordedRow(holding: RecordedHolding): RecordedRow = RecordedRow(
     quantity = Fmt.tokenAmount(holding.amountRaw, holding.decimals),
     meta = words(R.string.portfolio_recorded_meta, Fmt.utc(holding.landedAtMillis)),
 )
+
+/**
+ * The token a holding row's "Swap to USDC" opens the sheet for, or null when the row must not
+ * offer it. Offered only for a position the chain read in this session found with a balance and a
+ * readable mint: the mint gives the decimals and the multiplier the sheet states quantities in, and
+ * a position with neither has no quantity to swap. The app's own record never offers it, because
+ * it was not read from any wallet.
+ */
+fun swapOutToken(position: PortfolioPosition, state: PortfolioUiState): SwapToken? {
+    if (!state.connected || position.amountRaw <= 0L) return null
+    val decimals = position.decimals ?: return null
+    val multiplier = position.multiplier ?: return null
+    return SwapToken(
+        mint = position.mint,
+        symbol = position.symbol,
+        decimals = decimals,
+        multiplier = BigDecimal.valueOf(multiplier),
+    )
+}
 
 /** What the one banner slot says. The order of the tiers is [PortfolioUiState.banner]'s. */
 fun bannerText(banner: PortfolioBanner): Copy = when (banner) {

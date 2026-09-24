@@ -356,6 +356,17 @@ gets **146.5dp**; a full-width (`span = 2`) cell gets **326dp**.
 | Detail, `CellValueSize` | 24sp | 146.5dp | **8 characters** | "Unknown" (7 chars) | 35.55dp |
 | Full-width (`span = 2`) cells | 28sp | 326dp | **20 characters** | "4,389,047,809.999999" (20 chars) | 28.22dp |
 
+**The swap sheet left this grid on 2026-09-24.** Its cost block and its receipt now draw through
+**`AmberFactRows`** / **`AmberFact`** (`AmberFactRow.kt`): one fact per row inside
+`AmberTickerRowGroup`'s own tonal container, the label weighted and wrapping on the left, the
+value unweighted and one line on the right in `figureRow` (Bricolage, `tnum`), an optional sub line
+under both, and the whole row one 56dp tap target when it copies something (the signature, the one
+value set in JetBrains Mono because it is an on-chain key). Measured the same way: 328dp of content
+on a 400dp frame; the widest real value, "123.456789 AUTO.GBx", is 194.184dp (252.439dp at 1.3x),
+so the value never clips and the label wraps first (`SwapResultFitTest`). The "SwapSheet" row in
+the table above is kept as history; nothing draws at that size any more. Pass and Vote still use
+`FactGrid`.
+
 The 18sp row is the one that actually clipped in production: the signature fee used to format at
 lamports' own 9-decimal precision ("0.123456789 SOL," 15 characters against a 13-character budget)
 until it was narrowed to a 6-decimal display precision, the honest precision for a quantity worth
@@ -571,6 +582,7 @@ this is the whole list, not a sample of it:
 | `SkeletonSwitch` (Detail's `Hero` company name; every other skeleton-to-content switch in the app) | `tween(200ms, EaseOut)` alpha fade, never a spinner | `rememberMotionEnabled()` | Alpha 1 |
 | `Track`'s position marker | `tween(400ms, CubicBezierEasing(.2, .8, .2, 1))`, unchanged since before this restyle | `rememberMotionEnabled()` | The target position |
 | `LiveBar`'s breathing bar | `infiniteRepeatable(tween(1200ms, EaseInOut), reverse)`, alpha 1 to 0.45, while `live` is true | `rememberMotionEnabled()` | Alpha 1 (stops breathing, does not disappear) |
+| The swap result's mark and hero figure (`SwapSheet.kt`'s `ResultBlock`, 2026-09-24) | The ring's sweep and its settling fill on the no-bounce, medium-low spring; the hero figure on the quick 150ms tween. Once per result. Landed only moves; a failure's open caution ring and a pending broken amber ring are static | `rememberMotionEnabled()` | The settled frame is the first frame: the state starts settled when motion is off, so nothing snaps a frame later |
 
 Two spring families do the orchestrated work (`AmberChip`'s morph and `TodayScreen`'s stagger), both
 `Spring.DampingRatioNoBouncy` at `Spring.StiffnessMediumLow`: a settle, never a bounce, because a

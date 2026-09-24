@@ -21,6 +21,7 @@ import com.plainticker.mobile.wallet.WalletAccount
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -233,7 +234,22 @@ class PortfolioViewModel(
      */
     private var namesByMint: Map<String, XStockAsset> = emptyMap()
 
+    /**
+     * The newest slot any of this device's receipts landed in. Every balance read asks the node
+     * for at least this slot (`minContextSlot`), for two reasons that are the same reason: a node
+     * behind the swap would answer with the wallet from before it, and the forwarder's 60 s cache
+     * keys on the params, so a read that names the new slot cannot be served the cached old one.
+     */
+    private var landedSlot: Long? = null
+
+    /** False until the receipt store's first answer, which is history rather than a new landing. */
+    private var receiptsSeen = false
+
     init {
+        // Known before the first balance read starts, so the read that follows "View in
+        // Portfolio" on a fresh receipt (a new screen, a new ViewModel) already asks for the
+        // landing's slot instead of a cached answer from before the swap.
+        landedSlot = receipts.receipts.value.mapNotNull { it.slot }.maxOrNull()
         viewModelScope.launch {
             wallet.account.collect { account ->
                 if (account == null) {
@@ -250,7 +266,16 @@ class PortfolioViewModel(
         viewModelScope.launch {
             receipts.receipts.collect { landed ->
                 val newestFirst = landed.sortedByDescending { it.landedAtMillis }
+                val newSlot = newestFirst.mapNotNull { it.slot }.maxOrNull()
+                val grew = newSlot != null && (landedSlot == null || newSlot > landedSlot!!)
+                val firstSight = !receiptsSeen
+                receiptsSeen = true
+                landedSlot = newSlot ?: landedSlot
                 _state.update { it.copy(receipts = newestFirst, recorded = named(newestFirst)) }
+                // A swap this app just landed changed the wallet. The positions on screen are the
+                // balance from before it, so they are read again, no older than its slot. The
+                // first collection is the record as it stood at launch, not a new landing.
+                if (grew && !firstSight) wallet.account.value?.let { start(it) }
                 // The record names itself from the catalog rather than from a chain read, because
                 // it is drawn on a screen that may never make one. The catalog is kept on disk for
                 // the day and the list screen has usually already paid for it, so this is normally
@@ -317,7 +342,7 @@ class PortfolioViewModel(
             it.copy(phase = WalletPhase.CONNECTED, account = account, isLoading = true, note = null)
         }
 
-        val balances = runCatching { rpc.tokenBalances(account.address) }.getOrElse {
+        val balances = readBalances(account.address) ?: run {
             // Nothing was read, so nothing on screen may be replaced: what is drawn is the last
             // true answer and the banner says the chain is out.
             _state.update { it.copy(isLoading = false, chainUnavailable = true) }
@@ -367,6 +392,21 @@ class PortfolioViewModel(
                 pricesPartial = fetch.priced.isNotEmpty() && missedAPrice,
             )
         }
+    }
+
+    /**
+     * The wallet's token accounts, no older than [landedSlot] when there is one. A node that has
+     * not reached that slot yet refuses the read for a moment, so it is asked once more after a
+     * beat, and then without the slot: a balance up to a minute old beats no balance.
+     */
+    private suspend fun readBalances(owner: String): List<TokenBalance>? {
+        val slot = landedSlot
+        val slots = if (slot == null) listOf(null) else listOf(slot, slot, null)
+        for ((index, asked) in slots.withIndex()) {
+            if (index > 0) delay(FRESH_READ_RETRY_MS)
+            runCatching { rpc.tokenBalances(owner, asked) }.onSuccess { return it }
+        }
+        return null
     }
 
     /**
@@ -443,3 +483,6 @@ class PortfolioViewModel(
         )
     }
 }
+
+/** One beat between two balance reads that asked for a slot the node had not reached yet. */
+private const val FRESH_READ_RETRY_MS = 1_000L

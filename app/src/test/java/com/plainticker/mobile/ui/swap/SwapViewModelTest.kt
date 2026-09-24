@@ -19,6 +19,7 @@ import com.plainticker.mobile.data.rpc.TokenBalance
 import com.plainticker.mobile.repo.FakeRpcRepository
 import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
+import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WireMessage
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.testAccount
@@ -69,11 +70,32 @@ class SwapViewModelTest {
      * its taker key swapped for [seeker]'s, so the bytes are ones [TransactionGuard] reads as this
      * wallet's own. The golden order below carried "REDACTED" in place of a transaction, which the
      * guard now refuses before the wallet (security audit, finding 2), as it must.
+     *
+     * The taker's two token accounts are swapped for [seeker]'s as well (2026-09-24): the guard
+     * now reads the route's own accounts and requires the one spent from and the one paid into
+     * to be the wallet's own for the two mints, so a transaction whose taker is the seeker but
+     * whose accounts are still the original taker's is, correctly, refused.
      */
-    private val unsignedBase64: String = WireMessage.parseBase64(
-        Fixtures.read("jupiter/order-usdc-tslax-5-metis-taker-pays.json")
-            .let { HttpClientFactory.json.decodeFromString(SwapOrder.serializer(), it) }.transaction!!,
-    ).replaceKey(REAL_TAKER, seeker.address).base64()
+    private val unsignedBase64: String = asSeeker(
+        WireMessage.parseBase64(
+            Fixtures.read("jupiter/order-usdc-tslax-5-metis-taker-pays.json")
+                .let { HttpClientFactory.json.decodeFromString(SwapOrder.serializer(), it) }.transaction!!,
+        ),
+        REAL_TAKER,
+    ).base64()
+
+    /** [m] with [realTaker] and its USDC and TSLAx token accounts replaced by [seeker]'s own. */
+    private fun asSeeker(m: WireMessage, realTaker: String): WireMessage = kotlinx.coroutines.runBlocking {
+        m.replaceKey(realTaker, seeker.address)
+            .replaceKey(
+                TransactionGuard.ata(realTaker, KnownMints.USDC, KnownPrograms.TOKEN),
+                TransactionGuard.ata(seeker.address, KnownMints.USDC, KnownPrograms.TOKEN),
+            )
+            .replaceKey(
+                TransactionGuard.ata(realTaker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022),
+                TransactionGuard.ata(seeker.address, KnownMints.TSLAX, KnownPrograms.TOKEN_2022),
+            )
+    }
 
     /** The golden order's own transaction line, as this file serves it. */
     private val transactionField = """"transaction": "$unsignedBase64","""
@@ -147,6 +169,7 @@ class SwapViewModelTest {
         rpc: FakeRpcRepository = chain(),
         submitSwaps: Boolean = true,
         receipts: FakeReceiptStore = this.receipts,
+        mints: com.plainticker.mobile.repo.MintRepository? = null,
     ) = SwapViewModel(
         swapApi = JupiterSwapApi(mock.client),
         wallet = wallet,
@@ -157,6 +180,7 @@ class SwapViewModelTest {
         debugLog = { line -> logged += line },
         // The receipt write stays on the test scheduler, so virtual time still orders it.
         ioDispatcher = mainDispatcher.dispatcher,
+        mints = mints,
     )
 
     private val logged = mutableListOf<String>()
@@ -679,7 +703,7 @@ class SwapViewModelTest {
                 awaitItem()
                 submitFive(vm, this)
                 val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
-                assertEquals(SwapFailure.NO_TRANSACTION, failed.reason)
+                assertEquals(SwapFailure.GUARD_REFUSED, failed.reason)
                 assertEquals("the wallet is never opened for it", 0, wallet.callCount)
                 assertTrue(mock.executes().isEmpty())
                 cancelAndIgnoreRemainingEvents()
@@ -914,6 +938,354 @@ class SwapViewModelTest {
 
     private fun refusal(code: Int) = """{"status":"Failed","code":$code,"error":"upstream words a reader cannot act on"}"""
 
+
+    // ---- Swap to USDC: the reverse direction, on a REAL order (2026-09-24) -----------------------
+
+    /**
+     * The real TSLAx-to-USDC order captured 2026-09-24 for 0.002646 TSLAx (see
+     * TransactionGuardReverseTest for where it came from), with its taker and the taker's two
+     * token accounts replaced by [seeker]'s, served as this wallet's own order.
+     */
+    private val reverseOrder: String = run {
+        val text = Fixtures.read("jupiter/order-tslax-usdc-default-metis.json")
+        val order = HttpClientFactory.json.decodeFromString(SwapOrder.serializer(), text)
+        val bytes = asSeeker(WireMessage.parseBase64(order.transaction!!), REVERSE_TAKER).base64()
+        text.replace(order.transaction!!, bytes).replace(REVERSE_TAKER, seeker.address)
+    }
+
+    private val reverseLanded =
+        """{"status":"Success","signature":"${"1".repeat(88)}","slot":"450068700","inputAmountResult":"264600","outputAmountResult":"996812"}"""
+
+    private suspend fun openOutAndMax(vm: SwapViewModel, turbine: app.cash.turbine.ReceiveTurbine<SwapState>, token: SwapToken = tslax): SwapState.Amount {
+        vm.openOut(token)
+        turbine.awaitUntil { it is SwapState.Amount }
+        vm.useMax()
+        return turbine.awaitUntil { it is SwapState.Amount && it.input.isUsable } as SwapState.Amount
+    }
+
+    @Test
+    fun `swap to USDC spends the whole raw balance on Max, quotes the xStock into USDC for this wallet, and lands`() = runTest {
+        orderResponse = reverseOrder
+        executePlan = listOf(reverseLanded to HttpStatusCode.OK)
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, rpc = chain(tokenRaw = 264_600L))
+
+        vm.state.test {
+            awaitItem()
+            val max = openOutAndMax(vm, this)
+            assertEquals(KnownMints.TSLAX, max.leg.input.mint)
+            assertEquals(KnownMints.USDC, max.leg.output.mint)
+            assertEquals("the field shows what the wallet shows", "0.002646", max.input.text)
+            assertEquals("and Max sends the raw balance itself", 264_600L, max.input.raw)
+
+            vm.submit()
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            val order = mock.orders().single().url.parameters
+            assertEquals(KnownMints.TSLAX, order["inputMint"])
+            assertEquals(KnownMints.USDC, order["outputMint"])
+            assertEquals("264600", order["amount"])
+            assertEquals("the taker is the connected wallet", seeker.address, order["taker"])
+            assertEquals("the guard passed the real reverse bytes to the wallet unchanged", 1, wallet.callCount)
+            assertEquals(996_812L, landed.fill.outAmountRaw)
+
+            val receipt = receipts.writes.single()
+            assertEquals(KnownMints.TSLAX, receipt.inputMint)
+            assertEquals(264_600L, receipt.inputAmountRaw)
+            assertEquals(KnownMints.USDC, receipt.outputMint)
+            assertEquals(996_812L, receipt.outputAmountRaw)
+            assertEquals(1.0, receipt.inputMultiplier, 0.0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `swap to USDC with none of the xStock cannot be submitted and asks Jupiter nothing`() = runTest {
+        val mock = jupiter()
+        val vm = viewModel(mock, wallet(), rpc = chain(tokenRaw = 0L))
+
+        vm.state.test {
+            awaitItem()
+            vm.openOut(tslax)
+            val amount = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertEquals(0L, amount.balanceRaw)
+            vm.amountChanged("0.001")
+            val typed = awaitUntil { it is SwapState.Amount && it.input.text == "0.001" } as SwapState.Amount
+            assertEquals(AmountProblem.ABOVE_BALANCE, typed.input.problem)
+            vm.submit()
+            runCurrent()
+            assertTrue(mock.requests.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a frozen token account is not a spendable balance, and the sheet knows why`() = runTest {
+        val frozen = TokenBalance(
+            tokenAccount = "frozen-account",
+            mint = KnownMints.TSLAX,
+            owner = seeker.address,
+            amountRaw = 264_600L,
+            decimals = 8,
+            uiAmountString = "0.002646",
+            programId = KnownPrograms.TOKEN_2022,
+            state = "frozen",
+        )
+        val rpc = chain().apply { balances = Result.success(balances.getOrThrow() + frozen) }
+        val vm = viewModel(jupiter(), wallet(), rpc = rpc)
+
+        vm.state.test {
+            awaitItem()
+            vm.openOut(tslax)
+            val amount = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertEquals(0L, amount.balanceRaw)
+            assertTrue(amount.spendFrozen)
+            vm.useMax()
+            runCurrent()
+            assertFalse((vm.state.value as SwapState.Amount).canSubmit)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a split xStock is typed and sent in the right units, and Max is still the exact raw balance`() = runTest {
+        // NFLXx's shape: an effective multiplier of 10, so 1 share in the wallet is 10^7 raw.
+        val split = tslax.copy(multiplier = java.math.BigDecimal.TEN)
+        val vm = viewModel(jupiter(), wallet(), rpc = chain(tokenRaw = 272_557_048_309L))
+
+        vm.state.test {
+            awaitItem()
+            val max = openOutAndMax(vm, this, split)
+            assertEquals("27255.7048309", max.input.text)
+            assertEquals(272_557_048_309L, max.input.raw)
+
+            vm.amountChanged("1")
+            val one = awaitUntil { it is SwapState.Amount && it.input.text == "1" } as SwapState.Amount
+            assertEquals("one share as the wallet shows it is 10^7 raw at a multiplier of 10", 10_000_000L, one.input.raw)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a token opened without a known multiplier has it read from the mint, the one in force now`() = runTest {
+        val mints = com.plainticker.mobile.repo.FakeMintRepository(
+            reading = Result.success(
+                com.plainticker.mobile.repo.mintReading(
+                    com.plainticker.mobile.repo.mintFacts(
+                        scaledUiAmount = com.plainticker.mobile.data.rpc.ScaledUiAmountConfig(
+                            multiplier = 1.0,
+                            newMultiplier = 10.0,
+                            // NFLXx's own: scheduled for 2025-11-16 and long since in force.
+                            newMultiplierEffectiveAtEpochSeconds = 1_763_337_300L,
+                            authority = null,
+                        ),
+                    ),
+                    // Read on 2026-09-24, after the scheduled change took effect.
+                    readAtMillis = 1_790_208_000_000L,
+                ),
+            ),
+        )
+        val vm = viewModel(jupiter(), wallet(), rpc = chain(tokenRaw = 10_000_000L), mints = mints)
+
+        vm.state.test {
+            awaitItem()
+            vm.openOut(tslax.copy(multiplier = null))
+            val amount = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertEquals(0, java.math.BigDecimal.TEN.compareTo(amount.leg.input.multiplier))
+            assertEquals(listOf(KnownMints.TSLAX), mints.asked)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a mint that cannot be read stops the sheet rather than guessing at a split`() = runTest {
+        val mints = com.plainticker.mobile.repo.FakeMintRepository(reading = Result.failure(java.io.IOException("down")))
+        val vm = viewModel(jupiter(), wallet(), mints = mints)
+
+        vm.state.test {
+            awaitItem()
+            vm.openOut(tslax.copy(multiplier = null))
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.CHAIN_UNREAD, failed.reason)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ---- The edges of either direction ------------------------------------------------------------
+
+    @Test
+    fun `a wallet that disconnects before signing is never handed the bytes`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            vm.open(tslax)
+            awaitUntil { it is SwapState.Amount }
+            vm.amountChanged("5")
+            awaitUntil { it is SwapState.Amount && it.input.isUsable }
+            wallet.connectedAs(null)
+            vm.submit()
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.WALLET_CHANGED, failed.reason)
+            assertEquals(0, wallet.callCount)
+            assertTrue(mock.executes().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a session that answers for another account is not handed this account's order`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            vm.open(tslax)
+            awaitUntil { it is SwapState.Amount }
+            vm.amountChanged("5")
+            awaitUntil { it is SwapState.Amount && it.input.isUsable }
+            wallet.connectedAs(testAccount(fill = 9))
+            vm.submit()
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.WALLET_CHANGED, failed.reason)
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a quote that would deliver nothing is refused before the wallet`() = runTest {
+        orderResponse = orderResponse.replace(""""outAmount": "1360437",""", """"outAmount": "0",""")
+            .replace(THRESHOLD_FIELD, """"otherAmountThreshold": "0",""")
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.QUOTE_DUST, failed.reason)
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `each execute refusal maps to what it can honestly claim about the money`() = runTest {
+        val cases = listOf(
+            refusal(6001) to SwapFailure.SLIPPAGE,
+            """{"status":"Failed","code":-1000,"error":"Slippage tolerance exceeded"}""" to SwapFailure.SLIPPAGE,
+            refusal(-1005) to SwapFailure.QUOTE_EXPIRED,
+            refusal(-1) to SwapFailure.QUOTE_EXPIRED,
+            refusal(-1006) to SwapFailure.SUBMIT_UNAVAILABLE,
+            refusal(-1001) to SwapFailure.SUBMIT_UNAVAILABLE,
+            refusal(-1000) to SwapFailure.SWAP_REFUSED,
+        )
+        for ((answer, expected) in cases) {
+            resetPerCase()
+            executePlan = listOf(answer to HttpStatusCode.OK)
+            val mock = jupiter()
+            val vm = viewModel(mock, wallet())
+            vm.state.test {
+                awaitItem()
+                submitFive(vm, this)
+                val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+                assertEquals(answer, expected, failed.reason)
+                assertTrue("no receipt for a swap that is not known to have landed", receipts.writes.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+    }
+
+    @Test
+    fun `retry asks for a fresh quote for the same amount, and is refused where the first may have landed`() = runTest {
+        executePlan = listOf(refusal(-1005) to HttpStatusCode.OK, LANDED to HttpStatusCode.OK)
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val expired = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(FailureNext.NEW_QUOTE, expired.reason.next)
+            vm.retry()
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertEquals("a second quote and a second approval", 2, mock.orders().size)
+            assertEquals(2, wallet.callCount)
+            assertEquals(5_000_000L, landed.quote.inAmountRaw)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        resetPerCase()
+        executePlan = listOf(refusal(-1006) to HttpStatusCode.OK)
+        val second = jupiter()
+        val vm2 = viewModel(second, wallet())
+        vm2.state.test {
+            awaitItem()
+            submitFive(vm2, this)
+            awaitUntil { it is SwapState.Failed && it.reason == SwapFailure.SUBMIT_UNAVAILABLE }
+            vm2.retry()
+            runCurrent()
+            assertEquals("no second attempt over one that may have landed", 1, second.orders().size)
+            assertEquals(1, second.executes().size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `swap back opens the other direction with a balance no older than the landing's slot`() = runTest {
+        val rpc = chain()
+        val vm = viewModel(jupiter(), wallet(), rpc = rpc)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Landed }
+            rpc.balances = Result.success(listOf(balance(KnownMints.USDC, 15_200_000L, 6), balance(KnownMints.TSLAX, 1_360_941L, 8)))
+            vm.swapBack()
+            val back = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertEquals(KnownMints.TSLAX, back.leg.input.mint)
+            assertEquals(KnownMints.USDC, back.leg.output.mint)
+            assertEquals("the TSLAx that just arrived", 1_360_941L, back.balanceRaw)
+            assertEquals("the read after the landing names its slot", 367_000_000L, rpc.balanceSlots.last())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a watched holding is read from the chain and read again after a landing changes it`() = runTest {
+        val rpc = chain(tokenRaw = 0L)
+        val vm = viewModel(jupiter(), wallet(), rpc = rpc)
+
+        vm.holding.test {
+            assertNull(awaitItem())
+            vm.watchHolding(tslax)
+            assertEquals(SwapHolding(tslax, 0L), awaitItem())
+            assertFalse(SwapHolding(tslax, 0L).canSwapOut)
+
+            rpc.balances = Result.success(listOf(balance(KnownMints.USDC, 15_200_000L, 6), balance(KnownMints.TSLAX, 1_360_941L, 8)))
+            vm.open(tslax)
+            awaitUntilState(vm) { it is SwapState.Amount }
+            vm.amountChanged("5")
+            awaitUntilState(vm) { it is SwapState.Amount && it.input.isUsable }
+            vm.submit()
+            val after = awaitItem()
+            assertEquals(1_360_941L, after?.raw)
+            assertTrue(after!!.canSwapOut)
+            assertEquals("the refresh asks for the landing's slot", 367_000_000L, rpc.balanceSlots.last())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private suspend fun awaitUntilState(vm: SwapViewModel, predicate: (SwapState) -> Boolean) {
+        while (!predicate(vm.state.value)) kotlinx.coroutines.yield()
+    }
+
     private companion object {
         const val START = 1_757_600_000_000L
         const val TICK = 100L
@@ -928,6 +1300,9 @@ class SwapViewModelTest {
 
         /** The taker of the real 2026-09-23 order whose bytes stand in for the redacted ones. */
         const val REAL_TAKER = "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"
+
+        /** The taker of the real 2026-09-24 TSLAx-to-USDC order, replaced by the test wallet. */
+        const val REVERSE_TAKER = "AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2"
 
         /** The 2026-09-12 fixture's own field, so a test can take it away by name. */
         const val THRESHOLD_FIELD = """"otherAmountThreshold": "1346933","""

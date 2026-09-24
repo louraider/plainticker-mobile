@@ -39,10 +39,16 @@ class SolanaRpcApi(
     private val client: HttpClient,
     private val baseUrl: String = BASE_URL,
 ) {
-    suspend fun getBalance(pubkey: String): ContextValue<Long> =
+    /**
+     * @param minContextSlot when given, the node must have seen at least this slot before it
+     *   answers. Passed after a swap lands, with the slot the landing reported: it keeps a lagging
+     *   node from answering with the balance from before the swap, and because the forwarder keys
+     *   its 60 s cache on the params, it also keeps a cached pre-swap answer from being served.
+     */
+    suspend fun getBalance(pubkey: String, minContextSlot: Long? = null): ContextValue<Long> =
         call(METHOD_GET_BALANCE, buildJsonArray {
             add(pubkey(pubkey))
-            add(config(null))
+            add(config(null, minContextSlot))
         })
 
     suspend fun getAccountInfo(pubkey: String, encoding: RpcEncoding = RpcEncoding.BASE64): ContextValue<RpcAccount> =
@@ -64,12 +70,21 @@ class SolanaRpcApi(
         })
     }
 
-    /** Token accounts of [owner] under one token program, jsonParsed so amounts come typed. */
-    suspend fun getTokenAccountsByOwner(owner: String, programId: String): ContextValue<List<KeyedAccount>> =
+    /**
+     * Token accounts of [owner] under one token program, jsonParsed so amounts come typed. For
+     * Token-2022 (every xStock) this is the only read that lists the accounts; there is no
+     * separate "parsed" method on the wire, `getParsedTokenAccountsByOwner` is a web3.js wrapper
+     * around exactly this call with `encoding: jsonParsed`. [minContextSlot] as on [getBalance].
+     */
+    suspend fun getTokenAccountsByOwner(
+        owner: String,
+        programId: String,
+        minContextSlot: Long? = null,
+    ): ContextValue<List<KeyedAccount>> =
         call(METHOD_GET_TOKEN_ACCOUNTS_BY_OWNER, buildJsonArray {
             add(pubkey(owner))
             addJsonObject { put("programId", pubkey(programId)) }
-            add(config(RpcEncoding.JSON_PARSED))
+            add(config(RpcEncoding.JSON_PARSED, minContextSlot))
         })
 
     /**
@@ -89,9 +104,12 @@ class SolanaRpcApi(
         return response.result ?: throw RpcException(0, method, "empty result")
     }
 
-    private fun config(encoding: RpcEncoding?): JsonObject = buildJsonObject {
+    private fun config(encoding: RpcEncoding?, minContextSlot: Long? = null): JsonObject = buildJsonObject {
         put("commitment", COMMITMENT)
         if (encoding != null) put("encoding", encoding.wire)
+        // The forwarder accepts this key on both account reads and getBalance (lib/rpc/forwarder.ts,
+        // ACCOUNT_CONFIG_KEYS and BALANCE_CONFIG_KEYS); a non-positive slot says nothing, so it is left out.
+        if (minContextSlot != null && minContextSlot > 0L) put("minContextSlot", minContextSlot)
     }
 
     private fun pubkey(value: String): String = requireBase58(value)

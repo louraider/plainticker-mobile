@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +62,7 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
+import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.defaultAmberColors
@@ -81,7 +83,7 @@ import com.plainticker.mobile.ui.swap.SwapActions
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.swap.SwapSheet
 import com.plainticker.mobile.ui.swap.SwapState
-import com.plainticker.mobile.ui.swap.SwapToken
+import com.plainticker.mobile.ui.swap.SwapHolding
 import com.plainticker.mobile.ui.swap.SwapViewModel
 import com.plainticker.mobile.ui.swap.quoteOrNull
 import com.plainticker.mobile.ui.theme.AmberColors
@@ -118,7 +120,14 @@ fun DetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
+    val holding by swapViewModel.holding.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
+
+    // What the connected wallet holds of this token, read from the chain, is what decides whether
+    // "Swap to USDC" is offered here. Keyed on the token, so a chain read that adds the multiplier
+    // later hands the machine the better answer.
+    val swapToken = state.swapToken()
+    LaunchedEffect(swapToken) { swapToken?.let(swapViewModel::watchHolding) }
 
     // The one permission this app asks for, at the one moment it means anything: the tap that puts
     // the first ticker on the watchlist, which is the tap that creates something to notify about.
@@ -150,24 +159,18 @@ fun DetailScreen(
                 swapViewModel.close()
                 onViewPortfolio()
             },
+            onRetry = swapViewModel::retry,
+            onSwapBack = swapViewModel::swapBack,
         ),
+        holding = holding,
+        onSwapOut = { swapToken?.let(swapViewModel::openOut) },
         onToggleWatch = {
             val ask = viewModel.toggleWatch()
             if (ask && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         },
-        onSwap = {
-            state.mint?.let { mint ->
-                swapViewModel.open(
-                    SwapToken(
-                        mint = mint,
-                        symbol = state.symbol ?: state.ticker,
-                        decimals = state.chain.valueOrNull?.facts?.decimals ?: MintFacts.XSTOCK_DECIMALS,
-                    )
-                )
-            }
-        },
+        onSwap = { swapToken?.let(swapViewModel::open) },
         // The peek's own way to Pro, beside the honest short form rather than in place of it
         // (task A6): the same destination the swap receipt already leads to.
         onViewPortfolio = onViewPortfolio,
@@ -189,6 +192,10 @@ internal fun DetailContent(
     onVote: (() -> Unit)? = null,
     /** Null in the previews and the gallery; the peek's own way to Pro when it is not (task A6). */
     onViewPortfolio: (() -> Unit)? = null,
+    /** The connected wallet's chain-read balance of this token; null with no wallet or no read. */
+    holding: SwapHolding? = null,
+    /** "Swap to USDC"; null in the previews and the gallery. */
+    onSwapOut: (() -> Unit)? = null,
 ) {
     val colors = defaultAmberColors()
     // The only Box on Detail, and the only thing in it that does not scroll is the scrim: the
@@ -239,7 +246,7 @@ internal fun DetailContent(
             state.readNotice?.let { NoticeLine(it) }
             NextUpBlock(state)
             VoteBlock(state = state, onVote = onVote)
-            SwapBlock(state = state, swap = swap, onSwap = onSwap)
+            SwapBlock(state = state, swap = swap, onSwap = onSwap, holding = holding, onSwapOut = onSwapOut)
             Spacer(Modifier.height(TailGap))
 
             // The sheet is a modal surface and draws in its own window, so where it sits in this
@@ -798,6 +805,8 @@ private fun SwapBlock(
     state: DetailUiState,
     swap: SwapState,
     onSwap: () -> Unit,
+    holding: SwapHolding? = null,
+    onSwapOut: (() -> Unit)? = null,
 ) {
     val label = state.swapLabel ?: return
     val cost = state.costLine(swap.quoteOrNull?.allInCostPct)
@@ -813,6 +822,12 @@ private fun SwapBlock(
             onClick = onSwap,
             enabled = state.mint != null && !swap.isBusy,
         )
+        // The exit, for a wallet the chain says holds some: the same machine the other way round,
+        // one step quieter than the swap in, because it is the second thing this screen offers.
+        val out = state.swapOutLabel(holding)
+        if (out != null && onSwapOut != null) {
+            AmberSecondaryAction(label = out.text(), onClick = onSwapOut)
+        }
         cost?.let {
             Text(text = it.text(), style = AmberType.meta, color = colors.textTertiary(AmberSurface.GROUND))
         }

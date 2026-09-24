@@ -23,7 +23,8 @@ object Fmt {
 
     /** U+2026, one character, never three periods. */
     private const val ELLIPSIS = '…'
-    private const val MISSING = "-"
+    /** The missing-value placeholder, the same one value_missing draws. */
+    const val MISSING = "-"
 
     private val MONTHS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
