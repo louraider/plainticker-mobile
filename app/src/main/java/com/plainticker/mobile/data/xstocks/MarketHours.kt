@@ -1,6 +1,5 @@
 package com.plainticker.mobile.data.xstocks
 
-import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
@@ -47,8 +46,17 @@ data class MarketStatus(
     val source: MarketSource,
     /** Whether the venue takes orders now, whatever session it is in. */
     val venueOpen: Boolean,
-    /** Unix millis of the next period change, when the venue said so and it parsed. */
+    /**
+     * Unix millis of the next period change: the venue's own when it said so and it parsed, the
+     * calendar's next boundary when [MarketHours.sessionAt] had to fall back to the calendar.
+     */
     val nextChangeAtMillis: Long?,
+    /**
+     * The exchange calendar at the same instant: which side of the session a closed venue is on
+     * (before the open, after the close, a holiday) and when it next opens or closes. Null only
+     * for the per-asset reading ([MarketHours.of]), which Detail labels by [state] alone.
+     */
+    val session: NyseSession? = null,
 ) {
     /** The exchange's own session: only then does the token's quote track a live underlying. */
     val regularSession: Boolean get() = state == MarketState.REGULAR
@@ -100,12 +108,49 @@ object MarketHours {
      */
     fun ofCatalog(assets: List<XStockAsset>, nowMillis: Long): MarketStatus? {
         if (assets.isEmpty()) return null
-        // The halt is cleared on both levels, the asset's and the block's own flag, because
-        // [of] folds the two together and either one would answer HALTED for the whole list.
-        // The period and the open flag still come from the block: it is only the halt that is
-        // about one token rather than about the exchange behind all of them.
-        val block = assets.firstNotNullOfOrNull { it.trading }?.copy(isTradingHalted = false)
-        return of(block, halted = false, nowMillis = nowMillis)
+        return sessionAt(nowMillis, snapshotOf(assets))
+    }
+
+    /**
+     * The one trading block a whole catalog is read by: the first that answers, with its halt
+     * cleared. The halt is cleared on both levels, the asset's and the block's own flag, because
+     * [of] folds the two together and either one would answer HALTED for the whole list. The
+     * period and the open flag still come from the block: it is only the halt that is about one
+     * token rather than about the exchange behind all of them.
+     */
+    fun snapshotOf(assets: List<XStockAsset>): Trading? =
+        assets.firstNotNullOfOrNull { it.trading }?.copy(isTradingHalted = false)
+
+    /**
+     * The venue at [nowMillis], from a [snapshot] of its trading block that may be hours old.
+     *
+     * The snapshot is a photograph: `currentPeriod` and `openNow` describe the moment the catalog
+     * was fetched, and the catalog is cached for up to a day. So it is believed only until its own
+     * `nextChangeAt`, the instant the venue itself said the period would change. Past that, or
+     * with no snapshot at all, the exchange calendar ([NyseCalendar]) answers and the status says
+     * so ([MarketSource.LOCAL_SCHEDULE]) until a fresh block lands. Whichever answers, [session]
+     * carries the calendar's reading, so a screen can say which side of the session a closed venue
+     * is on and when it next opens, in the reader's own time.
+     *
+     * The calendar never claims [MarketState.EXTENDED] or [MarketState.OVERNIGHT]: those are the
+     * xStocks venue's own periods and only its block can report them. The calendar answers the
+     * exchange's question, open or not, and [NyseSession.phase] carries the rest.
+     */
+    fun sessionAt(nowMillis: Long, snapshot: Trading?): MarketStatus {
+        val session = NyseCalendar.session(nowMillis)
+        val changeAt = snapshot?.nextChangeAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+        val fresh = snapshot != null && (changeAt == null || nowMillis < changeAt)
+        if (fresh) {
+            return of(snapshot, halted = false, nowMillis = nowMillis).copy(session = session)
+        }
+        val regular = session.phase == SessionPhase.REGULAR
+        return MarketStatus(
+            state = if (regular) MarketState.REGULAR else MarketState.CLOSED,
+            source = MarketSource.LOCAL_SCHEDULE,
+            venueOpen = regular,
+            nextChangeAtMillis = session.nextBoundaryMillis,
+            session = session,
+        )
     }
 
     /**
@@ -142,17 +187,12 @@ object MarketHours {
     }
 
     /**
-     * The fallback: a US equity week with no holiday calendar. Monday to Friday, 09:30 to 16:00 in
-     * [ZONE], everything else closed.
+     * The fallback: the exchange calendar ([NyseCalendar]), open only during a trading day's
+     * regular session. Weekends, the holidays in its table and the hours after a 13:00 early close
+     * are all closed.
      */
-    fun localSchedule(nowMillis: Long): MarketState {
-        val local = Instant.ofEpochMilli(nowMillis).atZone(ZONE)
-        val weekend = local.dayOfWeek == DayOfWeek.SATURDAY || local.dayOfWeek == DayOfWeek.SUNDAY
-        if (weekend) return MarketState.CLOSED
-        val time = local.toLocalTime()
-        val trading = !time.isBefore(OPEN) && time.isBefore(CLOSE)
-        return if (trading) MarketState.REGULAR else MarketState.CLOSED
-    }
+    fun localSchedule(nowMillis: Long): MarketState =
+        if (NyseCalendar.session(nowMillis).phase == SessionPhase.REGULAR) MarketState.REGULAR else MarketState.CLOSED
 
     private fun TradingPeriod.toState(): MarketState = when (this) {
         TradingPeriod.MARKET -> MarketState.REGULAR

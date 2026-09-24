@@ -22,6 +22,7 @@ import com.plainticker.mobile.ui.home.HomeScreen
 import com.plainticker.mobile.ui.home.HomeTab
 import com.plainticker.mobile.ui.onboarding.OnboardingScreen
 import com.plainticker.mobile.ui.spike.SpikeScreen
+import com.plainticker.mobile.ui.you.DigestScreen
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 /**
@@ -92,7 +93,12 @@ fun AppNavHost(
                 onOpenSpike = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.SPIKE) }) else null,
                 onOpenGallery = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.GALLERY) }) else null,
                 initialTab = entry.arguments?.getInt(Routes.ARG_TAB) ?: HomeTab.LIST.ordinal,
+                onOpenDigest = { navController.navigate(Routes.DIGEST) },
             )
+        }
+        composable(Routes.DIGEST) {
+            // No back control on the screen, the same as Detail: the system gesture pops it.
+            DigestScreen(viewModel = viewModel(factory = factory))
         }
         composable(
             route = Routes.DETAIL,

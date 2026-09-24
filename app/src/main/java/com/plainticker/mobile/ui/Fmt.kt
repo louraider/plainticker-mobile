@@ -5,13 +5,16 @@ import java.math.RoundingMode
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
 /**
  * The one number and time formatter (DESIGN.md section 7, plan section 13 Pass 7). Every
  * number on every screen passes through it.
  *
- * en-US fixed: comma thousands, period decimal, month names in sentence case, times in UTC.
+ * en-US fixed: comma thousands, period decimal, month names in sentence case, times in UTC
+ * except where a function says it reads the reader's own zone ([clock], [weekday]).
  * Pure JVM (java.math, java.time), no Android dependency, so it runs in plain unit tests.
  *
  * Rounding is half-up on the shortest decimal representation of the double (what a person
@@ -27,6 +30,7 @@ object Fmt {
     const val MISSING = "-"
 
     private val MONTHS = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    private val WEEKDAYS = arrayOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
     /** Compact money units, largest first; [compactMoney] takes the first that the amount fills. */
     private val MONEY_UNITS = listOf(
@@ -162,6 +166,29 @@ object Fmt {
     }
 
     fun utc(epochMillis: Long): String = utc(Instant.ofEpochMilli(epochMillis))
+
+    // ---- The reader's own time ------------------------------------------------------------
+
+    /**
+     * A time of day in the reader's own zone, 24-hour: "16:30". For a surface a beginner reads at
+     * a glance (Today's venue line, the digest's stamp), where a UTC time is a conversion the
+     * reader should not have to do. [zone] is passed in, never read here, so this stays pure.
+     */
+    fun clock(epochMillis: Long, zone: ZoneId): String {
+        val t = Instant.ofEpochMilli(epochMillis).atZone(zone)
+        return "${two(t.hour)}:${two(t.minute)}"
+    }
+
+    /** The weekday in the reader's own zone, in sentence case: "Monday". */
+    fun weekday(epochMillis: Long, zone: ZoneId): String =
+        WEEKDAYS[Instant.ofEpochMilli(epochMillis).atZone(zone).dayOfWeek.value - 1]
+
+    /** How many calendar days, in the reader's own zone, lie between [nowMillis] and [thenMillis]. */
+    fun daysAhead(thenMillis: Long, nowMillis: Long, zone: ZoneId): Long {
+        val then = Instant.ofEpochMilli(thenMillis).atZone(zone).toLocalDate()
+        val now = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+        return ChronoUnit.DAYS.between(now, then)
+    }
 
     /** A calendar day in UTC without the year, for report dates and history rows: "Oct 22". */
     fun monthDay(instant: Instant): String {

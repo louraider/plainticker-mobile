@@ -1,6 +1,8 @@
 package com.plainticker.mobile.ui.components
 
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,5 +70,54 @@ class TopBarTest {
                 "width",
             wordmarkAt13xDp + watchingAt13xDp <= contentWidthDp,
         )
+    }
+
+    // ---- The lockup: the two-corners mark before the wordmark (2026-09-24) ---------------------------
+
+    /**
+     * The mark is drawn at the wordmark's cap height. Measured with fontTools against
+     * `res/font/bricolage_grotesque.ttf` instantiated at `wght` 700, `wdth` 100, `opsz` 15, the
+     * wordmark's own coordinates: `OS/2.sCapHeight` is 660 of 1000 units, and the "P" glyph's own
+     * `yMax` is also 660, so the cap height at 15sp is 9.9sp. The mark is sized in sp, so it grows
+     * with font scale exactly as the wordmark does; the 6dp gap does not.
+     */
+    private val markDp = 9.9
+    private val gapDp = 6.0
+
+    @Test
+    fun `the mark is the wordmark's cap height and sits a fixed gap before it`() {
+        assertEquals(9.9f, WordmarkCapHeight.value, 0.001f)
+        assertEquals(6f, MarkGap.value, 0.0f)
+        assertEquals(markDp, WordmarkCapHeight.value.toDouble(), 0.001)
+        assertEquals(gapDp, MarkGap.value.toDouble(), 0.0)
+    }
+
+    @Test
+    fun `mark, gap, wordmark and the widest real action clear the TopBar's budget at 1_0x`() {
+        val used = markDp + gapDp + wordmarkWidthDp + watchingWidthDp
+        assertEquals(159.058, used, 0.01)
+        assertTrue("the lockup plus \"Watching\" must fit $contentWidthDp dp", used <= contentWidthDp)
+        assertEquals("the margin left", 200.942, contentWidthDp - used, 0.01)
+    }
+
+    @Test
+    fun `mark, gap, wordmark and the widest real action still clear it at 1_3x`() {
+        val used = markDp * 1.3 + gapDp + wordmarkWidthDp * 1.3 + watchingWidthDp * 1.3
+        assertEquals(204.975, used, 0.01)
+        assertTrue("grown to 1.3x the lockup plus \"Watching\" must still fit $contentWidthDp dp", used <= contentWidthDp)
+        assertEquals("the margin left", 155.025, contentWidthDp - used, 0.01)
+    }
+
+    @Test
+    fun `the mark is drawn from the tight crop, tinted with the action token, and says nothing to a screen reader`() {
+        val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }
+        val source = com.plainticker.mobile.lint.KotlinScan(
+            File(module, "src/main/java/com/plainticker/mobile/ui/components/TopBar.kt").readText(),
+        ).code
+        assertTrue("the tight crop, never the 108 launcher grid", "R.drawable.ic_brand_mark_tight" in source)
+        assertFalse("R.drawable.ic_brand_mark)" in source)
+        assertTrue("decorative beside the wordmark", "contentDescription = null" in source)
+        assertTrue("follows dark and light through the action token", "tint = colors.actionText" in source)
+        assertTrue("the mark comes before the wordmark", source.indexOf("ic_brand_mark_tight") < source.indexOf("text = title"))
     }
 }

@@ -3,12 +3,14 @@ package com.plainticker.mobile.ui.watchlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.plainticker.mobile.core.Clock
+import com.plainticker.mobile.data.jupiter.PriceEntry
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.VoteRound
-import com.plainticker.mobile.data.xstocks.MarketHours
 import com.plainticker.mobile.data.xstocks.MarketStatus
+import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.MarketClock
 import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
@@ -48,6 +50,11 @@ sealed interface WatchlistBanner {
 data class WatchlistUiState(
     /** How many tickers are watched. The rows follow; this is what decides the empty state. */
     val watched: Int = 0,
+    /**
+     * The watched tickers themselves, known before their rows are: Tracked today leaves these out,
+     * so no ticker is ever priced twice on Today, even while the watched rows are still cold.
+     */
+    val watchedTickers: Set<String> = emptySet(),
     val isLoading: Boolean = false,
     val rows: List<WatchedTicker> = emptyList(),
     /** The last digest the daily check produced, which is what the Panel draws. */
@@ -143,11 +150,17 @@ class WatchlistViewModel(
     private val catalog: CatalogRepository,
     private val prices: PriceRepository,
     private val nextUpRepo: NextUpRepository,
+    /**
+     * Asked by [watch], Today's own Watch on a first open: the same store Detail's Watch asks, so
+     * the system dialog comes once, at the first watch, wherever that happens. Null never asks.
+     */
+    private val prompts: NotificationPromptStore? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
         WatchlistUiState(
             watched = watchlist.tickers.value.size,
+            watchedTickers = watchlist.tickers.value,
             isLoading = watchlist.tickers.value.isNotEmpty(),
             digest = digests.record.value,
             notificationsOn = notifier.enabled(),
@@ -159,10 +172,28 @@ class WatchlistViewModel(
     private var loadJob: Job? = null
     private var todayJob: Job? = null
 
+    /**
+     * The venue as a clock ([MarketClock] has the stale "Closed" the Seeker drew on 24 Sep 2026):
+     * recomputed on every resume and at every boundary while Today is on screen, never only once
+     * at load.
+     */
+    private val marketClock = MarketClock(clock, catalog, viewModelScope) { market ->
+        _state.update { it.copy(market = market, nowMillis = clock.nowMillis()) }
+    }
+
+    /**
+     * The one price read Today draws from. Today's join prices every analyzed token at once; a
+     * watched ticker's figure is taken from that same read whenever it covers the ticker's mint,
+     * so a watched row and anything else on the screen can never print two different premiums for
+     * one token (the Seeker drew METAx at +0.15% and +0.13% on one screen). A watched ticker the
+     * join does not cover (not analyzed) keeps the figure [WatchlistFacts] read for it.
+     */
+    private var sharedPrices: Map<String, PriceEntry> = emptyMap()
+
     init {
         viewModelScope.launch {
             watchlist.tickers.collect { watched ->
-                _state.update { it.copy(watched = watched.size, isLoading = watched.isNotEmpty()) }
+                _state.update { it.copy(watched = watched.size, watchedTickers = watched, isLoading = watched.isNotEmpty()) }
                 load(watched)
             }
         }
@@ -185,6 +216,35 @@ class WatchlistViewModel(
 
     /** Takes one ticker off the list. The rows follow from the store, so nothing is removed here. */
     fun unwatch(ticker: String) = watchlist.remove(ticker)
+
+    /**
+     * Today's own Watch, on a Tracked row of a first open. True when the caller should now ask for
+     * the notification permission: this was the first ticker ever watched and nothing has asked
+     * before, the exact rule Detail's own Watch keeps ([com.plainticker.mobile.ui.detail.DetailViewModel.toggleWatch]),
+     * read through the same [NotificationPromptStore], so the dialog comes once, after the first
+     * watch, whichever screen that watch happened on.
+     */
+    fun watch(ticker: String): Boolean {
+        val before = watchlist.tickers.value
+        if (ticker in before) return false
+        watchlist.add(ticker)
+        val store = prompts ?: return false
+        if (before.isNotEmpty() || store.hasAsked()) return false
+        store.setAsked()
+        return true
+    }
+
+    /**
+     * Today came back to the foreground: re-read the notification setting, move the clock, and
+     * recompute the venue, then keep it current at every boundary while Today stays resumed.
+     */
+    fun onResume() {
+        notificationsChanged()
+        marketClock.onResume()
+    }
+
+    /** Today left the foreground: the boundary job stops, nothing runs in the background. */
+    fun onPause() = marketClock.onPause()
 
     /**
      * Fires the daily check now. Debug builds only (the screen offers no way to call it otherwise),
@@ -226,7 +286,7 @@ class WatchlistViewModel(
             _state.update {
                 it.copy(
                     isLoading = false,
-                    rows = loaded.rows,
+                    rows = loaded.rows.map(::sharedPrice),
                     analysisUnavailable = loaded.analysisUnavailable,
                     catalogUnavailable = loaded.catalogUnavailable,
                     pricesUnavailable = loaded.pricesUnavailable,
@@ -313,7 +373,7 @@ class WatchlistViewModel(
             _state.update { current ->
                 current.copy(
                     todayLoading = false,
-                    market = MarketHours.ofCatalog(assets, clock.nowMillis()),
+                    market = marketClock.setAssets(assets),
                     analysisGeneratedAtMillis = generatedAtMillis,
                     analyzedTotal = analyzed.size,
                     withoutAnalysisTotal = withoutAnalysisTotal,
@@ -342,16 +402,24 @@ class WatchlistViewModel(
             }.sortedByDescending { it.poolUsd }
 
             val pricesFetchedAtMillis = if (fetch != null) pricesAskedAt else null
+            fetch?.priced?.let { sharedPrices = sharedPrices + it }
 
             _state.update { current ->
                 current.copy(
                     trackedLoading = false,
                     pricesFetchedAtMillis = pricesFetchedAtMillis,
                     tracked = tracked,
+                    rows = current.rows.map(::sharedPrice),
                     nowMillis = clock.nowMillis(),
                 )
             }
         }
+    }
+
+    /** A watched row priced from [sharedPrices] when that read covers its mint; unchanged otherwise. */
+    private fun sharedPrice(row: WatchedTicker): WatchedTicker {
+        val entry = row.mint?.let { sharedPrices[it] } ?: return row
+        return row.copy(priceUsd = entry.usdPrice, referencePriceUsd = entry.stockData?.price, poolUsd = entry.liquidity)
     }
 
     private companion object {

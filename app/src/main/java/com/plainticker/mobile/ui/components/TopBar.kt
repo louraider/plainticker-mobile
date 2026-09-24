@@ -10,14 +10,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.PlainTickerType
@@ -76,13 +84,29 @@ fun TopBar(
         } else {
             Modifier.semantics { hideFromAccessibility() }
         }
-        Text(
-            text = title,
-            style = PlainTickerType.wordmark,
-            color = colors.textPrimary,
-            maxLines = 1,
-            modifier = titleModifier,
-        )
+        // The lockup: the two-corners mark, cropped tight to its own block
+        // (ic_brand_mark_tight, design/brand/glyph.py) so the glyph is the box, sized to the
+        // wordmark's cap height and tinted with actionText so it follows dark and light. The
+        // size is in sp, so it grows with font scale exactly as the wordmark beside it does;
+        // TopBarTest proves the pair plus the widest trailing action still fit at 1.0x and 1.3x.
+        // Decorative: the wordmark beside it already names the app, so it says nothing to a
+        // screen reader.
+        val markSize = with(LocalDensity.current) { WordmarkCapHeight.toDp() }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = titleModifier) {
+            Icon(
+                painter = painterResource(R.drawable.ic_brand_mark_tight),
+                contentDescription = null,
+                tint = colors.actionText,
+                modifier = Modifier.size(markSize),
+            )
+            Spacer(Modifier.width(MarkGap))
+            Text(
+                text = title,
+                style = PlainTickerType.wordmark,
+                color = colors.textPrimary,
+                maxLines = 1,
+            )
+        }
         when {
             action != null && onAction != null ->
                 TextAction(label = action, onClick = onAction, color = colors.actionText)
@@ -99,6 +123,16 @@ fun TopBar(
         }
     }
 }
+
+/**
+ * The wordmark's cap height: [PlainTickerType.wordmark] is Bricolage 700 at 15sp, and the bundled
+ * variable font's OS/2 `sCapHeight` is 660 of 1000 units at that instance (fontTools, 2026-09-24),
+ * so 9.9sp. The mark is drawn exactly that tall, so it stands level with the "P".
+ */
+internal val WordmarkCapHeight = (15f * 660f / 1000f).sp
+
+/** Between the mark and the wordmark: a little over half a cap height, read as one lockup. */
+internal val MarkGap = 6.dp
 
 @InstrumentPreviews
 @Composable

@@ -1,29 +1,35 @@
 package com.plainticker.mobile.ui.today
 
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.data.xstocks.MarketSource
 import com.plainticker.mobile.data.xstocks.MarketStatus
+import com.plainticker.mobile.data.xstocks.NyseCalendar
+import com.plainticker.mobile.data.xstocks.SessionPhase
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
+import com.plainticker.mobile.ui.watchlist.watchRow
 import com.plainticker.mobile.ui.words
+import com.plainticker.mobile.watchlist.DigestRecord
+import com.plainticker.mobile.watchlist.WatchedTicker
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
+import java.time.ZoneId
 
 /**
- * What Today's four built blocks say (docs/design-research-2026-09-21.md section 3): the venue and
- * data age line, Tracked today's lede, Next up's single row, and the footer count. Block 2, Yours,
- * is the kept Watched section (com.plainticker.mobile.ui.watchlist.WatchlistModel) already draws;
- * nothing here duplicates it.
+ * What Today says, in direction A, "One line, then yours" (the founder's pick, 2026-09-24): the
+ * venue as one line in the reader's own time, the watched stocks first with one figure each and
+ * that figure's meaning stated once, the digest as a single link, three Tracked rows that never
+ * repeat a watched ticker, and Next up as one row. No footer count: Stocks' own segments carry it.
  *
  * The same split every other screen's model keeps: [com.plainticker.mobile.ui.watchlist.WatchlistViewModel]
- * decides the numbers, off one join over the same repositories Stocks reads so the two screens'
- * coverage counts cannot disagree; this file decides the sentence. Every function here is pure and
- * total, and a fact that is not yet known (no catalog read, no round) returns null rather than a
- * guess, so a caller never has to invent a sentence to fill a slot before the day's first refresh.
+ * decides the numbers, this file decides the sentence. Every function here is pure and total; the
+ * reader's zone is passed in, never read, so a test can pin Kyiv, New York and Tokyo alike. A fact
+ * that is not yet known returns null rather than a guess.
  */
 
 /** One row of "Tracked today": an analyzed xStock whose pool clears the liquidity floor. */
@@ -62,37 +68,80 @@ data class TodayLeader(
 private fun skrAmount(raw: BigInteger): String =
     Fmt.tokenAmount(BigDecimal(raw).movePointLeft(SkrStakeBound.SKR_DECIMALS), maxDecimals = 1)
 
-/** Rows Today draws inline before "All N tracked" hands the rest to Stocks. */
-const val TrackedPreviewCount: Int = 6
+/**
+ * Rows Today draws inline before "All N in Stocks" hands the rest over: three, down from six, so the
+ * first viewport holds the reader's own stocks and a taste of the thesis rather than a second list.
+ */
+const val TrackedPreviewCount: Int = 3
 
-// ---- Block 1: venue and data age ---------------------------------------------------------------
+// ---- The status line --------------------------------------------------------------------------
 
 /**
- * The one line of facts (research section 3, block 1): where the venue is right now. Null while no
- * catalog has answered at all (a null [MarketStatus] is `MarketHours.ofCatalog`'s own reading of an
- * empty catalog), because "the NYSE is closed" is not a sentence this screen can state about a
- * venue it has not read yet.
+ * The venue in one line, in the reader's own time: "NYSE open. Closes at 23:00 your time",
+ * "NYSE closed. Opens Monday at 16:30 your time". Null while no catalog has answered at all:
+ * "the NYSE is closed" is not a sentence this screen can state about a venue it has not read.
  *
- * The four-way branch mirrors `ListUiState.hours` exactly, so Today and Stocks can never disagree
- * about where the venue is; the one difference is that this line is a standing fact rather than a
- * caveat, so unlike Stocks' banner it is drawn in the open, venue-sourced case too.
+ * The state comes from [market] (the venue's block while it is fresh, the calendar after it
+ * expires, [com.plainticker.mobile.data.xstocks.MarketHours.sessionAt]); which side of the
+ * session a closed venue is on, and when it next opens, comes from the calendar reading it
+ * carries. Pre-market and after hours are their own sentences and say that tokens still trade on
+ * thinner pools, because a beginner looking at a moving token price at 20:00 New York time is
+ * owed the reason it may sit further from the share.
  */
-fun venueSentence(market: MarketStatus?): Copy? {
+fun statusLine(market: MarketStatus?, nowMillis: Long, zone: ZoneId): Copy? {
     val m = market ?: return null
-    val guessed = m.source == MarketSource.LOCAL_SCHEDULE
+    val session = m.session ?: NyseCalendar.session(nowMillis)
+    if (m.regularSession) {
+        val venueClose = m.nextChangeAtMillis.takeIf { m.source == MarketSource.VENUE }
+        val closeAt = venueClose ?: session.nextCloseMillis ?: return words(R.string.today_status_open_untimed)
+        val time = Fmt.clock(closeAt, zone)
+        return when {
+            m.source == MarketSource.LOCAL_SCHEDULE -> words(R.string.today_status_open_calendar, time)
+            session.earlyClose -> words(R.string.today_status_open_short_day, time)
+            else -> words(R.string.today_status_open, time)
+        }
+    }
+    val openAt = session.nextOpenMillis
+    val time = Fmt.clock(openAt, zone)
+    val days = Fmt.daysAhead(openAt, nowMillis, zone)
+    val weekday = Fmt.weekday(openAt, zone)
     return when {
-        m.regularSession && guessed -> words(R.string.banner_market_open_local)
-        m.regularSession -> words(R.string.today_venue_open)
-        guessed -> words(R.string.banner_market_closed_local)
-        else -> words(R.string.banner_market_closed)
+        session.phase == SessionPhase.PRE_MARKET -> words(R.string.today_status_pre, time)
+        session.phase == SessionPhase.AFTER_HOURS -> dayed(
+            days, time, weekday,
+            R.string.today_status_after_today, R.string.today_status_after_tomorrow, R.string.today_status_after_day,
+        )
+        session.holiday -> dayed(
+            days, time, weekday,
+            R.string.today_status_holiday_today, R.string.today_status_holiday_tomorrow, R.string.today_status_holiday_day,
+        )
+        else -> dayed(
+            days, time, weekday,
+            R.string.today_status_closed_today, R.string.today_status_closed_tomorrow, R.string.today_status_closed_day,
+        )
     }
 }
 
+/** The same sentence in its today, tomorrow or weekday form, by calendar days in the reader's zone. */
+private fun dayed(days: Long, time: String, weekday: String, today: Int, tomorrow: Int, other: Int): Copy = when {
+    days <= 0L -> words(today, time)
+    days == 1L -> words(tomorrow, time)
+    else -> words(other, weekday, time)
+}
+
+/** Whether the status line is lit: only while the exchange's own session is on. */
+fun statusLive(market: MarketStatus?): Boolean = market?.regularSession == true
+
+/**
+ * The market hours sheet's source note: drawn only while the line reads the calendar because the
+ * venue's block has expired or never came, never when the venue itself answered.
+ */
+fun statusFromCalendar(market: MarketStatus?): Boolean = market?.source == MarketSource.LOCAL_SCHEDULE
+
 /**
  * How old the analysis and the prices are, read together or not at all: naming one age and staying
- * silent about the other would read as the other one being unknown, which is not always true, so
- * the line waits for both. True before the first refresh of the day the same way the lede below is:
- * not yet drawn, never drawn wrong.
+ * silent about the other would read as the other one being unknown. Drawn in the market hours
+ * sheet, off the first viewport.
  */
 fun freshnessSentence(analysisAtMillis: Long?, pricesAtMillis: Long?, nowMillis: Long): Copy? {
     val analysisAt = analysisAtMillis ?: return null
@@ -104,39 +153,93 @@ fun freshnessSentence(analysisAtMillis: Long?, pricesAtMillis: Long?, nowMillis:
     )
 }
 
-// ---- Block 3: Tracked today ---------------------------------------------------------------------
+// ---- Watched ----------------------------------------------------------------------------------
 
 /**
- * The lede (research section 3): a fact about how far the product's coverage reaches today, not
- * about how many stocks moved. That is the one shape of sentence this block can state truthfully in
- * every state: true when nothing has moved and true when everything has, because tracking is a fact
- * about pool depth and never about direction; true before the first refresh of the day because it
- * is simply not drawn then ([analyzedTotal] is 0 until the join has run once), which is exactly the
- * state a sentence about "how many moved" could not stay honest in without a price history this
- * app does not keep.
+ * What every figure on Today means, said once above the watched rows instead of "vs NYSE close"
+ * on every row: against the share price now while the exchange trades, against the last close
+ * otherwise (DESIGN.md's price label, `MarketStatus.priceLabel`, in a sentence).
  */
-fun trackedLede(trackedCount: Int, analyzedTotal: Int): Copy? {
-    if (analyzedTotal <= 0) return null
-    return words(R.string.today_tracked_lede, Fmt.count(trackedCount), Fmt.count(analyzedTotal)) // lint-allow count: a coverage ratio, no noun agreement
+fun figureMeaning(market: MarketStatus?): Copy =
+    words(if (market?.regularSession == true) R.string.today_figure_live else R.string.today_figure_close)
+
+/**
+ * One watched ticker on Today: one figure, the premium, and only above the liquidity floor. Below
+ * it, or with no depth reported, the pool states itself beside the report date instead of a figure
+ * (DESIGN.md section 1.1), in the list's own words.
+ */
+data class TodayWatchRow(
+    val ticker: String,
+    val symbol: String,
+    val company: String?,
+    /** The signed premium, or null: a thin or unpriced pool draws no figure at all. */
+    val figure: String?,
+    /** The next report, or why there is no date. */
+    val report: Copy,
+    /** The pool's own sentence when there is no figure to draw; null otherwise. */
+    val poolNote: Copy?,
+)
+
+fun todayWatchRow(row: WatchedTicker): TodayWatchRow {
+    val base = watchRow(row)
+    val quality = row.tracking
+    val premium = (quality as? TrackingQuality.Tracked)?.premiumPct
+    return TodayWatchRow(
+        ticker = row.ticker,
+        symbol = base.symbol,
+        company = base.company,
+        figure = premium?.let { Fmt.percent(it) },
+        report = base.report,
+        poolNote = if (premium != null) null else base.tracking,
+    )
 }
 
-/** "All 22 tracked", the footer of the Tracked block that hands the rest to Stocks. */
+// ---- Digest -----------------------------------------------------------------------------------
+
+/**
+ * The digest as one line and a link: "Last digest today at 09:49." with "Read it" beside it, in
+ * the reader's own time. Before the first digest, the sentence that says when it lands, and no
+ * link, because there is nothing yet to read.
+ */
+fun digestLink(record: DigestRecord, nowMillis: Long, zone: ZoneId): Copy {
+    val at = record.producedAtMillis
+    if (record.text == null || at == null) return words(R.string.today_digest_none)
+    val time = Fmt.clock(at, zone)
+    return if (Fmt.daysAhead(at, nowMillis, zone) == 0L) {
+        words(R.string.today_digest_link_today, time)
+    } else {
+        words(R.string.today_digest_link_day, Fmt.weekday(at, zone), time)
+    }
+}
+
+/** Whether the digest line carries its "Read it" link: only once there is a digest to read. */
+fun digestReadable(record: DigestRecord): Boolean = record.text != null && record.producedAtMillis != null
+
+// ---- Tracked today ----------------------------------------------------------------------------
+
+/**
+ * The Tracked rows Today draws: deepest pool first, never a ticker the reader already watches (that
+ * one has its figure in Watched, and one ticker is priced once per screen), at most
+ * [TrackedPreviewCount] of them.
+ */
+fun trackedPreview(tracked: List<TrackedRow>, watched: Set<String>): List<TrackedRow> {
+    val keys = watched.mapTo(HashSet()) { it.trim().uppercase() } // lint-allow uppercase: map key
+    return tracked.filter { it.ticker.trim().uppercase() !in keys }.take(TrackedPreviewCount) // lint-allow uppercase: map key
+}
+
+/** "All 20 in Stocks", the link under Tracked that hands the rest to Stocks. */
 fun trackedAllCopy(trackedCount: Int): Copy =
     words(R.string.today_tracked_all, Fmt.count(trackedCount)) // lint-allow count: a total, no noun agreement
 
-// ---- Block 4: Next up ----------------------------------------------------------------------------
+// ---- Next up ----------------------------------------------------------------------------------
 
-/** "Round 2 closes 28 Sep 2026 00:00 UTC", the same round com.plainticker.mobile.ui.vote.VoteScreen names. */
-fun nextUpRoundLede(round: VoteRound?): Copy? {
+/**
+ * "Chosen by staked SKR. Round closes Monday at 03:00 your time.", the same round
+ * com.plainticker.mobile.ui.vote.VoteScreen names, in the reader's own time rather than UTC.
+ */
+fun nextUpLede(round: VoteRound?, zone: ZoneId): Copy? {
     if (round == null) return null
     val closesAt = round.closesAtInstant() ?: return null
-    return words(R.string.today_next_up_round_closes, Fmt.count(round.id), Fmt.utc(closesAt)) // lint-allow count: a round number, no noun follows
-}
-
-// ---- Block 5: the footer -------------------------------------------------------------------------
-
-/** "160 analyzed, 768 without analysis", the same two totals Stocks' own segmented control counts. */
-fun footerCopy(analyzedTotal: Int, withoutAnalysisTotal: Int): Copy? {
-    if (analyzedTotal <= 0 && withoutAnalysisTotal <= 0) return null
-    return words(R.string.today_footer_count, Fmt.count(analyzedTotal), Fmt.count(withoutAnalysisTotal)) // lint-allow count: two totals, no noun agreement
+    val millis = closesAt.toEpochMilli()
+    return words(R.string.today_next_up_lede, Fmt.weekday(millis, zone), Fmt.clock(millis, zone))
 }

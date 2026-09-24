@@ -421,7 +421,14 @@ material3 1.4.0's stable component (section 10), 64dp on `surfaceRaised`, labels
 string, so no character budget applies. The pill's width-morph (research 5.3) is not built; what
 plays is `NavigationItem`'s own built-in selection transition.
 
-**`TopBar`** (`TopBar.kt`) draws `PlainTickerType.wordmark` and resolves `defaultAmberColors()` for
+**`TopBar`** (`TopBar.kt`) draws the lockup, the two-corners mark before the wordmark (2026-09-24):
+`ic_brand_mark_tight`, the launcher's four rectangles cropped to their own 46-unit block by
+`design/brand/glyph.py` (drawn from the 108 launcher grid the glyph would fill only 46 units of its
+box, the web TopNav's lesson), sized to the wordmark's cap height (Bricolage 700 at 15sp,
+`sCapHeight` 660/1000, so 9.9sp, in sp so it scales with the wordmark), tinted `actionText`,
+`contentDescription` null, 6dp before the word. `TopBarTest` proves mark, gap, wordmark and the
+widest real trailing action ("Watching") fit the 360dp row: 200.94dp to spare at 1.0x, 155.02dp at
+1.3x. The bar draws `PlainTickerType.wordmark` and resolves `defaultAmberColors()` for
 its three colours. The wordmark itself moved on 2026-09-24 (section 9, "Two corners, refit"):
 Bricolage 700 replacing Outfit SemiBold 15sp, the one deliberate exception to "Instrument's word
 style is unchanged by the redesign" every other `TopBar` slot still is, closing the one place the
@@ -455,7 +462,7 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `Sheet`, `SheetSurface` | Retired | Replaced by `AmberSheet`/`AmberSheetSurface` (28dp top radius, `surfaceHigh`, amber handle, versus Instrument's square, neutral one). |
 | `ListRow` | **Kept, one caller** | `GalleryScreen.kt` only (debug builds), to stay field-for-field comparable with `design/canvas/instrument.py`'s own artboards. Every product screen moved to `AmberTickerRow`. Do not add a second caller. |
 | `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak: `ListScreen.kt` (Stocks) draws `TodayStrip` beside the Watched chip whenever a reader has watched a ticker, directly on that screen's own `colors.surfaceGround`, and it was reading Instrument's fixed `Ink2`/`Line` there, near-invisible on Amber's light ground. The `pluralStringResource` calls behind that text still live only in `ListScreen.kt`, unmoved (`CopyLintTest`'s `CountCopyTest` pins them there; this fix only threads the screen's own `colors` through, not the copy). `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
-| `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. The digest block on Today now follows the system light/dark setting like the rest of the screen. |
+| `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. Since Today direction A (2026-09-24) Today no longer draws `WatchlistContent`: the digest lives on its own screen under You (`ui/you/DigestScreen.kt`), whose `Panel` resolves the same colours. |
 | `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept, Instrument type (mostly), Amber colour** | Anatomy and `PlainTickerType` styles unchanged; each now resolves `defaultAmberColors()` instead of a fixed dark token. Not an oversight: none of these needed a shape change to read correctly, only a colour source that follows the system theme. One exception since 2026-09-24: `TopBar`'s own `PlainTickerType.wordmark` moved onto Bricolage 700 (section 9), so this row's "type unchanged" claim now holds for `Field`, `Skeleton`, `Banner` and `TextAction` only. |
 
 ## 5. Layout
@@ -520,10 +527,43 @@ or a sheet's top radius. A chip's selected radius is a fourth, dynamic value
 
 ### 5.3 Screen by screen
 
-**Today** opens on `surfaceGround`: a venue status card (`AmberFigure`), "Tracked today" and "Next
-up" as `AmberSectionHead` plus `AmberTickerRowGroup` blocks, then Watchlist's own content
-(`WatchlistContent`) as the "Yours" block in between, then a footer count. See section 4.7 for
-`WatchlistContent`'s own un-restyled digest panel.
+**Today** is direction A, "One line, then yours" (the founder's pick of three, 2026-09-24,
+after a tester called the previous layout cluttered, unclear, stale and dominated by a huge
+banner). One `LazyColumn` on `surfaceGround`, 16dp side inset, 8dp above each section on top of
+`AmberSectionHead`'s own 24dp, so the screen breathes:
+
+1. **The status line**: the venue in one wrapping line in the reader's own time ("NYSE open.
+   Closes at 23:00 your time"), led by a 3dp bar lit in `actionText` only during the exchange's
+   own session, the state phrase before the first period in weight 600. It replaced a 120dp
+   `AmberFigure` card whose 34sp "Open"/"Closed" was the loudest thing on the screen and often
+   wrong. Pre-market and after hours are their own sentences and say tokens still trade on thinner
+   pools; a holiday and a 13:00 early close say so. It owns its row and carries no `maxLines`, so
+   it wraps rather than clips (5.4). A tap opens the market hours sheet (`AmberSheet`): what the
+   hours mean for a token, the analysis and price ages, and, only when the calendar is answering,
+   why. The status is a clock (`MarketClock`): recomputed on every resume and at every open or
+   close while the screen is resumed, stopped on pause; the venue's trading block is believed only
+   until its own `nextChangeAt`, then the bundled NYSE calendar (`NyseCalendar`, 2026 and 2027
+   holidays and early closes) answers until a one-asset refresh lands. Stocks' hours banner reads
+   the same clock.
+2. **Watched**: `AmberSectionHead` (count as meta, the figure's meaning as the lede, said once:
+   against the share price while trading, against the last close otherwise), then the reader's
+   rows in `AmberTickerRowGroup`, one figure each. The figure comes from Today's one price read,
+   so no ticker is ever priced twice on the screen. A pool under the liquidity floor, or one with
+   no depth reported, states itself beside the report date instead of a figure (1.1). No Unwatch
+   here; it is on the stock's own page. Under the rows, the digest as one line in the reader's
+   time with "Read it", which opens the digest screen under You (its own route, `digest`); the
+   weighted sentence and the short fixed action never share a budget they could lose (5.4).
+3. **Tracked today**: three rows, deepest pool first, never a watched ticker, then "All N in
+   Stocks". Skeleton only while prices are out.
+4. **Next up for analysis**: one row, the round's close in the reader's time, opening Vote.
+
+No footer count: Stocks' own segments carry it. **First open** (nothing watched) swaps Watched and
+the digest for a start block, a sentence of what watching gives and one `AmberPrimaryAction`,
+"Find a stock", and gives each Tracked row a Watch trailing action (the figure-plus-action pairing
+`AmberTickerRow`'s budget proves; `TodayModelTest` re-proves it with fontTools numbers). No digest
+line, no notifications line and no Next up on a first open. The notification permission is asked
+once, right after the first watch, from Today or Detail alike; the setting lives in You and on the
+digest screen, beside the digest it delivers.
 
 **Stocks** (`ListScreen.kt`, mounted by `StocksScreen`) replaced an infinite scroll with search at
 the top, sticky sector chapters (`stickyHeader` items painted opaque so pinned content never shows
@@ -577,7 +617,7 @@ this is the whole list, not a sample of it:
 | Where | Spec | Gate | Snaps to |
 |---|---|---|---|
 | `AmberChip`'s corner radius, selecting/deselecting | `spring(dampingRatio = NoBouncy, stiffness = MediumLow)` on the radius `Dp`, 8dp to full | `rememberMotionEnabled()` | The selected or unselected end shape |
-| `TodayScreen`'s block entrance (venue, tracked, next up, footer; blocks 1, 3, 4, 5) | The same no-bounce, medium-low spring, on alpha and an 8dp rise, staggered 40ms per block, once, the first time a block has something to draw | `rememberMotionEnabled()` | Alpha 1, no translation |
+| `TodayScreen`'s block entrance (the status line, Tracked today, Next up; the reader's own rows and the start block stay still) | The same no-bounce, medium-low spring, on alpha and an 8dp rise, staggered 40ms per block, once, the first time a block has something to draw | `rememberMotionEnabled()` | Alpha 1, no translation |
 | Portfolio's Total card; You's Pro/Staked SKR pair | `tween(150ms, LinearOutSlowInEasing)`, the research's "quick" token, once on first composition | `rememberMotionEnabled()` | Alpha 1 |
 | `SkeletonSwitch` (Detail's `Hero` company name; every other skeleton-to-content switch in the app) | `tween(200ms, EaseOut)` alpha fade, never a spinner | `rememberMotionEnabled()` | Alpha 1 |
 | `Track`'s position marker | `tween(400ms, CubicBezierEasing(.2, .8, .2, 1))`, unchanged since before this restyle | `rememberMotionEnabled()` | The target position |

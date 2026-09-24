@@ -1,102 +1,108 @@
 package com.plainticker.mobile.ui.today
 
-import android.content.Intent
-import android.provider.Settings
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
-import com.plainticker.mobile.ui.components.AmberFigure
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
+import com.plainticker.mobile.ui.components.AmberSheet
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.AmberTickerRowGroup
+import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.SkeletonRows
+import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.rememberMotionEnabled
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
-import com.plainticker.mobile.ui.watchlist.WatchlistContent
 import com.plainticker.mobile.ui.watchlist.WatchlistUiState
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
+import com.plainticker.mobile.ui.watchlist.bannerText
+import java.time.ZoneId
 import kotlinx.coroutines.delay
 
 /**
- * Today (docs/design-research-2026-09-21.md section 3): the new home, replacing the endless list
- * the founder complained about. The research draws it in five blocks:
+ * Today, direction A, "One line, then yours" (the founder's pick of three, 2026-09-24; the
+ * comparison page and its diagnosis sit with that decision). A tester called the previous Today
+ * cluttered, unclear, stale and dominated by a huge banner; every one of those was true, and each
+ * block below answers one of them.
  *
- * 1. Venue and data age, one line of facts.
- * 2. Yours: holdings and watched stocks, each with its one relevant fact.
- * 3. Tracked today: the tokens above the liquidity floor, sorted by depth.
- * 4. Next up: the vote leader, one row, opens Vote.
- * 5. A footer count opening Stocks.
+ * Top to bottom, returning:
+ * 1. **The status line** ([TodayStatusLine]): the venue in one wrapping line, in the reader's own
+ *    time, replacing a 120dp card with a 34sp word in it. Tap it for the market hours sheet
+ *    ([TodayHoursSheet]), where the data ages and the calendar note live.
+ * 2. **Watched** ([TodayWatchedBlock]): the reader's own stocks first, one figure each, the
+ *    figure's meaning said once in the lede instead of "vs NYSE close" on every row. A thin pool
+ *    states itself instead of a figure. Then the digest as one line with "Read it"
+ *    ([TodayDigestLine]), which opens the digest screen under You.
+ * 3. **Tracked today** ([TodayTrackedBlock]): three rows, never a watched ticker, then "All N in
+ *    Stocks".
+ * 4. **Next up** ([TodayNextUpBlock]): one row, opening Vote.
  *
- * Block 2 is the whole of the former Watchlist screen: [WatchlistContent] itself is unchanged (not
- * rewritten), called here through the two seams it grew for exactly this move
- * (`beforeContent`/`afterContent`), with the same [WatchlistViewModel] HomeScreen used to hand to
- * `HomeTab.WATCHLIST`, so watching a ticker, the daily digest, the "no notifications" line and the
- * empty state all still work unchanged, and the same instance now also carries blocks 1, 3 and 4's
- * data (see [WatchlistViewModel]'s own class doc for why one ViewModel powers both halves).
+ * First open (nothing watched) swaps block 2 for [TodayStartBlock], one primary action, "Find a
+ * stock", and gives every Tracked row a Watch, so the first real step can happen on this screen.
+ * There is no digest line, no notifications line and no Next up on a first open: one goal per
+ * session. The notification permission is asked once, right after the first watch, the same rule
+ * Detail's Watch keeps; the setting itself lives in You and on the digest screen.
  *
- * Blocks 1, 3, 4 and 5 are built here, in the Amber components already in `ui/components`
- * (`AmberFigure`, `AmberSectionHead`, `AmberTickerRow`): the ticker row and the number-with-context
- * component this task's brief names both exist and are used below; the departures-board three-tile
- * status card the approved Amber mockup frame draws for block 1 does not have a matching component
- * yet (none of the five listed fits a row of three stat tiles), so this screen states the same
- * underlying facts (the venue, then the analysis and price ages, exactly as the Ink and Bureau
- * directions' own mockup frames word them) inside [AmberFigure]'s own 28dp status card rather than
- * forking a new shared component for one screen. See the report for the rest of that gap.
+ * **The status is a clock.** [WatchlistViewModel.onResume] recomputes it every time Today comes
+ * back and keeps it current at every open and close while Today stays on screen;
+ * [WatchlistViewModel.onPause] stops that. [com.plainticker.mobile.repo.MarketClock] has the bug
+ * this replaces.
  *
- * The lede a reader sees on block 3 ([trackedLede]) states how far the product's coverage reaches
- * today, not how many stocks moved: see that function's own doc for why a coverage fact is the one
- * shape of sentence that stays true in every state this screen can be in, including before the
- * day's first refresh, which a sentence about movement could not promise without a price history
- * this app does not keep.
- *
- * On the scroll the research asks for: `HomeTab.WATCHLIST`'s ordinal (the digest notification's
- * `EXTRA_TAB`) resolves to this destination ([com.plainticker.mobile.ui.home.toAmberDestination]),
- * and the research says that should land "scrolled to Yours." No scroll state is wired here: with
- * block 1 now drawn above Yours, a notification tap would land above it rather than on it, but
- * wiring a scroll-to-anchor is `ui/home` and `ui/nav` work (the digest's `EXTRA_TAB` is read and
- * consumed in [com.plainticker.mobile.ui.home.HomeScreen]), outside this task's file set.
- *
- * **The one orchestrated moment, filled in.** Section 5.3's motion line ("Today's blocks settle in
- * with a spring, 40ms stagger") and section 7's calendar (staggered entry did not land in the
- * research's eight-day slice) named this screen by name. [amberBlockEntrance] gives blocks 1, 3, 4
- * and 5 ([TodayVenueBlock], [TodayTrackedBlock], [TodayNextUpBlock], [TodayFooter]) a single
- * fade-and-rise settle, staggered 40ms apart, the first time each has something to draw. Block 2,
- * Yours, is deliberately left still: [WatchlistContent] draws it, shared with the still-Instrument
- * [com.plainticker.mobile.ui.watchlist.WatchlistScreen], and it is a per-ticker list, the exact
- * shape of thing this task's brief warns a stagger is wrong for even at a handful of rows, let
- * alone the roughly 830-row list [com.plainticker.mobile.ui.list.ListScreen] draws; see the report
- * for the full reasoning. Every entrance is gated by [rememberMotionEnabled]: at animator scale 0
- * (the smoke script's own setting) each block is at its settled, fully opaque, untranslated state
- * on the next frame rather than mid-animation, so nothing here is ever readable only because it
- * finished animating.
+ * **Motion.** One orchestrated moment, as before: the status line, Tracked and Next up settle in
+ * with the no-bounce spring, staggered 40ms ([amberBlockEntrance]). The reader's own rows and the
+ * start block stay still: a stagger belongs to a block, never to a per-ticker list, and nothing
+ * here needs motion to be legible (the smoke script runs at animator scale 0).
  */
 @Composable
 fun TodayScreen(
@@ -105,142 +111,197 @@ fun TodayScreen(
     modifier: Modifier = Modifier,
     onBrowseStocks: (() -> Unit)? = null,
     onRunCheck: (() -> Unit)? = null,
-    /**
-     * Block 4's row opens Vote (research section 3). Null draws the row without a click target
-     * rather than nothing at all: [com.plainticker.mobile.ui.home.HomeScreen] is what would wire a
-     * real destination switch here (the same way it already does for [onBrowseStocks]), and that
-     * file is outside this task's `ui/today` and `ui/watchlist` file set, so the seam is left for
-     * whoever next touches `ui/home/HomeScreen.kt` rather than reached for here.
-     */
+    /** Next up's row opens Vote. Null draws the row without a click target. */
     onOpenVote: (() -> Unit)? = null,
+    /** The digest line's "Read it": the digest screen under You. Null draws the line without it. */
+    onOpenDigest: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val state by watchlistViewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    var hoursOpen by rememberSaveable { mutableStateOf(false) }
+    val zone = remember { ZoneId.systemDefault() }
 
-    // The one piece of Yours that can change while the app is away: a reader who took the Enable
-    // action went to the system settings and came back. The same rule WatchlistScreen kept before
-    // this block moved here.
+    // The same one-time ask Detail's Watch makes: after the first watch, and never again.
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    // Resumed: the venue is recomputed now and at every boundary; paused: nothing runs.
     LifecycleResumeEffect(watchlistViewModel) {
-        watchlistViewModel.notificationsChanged()
-        onPauseOrDispose { }
+        watchlistViewModel.onResume()
+        onPauseOrDispose { watchlistViewModel.onPause() }
     }
 
-    WatchlistContent(
+    TodayContent(
         state = state,
-        onUnwatch = watchlistViewModel::unwatch,
-        onRetry = watchlistViewModel::refresh,
+        zone = zone,
         onOpenDetail = onOpenDetail,
-        // Nothing watched yet is the common first state, and the one place to fix it is Stocks
-        // now, not List.
-        onBrowseList = onBrowseStocks,
-        // The same gate the gallery and the wallet spike sit behind.
-        onRunCheck = onRunCheck,
-        onEnableNotifications = {
-            context.startActivity(
-                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
-            )
+        onOpenHours = { hoursOpen = true },
+        onFindStock = onBrowseStocks,
+        onWatch = { ticker ->
+            val ask = watchlistViewModel.watch(ticker)
+            if (ask && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         },
+        onRetry = watchlistViewModel::refresh,
+        onOpenVote = onOpenVote,
+        onOpenDigest = onOpenDigest,
+        onRunCheck = onRunCheck,
         modifier = modifier,
         header = header,
-        beforeContent = { TodayVenueBlock(state) },
-        afterContent = {
-            TodayAfterContent(
+    )
+
+    if (hoursOpen) {
+        TodayHoursSheet(state = state, onDismiss = { hoursOpen = false })
+    }
+}
+
+/** The whole screen, one list: header, status, then either the start block or Watched, Tracked, Next up. */
+@Composable
+internal fun TodayContent(
+    state: WatchlistUiState,
+    zone: ZoneId,
+    onOpenDetail: (String) -> Unit,
+    onOpenHours: () -> Unit,
+    onFindStock: (() -> Unit)?,
+    onWatch: (String) -> Unit,
+    onRetry: () -> Unit,
+    onOpenVote: (() -> Unit)?,
+    onOpenDigest: (() -> Unit)?,
+    onRunCheck: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    header: @Composable () -> Unit = {},
+) {
+    val colors = defaultAmberColors()
+    val firstOpen = state.isEmpty
+    LazyColumn(
+        modifier = modifier.fillMaxSize().background(colors.surfaceGround),
+        // The content ends above the navigation bar; the padding is part of the scroll.
+        contentPadding = WindowInsets.navigationBars.asPaddingValues(),
+    ) {
+        item(key = "header") { header() }
+        item(key = "status") { TodayStatusLine(state = state, zone = zone, onOpenHours = onOpenHours, colors = colors) }
+        state.banner?.let { banner ->
+            item(key = "banner") {
+                Banner(
+                    text = bannerText(banner).text(),
+                    action = stringResource(R.string.action_retry),
+                    onAction = onRetry,
+                    modifier = Modifier.padding(top = BlockGap),
+                    colors = colors,
+                )
+            }
+        }
+        if (firstOpen) {
+            item(key = "start") { TodayStartBlock(onFindStock = onFindStock, colors = colors) }
+        } else {
+            item(key = "watched") {
+                TodayWatchedBlock(state = state, onOpenDetail = onOpenDetail, colors = colors)
+            }
+            item(key = "digest") { TodayDigestLine(state = state, zone = zone, onOpenDigest = onOpenDigest, colors = colors) }
+        }
+        item(key = "tracked") {
+            TodayTrackedBlock(
                 state = state,
                 onOpenDetail = onOpenDetail,
-                onOpenVote = onOpenVote,
-                onBrowseStocks = onBrowseStocks,
+                onBrowseStocks = onFindStock,
+                onWatch = if (firstOpen) onWatch else null,
+                colors = colors,
             )
-        },
-    )
+        }
+        if (!firstOpen) {
+            item(key = "next-up") { TodayNextUpBlock(state = state, zone = zone, onOpenVote = onOpenVote) }
+        }
+        // Debug builds only, behind the same gate as the component gallery and the wallet spike.
+        onRunCheck?.let { run ->
+            item(key = "debug-run") {
+                Row(Modifier.fillMaxWidth().padding(horizontal = Side), horizontalArrangement = Arrangement.End) {
+                    TextAction(label = stringResource(R.string.debug_run_watchlist_check), onClick = run, color = colors.actionText)
+                }
+            }
+        }
+        item(key = "end") { Spacer(Modifier.height(EndGap)) }
+    }
 }
 
 /**
- * Block 1: the venue and data age, in [AmberFigure]'s own status card (DESIGN.md section 4's "28dp
- * for a status card"). Undrawn while [WatchlistUiState.market] is null, which is true both before
- * Today's join has ever run and if the catalog it reads never answers: "the NYSE is closed" is not
- * a sentence this screen can state about a venue it has not read.
+ * The venue, one line. A 3dp bar leads it, lit (actionText) only while the exchange's own session
+ * is on; the state phrase, everything up to the first period, is set in weight 600 so it reads
+ * first. The line wraps rather than clipping: it owns its whole row and has no sibling to share a
+ * budget with (DESIGN.md section 5.4), which is why it carries no `maxLines`. Undrawn until a
+ * catalog has answered: no sentence about a venue this screen has not read.
  */
 @Composable
-private fun TodayVenueBlock(state: WatchlistUiState) {
-    val sentence = venueSentence(state.market) ?: return
-    val freshness = freshnessSentence(state.analysisGeneratedAtMillis, state.pricesFetchedAtMillis, state.nowMillis)
-    val contextText = listOfNotNull(sentence.text(), freshness?.text()).joinToString(" ")
-    val stateWord = if (state.market?.regularSession == true) {
-        stringResource(R.string.today_venue_state_open)
-    } else {
-        stringResource(R.string.today_venue_state_closed)
+private fun TodayStatusLine(state: WatchlistUiState, zone: ZoneId, onOpenHours: () -> Unit, colors: AmberColors) {
+    val copy = statusLine(state.market, state.nowMillis, zone) ?: return
+    val text = copy.text()
+    val cut = text.indexOf('.').let { if (it < 0) text.length else it + 1 }
+    val line = buildAnnotatedString {
+        withStyle(SpanStyle(color = colors.textPrimary, fontWeight = FontWeight.SemiBold)) { append(text.substring(0, cut)) }
+        append(text.substring(cut))
     }
-    AmberFigure(
-        figure = stateWord,
-        context = contextText,
+    Row(
         modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .amberBlockEntrance(step = VenueEntranceStep),
-    )
+            .fillMaxWidth()
+            .amberBlockEntrance(step = StatusEntranceStep)
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.today_hours_open_label), onClick = onOpenHours)
+            .defaultMinSize(minHeight = 48.dp)
+            .padding(horizontal = Side, vertical = 12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            Modifier
+                .padding(top = 3.dp)
+                .width(3.dp)
+                .height(14.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(if (statusLive(state.market)) colors.actionText else colors.textTertiary(AmberSurface.GROUND)),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(text = line, style = AmberType.context, color = colors.textSecondary, modifier = Modifier.weight(1f))
+    }
 }
 
-/** Blocks 3, 4 and 5, the seam [WatchlistContent] draws after Yours. */
+/** First open: what watching gives, and the one step to take. */
 @Composable
-private fun TodayAfterContent(
-    state: WatchlistUiState,
-    onOpenDetail: (String) -> Unit,
-    onOpenVote: (() -> Unit)?,
-    onBrowseStocks: (() -> Unit)?,
-) {
-    Column(Modifier.fillMaxWidth()) {
-        TodayTrackedBlock(state = state, onOpenDetail = onOpenDetail, onBrowseStocks = onBrowseStocks)
-        TodayNextUpBlock(state = state, onOpenVote = onOpenVote)
-        footerCopy(state.analyzedTotal, state.withoutAnalysisTotal)?.let { footer ->
-            TodayFooter(text = footer.text(), onBrowseStocks = onBrowseStocks)
+private fun TodayStartBlock(onFindStock: (() -> Unit)?, colors: AmberColors) {
+    Column(Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 28.dp)) {
+        Text(text = stringResource(R.string.today_start_title), style = AmberType.sectionHead, color = colors.textPrimary)
+        Spacer(Modifier.height(8.dp))
+        Text(text = stringResource(R.string.today_start_body), style = AmberType.body, color = colors.textSecondary)
+        if (onFindStock != null) {
+            Spacer(Modifier.height(20.dp))
+            AmberPrimaryAction(label = stringResource(R.string.action_find_stock), onClick = onFindStock, colors = colors)
         }
     }
 }
 
-/**
- * Block 3: Tracked today. Undrawn while [WatchlistUiState.todayLoading] is true and this screen
- * does not yet know whether there is an analyzed universe to draw from at all; once that is known,
- * either nothing (no analyzed universe, [WatchlistUiState.analyzedTotal] at 0: the section stays
- * undrawn rather than drawn with a "0 of 0" lede that has nothing behind it) or the section head
- * with a skeleton while [WatchlistUiState.trackedLoading] is still true (Jupiter's prices, the one
- * thing these rows need, have not answered yet), then the rows themselves (deepest pool first,
- * [TrackedPreviewCount] of them, "All N tracked" handing the rest to Stocks). Gated on
- * [trackedLoading][WatchlistUiState.trackedLoading] rather than [todayLoading][WatchlistUiState.todayLoading]
- * on purpose: the animator-zero stall (docs/qa-checklist.md, 2026-09-22) was this section (and the
- * venue line) sitting on skeleton for as long as the price fetch took even though the venue line
- * reads no price at all; [WatchlistViewModel.loadToday]'s own doc has the fix in full.
- */
+/** Watched: the reader's own stocks, one figure each, the figure's meaning said once. Still, never staggered. */
 @Composable
-private fun TodayTrackedBlock(
-    state: WatchlistUiState,
-    onOpenDetail: (String) -> Unit,
-    onBrowseStocks: (() -> Unit)?,
-) {
-    if (!state.todayLoading && state.analyzedTotal <= 0) return
-    Column(modifier = Modifier.fillMaxWidth().amberBlockEntrance(step = TrackedEntranceStep)) {
+private fun TodayWatchedBlock(state: WatchlistUiState, onOpenDetail: (String) -> Unit, colors: AmberColors) {
+    Column(Modifier.fillMaxWidth().padding(top = SectionGap)) {
         AmberSectionHead(
-            title = stringResource(R.string.today_heading_tracked),
-            meta = if (state.trackedLoading) null else Fmt.count(state.tracked.size),
-            lede = if (state.trackedLoading) null else trackedLede(state.tracked.size, state.analyzedTotal)?.text(),
+            title = stringResource(R.string.watchlist_heading_watched),
+            meta = Fmt.count(state.watched),
+            lede = figureMeaning(state.market).text(),
+            colors = colors,
         )
-        when {
-            state.trackedLoading -> SkeletonRows(count = TrackedSkeletonCount)
-            state.tracked.isNotEmpty() -> {
-                AmberTickerRowGroup {
-                    state.tracked.take(TrackedPreviewCount).forEach { row ->
-                        AmberTickerRow(
-                            ticker = row.display,
-                            company = row.company,
-                            figure = row.figure,
-                            context = stringResource(R.string.today_tracked_context),
-                            onClick = { onOpenDetail(row.ticker) },
-                            onClickLabel = stringResource(R.string.action_open_ticker, row.display),
-                        )
-                    }
-                }
-                if (onBrowseStocks != null) {
-                    AmberTextLink(text = trackedAllCopy(state.tracked.size).text(), onClick = onBrowseStocks)
+        if (state.isCold) {
+            SkeletonRows(count = minOf(state.watched, ColdRowCap), colors = colors)
+        } else {
+            AmberTickerRowGroup(colors = colors) {
+                state.rows.forEach { ticker ->
+                    val row = todayWatchRow(ticker)
+                    val report = row.report.text()
+                    val context = row.poolNote?.let { stringResource(R.string.list_row_meta_join, report, it.text()) } ?: report
+                    AmberTickerRow(
+                        ticker = row.symbol,
+                        company = row.company,
+                        figure = row.figure,
+                        context = context,
+                        colors = colors,
+                        onClick = { onOpenDetail(row.ticker) },
+                        onClickLabel = stringResource(R.string.action_open_ticker, row.symbol),
+                    )
                 }
             }
         }
@@ -248,17 +309,91 @@ private fun TodayTrackedBlock(
 }
 
 /**
- * Block 4: Next up. Undrawn while nothing staked SKR has chosen can be read
- * ([WatchlistUiState.nextUpLeader] null), which covers both "the join has not settled yet" and "the
- * server answered nothing": a strip with no leader is not a strip.
+ * The digest, folded to one line: when the last one landed, in the reader's own time, and "Read
+ * it". The sentence is the weighted, wrapping sibling; "Read it" is short and fixed, so it can
+ * never starve the sentence (DESIGN.md section 5.4).
  */
 @Composable
-private fun TodayNextUpBlock(state: WatchlistUiState, onOpenVote: (() -> Unit)?) {
-    val leader = state.nextUpLeader ?: return
-    Column(modifier = Modifier.fillMaxWidth().amberBlockEntrance(step = NextUpEntranceStep)) {
+private fun TodayDigestLine(state: WatchlistUiState, zone: ZoneId, onOpenDigest: (() -> Unit)?, colors: AmberColors) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = digestLink(state.digest, state.nowMillis, zone).text(),
+            style = AmberType.context,
+            color = colors.textSecondary,
+            modifier = Modifier.weight(1f),
+        )
+        if (onOpenDigest != null && digestReadable(state.digest)) {
+            TextAction(label = stringResource(R.string.action_read_it), onClick = onOpenDigest, color = colors.actionText)
+        }
+    }
+}
+
+/**
+ * Tracked today: three rows, deepest pool first, never a watched ticker ([trackedPreview]), then
+ * "All N in Stocks". Undrawn once settled with nothing analyzed; a skeleton only while Jupiter's
+ * prices are out (the animator-zero stall, docs/qa-checklist.md 2026-09-22, gated this on
+ * `todayLoading` once and must not again). On a first open each row carries Watch: the row's meta
+ * line holds the figure and the action, the pairing AmberTickerRow's own budget proves for Vote's
+ * leader row, and [TodayModelTest] re-proves for this one.
+ */
+@Composable
+private fun TodayTrackedBlock(
+    state: WatchlistUiState,
+    onOpenDetail: (String) -> Unit,
+    onBrowseStocks: (() -> Unit)?,
+    onWatch: ((String) -> Unit)?,
+    colors: AmberColors,
+) {
+    if (!state.todayLoading && state.analyzedTotal <= 0) return
+    val rows = trackedPreview(state.tracked, state.watchedTickers)
+    if (!state.trackedLoading && rows.isEmpty()) return
+    Column(modifier = Modifier.fillMaxWidth().padding(top = SectionGap).amberBlockEntrance(step = TrackedEntranceStep)) {
         AmberSectionHead(
-            title = stringResource(R.string.next_up_label),
-            lede = nextUpRoundLede(state.voteRound)?.text(),
+            title = stringResource(R.string.today_heading_tracked),
+            meta = if (state.trackedLoading) null else Fmt.count(state.tracked.size),
+            lede = stringResource(R.string.today_tracked_lede),
+            colors = colors,
+        )
+        if (state.trackedLoading) {
+            SkeletonRows(count = TrackedPreviewCount, colors = colors)
+        } else {
+            AmberTickerRowGroup(colors = colors) {
+                rows.forEach { row ->
+                    AmberTickerRow(
+                        ticker = row.display,
+                        company = row.company,
+                        figure = row.figure,
+                        trailingAction = onWatch?.let { stringResource(R.string.action_watch) },
+                        onTrailingAction = onWatch?.let { watch -> { watch(row.ticker) } },
+                        colors = colors,
+                        onClick = { onOpenDetail(row.ticker) },
+                        onClickLabel = stringResource(R.string.action_open_ticker, row.display),
+                    )
+                }
+            }
+            if (onBrowseStocks != null) {
+                TextAction(
+                    label = trackedAllCopy(state.tracked.size).text(),
+                    onClick = onBrowseStocks,
+                    color = colors.actionText,
+                    modifier = Modifier.padding(start = Side - LinkInset),
+                )
+            }
+        }
+    }
+}
+
+/** Next up: one row, the vote leader, the round's close in the reader's own time. Undrawn with no leader. */
+@Composable
+private fun TodayNextUpBlock(state: WatchlistUiState, zone: ZoneId, onOpenVote: (() -> Unit)?) {
+    val leader = state.nextUpLeader ?: return
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp).amberBlockEntrance(step = NextUpEntranceStep)) {
+        AmberSectionHead(
+            title = stringResource(R.string.today_next_up_title),
+            lede = nextUpLede(state.voteRound, zone)?.text(),
         )
         AmberTickerRowGroup {
             AmberTickerRow(
@@ -274,75 +409,46 @@ private fun TodayNextUpBlock(state: WatchlistUiState, onOpenVote: (() -> Unit)?)
 }
 
 /**
- * Block 5: the footer count, "160 analyzed, 768 without analysis" beside a text action opening
- * Stocks. The count wraps rather than being forced to one line (the trap this task's brief names by
- * name): only "Stocks" is fixed-width, and it is four characters, never a variable value.
+ * The market hours sheet the status line opens: what the hours mean for a token, how old the data
+ * is, and, only while the line reads the calendar, why.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TodayFooter(text: String, onBrowseStocks: (() -> Unit)?) {
+private fun TodayHoursSheet(state: WatchlistUiState, onDismiss: () -> Unit) {
     val colors = defaultAmberColors()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .amberBlockEntrance(step = FooterEntranceStep),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = text,
-            style = AmberType.context,
-            color = colors.textSecondary,
-            modifier = Modifier.weight(1f),
-        )
-        if (onBrowseStocks != null) {
-            AmberTextLink(text = stringResource(R.string.nav_stocks), onClick = onBrowseStocks, colors = colors)
+    AmberSheet(onDismissRequest = onDismiss, colors = colors) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(text = stringResource(R.string.today_hours_title), style = AmberType.sectionHead, color = colors.textPrimary)
+            Text(text = stringResource(R.string.today_hours_body), style = AmberType.body, color = colors.textSecondary)
+            freshnessSentence(state.analysisGeneratedAtMillis, state.pricesFetchedAtMillis, state.nowMillis)?.let {
+                Text(text = it.text(), style = AmberType.context, color = colors.textSecondary)
+            }
+            if (statusFromCalendar(state.market)) {
+                Text(text = stringResource(R.string.today_hours_calendar), style = AmberType.context, color = colors.textSecondary)
+            }
         }
     }
 }
 
-/**
- * The one thing this screen needs beside the five named components and does not have an Amber
- * equivalent for yet: a plain clickable text ("All N tracked", "Stocks"). Kept private and local
- * to this file rather than added to `ui/components` (outside this task's file set, and one two-line
- * wrapper does not earn a new shared component); see the report for the same note in full.
- */
-@Composable
-private fun AmberTextLink(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    colors: AmberColors = defaultAmberColors(),
-) {
-    Text(
-        text = text,
-        style = AmberType.context,
-        color = colors.actionText,
-        modifier = modifier
-            .clickable(role = Role.Button, onClick = onClick)
-            .defaultMinSize(minHeight = 48.dp)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-    )
-}
+private val Side = 16.dp
+private val SectionGap = 8.dp
+private val BlockGap = 8.dp
+private val EndGap = 24.dp
 
-private const val TrackedSkeletonCount = 3
+/** TextAction's own 16dp start padding, taken back so "All N in Stocks" lines up with the section head. */
+private val LinkInset = 16.dp
+private const val ColdRowCap = 3
 
 /**
  * The settle this screen's class doc names: a block fades in and rises [EntranceRise] into place,
  * once, the first time it has something to draw, staggered by [step] positions of
- * [StaggerStepMillis] each. `remember`'s state lives with the call site, so a block that starts as
- * a skeleton and later gets real rows (Tracked today while [WatchlistUiState.trackedLoading] flips)
- * settles once on that arrival rather than replaying on every later recomposition, the same way the
- * `revealed` flag in [com.plainticker.mobile.ui.you.YouScreen]'s identity reveal and
- * [com.plainticker.mobile.ui.portfolio.PortfolioScreen]'s Total does.
- *
- * Damping is [Spring.DampingRatioNoBouncy] on purpose: this is a settle, not a bounce, and a
- * bouncy alpha can overshoot past fully opaque and read as a flicker on a small block.
- *
- * [motionEnabled] defaults to [rememberMotionEnabled] so a caller can thread one read through
- * several blocks; at animator scale 0 the delay is skipped and `snap()` replaces the spring, so the
- * block is at alpha 1, untranslated, on the very next frame rather than part-way through settling,
- * which is what keeps this legible under the smoke script's own animator-scale-0 pass and on any
- * phone with animations turned off.
+ * [StaggerStepMillis] each. Damping is [Spring.DampingRatioNoBouncy] on purpose: a settle, not a
+ * bounce, since a bouncy alpha can overshoot past fully opaque and read as a flicker. At animator
+ * scale 0 the delay is skipped and `snap()` replaces the spring, so the block is at alpha 1,
+ * untranslated, on the very next frame.
  */
 @Composable
 private fun Modifier.amberBlockEntrance(step: Int, motionEnabled: Boolean = rememberMotionEnabled()): Modifier {
@@ -366,8 +472,7 @@ private val EntranceSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoB
 private const val StaggerStepMillis = 40L
 private val EntranceRise = 8.dp
 
-/** Stagger order: blocks 1, 3, 4, 5 (research section 3's numbering); block 2, Yours, stays still. */
-private const val VenueEntranceStep = 0
+/** Stagger order: the status line, Tracked today, Next up. The reader's own rows stay still. */
+private const val StatusEntranceStep = 0
 private const val TrackedEntranceStep = 1
 private const val NextUpEntranceStep = 2
-private const val FooterEntranceStep = 3

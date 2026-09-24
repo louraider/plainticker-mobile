@@ -334,4 +334,28 @@ class FmtTest {
         assertThrows(IllegalArgumentException::class.java) { Fmt.shortKey("abcdefghij", head = -1) }
         assertThrows(IllegalArgumentException::class.java) { Fmt.shortKey("abcdefghij", tail = -1) }
     }
+
+    // ---- The reader's own time -------------------------------------------------------------
+
+    @Test
+    fun `clock reads the reader's own zone, 24-hour, through daylight saving`() {
+        val closeInSeptember = Instant.parse("2026-09-24T20:00:00Z").toEpochMilli()
+        assertEquals("23:00", Fmt.clock(closeInSeptember, java.time.ZoneId.of("Europe/Kyiv")))
+        assertEquals("16:00", Fmt.clock(closeInSeptember, java.time.ZoneId.of("America/New_York")))
+        val closeInNovember = Instant.parse("2026-11-02T21:00:00Z").toEpochMilli()
+        assertEquals("the same 16:00 close, both zones off daylight saving", "23:00", Fmt.clock(closeInNovember, java.time.ZoneId.of("Europe/Kyiv")))
+        assertEquals("09:05", Fmt.clock(Instant.parse("2026-09-24T06:05:00Z").toEpochMilli(), java.time.ZoneId.of("Europe/Kyiv")))
+    }
+
+    @Test
+    fun `weekday and days ahead are the reader's own calendar, not UTC's`() {
+        val kyiv = java.time.ZoneId.of("Europe/Kyiv")
+        val lateThursdayUtc = Instant.parse("2026-09-24T22:30:00Z").toEpochMilli() // already Friday in Kyiv
+        assertEquals("Friday", Fmt.weekday(lateThursdayUtc, kyiv))
+        assertEquals("Thursday", Fmt.weekday(lateThursdayUtc, java.time.ZoneId.of("America/New_York")))
+        val mondayOpen = Instant.parse("2026-09-28T13:30:00Z").toEpochMilli()
+        assertEquals(3L, Fmt.daysAhead(mondayOpen, lateThursdayUtc, kyiv))
+        assertEquals(0L, Fmt.daysAhead(lateThursdayUtc, lateThursdayUtc, kyiv))
+        assertEquals(-1L, Fmt.daysAhead(Instant.parse("2026-09-24T12:00:00Z").toEpochMilli(), lateThursdayUtc, kyiv))
+    }
 }

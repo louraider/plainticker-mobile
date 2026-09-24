@@ -15,6 +15,7 @@ import com.plainticker.mobile.ui.swap.SwapViewModel
 import com.plainticker.mobile.ui.vote.VoteTabViewModel
 import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
+import com.plainticker.mobile.ui.you.DigestViewModel
 import com.plainticker.mobile.ui.you.YouViewModel
 
 /** One ViewModel per screen, each built from [AppContainer]; the detail ticker comes from the route. */
@@ -83,7 +84,13 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.catalogRepository,
             container.priceRepository,
             container.nextUpRepository,
+            // Today's first-open Watch asks for notifications once, after the first watch, through
+            // the same store Detail's Watch reads.
+            prompts = container.notificationPromptStore,
         )
+    }
+    initializer {
+        DigestViewModel(container.digestStore, container.digestNotifier, container.clock)
     }
     initializer {
         VoteViewModel(

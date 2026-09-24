@@ -8,13 +8,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Today's four built blocks (docs/design-research-2026-09-21.md section 3), pinned from source the
- * way [com.plainticker.mobile.ui.watchlist.WatchlistScreenTest] and
- * [com.plainticker.mobile.ui.components.AmberTickerRowTest] pin theirs: there is no layout test on a
- * plain JVM that can measure a real render, so what is pinned is that the required components are
- * used, the blocks compose in the research's order, and the two variable slots this file adds
- * (the footer count, the venue card's context) are never squeezed the way the trap this task's
- * brief names by name squeezed "Round" and "no wallet connected".
+ * Today in direction A, "One line, then yours", pinned from source the way
+ * [com.plainticker.mobile.ui.watchlist.WatchlistScreenTest] and
+ * [com.plainticker.mobile.ui.components.AmberTickerRowTest] pin theirs: no plain-JVM layout test
+ * can measure a real render, so what is pinned is the block order in both states, what each block
+ * is gated on, which Amber components draw it, that no new slot is squeezed (DESIGN.md 5.4), and
+ * that the venue is recomputed on resume and stopped on pause.
  */
 class TodayScreenTest {
 
@@ -23,9 +22,11 @@ class TodayScreenTest {
         .first { File(it, "src/main/AndroidManifest.xml").isFile }
         .canonicalFile
 
-    private val source: String by lazy {
-        KotlinScan(File(module, "src/main/java/com/plainticker/mobile/ui/today/TodayScreen.kt").readText()).code
+    private val raw: String by lazy {
+        File(module, "src/main/java/com/plainticker/mobile/ui/today/TodayScreen.kt").readText()
     }
+
+    private val source: String by lazy { KotlinScan(raw).code }
 
     private fun body(function: String, until: String): String {
         val start = source.indexOf(function)
@@ -35,133 +36,174 @@ class TodayScreenTest {
         return source.substring(start, end)
     }
 
-    // ---- The seams: block 1 before Yours, blocks 3/4/5 after it -------------------------------
+    private val content: String get() = body("internal fun TodayContent(", "private fun TodayStatusLine(")
+
+    // ---- The order, returning and first open ----------------------------------------------------------
 
     @Test
-    fun `block 1 is the before seam, blocks 3, 4 and 5 are the after seam`() {
-        val fn = body("fun TodayScreen(", "private fun TodayVenueBlock(")
-        assertTrue("block 1 draws through WatchlistContent's beforeContent seam", "beforeContent = { TodayVenueBlock(state) }" in fn)
-        assertTrue("blocks 3, 4 and 5 draw through its afterContent seam", "afterContent = {" in fn)
-        assertTrue("TodayAfterContent(" in fn)
+    fun `returning, the blocks run status, watched, digest, tracked, next up`() {
+        val order = listOf("TodayStatusLine(", "TodayWatchedBlock(", "TodayDigestLine(", "TodayTrackedBlock(", "TodayNextUpBlock(")
+            .map { content.indexOf(it) }
+        assertTrue("every block is drawn from TodayContent: $order", order.all { it >= 0 })
+        assertEquals("in the order direction A draws", order.sorted(), order)
     }
 
     @Test
-    fun `blocks 3, 4 and 5 compose in the research's order, Tracked today then Next up then the footer`() {
-        val fn = body("private fun TodayAfterContent(", "private fun TodayTrackedBlock(")
-        val trackedAt = fn.indexOf("TodayTrackedBlock(")
-        val nextUpAt = fn.indexOf("TodayNextUpBlock(")
-        val footerAt = fn.indexOf("footerCopy(")
-        assertTrue("TodayAfterContent never calls TodayTrackedBlock", trackedAt >= 0)
-        assertTrue("TodayAfterContent never calls TodayNextUpBlock", nextUpAt >= 0)
-        assertTrue("TodayAfterContent never calls footerCopy", footerAt >= 0)
-        assertTrue("Tracked today must compose before Next up", trackedAt < nextUpAt)
-        assertTrue("Next up must compose before the footer", nextUpAt < footerAt)
-    }
-
-    // ---- The five components this task names, used rather than forked -------------------------
-
-    @Test
-    fun `every block reuses the named Amber components, never a re-drawn equivalent`() {
-        assertTrue("block 1 is AmberFigure's own status card", "AmberFigure(" in source)
-        assertTrue("blocks 3 and 4 use the section head", "AmberSectionHead(" in source)
-        assertTrue("the tracked rows and the Next up row use the ticker row", "AmberTickerRow(" in source)
-        assertTrue("both row lists sit in the tonal group", "AmberTickerRowGroup {" in source)
-    }
-
-    // ---- No false claims: every block is gated on the fact it draws being known ----------------
-
-    @Test
-    fun `block 1 is undrawn while the venue is not yet known`() {
-        val fn = body("private fun TodayVenueBlock(", "private fun TodayAfterContent(")
-        assertTrue("no market read, no sentence stated", "venueSentence(state.market) ?: return" in fn)
+    fun `first open swaps Watched and the digest for the start block, and drops Next up`() {
+        val branch = content.substring(content.indexOf("if (firstOpen) {"), content.indexOf("TodayTrackedBlock("))
+        assertTrue("the start block is the first-open branch", "TodayStartBlock(" in branch.substringBefore("} else {"))
+        assertFalse("no Watched block on a first open", "TodayWatchedBlock(" in branch.substringBefore("} else {"))
+        assertFalse("no digest line on a first open", "TodayDigestLine(" in branch.substringBefore("} else {"))
+        assertTrue("Next up is gated on not being a first open", "if (!firstOpen) {" in content)
+        val nextUpGate = content.indexOf("if (!firstOpen) {")
+        assertTrue(nextUpGate < content.indexOf("TodayNextUpBlock("))
     }
 
     @Test
-    fun `block 3's meta count is never drawn while still loading, and the section itself is undrawn once settled with nothing analyzed`() {
+    fun `Watch on a tracked row exists only on a first open`() {
+        assertTrue("onWatch = if (firstOpen) onWatch else null" in content)
+        val tracked = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
+        assertTrue("the action is AmberTickerRow's own trailing action, the pairing its budget proves", "trailingAction = onWatch?.let" in tracked)
+    }
+
+    @Test
+    fun `the start block offers one primary action and nothing else to press`() {
+        val start = body("private fun TodayStartBlock(", "private fun TodayWatchedBlock(")
+        assertEquals(1, Regex("AmberPrimaryAction\\(").findAll(start).count())
+        assertFalse("TextAction(" in start)
+        assertFalse("AmberSecondaryAction(" in start)
+    }
+
+    // ---- What was removed stays removed ----------------------------------------------------------------
+
+    @Test
+    fun `no footer count, no venue card, no per-row NYSE close, no notifications line on Today`() {
+        assertFalse("the footer count left Today; Stocks' own segments carry it", "footerCopy" in source || "today_footer_count" in raw)
+        assertFalse("the 120dp status card is gone", "AmberFigure(" in source)
+        assertFalse("the figure's meaning is said once, not per row", "today_tracked_context" in raw || "list_row_meta_premium" in raw)
+        assertFalse("the notifications line lives in You and on the digest screen", "watchlist_notifications" in raw || "action_enable" in raw)
+        assertFalse("Today draws its own list now, not the Watchlist screen's content", "WatchlistContent(" in source)
+    }
+
+    // ---- Gates: nothing is said before it is known -------------------------------------------------------
+
+    @Test
+    fun `the status line is undrawn while the venue is not yet known`() {
+        val fn = body("private fun TodayStatusLine(", "private fun TodayStartBlock(")
+        assertTrue("statusLine(state.market, state.nowMillis, zone) ?: return" in fn)
+    }
+
+    @Test
+    fun `tracked rows are the preview, never a watched ticker, and gate on the price fetch, not todayLoading`() {
         val fn = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        assertTrue("no state before the fast half of the join has run", "if (!state.todayLoading && state.analyzedTotal <= 0) return" in fn)
-        assertTrue("the count is null, never a guess, while prices are still out", "if (state.trackedLoading) null else Fmt.count(state.tracked.size)" in fn)
-    }
-
-    /**
-     * The animator-zero stall (docs/qa-checklist.md, 2026-09-22): the block's skeleton-versus-rows
-     * choice, and its lede and meta, gate on [state.trackedLoading][com.plainticker.mobile.ui.watchlist.WatchlistUiState.trackedLoading],
-     * which only Jupiter's price fetch flips, never on [state.todayLoading][com.plainticker.mobile.ui.watchlist.WatchlistUiState.todayLoading],
-     * which the venue line and Next up also read and which settles well before prices do
-     * ([WatchlistViewModel.loadToday]'s own doc). Pinning this the other way round, gating the
-     * skeleton on `todayLoading`, is exactly the regression that reintroduces the stall.
-     */
-    @Test
-    fun `block 3's skeleton and rows gate on trackedLoading, the price-fetch flag, not todayLoading`() {
-        val fn = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        assertTrue("the lede is never a guess while prices are still out", "if (state.trackedLoading) null else trackedLede(" in fn)
-        assertTrue("the skeleton shows only while prices are out", "state.trackedLoading -> SkeletonRows(" in fn)
-        assertFalse("todayLoading must not gate the skeleton; it settles before prices ever answer", "state.todayLoading -> SkeletonRows(" in fn)
+        assertTrue("trackedPreview(state.tracked, state.watchedTickers)" in fn)
+        assertTrue("undrawn once settled with nothing analyzed", "if (!state.todayLoading && state.analyzedTotal <= 0) return" in fn)
+        assertTrue("the count is null, never a guess, while prices are out", "if (state.trackedLoading) null else Fmt.count(state.tracked.size)" in fn)
+        assertTrue("the skeleton shows only while prices are out", "if (state.trackedLoading) {" in fn && "SkeletonRows(" in fn)
+        assertFalse("todayLoading must not gate the skeleton (the animator-zero stall)", "state.todayLoading) {" in fn)
+        assertTrue("the rest is handed to Stocks", "trackedAllCopy(state.tracked.size)" in fn)
     }
 
     @Test
-    fun `block 4 is undrawn while no leader can be read`() {
-        val fn = body("private fun TodayNextUpBlock(", "private fun TodayFooter(")
+    fun `watched rows carry one figure each, and a thin pool's note instead of a figure`() {
+        val fn = body("private fun TodayWatchedBlock(", "private fun TodayDigestLine(")
+        assertTrue("todayWatchRow(" in fn)
+        assertTrue("figure = row.figure" in fn)
+        assertTrue("the pool note joins the report line", "row.poolNote?.let" in fn)
+        assertTrue("the figure's meaning is the section's lede, said once", "lede = figureMeaning(state.market).text()" in fn)
+        assertFalse("no Unwatch on Today: it is on the stock's own page", "trailingAction" in fn)
+    }
+
+    @Test
+    fun `next up is undrawn while no leader can be read, and names the round in the reader's time`() {
+        val fn = body("private fun TodayNextUpBlock(", "private fun TodayHoursSheet(")
         assertTrue("state.nextUpLeader ?: return" in fn)
+        assertTrue("nextUpLede(state.voteRound, zone)" in fn)
     }
 
     @Test
-    fun `block 5 is undrawn while neither total is known`() {
-        assertTrue("footerCopy(state.analyzedTotal, state.withoutAnalysisTotal)?.let { footer ->" in source)
+    fun `the digest line links to the digest only when there is one to read`() {
+        val fn = body("private fun TodayDigestLine(", "private fun TodayTrackedBlock(")
+        assertTrue("onOpenDigest != null && digestReadable(state.digest)" in fn)
     }
 
-    // ---- The clipping trap this task's brief names by name, twice ------------------------------
+    // ---- The clock: recomputed on resume, stopped on pause ------------------------------------------------
 
     @Test
-    fun `the footer count sits beside a fixed four-character label, never a fixed-width column`() {
-        val fn = body("private fun TodayFooter(", "private fun AmberTextLink(")
-        assertFalse("a fixed-width modifier is exactly the trap this row must not repeat", ".width(" in fn)
-        assertTrue("the count is the flexible sibling that absorbs the squeeze", "weight(1f)" in fn)
-        assertFalse("the count is never forced to one line", "maxLines" in fn)
+    fun `the venue is recomputed on every resume and the boundary job stops on pause`() {
+        val fn = body("fun TodayScreen(", "internal fun TodayContent(")
+        assertTrue("LifecycleResumeEffect(watchlistViewModel)" in fn)
+        assertTrue("watchlistViewModel.onResume()" in fn)
+        assertTrue("onPauseOrDispose { watchlistViewModel.onPause() }" in fn)
     }
 
     @Test
-    fun `the venue card's context line is never forced to one line either`() {
-        val fn = body("private fun TodayVenueBlock(", "private fun TodayAfterContent(")
+    fun `the first watch asks for notifications once, the same way Detail's Watch does`() {
+        val fn = body("fun TodayScreen(", "internal fun TodayContent(")
+        assertTrue("val ask = watchlistViewModel.watch(ticker)" in fn)
+        assertTrue("askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)" in fn)
+    }
+
+    @Test
+    fun `the status line opens the market hours sheet, and the sheet carries the ages and the calendar note`() {
+        val status = body("private fun TodayStatusLine(", "private fun TodayStartBlock(")
+        assertTrue("clickable(role = Role.Button" in status)
+        val sheet = body("private fun TodayHoursSheet(", "private val Side")
+        assertTrue("AmberSheet(" in sheet)
+        assertTrue("freshnessSentence(" in sheet)
+        assertTrue("if (statusFromCalendar(state.market))" in sheet)
+    }
+
+    // ---- The clipping rule (DESIGN.md 5.4) on every new slot ----------------------------------------------
+
+    @Test
+    fun `the status line owns its row and wraps, never forced to one line or a fixed width`() {
+        val fn = body("private fun TodayStatusLine(", "private fun TodayStartBlock(")
+        assertFalse("maxLines" in fn)
+        assertTrue("the text is the flexible sibling of a fixed 3dp bar", "modifier = Modifier.weight(1f)" in fn)
+        assertFalse("no width but the bar's own 3dp", Regex("\\.width\\((?!3\\.dp|10\\.dp)").containsMatchIn(fn))
+    }
+
+    @Test
+    fun `the digest sentence is the weighted sibling of a short fixed action`() {
+        val fn = body("private fun TodayDigestLine(", "private fun TodayTrackedBlock(")
+        assertTrue("modifier = Modifier.weight(1f)" in fn)
+        assertFalse("maxLines" in fn)
         assertFalse(".width(" in fn)
-        assertFalse("AmberFigure's own context slot carries no maxLines; this call adds none either", "maxLines" in fn)
     }
 
     @Test
-    fun `the text link this screen needed beyond the five named components declares a role`() {
-        val fn = body("private fun AmberTextLink(", "private const val TrackedSkeletonCount")
-        assertTrue("Role.Button" in fn)
+    fun `every block reuses the Amber components, never a re-drawn equivalent`() {
+        assertTrue("AmberSectionHead(" in source)
+        assertTrue("AmberTickerRow(" in source)
+        assertTrue("AmberTickerRowGroup(" in source)
+        assertTrue("AmberPrimaryAction(" in source)
+        assertTrue("AmberSheet(" in source)
     }
 
-    // ---- The orchestrated moment: blocks 1, 3, 4, 5 settle in, block 2 (Yours) stays still ------
+    // ---- The orchestrated moment ----------------------------------------------------------------------------
 
     @Test
-    fun `blocks 1, 3, 4 and 5 each carry the entrance modifier, staggered in the research's block order`() {
-        val block1 = body("private fun TodayVenueBlock(", "private fun TodayAfterContent(")
-        val block3 = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        val block4 = body("private fun TodayNextUpBlock(", "private fun TodayFooter(")
-        val block5 = body("private fun TodayFooter(", "private fun AmberTextLink(")
-        assertTrue("block 1 (venue) settles in", "amberBlockEntrance(step = VenueEntranceStep)" in block1)
-        assertTrue("block 3 (tracked) settles in", "amberBlockEntrance(step = TrackedEntranceStep)" in block3)
-        assertTrue("block 4 (next up) settles in", "amberBlockEntrance(step = NextUpEntranceStep)" in block4)
-        assertTrue("block 5 (footer) settles in", "amberBlockEntrance(step = FooterEntranceStep)" in block5)
-        val order = listOf("VenueEntranceStep = 0", "TrackedEntranceStep = 1", "NextUpEntranceStep = 2", "FooterEntranceStep = 3")
-            .map { source.indexOf(it) }
-        assertTrue("all four stagger steps are declared", order.all { it >= 0 })
+    fun `status, tracked and next up settle in, staggered in block order`() {
+        assertTrue("amberBlockEntrance(step = StatusEntranceStep)" in body("private fun TodayStatusLine(", "private fun TodayStartBlock("))
+        assertTrue("amberBlockEntrance(step = TrackedEntranceStep)" in body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock("))
+        assertTrue("amberBlockEntrance(step = NextUpEntranceStep)" in body("private fun TodayNextUpBlock(", "private fun TodayHoursSheet("))
+        val order = listOf("StatusEntranceStep = 0", "TrackedEntranceStep = 1", "NextUpEntranceStep = 2").map { source.indexOf(it) }
+        assertTrue(order.all { it >= 0 })
         assertEquals(order, order.sorted())
     }
 
     @Test
-    fun `block 2, Yours, is never wrapped in the entrance modifier, TodayScreen itself never calls it`() {
-        val fn = body("fun TodayScreen(", "private fun TodayVenueBlock(")
-        assertFalse("Yours is WatchlistContent's shared, per-ticker list; a stagger belongs to the block, not the row", "amberBlockEntrance" in fn)
+    fun `the reader's own rows and the start block never stagger`() {
+        assertFalse("amberBlockEntrance" in body("private fun TodayWatchedBlock(", "private fun TodayDigestLine("))
+        assertFalse("amberBlockEntrance" in body("private fun TodayStartBlock(", "private fun TodayWatchedBlock("))
+        assertFalse("amberBlockEntrance" in content)
     }
 
     @Test
-    fun `the entrance settles once per block, not once per row, the modifier is called exactly once in Tracked today`() {
-        val trackedBlock = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        val calls = Regex("amberBlockEntrance\\(").findAll(trackedBlock).count()
-        assertEquals("a per-row stagger inside the tracked rows' forEach is the shape this task's brief warns against", 1, calls)
+    fun `the entrance settles once per block, not once per row`() {
+        val tracked = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
+        assertEquals(1, Regex("amberBlockEntrance\\(").findAll(tracked).count())
     }
 
     @Test
@@ -170,10 +212,7 @@ class TodayScreenTest {
         assertTrue("rememberMotionEnabled" in fn)
         assertTrue("snap()" in fn)
         assertTrue("EntranceSpring" in fn)
-        assertTrue(
-            "settled starts false and the coroutine flips it without a user gesture, so it always reaches 1f on its own",
-            "targetValue = if (settled) 1f else 0f" in fn,
-        )
+        assertTrue("targetValue = if (settled) 1f else 0f" in fn)
     }
 
     @Test

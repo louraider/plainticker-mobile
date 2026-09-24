@@ -38,6 +38,7 @@ import com.plainticker.mobile.watchlist.InMemoryDigestStore
 import com.plainticker.mobile.repo.price
 import com.plainticker.mobile.repo.snapshot
 import com.plainticker.mobile.core.Clock
+import com.plainticker.mobile.data.xstocks.MarketSource
 import com.plainticker.mobile.data.xstocks.Trading
 import com.plainticker.mobile.data.xstocks.TradingPeriod
 import com.plainticker.mobile.data.xstocks.XStockAsset
@@ -1452,6 +1453,38 @@ class ListViewModelTest {
         advanceUntilIdle()
         assertNull("and it goes when the live list lands", vm.state.value.banner)
         assertFalse(vm.state.value.fromSnapshot)
+    }
+
+    // ---- The hours banner reads a clock (the same MarketClock Today runs) ----------------
+
+    /**
+     * Stocks had the same stale read as Today: `MarketHours.ofCatalog` computed once off a catalog
+     * cached for up to a day. A block cached while the venue was open, and changing at the close,
+     * must stop answering once the close has passed, and the resume is what notices.
+     */
+    @Test
+    fun `resume past the cached block's close drops the open venue and reads the calendar`() = runTest {
+        var now = 1_789_394_400_000L // Monday 14 Sep 2026, 10:00 in New York
+        val cached = Trading(currentPeriod = TradingPeriod.MARKET, openNow = true, nextChangeAt = "2026-09-14T20:00:00Z")
+        val vm = viewModel(catalog = FakeCatalogRepository(Result.success(catalog(cached))), clock = Clock { now })
+        advanceUntilIdle()
+        assertTrue("the fresh block says the session is on", vm.state.value.market!!.regularSession)
+        assertEquals(MarketSource.VENUE, vm.state.value.market!!.source)
+
+        now = 1_789_419_600_000L // the same day, 17:00 in New York: after the close
+        try {
+            vm.onResume()
+            val market = vm.state.value.market!!
+            assertFalse("the expired block no longer says open", market.regularSession)
+            assertEquals(MarketSource.LOCAL_SCHEDULE, market.source)
+            assertEquals(
+                "after the close, the calendar's own phase is after hours",
+                com.plainticker.mobile.data.xstocks.SessionPhase.AFTER_HOURS,
+                market.session?.phase,
+            )
+        } finally {
+            vm.onPause()
+        }
     }
 
     // ---- Support -----------------------------------------------------------------------
