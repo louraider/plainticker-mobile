@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,6 +61,10 @@ import com.plainticker.mobile.ui.theme.AmberLightColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.theme.JetBrainsMono
+import com.plainticker.mobile.ui.swap.SwapActions
+import com.plainticker.mobile.ui.swap.SwapSheet
+import com.plainticker.mobile.ui.swap.SwapToken
+import com.plainticker.mobile.ui.swap.SwapViewModel
 import com.plainticker.mobile.wallet.WalletAccount
 
 /**
@@ -109,6 +114,11 @@ fun PortfolioScreen(
     modifier: Modifier = Modifier,
     onBrowseList: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
+    /**
+     * The swap machine this screen's "Swap to USDC" opens, scoped to the home entry like every
+     * other ViewModel there, so a swap in flight survives a destination switch. Null in previews.
+     */
+    swapViewModel: SwapViewModel? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     PortfolioContent(
@@ -120,7 +130,28 @@ fun PortfolioScreen(
         onBrowseList = onBrowseList,
         modifier = modifier,
         header = header,
+        onSwapOut = swapViewModel?.let { swap -> { token: SwapToken -> swap.openOut(token) } },
     )
+    if (swapViewModel != null) {
+        val swap by swapViewModel.state.collectAsStateWithLifecycle()
+        // A modal surface in its own window, so where it sits here does not matter. The receipt's
+        // "View in Portfolio" is this screen, so it only closes the sheet; the balance behind it
+        // is read again by the landing itself (PortfolioViewModel watches the receipts).
+        SwapSheet(
+            state = swap,
+            actions = SwapActions(
+                onAmountChanged = swapViewModel::amountChanged,
+                onMax = swapViewModel::useMax,
+                onFlip = swapViewModel::flip,
+                onSubmit = swapViewModel::submit,
+                onEdit = swapViewModel::edit,
+                onClose = swapViewModel::close,
+                onViewPortfolio = swapViewModel::close,
+                onRetry = swapViewModel::retry,
+                onSwapBack = swapViewModel::swapBack,
+            ),
+        )
+    }
 }
 
 @Composable
@@ -133,6 +164,8 @@ internal fun PortfolioContent(
     onBrowseList: (() -> Unit)?,
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
+    /** "Swap to USDC" for a holding the chain read found; null where no swap can be opened. */
+    onSwapOut: ((SwapToken) -> Unit)? = null,
 ) {
     val colors = amberColors()
     LazyColumn(
@@ -233,6 +266,7 @@ internal fun PortfolioContent(
                         last = index == state.positions.lastIndex,
                         colors = colors,
                         onOpenDetail = onOpenDetail,
+                        swapOut = onSwapOut?.let { open -> swapOutToken(position, state)?.let { token -> { open(token) } } },
                     )
                 }
                 item(key = "cost-basis") { Footnote(stringResource(R.string.portfolio_cost_basis), colors) }
@@ -343,24 +377,54 @@ private fun Holding(
     last: Boolean,
     colors: AmberColors,
     onOpenDetail: (String) -> Unit,
+    /** Opens "Swap to USDC" for this holding; null when the row must not offer it. */
+    swapOut: (() -> Unit)? = null,
 ) {
     val row = holdingRow(position)
     val quantity = row.quantity.text()
     val tracking = row.tracking?.text()
     val meta = tracking?.let { stringResource(R.string.list_row_meta_join, quantity, it) } ?: quantity
     AmberRowFrame(first = first, last = last, colors = colors) {
-        AmberTickerRow(
-            ticker = row.symbol,
-            company = row.company,
-            figure = row.value,
-            context = meta,
-            colors = colors,
-            onClick = { onOpenDetail(row.ticker) },
-            onClickLabel = stringResource(R.string.action_open_ticker, row.symbol),
-            description = sentence(row.symbol, row.company, quantity, tracking, row.value),
+        Column(Modifier.fillMaxWidth().background(colors.surfaceRaised)) {
+            AmberTickerRow(
+                ticker = row.symbol,
+                company = row.company,
+                figure = row.value,
+                context = meta,
+                colors = colors,
+                onClick = { onOpenDetail(row.ticker) },
+                onClickLabel = stringResource(R.string.action_open_ticker, row.symbol),
+                description = sentence(row.symbol, row.company, quantity, tracking, row.value),
+            )
+            if (swapOut != null) SwapOutLine(symbol = row.symbol, onClick = swapOut, colors = colors)
+        }
+    }
+}
+
+/**
+ * "Swap to USDC", on a line of its own under the holding it acts on, never on the row's meta line.
+ * Measured against the real fonts (2026-09-24, SwapResultFitTest): on the meta line, beside
+ * a value like "$12,345.67", the action would leave the quantity 124.44dp at 1.0x and 68.17dp at
+ * 1.3x, and "1.37 TSLAx, +0.09%" already needs 124.73dp and 162.14dp, so the quantity itself would
+ * ellipsize at 1.3x. On its own line the label (91.84dp, 119.39dp at 1.3x, Outfit SemiBold 14) has
+ * the row's whole 336dp, and the row above keeps every budget AmberTickerRow already proves.
+ */
+@Composable
+private fun SwapOutLine(symbol: String, onClick: () -> Unit, colors: AmberColors) {
+    val spoken = stringResource(R.string.portfolio_swap_to_usdc_a11y, symbol)
+    Row(Modifier.fillMaxWidth()) {
+        TextAction(
+            label = stringResource(R.string.portfolio_swap_to_usdc),
+            onClick = onClick,
+            color = colors.actionText,
+            contentPadding = SwapOutPadding,
+            modifier = Modifier.semantics { contentDescription = spoken },
         )
     }
 }
+
+/** 2dp under the row above and 14dp below; TextAction's own 48dp minimum makes the target. */
+private val SwapOutPadding = PaddingValues(start = 16.dp, top = 2.dp, end = 16.dp, bottom = 14.dp)
 
 /**
  * One recorded holding: the quantity as the row's figure (the app's own record carries no value),

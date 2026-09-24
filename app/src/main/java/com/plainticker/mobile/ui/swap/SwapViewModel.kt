@@ -12,6 +12,9 @@ import com.plainticker.mobile.data.jupiter.SwapError
 import com.plainticker.mobile.data.jupiter.SwapOrder
 import com.plainticker.mobile.data.receipts.ReceiptStore
 import com.plainticker.mobile.data.receipts.SwapReceipt
+import com.plainticker.mobile.data.SplitMultiplier
+import com.plainticker.mobile.data.rpc.TokenBalance
+import com.plainticker.mobile.repo.MintRepository
 import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
@@ -22,9 +25,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.math.BigDecimal
 import java.util.Base64
 
 /**
@@ -81,6 +86,11 @@ class SwapViewModel(
     private val debugLog: SwapDebugLog = SwapDebugLog.ANDROID,
     /** Where the receipt is written. viewModelScope runs on Main, and a file write does not. */
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * Reads a token's Token-2022 scaled UI multiplier when the screen that opened the sheet did
+     * not already know it. Null only in tests that open with a known multiplier.
+     */
+    private val mints: MintRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SwapState>(SwapState.Closed())
@@ -88,34 +98,78 @@ class SwapViewModel(
 
     private var job: Job? = null
 
+    private val _holding = MutableStateFlow<SwapHolding?>(null)
+
+    /**
+     * What the connected wallet holds of the token [watchHolding] named, read from the chain.
+     * Null with no wallet session, or before the first read answers. Detail offers "Swap to
+     * USDC" from it, and only from it: the app's own receipts never stand in for a balance here.
+     */
+    val holding: StateFlow<SwapHolding?> = _holding.asStateFlow()
+
+    private var watched: SwapToken? = null
+    private var holdingJob: Job? = null
+
     // ---- Closed -> Opening -> Amount ---------------------------------------------------------
 
     /**
      * Opens the sheet for USDC into [token]: authorize the wallet if it is not authorized yet,
      * then read the lamports and the two balances the rest of the machine decides on.
      */
-    fun open(token: SwapToken) {
+    fun open(token: SwapToken) = openLeg(SwapLeg.into(token))
+
+    /**
+     * Opens the sheet for [token] back to USDC, "Swap to USDC": the same machine, the same
+     * checks, with the xStock as the side being spent.
+     */
+    fun openOut(token: SwapToken) = openLeg(SwapLeg.outOf(token))
+
+    /**
+     * @param minContextSlot the slot a swap just landed in, when this opening follows one: the
+     *   balance read must be at least that new, or it would show the wallet from before the swap.
+     */
+    private fun openLeg(requested: SwapLeg, minContextSlot: Long? = null) {
         if (_state.value.isBusy) return
-        val leg = SwapLeg.into(token)
         job?.cancel()
         job = viewModelScope.launch {
-            _state.value = SwapState.Opening(leg, SwapTiming.started(clock.nowMillis()))
+            _state.value = SwapState.Opening(requested, SwapTiming.started(clock.nowMillis()))
 
             val owner = wallet.account.value?.address ?: when (val outcome = wallet.connect()) {
                 is WalletOutcome.Success -> outcome.value.address
-                is WalletOutcome.NoWallet -> return@launch failOpen(leg, SwapFailure.NO_WALLET)
+                is WalletOutcome.NoWallet -> return@launch failOpen(requested, SwapFailure.NO_WALLET)
                 is WalletOutcome.Cancelled -> {
                     _state.value = SwapState.Closed(SwapNote.CANCELLED_IN_WALLET)
                     return@launch
                 }
                 is WalletOutcome.Error -> {
                     debugLog.raw("connect: ${outcome.message}")
-                    return@launch failOpen(leg, SwapFailure.CONNECT_REFUSED)
+                    return@launch failOpen(requested, SwapFailure.CONNECT_REFUSED)
                 }
             }
 
-            val funds = readFunds(owner, leg.token) ?: return@launch failOpen(leg, SwapFailure.CHAIN_UNREAD)
+            // No quantity of the xStock is stated until its multiplier is known: a split token
+            // read as unsplit would put a balance ten times off on the screen and in the field.
+            val token = resolveScale(requested.token) ?: return@launch failOpen(requested, SwapFailure.CHAIN_UNREAD)
+            val leg = requested.withToken(token)
+            val funds = readFunds(owner, leg.token, minContextSlot)
+                ?: return@launch failOpen(leg, SwapFailure.CHAIN_UNREAD)
             _state.value = SwapState.Amount(leg, funds, AmountInput.EMPTY)
+        }
+    }
+
+    /**
+     * Keeps [holding] current for [token] while a wallet is connected. Detail calls it once the
+     * catalog has named the mint; a second call for the same token is free.
+     */
+    fun watchHolding(token: SwapToken) {
+        if (watched == token) return
+        watched = token
+        holdingJob?.cancel()
+        _holding.value = null
+        holdingJob = viewModelScope.launch {
+            wallet.account.collect { account ->
+                if (account == null) _holding.value = null else readHolding(account.address, token, null)
+            }
         }
     }
 
@@ -127,10 +181,18 @@ class SwapViewModel(
         _state.value = amount.copy(input = validate(amount, text), note = null)
     }
 
-    /** Max: the whole balance of the side being spent, exactly, with no rounding on the way. */
+    /**
+     * Max: the whole balance of the side being spent, exactly. The field shows it as the wallet
+     * does (scaled by the multiplier), and the amount sent is the raw balance itself, set here
+     * rather than read back out of the text, so no conversion can shave a base unit off it.
+     */
     fun useMax() {
         val amount = _state.value as? SwapState.Amount ?: return
-        amountChanged(SwapAmount.maxText(amount.balanceRaw, amount.leg.input.decimals))
+        val side = amount.leg.input
+        val text = SwapAmount.maxText(amount.balanceRaw, side.decimals, side.multiplier ?: BigDecimal.ONE)
+        val parsed = validate(amount, text)
+        val input = if (parsed.problem == null) parsed.copy(raw = amount.balanceRaw) else parsed
+        _state.value = amount.copy(input = input, note = null)
     }
 
     /**
@@ -152,6 +214,29 @@ class SwapViewModel(
         if (!amount.canSubmit) return
         job?.cancel()
         job = viewModelScope.launch { attempt(amount) }
+    }
+
+    /**
+     * The same amount again, with a fresh quote: the way on from a failure whose [SwapFailure.next]
+     * is [FailureNext.RETRY] or [FailureNext.NEW_QUOTE]. Refused for every other failure, and
+     * above all for [SwapFailure.SUBMIT_UNAVAILABLE], where a first attempt may have landed.
+     */
+    fun retry() {
+        val failed = _state.value as? SwapState.Failed ?: return
+        if (failed.reason.next != FailureNext.RETRY && failed.reason.next != FailureNext.NEW_QUOTE) return
+        val funds = failed.funds ?: return
+        val input = failed.input?.takeIf { it.isUsable } ?: return
+        job?.cancel()
+        job = viewModelScope.launch { attempt(SwapState.Amount(failed.leg, funds, input)) }
+    }
+
+    /**
+     * From a fresh receipt, the other direction: the token that just arrived, back the way it
+     * came. The balance is read again, no older than the slot the swap landed in.
+     */
+    fun swapBack() {
+        val landed = _state.value as? SwapState.Landed ?: return
+        openLeg(landed.leg.flipped(), minContextSlot = landed.fill.slot)
     }
 
     /** Back to the amount step from a shortfall or a failure, with the typed amount revalidated. */
@@ -232,13 +317,27 @@ class SwapViewModel(
             )
             if (verdict is TransactionGuard.Verdict.Refuse) {
                 debugLog.raw("order ${quote.requestId} refused before the wallet: ${verdict.reason}")
-                return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
+                return fail(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing)
+            }
+
+            // ---- Dust. A quote that delivers nothing, or whose floor is nothing, is fees for no
+            // swap: a sliver of an xStock worth under a millionth of a dollar rounds to no USDC.
+            if (quote.outAmountRaw <= 0L || quote.worstCaseOutRaw <= 0L) {
+                debugLog.raw("order ${quote.requestId} delivers ${quote.outAmountRaw}, floor ${quote.worstCaseOutRaw}")
+                return fail(leg, funds, input, SwapFailure.QUOTE_DUST, quote, requote, timing)
             }
 
             // ---- The SOL check. Here, on the quote's own three fields, before any approval.
             if (!quote.solCost.isCoveredBy(funds.lamports)) {
                 _state.value = SwapState.Shortfall(leg, funds, input, quote, timing)
                 return
+            }
+
+            // ---- The wallet this order was built for is still the one connected. A disconnect
+            // mid-flow, or a session that now answers for another account, must not be handed
+            // bytes whose taker is someone else.
+            if (wallet.account.value?.address != funds.owner) {
+                return fail(leg, funds, input, SwapFailure.WALLET_CHANGED, quote, requote, timing)
             }
 
             // ---- AwaitingWallet: the round-trip this product rests on.
@@ -266,6 +365,12 @@ class SwapViewModel(
                 // amount step with the typed amount intact rather than to a terminal screen.
                 _state.value = SwapState.Amount(leg, funds, input, SwapNote.NOT_APPROVED)
                 return
+            }
+
+            // A signature that came back from a session now answering for another account is not
+            // this order's signature, and sending it would only fail on chain at best.
+            if (wallet.account.value?.address != funds.owner) {
+                return fail(leg, funds, input, SwapFailure.WALLET_CHANGED, quote, requote, timing)
             }
 
             if (!submitSwaps) {
@@ -303,14 +408,7 @@ class SwapViewModel(
                     requote = true
                     continue
                 }
-                // A non-2xx with no structured body is not a refusal we can read: whether the
-                // transaction was forwarded is unknown, so the sentence must not claim either way.
-                val reason = when {
-                    refusal.requotable -> SwapFailure.QUOTE_GONE
-                    refusal is SwapError.Http -> SwapFailure.SUBMIT_UNAVAILABLE
-                    else -> SwapFailure.SWAP_REFUSED
-                }
-                return fail(leg, funds, input, reason, quote, requote, timing)
+                return fail(leg, funds, input, executeFailure(refusal), quote, requote, timing)
             }
 
             val answer = result
@@ -338,7 +436,35 @@ class SwapViewModel(
             val receipt = receiptOf(leg, quote, fill, clock.nowMillis())
             withContext(ioDispatcher) { receipts.record(receipt) }
             _state.value = SwapState.Landed(leg, quote, fill, requote, timing)
+            // What Detail offers next depends on the balance this swap just changed, so it is
+            // read again, no older than the slot the swap landed in.
+            watched?.takeIf { it.mint == leg.token.mint }?.let { token ->
+                viewModelScope.launch { readHolding(funds.owner, token, fill.slot) }
+            }
             return
+        }
+    }
+
+    /**
+     * Which failure a structured /execute refusal is, once the one automatic requote is spent.
+     *
+     * The codes are Jupiter Ultra's own. What matters is the claim each lets the sheet make about
+     * the money: a refusal Jupiter reports as final may say nothing was swapped; one that means
+     * Jupiter itself does not know (-1001 and -2001 unknown, -1006 timed out) may not, so it is
+     * [SwapFailure.SUBMIT_UNAVAILABLE], which offers Portfolio and never a second attempt. The
+     * words are matched as well as the codes because an Ultra refusal's `code` is not always set.
+     */
+    private fun executeFailure(refusal: SwapError): SwapFailure {
+        val detail = refusal.detail.orEmpty()
+        return when {
+            refusal.requotable -> SwapFailure.QUOTE_GONE
+            // A non-2xx with no structured body is not a refusal we can read: whether the
+            // transaction was forwarded is unknown, so the sentence must not claim either way.
+            refusal is SwapError.Http -> SwapFailure.SUBMIT_UNAVAILABLE
+            refusal.code in UNKNOWN_OUTCOME_CODES -> SwapFailure.SUBMIT_UNAVAILABLE
+            refusal.code == CODE_SLIPPAGE || detail.contains("slippage", ignoreCase = true) -> SwapFailure.SLIPPAGE
+            refusal.code in EXPIRED_CODES -> SwapFailure.QUOTE_EXPIRED
+            else -> SwapFailure.SWAP_REFUSED
         }
     }
 
@@ -349,32 +475,95 @@ class SwapViewModel(
         return SwapState.Amount(
             leg = leg,
             funds = funds,
-            input = if (text.isEmpty()) AmountInput.EMPTY else SwapAmount.parse(text, leg.input.decimals, funds.balanceOf(leg.input)),
+            input = if (text.isEmpty()) {
+                AmountInput.EMPTY
+            } else {
+                SwapAmount.parse(text, leg.input.decimals, funds.balanceOf(leg.input), leg.input.multiplier ?: BigDecimal.ONE)
+            },
         )
     }
 
     private fun validate(amount: SwapState.Amount, text: String): AmountInput =
-        SwapAmount.parse(text, amount.leg.input.decimals, amount.balanceRaw)
+        SwapAmount.parse(
+            text,
+            amount.leg.input.decimals,
+            amount.balanceRaw,
+            amount.leg.input.multiplier ?: BigDecimal.ONE,
+        )
 
     /**
      * Lamports and both balances in two reads. A wallet with no account for a mint has a balance
      * of zero rather than an unknown one: the forwarder returns only non-empty accounts, and a
-     * mint with no account is a mint this wallet has none of.
+     * mint with no account is a mint this wallet has none of. A frozen account is listed but not
+     * counted, because nothing in it can be spent, and its mint is named so the sheet can say so.
+     *
+     * [minContextSlot] is asked for twice before giving up on it: a node a slot or two behind the
+     * one Jupiter confirmed in answers "minimum context slot not reached" for a moment, and the
+     * read that follows a landing is exactly when that happens. After that the plain read stands,
+     * because a balance up to a minute old is still a balance, and no balance is a failure.
      */
-    private suspend fun readFunds(owner: String, token: SwapToken): SwapFunds? {
-        val lamports = runCatching { rpc.lamports(owner) }
-        val balances = runCatching { rpc.tokenBalances(owner) }
-        if (lamports.isFailure || balances.isFailure) {
-            debugLog.raw("balances: ${(lamports.exceptionOrNull() ?: balances.exceptionOrNull())?.message}")
-            return null
+    private suspend fun readFunds(owner: String, token: SwapToken, minContextSlot: Long? = null): SwapFunds? {
+        val slots = if (minContextSlot == null) listOf(null) else listOf(minContextSlot, minContextSlot, null)
+        var failure: Throwable? = null
+        for ((attemptIndex, slot) in slots.withIndex()) {
+            if (attemptIndex > 0) delay(FRESH_READ_RETRY_MS)
+            val lamports = runCatching { rpc.lamports(owner, slot) }
+            val balances = runCatching { rpc.tokenBalances(owner, slot) }
+            if (lamports.isFailure || balances.isFailure) {
+                failure = lamports.exceptionOrNull() ?: balances.exceptionOrNull()
+                continue
+            }
+            return fundsOf(owner, token, lamports.getOrThrow(), balances.getOrThrow())
         }
-        val accounts = balances.getOrThrow()
+        debugLog.raw("balances: ${failure?.message}")
+        return null
+    }
+
+    private fun fundsOf(owner: String, token: SwapToken, lamports: Long, accounts: List<TokenBalance>): SwapFunds {
+        fun spendable(mint: String) = accounts.filter { it.mint == mint && !it.frozen }.sumOf { it.amountRaw }
+        val usdcRaw = spendable(KnownMints.USDC)
+        val tokenRaw = spendable(token.mint)
+        val frozen = accounts.filter { it.frozen && it.amountRaw > 0L }.map { it.mint }.toSet()
         return SwapFunds(
             owner = owner,
-            lamports = lamports.getOrThrow(),
-            usdcRaw = accounts.filter { it.mint == KnownMints.USDC }.sumOf { it.amountRaw },
-            tokenRaw = accounts.filter { it.mint == token.mint }.sumOf { it.amountRaw },
+            lamports = lamports,
+            usdcRaw = usdcRaw,
+            tokenRaw = tokenRaw,
+            // Named only where the frozen account is the whole story: a spendable balance beside
+            // a frozen one is simply the spendable balance.
+            frozenMints = buildSet {
+                if (KnownMints.USDC in frozen && usdcRaw == 0L) add(KnownMints.USDC)
+                if (token.mint in frozen && tokenRaw == 0L) add(token.mint)
+            },
         )
+    }
+
+    /** The holding [watchHolding] reports, from one balance read; a failed read keeps the last one. */
+    private suspend fun readHolding(owner: String, token: SwapToken, minContextSlot: Long?) {
+        val accounts = runCatching { rpc.tokenBalances(owner, minContextSlot) }.getOrNull()
+            ?: runCatching { rpc.tokenBalances(owner, null) }.getOrNull()
+            ?: return
+        if (watched != token) return
+        _holding.value = SwapHolding(
+            token = token,
+            raw = accounts.filter { it.mint == token.mint && !it.frozen }.sumOf { it.amountRaw },
+        )
+    }
+
+    /**
+     * [token] with its multiplier known, or null when it cannot be. A token that already carries
+     * one (the screen that opened the sheet read the mint) is taken as it is; otherwise the mint
+     * is read here, and the multiplier in force at that read is the one used. A mint with no
+     * scaled amount extension is a multiplier of one, read off the chain. A mint that cannot be
+     * read leaves it unknown, and the sheet stops rather than guessing at a split.
+     */
+    private suspend fun resolveScale(token: SwapToken): SwapToken? {
+        if (token.scaleKnown) return token
+        val reading = runCatching { mints?.mint(token.mint) }.getOrNull() ?: return null
+        val facts = reading.facts ?: return null
+        val multiplier = facts.scaledUiAmount?.let { SplitMultiplier.ofMint(it).effectiveAt(reading.readAtMillis) }
+            ?: SplitMultiplier.NONE
+        return token.copy(decimals = facts.decimals, multiplier = BigDecimal.valueOf(multiplier))
     }
 
     private fun receiptOf(leg: SwapLeg, quote: SwapQuote, fill: SwapFill, nowMillis: Long): SwapReceipt =
@@ -392,6 +581,8 @@ class SwapViewModel(
             route = quote.route,
             landedAtMillis = nowMillis,
             slot = fill.slot,
+            inputMultiplier = (leg.input.multiplier ?: BigDecimal.ONE).toDouble(),
+            outputMultiplier = (leg.output.multiplier ?: BigDecimal.ONE).toDouble(),
         )
 
     private fun failOpen(leg: SwapLeg, reason: SwapFailure) {
@@ -409,4 +600,27 @@ class SwapViewModel(
     ) {
         _state.value = SwapState.Failed(leg, funds, input, reason, quote, requoted, timing)
     }
+
+    private companion object {
+        /** One beat between two reads that asked for a slot the node had not reached yet. */
+        const val FRESH_READ_RETRY_MS = 1_000L
+
+        /** Jupiter's program error for a route that ended below its slippage bound. */
+        const val CODE_SLIPPAGE = 6001
+
+        /** /execute codes that mean Jupiter does not know whether it landed: unknown, timed out. */
+        val UNKNOWN_OUTCOME_CODES = setOf(-1001, -1006, -2001)
+
+        /** /execute codes that mean the order or its blockhash expired unsent or unlanded. */
+        val EXPIRED_CODES = setOf(-1, -1004, -1005)
+    }
+}
+
+/**
+ * What the connected wallet holds of one token, from the chain. [raw] counts only accounts that
+ * can spend: a frozen one is excluded, the same way [SwapFunds] excludes it.
+ */
+data class SwapHolding(val token: SwapToken, val raw: Long) {
+    /** True when there is something to swap back to USDC. */
+    val canSwapOut: Boolean get() = raw > 0L
 }

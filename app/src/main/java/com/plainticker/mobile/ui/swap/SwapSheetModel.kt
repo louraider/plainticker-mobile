@@ -111,7 +111,37 @@ data class SheetReceipt(
 )
 
 /** What a button does. The sheet maps each to one [SwapViewModel] method and decides nothing. */
-enum class SheetActionKind { Submit, Edit, Close, ViewPortfolio }
+enum class SheetActionKind { Submit, Edit, Close, ViewPortfolio, Retry, SwapBack }
+
+/** Which of the three results a finished attempt is. Each has its own mark, colour and words. */
+enum class ResultTone {
+    /** It landed. The amber ring closes around the figure that arrived. */
+    Landed,
+
+    /** It did not, and what that means for the money is certain. The caution colour. */
+    Failed,
+
+    /** It was signed and handed on and nobody has said whether it landed. Amber, open. */
+    Pending,
+}
+
+/**
+ * The result an attempt ended in, drawn as its own moment at the top of the sheet rather than
+ * as one more line in it (2026-09-24: the founder's first real receipt read "Landed / confirmed in
+ * 0.5 s" in a small amber line, and whether the swap had worked was not clear).
+ *
+ * [headline] is the plain answer in the largest words on the sheet. [figure] is the hero number,
+ * only for a landing, and only the executed fill. [detail] says the one thing a person needs next:
+ * what arrived and how fast, or why it failed. [announcement] is what TalkBack reads once, as a
+ * polite live region, when the result appears: headline and detail together, no seconds ticking.
+ */
+data class SheetResult(
+    val tone: ResultTone,
+    val headline: Copy,
+    val figure: Copy? = null,
+    val detail: Copy?,
+    val announcement: List<Copy>,
+)
 
 /** One button. */
 data class SheetAction(val label: Copy, val kind: SheetActionKind, val enabled: Boolean = true)
@@ -147,9 +177,19 @@ data class SheetContent(
     val primary: SheetAction?,
     val secondary: SheetAction?,
     val footnote: Copy?,
+    /** The finished attempt's own moment: landed, failed or not yet known. Null while it runs. */
+    val result: SheetResult? = null,
+    /**
+     * A second action in the secondary style, under [secondary]: "Swap back" on a fresh receipt.
+     * Never a second primary: a sheet asks for one decision at a time.
+     */
+    val extra: SheetAction? = null,
 ) {
     /** The receipt replaces the sheet's own anatomy rather than being appended to it. */
     val isReceipt: Boolean get() = receipt != null
+
+    /** True when the sheet leads with a result instead of the pair it is about. */
+    val leadsWithResult: Boolean get() = result != null
 }
 
 /**
@@ -175,6 +215,8 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         primary: SheetAction? = null,
         secondary: SheetAction? = null,
         footnote: Copy? = null,
+        result: SheetResult? = null,
+        extra: SheetAction? = null,
     ) = SheetContent(
         title = title,
         flip = flip,
@@ -188,6 +230,8 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         primary = primary,
         secondary = secondary,
         footnote = footnote,
+        result = result,
+        extra = extra,
     )
 
     return when (this) {
@@ -203,11 +247,8 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
                 label = words(R.string.swap_amount_label, leg.input.symbol),
                 value = input.text,
                 action = words(R.string.action_max),
-                balance = words(
-                    R.string.swap_balance,
-                    Fmt.tokenAmount(balanceRaw, leg.input.decimals),
-                    leg.input.symbol,
-                ),
+                // What the wallet shows: raw scaled by the token's multiplier, never raw alone.
+                balance = words(R.string.swap_balance, leg.input.shown(balanceRaw), leg.input.symbol),
             ),
             costNotice = CostNotice.AtTap,
             notice = amountNotice(),
@@ -253,10 +294,12 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             secondary = close,
         )
 
-        // No action at all: POST /execute is in flight and there is nothing to take back.
+        // No action at all: POST /execute is in flight and there is nothing to take back. The
+        // notice says what is true right now, signed and sent, and claims nothing about landing.
         is SwapState.Landing -> base(
             phase = running(R.string.swap_landing, R.string.swap_a11y_landing, timing, nowMillis),
             cells = costCells(leg, quote),
+            notice = words(R.string.swap_landing_note),
         )
 
         // The debug terminal. Signed, nothing sent, no signature to show and no fill to claim.
@@ -271,37 +314,105 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             secondary = close,
         )
 
-        is SwapState.Landed -> base(
-            phase = SheetPhase(
+        is SwapState.Landed -> {
+            val phase = SheetPhase(
                 label = words(R.string.receipt_landed),
                 meta = timing.landingMillis?.let { words(R.string.receipt_confirmed_in, Fmt.secondsExact(it)) },
                 // DESIGN.md section 6: the receipt's bar is static. Nothing here is still live.
                 live = false,
                 announcement = words(R.string.receipt_landed),
-            ),
-            cells = receiptCells(),
-            receipt = SheetReceipt(
-                label = words(R.string.receipt_received),
-                // An answer that reported no fill leaves this unknown. The estimate standing in
-                // for it would put a quantity nobody received under the word "You received".
-                amount = fill.outAmountRaw
-                    ?.let { raw(Fmt.tokenAmount(it, leg.output.decimals)) }
-                    ?: words(R.string.value_missing),
-                symbol = leg.output.symbol,
-                signature = fill.signature,
-            ),
-            secondary = SheetAction(words(R.string.receipt_view_portfolio), SheetActionKind.ViewPortfolio),
-        )
+            )
+            // An answer that reported no fill leaves this unknown. The estimate standing in for
+            // it would put a quantity nobody received under the word "You received".
+            val amount = fill.outAmountRaw?.let { raw(leg.output.shown(it)) } ?: words(R.string.value_missing)
+            base(
+                phase = phase,
+                cells = receiptCells(),
+                receipt = SheetReceipt(
+                    label = words(R.string.receipt_received),
+                    amount = amount,
+                    symbol = leg.output.symbol,
+                    signature = fill.signature,
+                ),
+                secondary = SheetAction(words(R.string.receipt_view_portfolio), SheetActionKind.ViewPortfolio),
+                result = landedResult(amount),
+                // The other direction, straight from the receipt: the token that just arrived,
+                // back the way it came. Worded as a direction and never as a trading verb.
+                extra = SheetAction(
+                    words(R.string.receipt_swap_back, leg.input.symbol),
+                    SheetActionKind.SwapBack,
+                ),
+            )
+        }
 
         is SwapState.Failed -> base(
             cells = quote?.let { costCells(leg, it) }.orEmpty(),
             notice = words(reason.text),
-            // Nothing to go back to when the failure happened before the wallet was read.
-            primary = if (funds == null) null else SheetAction(words(R.string.swap_back_to_amount), SheetActionKind.Edit),
+            primary = failurePrimary(),
             secondary = close,
+            result = failedResult(),
         )
     }
 }
+
+/**
+ * The one forward action a failure offers. Nothing to go back to when the failure happened
+ * before the wallet was read, and never a second attempt when the first one may have landed:
+ * [SwapFailure.SUBMIT_UNAVAILABLE] offers Portfolio, where the answer will be.
+ */
+private fun SwapState.Failed.failurePrimary(): SheetAction? {
+    if (funds == null) return null
+    return when (reason.next) {
+        FailureNext.NONE -> null
+        FailureNext.EDIT -> SheetAction(words(R.string.swap_back_to_amount), SheetActionKind.Edit)
+        FailureNext.RETRY ->
+            if (input?.isUsable == true) SheetAction(words(R.string.swap_try_again), SheetActionKind.Retry)
+            else SheetAction(words(R.string.swap_back_to_amount), SheetActionKind.Edit)
+        FailureNext.NEW_QUOTE ->
+            if (input?.isUsable == true) SheetAction(words(R.string.swap_new_quote), SheetActionKind.Retry)
+            else SheetAction(words(R.string.swap_back_to_amount), SheetActionKind.Edit)
+        FailureNext.PORTFOLIO -> SheetAction(words(R.string.receipt_view_portfolio), SheetActionKind.ViewPortfolio)
+    }
+}
+
+/** The landing, as its own moment: "Swap landed", the fill as the hero, what arrived and how fast. */
+private fun SwapState.Landed.landedResult(amount: Copy): SheetResult {
+    val headline = words(R.string.result_landed)
+    val detail = timing.landingMillis
+        ?.let { words(R.string.result_received_in, leg.output.symbol, Fmt.secondsExact(it)) }
+        ?: words(R.string.result_received, leg.output.symbol)
+    val spoken = fill.outAmountRaw
+        ?.let { words(R.string.result_landed_a11y, leg.output.shown(it), leg.output.symbol) }
+        ?: words(R.string.result_landed_unreported_a11y, leg.output.symbol)
+    return SheetResult(
+        tone = ResultTone.Landed,
+        headline = headline,
+        figure = amount,
+        detail = detail,
+        announcement = listOf(headline, spoken),
+    )
+}
+
+/**
+ * A failure, as its own moment. The headline says what is certain about the money, picked by the
+ * failure's [FailureOutcome]; the detail is the failure's own one-line reason. Not knowing is its
+ * own tone, not a failure: [ResultTone.Pending].
+ */
+private fun SwapState.Failed.failedResult(): SheetResult {
+    val (tone, headline) = when (reason.outcome) {
+        FailureOutcome.NOTHING_SENT -> ResultTone.Failed to words(R.string.result_nothing_swapped)
+        FailureOutcome.NOT_LANDED -> ResultTone.Failed to words(R.string.result_not_landed)
+        FailureOutcome.UNKNOWN -> ResultTone.Pending to words(R.string.result_pending)
+    }
+    val detail = words(reason.text)
+    return SheetResult(tone = tone, headline = headline, detail = detail, announcement = listOf(headline, detail))
+}
+
+/**
+ * A quantity of this token as its wallet shows it: raw scaled by the token's multiplier. The
+ * missing value, never a guess, while the multiplier is unknown ([SwapToken.ui]).
+ */
+internal fun SwapToken.shown(raw: Long): String = ui(raw)?.let { Fmt.tokenAmount(it) } ?: Fmt.MISSING
 
 /** True while something on the sheet is counting: a phase in flight, or a quote with an expiry. */
 val SwapState.needsAClock: Boolean
@@ -334,7 +445,11 @@ private fun running(
  * through "more than the USDC in this wallet", which reads as a typo and not as an empty wallet.
  */
 private fun SwapState.Amount.amountNotice(): Copy? = when {
+    // A frozen account first: "no TSLAx" would be false, the wallet has it and cannot move it.
+    spendFrozen -> words(R.string.swap_account_frozen, leg.input.symbol)
     leg.intoToken && balanceRaw == 0L -> words(R.string.swap_no_usdc)
+    // The exit from a holding with nothing in it: said plainly, before any amount is typed.
+    !leg.intoToken && balanceRaw == 0L -> words(R.string.swap_no_balance, leg.input.symbol)
     note != null -> words(note.text)
     else -> input.problem?.let { problem ->
         when (problem) {
@@ -342,6 +457,7 @@ private fun SwapState.Amount.amountNotice(): Copy? = when {
             AmountProblem.NOT_A_NUMBER -> words(R.string.swap_amount_not_a_number)
             AmountProblem.NOT_ABOVE_ZERO -> words(R.string.swap_amount_not_above_zero)
             AmountProblem.ABOVE_BALANCE -> words(R.string.swap_amount_above_balance, leg.input.symbol)
+            AmountProblem.BELOW_ONE_UNIT -> words(R.string.swap_amount_below_unit, leg.input.symbol)
             // The one amount problem that counts out loud, so the one that has to agree with it.
             AmountProblem.TOO_PRECISE -> counted(
                 R.plurals.swap_amount_too_precise,
@@ -368,14 +484,14 @@ private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
         label = words(R.string.swap_you_receive),
         value = words(
             R.string.swap_amount_symbol,
-            Fmt.tokenAmount(quote.outAmountRaw, leg.output.decimals),
+            leg.output.shown(quote.outAmountRaw),
             leg.output.symbol,
         ),
         // otherAmountThreshold: the least this swap may deliver before it reverts, stated beside
         // the estimate rather than hidden behind a slippage control the sheet does not have.
         sub = words(
             R.string.swap_worst_case,
-            Fmt.tokenAmount(quote.worstCaseOutRaw, leg.output.decimals),
+            leg.output.shown(quote.worstCaseOutRaw),
             leg.output.symbol,
         ),
         span = 2,
@@ -424,7 +540,7 @@ private fun SwapState.Landed.receiptCells(): List<SheetCell> = listOf(
         label = words(R.string.receipt_paid),
         value = words(
             R.string.swap_amount_symbol,
-            Fmt.tokenAmount(fill.inAmountRaw, leg.input.decimals),
+            leg.input.shown(fill.inAmountRaw),
             leg.input.symbol,
         ),
     ),

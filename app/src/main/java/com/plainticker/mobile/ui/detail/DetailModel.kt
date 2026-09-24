@@ -3,6 +3,11 @@ package com.plainticker.mobile.ui.detail
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.MultiplierSource
+import com.plainticker.mobile.data.SplitMultiplier
+import com.plainticker.mobile.data.rpc.MintFacts
+import com.plainticker.mobile.ui.swap.SwapHolding
+import com.plainticker.mobile.ui.swap.SwapToken
+import java.math.BigDecimal
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.Axes
 import com.plainticker.mobile.data.plainticker.Axis
@@ -678,6 +683,35 @@ fun DetailUiState.costLine(allInCostPct: Double?): Copy? {
         pool != null -> words(R.string.detail_liquidity_line, pool)
         else -> null
     }
+}
+
+/**
+ * The token this screen swaps, carrying the scaled UI multiplier Detail's own chain read found in
+ * force. When the chain was not read the multiplier is null, and the swap machine reads the mint
+ * itself before it states any quantity: a split read as unsplit is a balance ten times off.
+ */
+fun DetailUiState.swapToken(): SwapToken? {
+    val mint = mint ?: return null
+    val read = chain.valueOrNull
+    val multiplier = read?.let { r ->
+        BigDecimal.valueOf(r.facts.scaledUiAmount?.let(SplitMultiplier::ofMint)?.effectiveAt(r.readAtMillis) ?: SplitMultiplier.NONE)
+    }
+    return SwapToken(
+        mint = mint,
+        symbol = symbol ?: ticker,
+        decimals = read?.facts?.decimals ?: MintFacts.XSTOCK_DECIMALS,
+        multiplier = multiplier,
+    )
+}
+
+/**
+ * "Swap TSLAx to USDC", the exit from a holding, offered only when the connected wallet's own
+ * chain read found some of this token. Never from the app's receipts: a record of what this app
+ * once swapped is not a balance anyone can spend.
+ */
+fun DetailUiState.swapOutLabel(holding: SwapHolding?): Copy? {
+    val held = holding?.takeIf { it.canSwapOut && it.token.mint == mint } ?: return null
+    return symbol?.let { words(R.string.detail_swap_out_button, it) }?.takeIf { held.raw > 0L }
 }
 
 // ---- The read and What to check next (task A6) --------------------------------------------------

@@ -7,7 +7,9 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.raw
+import com.plainticker.mobile.ui.swap.SwapToken
 import com.plainticker.mobile.ui.words
+import java.math.BigDecimal
 
 /**
  * What the Portfolio screen says, decided away from the composition (task T11, design task DT8).
@@ -84,7 +86,32 @@ data class RecordedHolding(
     val decimals: Int,
     /** When the newest swap touching this mint landed. */
     val landedAtMillis: Long,
-)
+    /**
+     * The Token-2022 scaled UI multiplier the newest receipt naming this mint was drawn with when
+     * it landed. A scale factor, not a price: what the stored figure meant on that day.
+     */
+    val recordedMultiplier: Double = 1.0,
+    /**
+     * The multiplier in force now, read off the mint, or null while it has not been read (a cold
+     * open offline, a mint that did not answer). Also a scale factor, not a price. With it, this
+     * row reads the same quantity the wallet, the chain-read holding and "Swap to USDC" read.
+     */
+    val multiplier: Double? = null,
+) {
+    /**
+     * The quantity to draw: raw / 10^decimals x the multiplier in force now, the one rule every
+     * xStock quantity in the app follows. Without a current multiplier it is the stored figure,
+     * scaled as it was when the swap landed, and [scaleRead] is false so the row says so.
+     */
+    val quantity: java.math.BigDecimal
+        get() = BigDecimal.valueOf(amountRaw).movePointLeft(decimals)
+            .multiply(BigDecimal.valueOf(usable(multiplier ?: recordedMultiplier)))
+
+    /** True when [quantity] uses the multiplier in force now, false for the stored figure. */
+    val scaleRead: Boolean get() = multiplier != null
+}
+
+private fun usable(multiplier: Double): Double = if (multiplier.isFinite() && multiplier > 0.0) multiplier else 1.0
 
 /** One recorded holding in the parts a 64dp row draws. */
 data class RecordedRow(
@@ -171,16 +198,18 @@ private fun trackingCopy(quality: TrackingQuality?): Copy? = when (quality) {
  */
 fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
     signature = receipt.signature,
+    // What the wallet showed on each side: raw scaled by the multiplier recorded at the landing,
+    // so a split xStock reads as its wallet reads, not ten times smaller.
     paid = words(
         R.string.portfolio_row_quantity,
-        Fmt.tokenAmount(receipt.inputAmountRaw, receipt.inputDecimals),
+        Fmt.tokenAmount(receipt.inputUi()),
         receipt.inputSymbol,
     ),
-    received = receipt.outputAmountRaw
+    received = receipt.outputUi()
         ?.let {
             words(
                 R.string.portfolio_swap_row_received,
-                Fmt.tokenAmount(it, receipt.outputDecimals),
+                Fmt.tokenAmount(it),
                 receipt.outputSymbol,
             )
         }
@@ -210,22 +239,24 @@ fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
  */
 fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
     val net = LinkedHashMap<String, RecordedHolding>(receipts.size)
-    fun fold(mint: String, symbol: String, decimals: Int, delta: Long, landedAtMillis: Long) {
+    fun fold(mint: String, symbol: String, decimals: Int, delta: Long, landedAtMillis: Long, multiplier: Double) {
         val seen = net[mint]
         net[mint] = seen?.copy(
             amountRaw = seen.amountRaw + delta,
             landedAtMillis = maxOf(seen.landedAtMillis, landedAtMillis),
+            recordedMultiplier = if (landedAtMillis >= seen.landedAtMillis) multiplier else seen.recordedMultiplier,
         ) ?: RecordedHolding(
             mint = mint,
             symbol = symbol,
             amountRaw = delta,
             decimals = decimals,
             landedAtMillis = landedAtMillis,
+            recordedMultiplier = multiplier,
         )
     }
     for (receipt in receipts) {
         receipt.outputAmountRaw?.let {
-            fold(receipt.outputMint, receipt.outputSymbol, receipt.outputDecimals, it, receipt.landedAtMillis)
+            fold(receipt.outputMint, receipt.outputSymbol, receipt.outputDecimals, it, receipt.landedAtMillis, receipt.outputMultiplier)
         }
         fold(
             receipt.inputMint,
@@ -233,6 +264,7 @@ fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
             receipt.inputDecimals,
             -receipt.inputAmountRaw,
             receipt.landedAtMillis,
+            receipt.inputMultiplier,
         )
     }
     return net.values.filter { it.amountRaw > 0L }.sortedBy { it.symbol }
@@ -247,9 +279,33 @@ fun recordedRow(holding: RecordedHolding): RecordedRow = RecordedRow(
     ticker = holding.ticker,
     symbol = holding.symbol,
     company = holding.company,
-    quantity = Fmt.tokenAmount(holding.amountRaw, holding.decimals),
-    meta = words(R.string.portfolio_recorded_meta, Fmt.utc(holding.landedAtMillis)),
+    quantity = Fmt.tokenAmount(holding.quantity),
+    // Never a silently different number: a figure not scaled by today's multiplier says so.
+    meta = if (holding.scaleRead) {
+        words(R.string.portfolio_recorded_meta, Fmt.utc(holding.landedAtMillis))
+    } else {
+        words(R.string.portfolio_recorded_meta_unscaled, Fmt.utc(holding.landedAtMillis))
+    },
 )
+
+/**
+ * The token a holding row's "Swap to USDC" opens the sheet for, or null when the row must not
+ * offer it. Offered only for a position the chain read in this session found with a balance and a
+ * readable mint: the mint gives the decimals and the multiplier the sheet states quantities in, and
+ * a position with neither has no quantity to swap. The app's own record never offers it, because
+ * it was not read from any wallet.
+ */
+fun swapOutToken(position: PortfolioPosition, state: PortfolioUiState): SwapToken? {
+    if (!state.connected || position.amountRaw <= 0L) return null
+    val decimals = position.decimals ?: return null
+    val multiplier = position.multiplier ?: return null
+    return SwapToken(
+        mint = position.mint,
+        symbol = position.symbol,
+        decimals = decimals,
+        multiplier = BigDecimal.valueOf(multiplier),
+    )
+}
 
 /** What the one banner slot says. The order of the tiers is [PortfolioUiState.banner]'s. */
 fun bannerText(banner: PortfolioBanner): Copy = when (banner) {

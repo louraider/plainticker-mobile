@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.jupiter.SwapOrder
+import java.math.BigDecimal
 import java.math.BigInteger
 import java.util.Locale
 
@@ -101,7 +102,14 @@ sealed interface SwapState {
         /** The flip is offered only when the wallet actually has the token to send back. */
         val canFlip: Boolean get() = funds.tokenRaw > 0L
 
-        val canSubmit: Boolean get() = input.isUsable
+        /**
+         * True when the side being spent sits in a token account its issuer has frozen. A frozen
+         * balance is not spendable, so [balanceRaw] already reads zero, and the sheet says why
+         * rather than calling the wallet empty.
+         */
+        val spendFrozen: Boolean get() = leg.input.mint in funds.frozenMints
+
+        val canSubmit: Boolean get() = input.isUsable && !spendFrozen
     }
 
     /** GET /order, at the tap and never for a preview. [requote] is the one automatic retry. */
@@ -206,12 +214,36 @@ val SwapState.quoteOrNull: SwapQuote?
 
 // ---- The pair ----------------------------------------------------------------------------------
 
-/** One side of a swap: what the chain calls it, what a person calls it, and its base units. */
+/**
+ * One side of a swap: what the chain calls it, what a person calls it, its base units, and the
+ * Token-2022 scaled UI amount multiplier that turns those base units into what a wallet shows.
+ *
+ * **Raw and UI are different numbers for an xStock.** Every amount on the wire (Jupiter's
+ * `amount`, `inAmount`, `outAmount`, the route instruction's u64, a token account's `amount`) is
+ * the raw u64. What a wallet displays is raw / 10^decimals x the mint's `scaledUiAmountConfig`
+ * multiplier in force now ([com.plainticker.mobile.data.SplitMultiplier.effectiveAt]). NFLXx,
+ * read 2026-09-24: stored multiplier 1, a scheduled 10 effective since 2025-11-16, and the node
+ * answering `uiAmountString` 27255.7048309 for raw 272557048309, which is raw / 10^8 x 10. So this
+ * app sends raw and draws [ui], and the two conversions live here and in [SwapAmount] only.
+ */
 data class SwapToken(
     val mint: String,
     val symbol: String,
     val decimals: Int,
-)
+    /**
+     * The scaled UI multiplier in force. One for USDC and for any mint without the extension,
+     * which is a fact read off the chain, not a guess. Null while it is not known: [SwapViewModel]
+     * reads the mint before the sheet states any quantity of this token, and [ui] refuses to guess.
+     */
+    val multiplier: BigDecimal? = BigDecimal.ONE,
+) {
+    /** What a wallet shows for [raw] base units, or null while the multiplier is unknown. */
+    fun ui(raw: Long): BigDecimal? =
+        multiplier?.let { BigDecimal.valueOf(raw).movePointLeft(decimals).multiply(it) }
+
+    /** True once the multiplier is known, so every quantity of this token can be stated. */
+    val scaleKnown: Boolean get() = multiplier != null
+}
 
 /**
  * The direction. Flipping is the same machine with the two sides exchanged, which is why this is
@@ -227,10 +259,17 @@ data class SwapLeg(val input: SwapToken, val output: SwapToken) {
 
     fun flipped(): SwapLeg = SwapLeg(output, input)
 
+    /** The same pair with the xStock side replaced, for a multiplier read after the leg was built. */
+    fun withToken(replacement: SwapToken): SwapLeg =
+        if (intoToken) copy(output = replacement) else copy(input = replacement)
+
     companion object {
         val USDC = SwapToken(KnownMints.USDC, "USDC", 6)
 
         fun into(token: SwapToken): SwapLeg = SwapLeg(USDC, token)
+
+        /** The xStock back to USDC: the exit from a holding, "Swap to USDC". */
+        fun outOf(token: SwapToken): SwapLeg = SwapLeg(token, USDC)
     }
 }
 
@@ -239,8 +278,13 @@ data class SwapFunds(
     val owner: String,
     val lamports: Long,
     val usdcRaw: Long,
-    /** The xStock balance in its own base units. Zero when the wallet has no account for it. */
+    /**
+     * The xStock balance in its own base units. Zero when the wallet has no account for it, and
+     * zero for an account its issuer has frozen: a frozen balance cannot be spent.
+     */
     val tokenRaw: Long,
+    /** Mints whose token account in this wallet is frozen, so the sheet can say why it reads zero. */
+    val frozenMints: Set<String> = emptySet(),
 ) {
     fun balanceOf(side: SwapToken): Long = if (side.mint == KnownMints.USDC) usdcRaw else tokenRaw
 }
@@ -260,6 +304,13 @@ enum class AmountProblem {
     TOO_PRECISE,
     NOT_ABOVE_ZERO,
     ABOVE_BALANCE,
+
+    /**
+     * Above zero as typed, and still less than one base unit once the token's multiplier is
+     * applied. Only a split token (a multiplier above one) can produce it: its smallest step, as
+     * a wallet shows it, is larger than 10^-decimals.
+     */
+    BELOW_ONE_UNIT,
 }
 
 /**
@@ -435,21 +486,48 @@ data class SwapFill(
  * translated, and they name internals a reader cannot act on. The raw text goes to the debug log,
  * where it is useful, and the reader gets the sentence below.
  */
-enum class SwapFailure(@StringRes val text: Int) {
+enum class SwapFailure(
+    @StringRes val text: Int,
+    /** What is certainly true about the money, which picks the result's headline and tone. */
+    val outcome: FailureOutcome,
+    /** The one way on this failure offers, beside Close. */
+    val next: FailureNext,
+) {
     /** No wallet that speaks the adapter is installed at all. */
-    NO_WALLET(R.string.swap_failed_no_wallet),
+    NO_WALLET(R.string.swap_failed_no_wallet, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
 
     /** The wallet is connected but its lamports or its balances could not be read. */
-    CHAIN_UNREAD(R.string.swap_failed_chain_unread),
+    CHAIN_UNREAD(R.string.swap_failed_chain_unread, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
 
     /** GET /order did not answer: no network, a gateway page, a timeout. */
-    QUOTE_UNAVAILABLE(R.string.swap_failed_quote_unavailable),
+    QUOTE_UNAVAILABLE(R.string.swap_failed_quote_unavailable, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 
     /** GET /order answered with a refusal: no route, an amount out of bounds, a bad mint. */
-    QUOTE_REFUSED(R.string.swap_failed_quote_refused),
+    QUOTE_REFUSED(R.string.swap_failed_quote_refused, FailureOutcome.NOTHING_SENT, FailureNext.EDIT),
 
     /** The order came back without a transaction, so there is nothing to approve. */
-    NO_TRANSACTION(R.string.swap_failed_no_transaction),
+    NO_TRANSACTION(R.string.swap_failed_no_transaction, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /**
+     * The order carried a transaction, and [com.plainticker.mobile.wallet.TransactionGuard] read
+     * it as something other than the swap on the screen: another mint, another amount, another
+     * taker, proceeds routed to an account that is not this wallet's, a program off the list. The
+     * wallet was never opened for it.
+     */
+    GUARD_REFUSED(R.string.swap_failed_guard_refused, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /**
+     * The quote answered and would deliver nothing: an estimate or a floor of zero base units.
+     * An xStock amount worth less than a millionth of a dollar rounds to no USDC at all. Refused
+     * before the wallet, because paying fees to receive nothing is not a swap.
+     */
+    QUOTE_DUST(R.string.swap_failed_dust, FailureOutcome.NOTHING_SENT, FailureNext.EDIT),
+
+    /**
+     * The wallet session went away, or now answers for another account, between reading the
+     * balance and signing. The order was built for the first account, so nothing is signed.
+     */
+    WALLET_CHANGED(R.string.swap_failed_wallet_changed, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
 
     /**
      * The authorize round-trip failed, so the wallet was never read and nothing was quoted.
@@ -457,19 +535,59 @@ enum class SwapFailure(@StringRes val text: Int) {
      * This is the connect step only. An approval that comes back without a signature is not a
      * failure at all: it is [SwapNote.NOT_APPROVED], and it goes back to the amount step.
      */
-    CONNECT_REFUSED(R.string.swap_failed_connect_refused),
+    CONNECT_REFUSED(R.string.swap_failed_connect_refused, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
 
     /**
-     * POST /execute did not answer, or answered with no structured code. The transaction was
-     * signed and may or may not have been forwarded, so the sentence claims neither.
+     * POST /execute did not answer, answered with no structured code, or answered with a code
+     * that means Jupiter itself does not know. The transaction was signed and may or may not have
+     * been forwarded, so the sentence claims neither, and the sheet offers Portfolio and never a
+     * retry: a second attempt over a first one that did land is two swaps.
      */
-    SUBMIT_UNAVAILABLE(R.string.swap_failed_submit_unavailable),
+    SUBMIT_UNAVAILABLE(R.string.swap_failed_submit_unavailable, FailureOutcome.UNKNOWN, FailureNext.PORTFOLIO),
 
     /** A requotable code came back again after the one automatic requote. */
-    QUOTE_GONE(R.string.swap_failed_quote_gone),
+    QUOTE_GONE(R.string.swap_failed_quote_gone, FailureOutcome.NOT_LANDED, FailureNext.NEW_QUOTE),
+
+    /**
+     * /execute says the price moved past the order's slippage bound, so the route reverted on
+     * chain. Nothing was swapped; a fresh quote is priced at the new level.
+     */
+    SLIPPAGE(R.string.swap_failed_slippage, FailureOutcome.NOT_LANDED, FailureNext.NEW_QUOTE),
+
+    /** /execute says the order or its blockhash expired before it landed. Nothing was swapped. */
+    QUOTE_EXPIRED(R.string.swap_failed_quote_expired, FailureOutcome.NOT_LANDED, FailureNext.NEW_QUOTE),
 
     /** Any other refusal from /execute. Nothing was swapped. */
-    SWAP_REFUSED(R.string.swap_failed_swap_refused),
+    SWAP_REFUSED(R.string.swap_failed_swap_refused, FailureOutcome.NOT_LANDED, FailureNext.RETRY),
+}
+
+/** What a failure can honestly say happened to the money. */
+enum class FailureOutcome {
+    /** Nothing was signed, or nothing signed was sent. */
+    NOTHING_SENT,
+
+    /** It was sent, and Jupiter answered that it did not land. Nothing was swapped. */
+    NOT_LANDED,
+
+    /** It was signed and handed on, and no answer says whether it landed. */
+    UNKNOWN,
+}
+
+/** The one forward action a failure offers. [NONE] leaves Close on its own. */
+enum class FailureNext {
+    NONE,
+
+    /** The same amount, a fresh quote, from the top. */
+    RETRY,
+
+    /** [RETRY], worded for a quote that went: "Get a new quote". */
+    NEW_QUOTE,
+
+    /** Back to the amount step with the typed amount intact, to change it. */
+    EDIT,
+
+    /** Portfolio, to see whether it landed. Never a retry. */
+    PORTFOLIO,
 }
 
 /** A neutral word about a round-trip that is not a failure. */

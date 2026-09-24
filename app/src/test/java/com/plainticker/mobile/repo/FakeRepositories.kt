@@ -165,11 +165,18 @@ class FakeRpcRepository(
 ) : RpcRepository {
     val balanceOwners = mutableListOf<String>()
 
-    override suspend fun lamports(owner: String): Long = lamports.getOrThrow()
+    /** The minContextSlot each balance read asked for, in order; null for a read that named none. */
+    val balanceSlots = mutableListOf<Long?>()
 
-    override suspend fun tokenBalances(owner: String): List<TokenBalance> {
+    /** Answers in order to successive [tokenBalances] calls; [balances] once it runs out. */
+    val balanceQueue = ArrayDeque<Result<List<TokenBalance>>>()
+
+    override suspend fun lamports(owner: String, minContextSlot: Long?): Long = lamports.getOrThrow()
+
+    override suspend fun tokenBalances(owner: String, minContextSlot: Long?): List<TokenBalance> {
         balanceOwners += owner
-        return balances.getOrThrow()
+        balanceSlots += minContextSlot
+        return (balanceQueue.removeFirstOrNull() ?: balances).getOrThrow()
     }
 
     override suspend fun accountInfo(pubkey: String, encoding: RpcEncoding): RpcAccount? =

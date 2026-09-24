@@ -21,6 +21,7 @@ import com.plainticker.mobile.wallet.WalletAccount
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -233,7 +234,29 @@ class PortfolioViewModel(
      */
     private var namesByMint: Map<String, XStockAsset> = emptyMap()
 
+    /**
+     * The multiplier in force now for each xStock mint this screen has read, from the chain-read
+     * positions or from a mint read for the record alone. The recorded rows scale by it, so one
+     * token reads one quantity everywhere on the screen.
+     */
+    private var scaleByMint: Map<String, Double> = emptyMap()
+
+    /**
+     * The newest slot any of this device's receipts landed in. Every balance read asks the node
+     * for at least this slot (`minContextSlot`), for two reasons that are the same reason: a node
+     * behind the swap would answer with the wallet from before it, and the forwarder's 60 s cache
+     * keys on the params, so a read that names the new slot cannot be served the cached old one.
+     */
+    private var landedSlot: Long? = null
+
+    /** False until the receipt store's first answer, which is history rather than a new landing. */
+    private var receiptsSeen = false
+
     init {
+        // Known before the first balance read starts, so the read that follows "View in
+        // Portfolio" on a fresh receipt (a new screen, a new ViewModel) already asks for the
+        // landing's slot instead of a cached answer from before the swap.
+        landedSlot = receipts.receipts.value.mapNotNull { it.slot }.maxOrNull()
         viewModelScope.launch {
             wallet.account.collect { account ->
                 if (account == null) {
@@ -250,7 +273,16 @@ class PortfolioViewModel(
         viewModelScope.launch {
             receipts.receipts.collect { landed ->
                 val newestFirst = landed.sortedByDescending { it.landedAtMillis }
+                val newSlot = newestFirst.mapNotNull { it.slot }.maxOrNull()
+                val grew = newSlot != null && (landedSlot == null || newSlot > landedSlot!!)
+                val firstSight = !receiptsSeen
+                receiptsSeen = true
+                landedSlot = newSlot ?: landedSlot
                 _state.update { it.copy(receipts = newestFirst, recorded = named(newestFirst)) }
+                // A swap this app just landed changed the wallet. The positions on screen are the
+                // balance from before it, so they are read again, no older than its slot. The
+                // first collection is the record as it stood at launch, not a new landing.
+                if (grew && !firstSight) wallet.account.value?.let { start(it) }
                 // The record names itself from the catalog rather than from a chain read, because
                 // it is drawn on a screen that may never make one. The catalog is kept on disk for
                 // the day and the list screen has usually already paid for it, so this is normally
@@ -265,13 +297,23 @@ class PortfolioViewModel(
         val assets = runCatching { catalog.catalog() }.getOrNull() ?: return
         namesByMint = assets.mapNotNull { asset -> asset.solanaMint?.let { it to asset } }.toMap()
         _state.update { it.copy(recorded = named(receipts)) }
+        // The multiplier in force for each recorded xStock, read off its mint. A mint that does
+        // not answer (offline) leaves its row on the stored figure, which the row then says.
+        val unscaled = recordedHoldings(receipts).map { it.mint }.filter { it in namesByMint && it !in scaleByMint }
+        val read = unscaled.mapNotNull { mint ->
+            runCatching { mints.mint(mint) }.getOrNull()?.let { reading -> multiplierOf(reading)?.let { mint to it } }
+        }
+        if (read.isNotEmpty()) {
+            scaleByMint = scaleByMint + read
+            _state.update { it.copy(recorded = named(it.receipts)) }
+        }
     }
 
     /** The receipts folded into holdings, with whatever the catalog can currently name on them. */
     private fun named(receipts: List<SwapReceipt>): List<RecordedHolding> =
         recordedHoldings(receipts).map { holding ->
             val asset = namesByMint[holding.mint] ?: return@map holding
-            holding.copy(ticker = asset.underlyingTicker, company = asset.name)
+            holding.copy(ticker = asset.underlyingTicker, company = asset.name, multiplier = scaleByMint[holding.mint])
         }
 
     fun connect() {
@@ -317,7 +359,7 @@ class PortfolioViewModel(
             it.copy(phase = WalletPhase.CONNECTED, account = account, isLoading = true, note = null)
         }
 
-        val balances = runCatching { rpc.tokenBalances(account.address) }.getOrElse {
+        val balances = readBalances(account.address) ?: run {
             // Nothing was read, so nothing on screen may be replaced: what is drawn is the last
             // true answer and the banner says the chain is out.
             _state.update { it.copy(isLoading = false, chainUnavailable = true) }
@@ -342,6 +384,7 @@ class PortfolioViewModel(
         val owned = heldByMint(balances.filter { it.mint in byMint })
 
         val facts = readMints(owned)
+        scaleByMint = scaleByMint + facts.mapNotNull { (mint, reading) -> reading?.let { r -> multiplierOf(r)?.let { mint to it } } }
         // A wallet holding no xStock costs Jupiter nothing: there is no mint to price.
         val fetch = if (owned.isEmpty()) {
             PriceFetch.EMPTY
@@ -367,6 +410,21 @@ class PortfolioViewModel(
                 pricesPartial = fetch.priced.isNotEmpty() && missedAPrice,
             )
         }
+    }
+
+    /**
+     * The wallet's token accounts, no older than [landedSlot] when there is one. A node that has
+     * not reached that slot yet refuses the read for a moment, so it is asked once more after a
+     * beat, and then without the slot: a balance up to a minute old beats no balance.
+     */
+    private suspend fun readBalances(owner: String): List<TokenBalance>? {
+        val slot = landedSlot
+        val slots = if (slot == null) listOf(null) else listOf(slot, slot, null)
+        for ((index, asked) in slots.withIndex()) {
+            if (index > 0) delay(FRESH_READ_RETRY_MS)
+            runCatching { rpc.tokenBalances(owner, asked) }.onSuccess { return it }
+        }
+        return null
     }
 
     /**
@@ -412,6 +470,16 @@ class PortfolioViewModel(
         return out
     }
 
+    /**
+     * The multiplier in force at [reading], the same rule [position] applies: the mint's own
+     * extension, a scheduled change whose moment has passed, one for a mint without it, and null
+     * for a mint that was not read as a Token-2022 mint.
+     */
+    private fun multiplierOf(reading: MintReading): Double? {
+        val facts = reading.facts ?: return null
+        return facts.scaledUiAmount?.let(SplitMultiplier::ofMint)?.effectiveAt(reading.readAtMillis) ?: SplitMultiplier.NONE
+    }
+
     private fun position(
         balance: TokenBalance,
         asset: XStockAsset,
@@ -443,3 +511,6 @@ class PortfolioViewModel(
         )
     }
 }
+
+/** One beat between two balance reads that asked for a slot the node had not reached yet. */
+private const val FRESH_READ_RETRY_MS = 1_000L

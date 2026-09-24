@@ -45,4 +45,22 @@ data class SwapReceipt(
     val landedAtMillis: Long,
     /** The slot the execute answer reported, when it reported one. */
     val slot: Long? = null,
-)
+    /**
+     * The Token-2022 scaled UI multiplier each side was drawn with when it landed: one for USDC
+     * and for an unsplit xStock. The raw amounts above stay raw; these are what turn them into
+     * the figure a wallet shows (raw / 10^decimals x multiplier). Receipts written before this
+     * field existed read as one, which is what every xStock this app had swapped then carried.
+     */
+    val inputMultiplier: Double = 1.0,
+    val outputMultiplier: Double = 1.0,
+) {
+    /** What a wallet shows for the input side. */
+    fun inputUi(): java.math.BigDecimal = uiOf(inputAmountRaw, inputDecimals, inputMultiplier)
+
+    /** What a wallet shows for the output side, or null when the fill was not reported. */
+    fun outputUi(): java.math.BigDecimal? = outputAmountRaw?.let { uiOf(it, outputDecimals, outputMultiplier) }
+
+    private fun uiOf(raw: Long, decimals: Int, multiplier: Double): java.math.BigDecimal =
+        java.math.BigDecimal.valueOf(raw).movePointLeft(decimals)
+            .multiply(java.math.BigDecimal.valueOf(if (multiplier.isFinite() && multiplier > 0.0) multiplier else 1.0))
+}

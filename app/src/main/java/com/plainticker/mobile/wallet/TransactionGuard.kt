@@ -69,8 +69,8 @@ object TransactionGuard {
      * Anchor discriminators of the two Jupiter instructions whose layout is known from real /order
      * answers: `route_v2` (sha256("global:route_v2")[0..8]) and JupiterZ `fill`. Both carry the
      * input amount as a little-endian u64 straight after the discriminator, so the amount can be
-     * read from the bytes and not only from the JSON. Any other Jupiter instruction is still
-     * allowed; for those the JSON's own amount check is the one that applies.
+     * read from the bytes and not only from the JSON. Since 2026-09-24 they are also the only two
+     * Jupiter instructions a swap may carry ([checkSwap] explains why).
      */
     private val ROUTE_V2 = hex("bb64facc31c4af14")
     private val RFQ_FILL = hex("a860b7a35c0a28a0")
@@ -229,32 +229,55 @@ object TransactionGuard {
         }
 
     /**
-     * A Jupiter Ultra order. On a gasless order Jupiter, or the RFQ maker, is the fee payer, so the
-     * wallet must be a required signer rather than account 0. The order must be for the mints and
-     * the amount that were asked for; every top-level program must be Jupiter's own or one of the
-     * five a swap needs around it; no token authority may be handed to anyone but the wallet; and
-     * when the wallet does pay the fee, the priority fee may not exceed the one the order stated,
-     * which is the figure the SOL check before the wallet already used.
+     * A Jupiter Ultra order, in either direction: USDC into an xStock, or an xStock back to USDC.
+     * Nothing below knows or cares which way round it is; every rule is stated against the
+     * requested [inputMint] and [outputMint], so the reverse direction is held to exactly the
+     * checks the forward one is.
+     *
+     * On a gasless order Jupiter, or the RFQ maker, is the fee payer, so the wallet must be a
+     * required signer rather than account 0. The order must be for the mints and the amount that
+     * were asked for; every top-level program must be Jupiter's own or one of the five a swap
+     * needs around it; no token authority may be handed to anyone but the wallet; and when the
+     * wallet does pay the fee, the priority fee may not exceed the one the order stated, which is
+     * the figure the SOL check before the wallet already used.
+     *
+     * **The swap instruction itself, read from the bytes, not the JSON (2026-09-24).** Every real
+     * order this app has seen (three USDC-to-TSLAx, two TSLAx-to-USDC, the RFQ and the Metis
+     * shapes) carries exactly one of two Jupiter instructions, `route_v2` or JupiterZ `fill`, and
+     * in every one of them the account that is spent from is the taker's own associated token
+     * account for the input mint and the account that is paid into is the taker's own associated
+     * token account for the output mint. That is now required, not merely observed: it is what
+     * pins the direction and the mints at the byte level, where the JSON's `inputMint` could say
+     * one thing and the instruction do another, and it is what stops a route that pays the
+     * proceeds into someone else's account, which the amount check alone never could. Any other
+     * Jupiter instruction is refused, because its account layout is one this class cannot read.
+     * A refusal costs a retry; a wrong allow costs the money.
      */
-    fun checkSwap(
+    suspend fun checkSwap(
         bytes: ByteArray,
         wallet: String,
         order: SwapOrder,
         inputMint: String,
         outputMint: String,
         amount: Long,
-    ): Verdict = guardedBlocking {
-        if (order.inputMint != inputMint) return@guardedBlocking refuse("order input mint is not the requested one")
-        if (order.outputMint != outputMint) return@guardedBlocking refuse("order output mint is not the requested one")
-        if (order.inAmount.toLongOrNull() != amount) return@guardedBlocking refuse("order amount ${order.inAmount} is not the requested $amount")
-        if (order.taker != null && order.taker != wallet) return@guardedBlocking refuse("order was built for another taker")
+    ): Verdict = guarded {
+        if (order.inputMint != inputMint) return@guarded refuse("order input mint is not the requested one")
+        if (order.outputMint != outputMint) return@guarded refuse("order output mint is not the requested one")
+        if (order.inAmount.toLongOrNull() != amount) return@guarded refuse("order amount ${order.inAmount} is not the requested $amount")
+        if (order.taker != null && order.taker != wallet) return@guarded refuse("order was built for another taker")
 
-        val tx = decode(bytes) ?: return@guardedBlocking refuse("not a transaction this app can read")
+        val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read")
         val m = tx.message
         val keys = staticKeys(m)
         val signers = keys.take(m.signatureCount.toInt())
-        if (wallet !in signers) return@guardedBlocking refuse("the wallet is not a required signer")
-        requirePrograms(m, keys, SWAP_PROGRAMS)?.let { return@guardedBlocking it }
+        if (wallet !in signers) return@guarded refuse("the wallet is not a required signer")
+        requirePrograms(m, keys, SWAP_PROGRAMS)?.let { return@guarded it }
+
+        // The wallet's own accounts for each side, under either token program: USDC lives under
+        // the classic one and every xStock under Token-2022, and an account derived for this owner
+        // and this mint is this owner's account for this mint whichever program it is under.
+        val spendFrom = ownAccounts(wallet, inputMint)
+        val payInto = ownAccounts(wallet, outputMint)
 
         var jupiter = 0
         for (ix in m.instructions) {
@@ -267,57 +290,135 @@ object TransactionGuard {
                 in JUPITER_PROGRAMS -> {
                     jupiter++
                     val head = data.copyOfRange(0, minOf(8, data.size))
-                    if ((head.contentEquals(ROUTE_V2) || head.contentEquals(RFQ_FILL)) &&
-                        readU64(data, AMOUNT_OFFSET) != amount
-                    ) {
-                        return@guardedBlocking refuse("Jupiter instruction amount is not the requested $amount")
+                    val shape = when {
+                        program == KnownPrograms.JUPITER_AGGREGATOR_V6 && head.contentEquals(ROUTE_V2) -> RouteV2Accounts
+                        program == KnownPrograms.JUPITER_RFQ && head.contentEquals(RFQ_FILL) -> RfqFillAccounts
+                        else -> return@guarded refuse("Jupiter instruction ${head.toHex()} is not one whose accounts this app can read")
                     }
+                    if (readU64(data, AMOUNT_OFFSET) != amount) {
+                        return@guarded refuse("Jupiter instruction amount is not the requested $amount")
+                    }
+                    checkSwapAccounts(shape, acc, wallet, inputMint, outputMint, spendFrom, payInto)
+                        ?.let { return@guarded it }
                 }
                 KnownPrograms.TOKEN, KnownPrograms.TOKEN_2022 -> {
                     val tag = data.firstOrNull()?.toInt()?.and(0xff)
-                        ?: return@guardedBlocking refuse("token instruction without data")
+                        ?: return@guarded refuse("token instruction without data")
                     when (tag) {
                         TOKEN_APPROVE, TOKEN_APPROVE_CHECKED ->
-                            if (acc.getOrNull(1) != wallet) return@guardedBlocking refuse("swap carries an Approve to another delegate")
+                            if (acc.getOrNull(1) != wallet) return@guarded refuse("swap carries an Approve to another delegate")
                         TOKEN_SET_AUTHORITY -> {
                             val newAuthority = setAuthorityTarget(data)
-                            if (newAuthority != wallet) return@guardedBlocking refuse("swap carries a SetAuthority to another key")
+                            if (newAuthority != wallet) return@guarded refuse("swap carries a SetAuthority to another key")
                         }
                         TOKEN_CLOSE_ACCOUNT ->
-                            if (acc.getOrNull(1) != wallet) return@guardedBlocking refuse("swap closes an account into another key")
+                            if (acc.getOrNull(1) != wallet) return@guarded refuse("swap closes an account into another key")
                         TOKEN_SYNC_NATIVE -> Unit
                         TOKEN_TRANSFER, TOKEN_TRANSFER_CHECKED, TOKEN_BURN, TOKEN_BURN_CHECKED ->
-                            return@guardedBlocking refuse("swap carries a top-level token transfer or burn")
-                        else -> return@guardedBlocking refuse("swap carries token instruction $tag")
+                            return@guarded refuse("swap carries a top-level token transfer or burn")
+                        else -> return@guarded refuse("swap carries token instruction $tag")
                     }
                 }
                 KnownPrograms.ASSOCIATED_TOKEN -> {
                     val kind = data.firstOrNull()?.toInt() ?: 0
-                    if (kind != 0 && kind != 1) return@guardedBlocking refuse("swap carries an associated-token instruction that is not a create")
-                    if (acc.getOrNull(2) != wallet) return@guardedBlocking refuse("swap creates a token account for another owner")
+                    if (kind != 0 && kind != 1) return@guarded refuse("swap carries an associated-token instruction that is not a create")
+                    if (acc.getOrNull(2) != wallet) return@guarded refuse("swap creates a token account for another owner")
                 }
                 KnownPrograms.SYSTEM -> {
                     // A System instruction funded by someone else (a gasless payer) costs the
                     // wallet nothing; one funded by the wallet may move no lamports.
                     if (acc.getOrNull(0) == wallet) {
                         val lamports = systemTransferLamports(acc.map { it.orEmpty() }, data)
-                        if (lamports != 0L) return@guardedBlocking refuse("swap moves lamports out of the wallet")
+                        if (lamports != 0L) return@guarded refuse("swap moves lamports out of the wallet")
                     }
                 }
                 KnownPrograms.COMPUTE_BUDGET -> Unit
-                else -> return@guardedBlocking refuse("program $program is not allowed in a swap")
+                else -> return@guarded refuse("program $program is not allowed in a swap")
             }
         }
-        if (jupiter == 0) return@guardedBlocking refuse("swap carries no Jupiter instruction")
+        if (jupiter == 0) return@guarded refuse("swap carries no Jupiter instruction")
+        if (jupiter > 1) return@guarded refuse("swap carries $jupiter Jupiter instructions, not exactly one")
 
         if (keys.first() == wallet) {
-            val priority = priorityFeeLamports(m, keys) ?: return@guardedBlocking refuse("compute budget instruction is malformed")
+            val priority = priorityFeeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed")
             if (priority > order.prioritizationFeeLamports) {
-                return@guardedBlocking refuse("priority fee $priority exceeds the order's ${order.prioritizationFeeLamports}")
+                return@guarded refuse("priority fee $priority exceeds the order's ${order.prioritizationFeeLamports}")
             }
         }
         Verdict.Allow
     }
+
+    /**
+     * Where, in one Jupiter swap instruction's account list, the four accounts that decide whose
+     * money moves and where it lands sit. Null for a slot the instruction does not carry.
+     */
+    private class SwapAccountSlots(
+        val authority: Int,
+        val source: Int,
+        val destination: Int,
+        val inputMint: Int,
+        val outputMint: Int,
+        /** An optional second destination; when it is the program id itself, the slot is empty. */
+        val optionalDestination: Int?,
+    )
+
+    /**
+     * Jupiter v6 `route_v2`: user_transfer_authority, user_source_token_account,
+     * user_destination_token_account, source_mint, destination_mint, source_token_program,
+     * destination_token_program, destination_token_account (optional), event_authority, program.
+     * Confirmed on every Metis fixture, both directions.
+     */
+    private val RouteV2Accounts = SwapAccountSlots(
+        authority = 0, source = 1, destination = 2, inputMint = 3, outputMint = 4, optionalDestination = 7,
+    )
+
+    /**
+     * JupiterZ `fill`: taker, maker, taker_input_mint_token_account, maker_input_mint_token_account,
+     * taker_output_mint_token_account, maker_output_mint_token_account, input_mint,
+     * input_token_program, output_mint, output_token_program, ... Confirmed on the RFQ fixture.
+     */
+    private val RfqFillAccounts = SwapAccountSlots(
+        authority = 0, source = 2, destination = 4, inputMint = 6, outputMint = 8, optionalDestination = null,
+    )
+
+    /**
+     * The swap instruction's own accounts against the request. The authority, the account spent
+     * from and the account paid into must be static keys (the wallet's own accounts are never
+     * hidden in an address table in any order seen), and must be the wallet and its own accounts
+     * for the input and the output mint. A mint slot that is static must name the requested mint;
+     * one looked up from a table cannot be read offline, and the two token accounts beside it
+     * already pin the mint, because an associated token account is derived from its mint.
+     */
+    private fun checkSwapAccounts(
+        slots: SwapAccountSlots,
+        acc: List<String?>,
+        wallet: String,
+        inputMint: String,
+        outputMint: String,
+        spendFrom: Set<String>,
+        payInto: Set<String>,
+    ): Verdict? {
+        if (acc.getOrNull(slots.authority) != wallet) return refuse("the swap is not authorised by the wallet")
+        val source = acc.getOrNull(slots.source) ?: return refuse("the account spent from is not one this app can read")
+        if (source !in spendFrom) return refuse("the swap spends from an account that is not the wallet's own for the input mint")
+        val destination = acc.getOrNull(slots.destination) ?: return refuse("the account paid into is not one this app can read")
+        if (destination !in payInto) return refuse("the swap pays into an account that is not the wallet's own for the output mint")
+        acc.getOrNull(slots.inputMint)?.let { if (it != inputMint) return refuse("the swap instruction names another input mint") }
+        acc.getOrNull(slots.outputMint)?.let { if (it != outputMint) return refuse("the swap instruction names another output mint") }
+        slots.optionalDestination?.let { at ->
+            val extra = acc.getOrNull(at)
+            if (extra != KnownPrograms.JUPITER_AGGREGATOR_V6 && extra !in payInto) {
+                return refuse("the swap names a second destination that is not the wallet's own")
+            }
+        }
+        return null
+    }
+
+    /** [owner]'s associated token accounts for [mint], under the classic and the Token-2022 program. */
+    private suspend fun ownAccounts(owner: String, mint: String): Set<String> =
+        setOf(ata(owner, mint, KnownPrograms.TOKEN), ata(owner, mint, KnownPrograms.TOKEN_2022))
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     // ---- Decoding ---------------------------------------------------------------------------
 
@@ -468,13 +569,6 @@ object TransactionGuard {
     // ---- Small helpers ----------------------------------------------------------------------
 
     private fun refuse(reason: String) = Verdict.Refuse(reason)
-
-    private inline fun guardedBlocking(block: () -> Verdict): Verdict =
-        try {
-            block()
-        } catch (e: Exception) {
-            refuse("transaction could not be read: ${e::class.simpleName}")
-        }
 
     private suspend inline fun guarded(crossinline block: suspend () -> Verdict): Verdict =
         try {

@@ -247,6 +247,7 @@
     <string name="detail_method_body">We classify the company against its sector by a fixed rule. This is not a price forecast or investment advice.</string>
     <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close.</string>
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
+    <string name="detail_swap_out_button">Swap %1$s to USDC</string>
     <string name="detail_cost_line">est. all-in cost %1$s · depth %2$s</string>
     <string name="detail_liquidity_line">%1$s behind this price</string>
     <string name="detail_analysis_pending">Analysis not yet available</string>
@@ -320,6 +321,27 @@
     <string name="swap_failed_submit_unavailable">The result did not come back. Check Portfolio before trying again.</string>
     <string name="swap_failed_quote_gone">The quote went twice over. Start again from the amount.</string>
     <string name="swap_failed_swap_refused">The swap did not land. Nothing was swapped.</string>
+    <string name="swap_failed_guard_refused">The transaction did not match this swap, so it never reached the wallet</string>
+    <string name="swap_failed_dust">This amount is too small. The quote returns nothing for it.</string>
+    <string name="swap_failed_wallet_changed">The wallet disconnected or changed before signing. Nothing was signed.</string>
+    <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
+    <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
+    <string name="swap_try_again">Try again</string>
+    <string name="swap_new_quote">Get a new quote</string>
+    <string name="swap_landing_note">Signed and sent. Waiting for the network to confirm it.</string>
+    <string name="swap_no_balance">No %1$s in this wallet</string>
+    <string name="swap_account_frozen">The %1$s account in this wallet is frozen by its issuer, so it cannot be swapped</string>
+    <string name="swap_amount_below_unit">Smaller than the least %1$s that can be sent</string>
+
+    <!-- Result: the finished attempt's own moment, above everything else on the sheet -->
+    <string name="result_landed">Swap landed</string>
+    <string name="result_received">%1$s received</string>
+    <string name="result_received_in">%1$s received, confirmed in %2$s</string>
+    <string name="result_landed_a11y">Received %1$s %2$s</string>
+    <string name="result_landed_unreported_a11y">The amount of %1$s received was not reported</string>
+    <string name="result_nothing_swapped">Nothing was swapped</string>
+    <string name="result_not_landed">The swap did not land</string>
+    <string name="result_pending">Sent, not confirmed yet</string>
 
     <!-- Receipt -->
     <string name="receipt_landed">Landed</string>
@@ -333,6 +355,7 @@
     <string name="receipt_copy_signature">Copy the signature</string>
     <string name="receipt_slot">Slot</string>
     <string name="receipt_view_portfolio">View in Portfolio</string>
+    <string name="receipt_swap_back">Swap back to %1$s</string>
 
     <!-- Portfolio -->
     <string name="portfolio_heading_holdings">Holdings</string>
@@ -362,6 +385,9 @@
     <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
     <string name="portfolio_recorded_lede">What this app recorded when its own swaps landed. The wallet itself has not been read.</string>
     <string name="portfolio_recorded_meta">Swapped %1$s</string>
+    <string name="portfolio_recorded_meta_unscaled">Swapped %1$s · as recorded, current split not read</string>
+    <string name="portfolio_swap_to_usdc">Swap to USDC</string>
+    <string name="portfolio_swap_to_usdc_a11y">Swap %1$s to USDC</string>
     <string name="portfolio_connecting">Waiting for the wallet to answer</string>
     <string name="portfolio_wallet_cancelled">Cancelled in the wallet, nothing was connected</string>
     <string name="portfolio_wallet_refused">The wallet did not answer, so nothing was connected</string>
