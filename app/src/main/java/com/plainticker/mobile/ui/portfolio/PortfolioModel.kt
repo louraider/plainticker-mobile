@@ -86,7 +86,32 @@ data class RecordedHolding(
     val decimals: Int,
     /** When the newest swap touching this mint landed. */
     val landedAtMillis: Long,
-)
+    /**
+     * The Token-2022 scaled UI multiplier the newest receipt naming this mint was drawn with when
+     * it landed. A scale factor, not a price: what the stored figure meant on that day.
+     */
+    val recordedMultiplier: Double = 1.0,
+    /**
+     * The multiplier in force now, read off the mint, or null while it has not been read (a cold
+     * open offline, a mint that did not answer). Also a scale factor, not a price. With it, this
+     * row reads the same quantity the wallet, the chain-read holding and "Swap to USDC" read.
+     */
+    val multiplier: Double? = null,
+) {
+    /**
+     * The quantity to draw: raw / 10^decimals x the multiplier in force now, the one rule every
+     * xStock quantity in the app follows. Without a current multiplier it is the stored figure,
+     * scaled as it was when the swap landed, and [scaleRead] is false so the row says so.
+     */
+    val quantity: java.math.BigDecimal
+        get() = BigDecimal.valueOf(amountRaw).movePointLeft(decimals)
+            .multiply(BigDecimal.valueOf(usable(multiplier ?: recordedMultiplier)))
+
+    /** True when [quantity] uses the multiplier in force now, false for the stored figure. */
+    val scaleRead: Boolean get() = multiplier != null
+}
+
+private fun usable(multiplier: Double): Double = if (multiplier.isFinite() && multiplier > 0.0) multiplier else 1.0
 
 /** One recorded holding in the parts a 64dp row draws. */
 data class RecordedRow(
@@ -214,22 +239,24 @@ fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
  */
 fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
     val net = LinkedHashMap<String, RecordedHolding>(receipts.size)
-    fun fold(mint: String, symbol: String, decimals: Int, delta: Long, landedAtMillis: Long) {
+    fun fold(mint: String, symbol: String, decimals: Int, delta: Long, landedAtMillis: Long, multiplier: Double) {
         val seen = net[mint]
         net[mint] = seen?.copy(
             amountRaw = seen.amountRaw + delta,
             landedAtMillis = maxOf(seen.landedAtMillis, landedAtMillis),
+            recordedMultiplier = if (landedAtMillis >= seen.landedAtMillis) multiplier else seen.recordedMultiplier,
         ) ?: RecordedHolding(
             mint = mint,
             symbol = symbol,
             amountRaw = delta,
             decimals = decimals,
             landedAtMillis = landedAtMillis,
+            recordedMultiplier = multiplier,
         )
     }
     for (receipt in receipts) {
         receipt.outputAmountRaw?.let {
-            fold(receipt.outputMint, receipt.outputSymbol, receipt.outputDecimals, it, receipt.landedAtMillis)
+            fold(receipt.outputMint, receipt.outputSymbol, receipt.outputDecimals, it, receipt.landedAtMillis, receipt.outputMultiplier)
         }
         fold(
             receipt.inputMint,
@@ -237,6 +264,7 @@ fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
             receipt.inputDecimals,
             -receipt.inputAmountRaw,
             receipt.landedAtMillis,
+            receipt.inputMultiplier,
         )
     }
     return net.values.filter { it.amountRaw > 0L }.sortedBy { it.symbol }
@@ -251,8 +279,13 @@ fun recordedRow(holding: RecordedHolding): RecordedRow = RecordedRow(
     ticker = holding.ticker,
     symbol = holding.symbol,
     company = holding.company,
-    quantity = Fmt.tokenAmount(holding.amountRaw, holding.decimals),
-    meta = words(R.string.portfolio_recorded_meta, Fmt.utc(holding.landedAtMillis)),
+    quantity = Fmt.tokenAmount(holding.quantity),
+    // Never a silently different number: a figure not scaled by today's multiplier says so.
+    meta = if (holding.scaleRead) {
+        words(R.string.portfolio_recorded_meta, Fmt.utc(holding.landedAtMillis))
+    } else {
+        words(R.string.portfolio_recorded_meta_unscaled, Fmt.utc(holding.landedAtMillis))
+    },
 )
 
 /**

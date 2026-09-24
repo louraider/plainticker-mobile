@@ -385,6 +385,7 @@
     <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
     <string name="portfolio_recorded_lede">What this app recorded when its own swaps landed. The wallet itself has not been read.</string>
     <string name="portfolio_recorded_meta">Swapped %1$s</string>
+    <string name="portfolio_recorded_meta_unscaled">Swapped %1$s · as recorded, current split not read</string>
     <string name="portfolio_swap_to_usdc">Swap to USDC</string>
     <string name="portfolio_swap_to_usdc_a11y">Swap %1$s to USDC</string>
     <string name="portfolio_connecting">Waiting for the wallet to answer</string>

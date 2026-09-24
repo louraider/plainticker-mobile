@@ -235,6 +235,13 @@ class PortfolioViewModel(
     private var namesByMint: Map<String, XStockAsset> = emptyMap()
 
     /**
+     * The multiplier in force now for each xStock mint this screen has read, from the chain-read
+     * positions or from a mint read for the record alone. The recorded rows scale by it, so one
+     * token reads one quantity everywhere on the screen.
+     */
+    private var scaleByMint: Map<String, Double> = emptyMap()
+
+    /**
      * The newest slot any of this device's receipts landed in. Every balance read asks the node
      * for at least this slot (`minContextSlot`), for two reasons that are the same reason: a node
      * behind the swap would answer with the wallet from before it, and the forwarder's 60 s cache
@@ -290,13 +297,23 @@ class PortfolioViewModel(
         val assets = runCatching { catalog.catalog() }.getOrNull() ?: return
         namesByMint = assets.mapNotNull { asset -> asset.solanaMint?.let { it to asset } }.toMap()
         _state.update { it.copy(recorded = named(receipts)) }
+        // The multiplier in force for each recorded xStock, read off its mint. A mint that does
+        // not answer (offline) leaves its row on the stored figure, which the row then says.
+        val unscaled = recordedHoldings(receipts).map { it.mint }.filter { it in namesByMint && it !in scaleByMint }
+        val read = unscaled.mapNotNull { mint ->
+            runCatching { mints.mint(mint) }.getOrNull()?.let { reading -> multiplierOf(reading)?.let { mint to it } }
+        }
+        if (read.isNotEmpty()) {
+            scaleByMint = scaleByMint + read
+            _state.update { it.copy(recorded = named(it.receipts)) }
+        }
     }
 
     /** The receipts folded into holdings, with whatever the catalog can currently name on them. */
     private fun named(receipts: List<SwapReceipt>): List<RecordedHolding> =
         recordedHoldings(receipts).map { holding ->
             val asset = namesByMint[holding.mint] ?: return@map holding
-            holding.copy(ticker = asset.underlyingTicker, company = asset.name)
+            holding.copy(ticker = asset.underlyingTicker, company = asset.name, multiplier = scaleByMint[holding.mint])
         }
 
     fun connect() {
@@ -367,6 +384,7 @@ class PortfolioViewModel(
         val owned = heldByMint(balances.filter { it.mint in byMint })
 
         val facts = readMints(owned)
+        scaleByMint = scaleByMint + facts.mapNotNull { (mint, reading) -> reading?.let { r -> multiplierOf(r)?.let { mint to it } } }
         // A wallet holding no xStock costs Jupiter nothing: there is no mint to price.
         val fetch = if (owned.isEmpty()) {
             PriceFetch.EMPTY
@@ -450,6 +468,16 @@ class PortfolioViewModel(
             out[balance.mint] = runCatching { mints.mint(balance.mint) }.getOrNull()
         }
         return out
+    }
+
+    /**
+     * The multiplier in force at [reading], the same rule [position] applies: the mint's own
+     * extension, a scheduled change whose moment has passed, one for a mint without it, and null
+     * for a mint that was not read as a Token-2022 mint.
+     */
+    private fun multiplierOf(reading: MintReading): Double? {
+        val facts = reading.facts ?: return null
+        return facts.scaledUiAmount?.let(SplitMultiplier::ofMint)?.effectiveAt(reading.readAtMillis) ?: SplitMultiplier.NONE
     }
 
     private fun position(
