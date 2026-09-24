@@ -143,18 +143,34 @@ class PlainTickerThemeTest {
         assertEquals(FontWeight.SemiBold, t.textAction.fontWeight)
     }
 
+    /**
+     * `Wordmark` is the one deliberate exception, since 2026-09-24 (DESIGN.md section 9, "Two
+     * corners, refit"): [PlainTickerType.wordmark] itself moved off Outfit onto the same
+     * Bricolage the web's own TopNav wordmark and both OG images already set "PlainTicker" in, so
+     * [TopBar] finally draws the same word in the same face the web does. Every other
+     * `PlainTickerType` style is untouched; the third-font-family guard below still fires for
+     * anything else.
+     */
     @Test
-    fun `every style is Outfit or tabular JetBrains Mono`() {
+    fun `every style is Outfit or tabular JetBrains Mono, except the wordmark's own Bricolage`() {
         val styles = typeSlots()
         assertTrue(styles.size >= 13)
         styles.forEach { (name, style) ->
-            when (style.fontFamily) {
-                JetBrainsMono -> assertEquals("$name lacks tabular numerals", TABULAR_NUMERALS, style.fontFeatureSettings)
-                Outfit -> assertTrue("$name is a word style with a font feature", style.fontFeatureSettings == null)
+            when {
+                name == "Wordmark" -> {
+                    assertTrue("Wordmark must not still be Outfit", style.fontFamily != Outfit)
+                    assertTrue("Wordmark must not be mono", style.fontFamily != JetBrainsMono)
+                    assertEquals("Wordmark must carry no font feature", null, style.fontFeatureSettings)
+                    assertEquals("Wordmark must be Bricolage 700", FontWeight.Bold, style.fontWeight)
+                }
+                style.fontFamily == JetBrainsMono ->
+                    assertEquals("$name lacks tabular numerals", TABULAR_NUMERALS, style.fontFeatureSettings)
+                style.fontFamily == Outfit ->
+                    assertTrue("$name is a word style with a font feature", style.fontFeatureSettings == null)
                 else -> throw AssertionError("$name uses a third font family: ${style.fontFamily}")
             }
         }
-        // The numeral styles are mono; the word styles are Outfit.
+        // The numeral styles are mono; the word styles are Outfit, except Wordmark (Bricolage).
         listOf("HeroTicker", "HeroPrice", "BigValue", "FactValue", "TrackValue", "ListTicker", "Meta").forEach {
             assertEquals("$it must be mono", JetBrainsMono, styles.getValue(it).fontFamily)
         }
@@ -164,19 +180,24 @@ class PlainTickerThemeTest {
     }
 
     @Test
-    fun `material typography slots stay inside the two faces`() {
+    fun `material typography slots stay inside the two faces, except titleSmall's Bricolage wordmark`() {
         // Touch the scale first: the typography must not depend on initialization order.
         assertEquals(15.sp, PlainTickerType.body.fontSize)
         val typography = PlainTickerTypography
         listOf(
             typography.displayLarge, typography.displayMedium, typography.displaySmall,
             typography.headlineLarge, typography.headlineMedium, typography.headlineSmall,
-            typography.titleLarge, typography.titleMedium, typography.titleSmall,
+            typography.titleLarge, typography.titleMedium,
             typography.bodyLarge, typography.bodyMedium, typography.bodySmall,
             typography.labelLarge, typography.labelMedium, typography.labelSmall,
         ).forEach { style ->
             assertTrue(style.fontFamily == Outfit || style.fontFamily == JetBrainsMono)
         }
+        // titleSmall carries TopBar's own wordmark (Typography.kt), Bricolage 700 since
+        // 2026-09-24 (DESIGN.md section 9, "Two corners, refit"): the one deliberate exception
+        // this file's own "every style is Outfit or tabular JetBrains Mono" test documents.
+        assertEquals(PlainTickerType.wordmark, typography.titleSmall)
+        assertTrue(typography.titleSmall.fontFamily != Outfit && typography.titleSmall.fontFamily != JetBrainsMono)
         assertEquals(PlainTickerType.body, typography.bodyLarge)
         assertEquals(PlainTickerType.button, typography.labelLarge)
     }

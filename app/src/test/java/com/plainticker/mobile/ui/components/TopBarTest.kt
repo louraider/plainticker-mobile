@@ -1,0 +1,72 @@
+package com.plainticker.mobile.ui.components
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * The one-line clipping rule (the same rule [AmberTickerRowTest] proves for [AmberTickerRow]):
+ * [TopBar]'s title carries `maxLines = 1` with no `overflow`, so anything past what its own
+ * unweighted [androidx.compose.foundation.layout.Row] leaves it clips against whatever sits on the
+ * right rather than wrapping or ellipsizing. Moving
+ * [com.plainticker.mobile.ui.theme.PlainTickerType.wordmark] off Outfit SemiBold 15sp onto
+ * Bricolage 700 (2026-09-24, DESIGN.md section 9, "Two corners, refit") changes the glyphs that
+ * row has to fit, so the budget is redone here from the real font files rather than assumed
+ * unchanged, the same method [com.plainticker.mobile.ui.you.YouModelTest]'s own fact-cell budget
+ * and [AmberTickerRowTest]'s own arithmetic proofs use.
+ *
+ * **Measured against the real font files**, 2026-09-24:
+ * - `res/font/bricolage_grotesque.ttf` (fontTools), instantiated at `wght` 700 `wdth` 100 `opsz`
+ *   15, the exact variation coordinates [com.plainticker.mobile.ui.theme.PlainTickerType.wordmark]
+ *   builds (`bricolage()`, `Type.kt`): "PlainTicker" measures 81.390dp.
+ * - `res/font/outfit_semibold.ttf`, for the widest real action label [TopBar] ever draws beside
+ *   the wordmark (`action_watching`, "Watching", `DetailScreen.kt`, drawn through
+ *   [com.plainticker.mobile.ui.theme.PlainTickerType.textAction]'s own Outfit SemiBold 14sp, the
+ *   one face this change does not touch): 61.768dp. "Watch" (5 characters) and "You" (3
+ *   characters), the two other real actions [TopBar] ever draws, are both shorter.
+ */
+class TopBarTest {
+
+    /**
+     * [TopBar]'s own [androidx.compose.foundation.layout.Row] is `fillMaxWidth()` with 20dp of
+     * horizontal padding on each side (`.padding(horizontal = 20.dp)`) and
+     * `Arrangement.SpaceBetween`; on the Seeker's 400dp frame ([AmberTickerRowTest]'s and
+     * [com.plainticker.mobile.ui.you.YouModelTest]'s own frame) that is 360dp of content width,
+     * split unweighted between the wordmark and whatever action or meta fragment sits on the
+     * right. Neither child wraps or ellipsizes, so the two must never sum past this budget, or
+     * they overlap: the clipping bug this rule exists to catch before a device does.
+     */
+    private val contentWidthDp = 360.0
+
+    private val wordmarkWidthDp = 81.390 // "PlainTicker" at Bricolage 700, opsz 15, wdth 100.
+    private val watchingWidthDp = 61.768 // "Watching" (action_watching) at Outfit SemiBold 14sp.
+
+    @Test
+    fun `the wordmark and the widest real action clear the TopBar's own budget at 1_0x`() {
+        assertTrue(
+            "\"PlainTicker\" ($wordmarkWidthDp dp) plus \"Watching\" ($watchingWidthDp dp) must " +
+                "fit the TopBar's own $contentWidthDp dp content width, or the wordmark clips " +
+                "against the action beside it",
+            wordmarkWidthDp + watchingWidthDp <= contentWidthDp,
+        )
+    }
+
+    /**
+     * sp text scales by the raw font-scale factor, dp padding does not, the same conservative
+     * assumption [AmberTickerRowTest]'s own 1.3x proofs use: the real Android curve compresses
+     * small text below the nominal multiplier, so this is worse than the real device, not better.
+     */
+    @Test
+    fun `the same pair still clears the budget at 1_3x, where the clipping rule actually bites`() {
+        val wordmarkAt13xDp = wordmarkWidthDp * 1.3
+        val watchingAt13xDp = watchingWidthDp * 1.3
+        assertEquals(105.807, wordmarkAt13xDp, 0.01)
+        assertEquals(80.298, watchingAt13xDp, 0.01)
+        assertTrue(
+            "grown to 1.3x, \"PlainTicker\" ($wordmarkAt13xDp dp) plus \"Watching\" " +
+                "($watchingAt13xDp dp) must still fit the TopBar's own $contentWidthDp dp content " +
+                "width",
+            wordmarkAt13xDp + watchingAt13xDp <= contentWidthDp,
+        )
+    }
+}

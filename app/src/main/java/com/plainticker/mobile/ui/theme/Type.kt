@@ -96,7 +96,19 @@ object PlainTickerType {
     val textAction: TextStyle = ui(14.sp, FontWeight.SemiBold, 20.sp)
 
     // Supporting styles, one per canvas measurement.
-    val wordmark: TextStyle = ui(15.sp, FontWeight.SemiBold, 20.sp, (-0.01).em)
+    /**
+     * TopBar's own word style: Bricolage 700, opsz 15, replacing Outfit SemiBold 15sp on
+     * 2026-09-24 (DESIGN.md section 9, "Two corners, refit"). The one deliberate exception
+     * [PlainTickerThemeTest]'s own "every style is Outfit or tabular JetBrains Mono" test carries
+     * by name: the web's own TopNav wordmark and both OG images already set "PlainTicker" in
+     * Bricolage Bold, so this closes the one place the app and the web drew the same word in two
+     * different faces. Same 15sp point size, no manual tracking (Bricolage's own spacing, the
+     * same choice every [AmberType] style below makes; Outfit's negative-tracking-on-headings
+     * habit never applied to Bricolage).
+     * [com.plainticker.mobile.ui.components.TopBarTest] proves this still clears the one-line
+     * clipping rule against the widest real action label beside it, at 1.0x and 1.3x.
+     */
+    val wordmark: TextStyle = bricolage(15.sp, FontWeight.Bold, 20.sp)
     val tab: TextStyle = ui(14.sp, FontWeight.Medium, 20.sp)
     val tabSelected: TextStyle = ui(14.sp, FontWeight.SemiBold, 20.sp)
     /** Sub lines, state words, captions, banners: 13 Outfit 400. */

@@ -22,8 +22,12 @@ columns are the ones that decide: colour can separate two shapes, a silhouette c
 It also writes the two images the Solana dApp Store listing needs (docs/dapp-store-publishing.md),
 out of that same rasterizer and the same shipped drawable: a flat 512 icon and a 1024x500 banner.
 The store gets no vector, so the PNG is rendered from the file the launcher draws rather than
-traced from a screenshot of it, and the tile ground is chased through @color/ink to its literal
-value instead of being retyped here.
+traced from a screenshot of it, and the tile ground is chased through @color/amber_action (2026-
+09-24: the "Two corners, refit" tile, DESIGN.md section 9; @color/amber_ink before it) to its
+literal value instead of being retyped here. The banner's own wordmark and line are set in the
+same bundled Bricolage Grotesque the app's TopBar wordmark and the web's TopNav lockup use
+(2026-09-24, replacing Outfit), instantiated at the exact wght/wdth/opsz point each size needs the
+same way Type.kt's own `bricolage()` does.
 
 Run:   PYTHONIOENCODING=utf-8 python design/brand/render_icons.py
 Needs: python -m pip install pillow numpy
@@ -271,10 +275,11 @@ BANNER_LINE = "Read the xStock, then swap"
 BANNER_MIN_MARGIN = 72      # the least the group may come to an edge a store card can crop
 BANNER_MARK = 168           # the mark's own block, edge to edge
 BANNER_GUTTER = 72
-WORDMARK_SIZE = 92          # Outfit 600, the TopBar's own face for the app name
-WORDMARK_TRACKING = -0.01   # DESIGN.md section 3: negative on headings, never positive
-BANNER_LINE_SIZE = 30       # Outfit 400, body
+WORDMARK_SIZE = 92          # Bricolage 700, opsz 92: the banner's own size, not TopBar's 15sp
+WORDMARK_TRACKING = 0.0     # Bricolage carries its own spacing; no AmberType style tracks it either
+BANNER_LINE_SIZE = 30       # Bricolage 400, opsz 30, body
 BANNER_LEAD = 58            # wordmark baseline to line baseline
+BRICOLAGE = "bricolage_grotesque.ttf"
 
 
 def bundled_font(name, size):
@@ -283,6 +288,22 @@ def bundled_font(name, size):
     path = FONTS / name
     assert path.exists(), "{} is not bundled in res/font, see docs/fonts.md".format(name)
     return ImageFont.truetype(str(path), size)
+
+
+def bundled_variable_font(name, size, weight, width=100.0):
+    """
+    The bundled variable face, instantiated at one wght/wdth/opsz point.
+
+    The same method Type.kt's own `bricolage()` uses for every AmberType style and
+    PlainTickerType.wordmark: optical size held at the style's own point size rather than a
+    handful of fixed static weights, so this renderer draws the identical instance the app does.
+    """
+    font = bundled_font(name, size)
+    axes = font.get_variation_axes()
+    names = [axis["name"] for axis in axes]
+    assert names == [b"Optical size", b"Weight", b"Width"], "unexpected axis order: {}".format(names)
+    font.set_variation_by_axes([float(size), float(weight), float(width)])
+    return font
 
 
 def mark_bounds(foreground_path=SHIPPED_FOREGROUND):
@@ -318,8 +339,8 @@ def banner_layout():
     be cropped from either edge, and a group hard against one of them loses the mark or the name.
     """
     width, height = BANNER_SIZE
-    word_face = bundled_font("outfit_semibold.ttf", WORDMARK_SIZE)
-    line_face = bundled_font("outfit_regular.ttf", BANNER_LINE_SIZE)
+    word_face = bundled_variable_font(BRICOLAGE, WORDMARK_SIZE, weight=700.0)
+    line_face = bundled_variable_font(BRICOLAGE, BANNER_LINE_SIZE, weight=400.0)
     tracking = WORDMARK_TRACKING * WORDMARK_SIZE
     word_width = word_face.getlength(WORDMARK) + tracking * (len(WORDMARK) - 1)
     margin = round((width - (BANNER_MARK + BANNER_GUTTER
@@ -342,13 +363,14 @@ def store_banner():
     """
     The 1024x500 listing banner: the icon's own field, widened.
 
-    Nothing here is a second design. The ground is the tile's Ink, the mark is the same Canvas
-    rectangles out of the same drawable at the same proportions, and the type is the app's own face
-    saying the name and the short description the listing already carries. Seen small beside other
-    entries it is the icon with a name next to it, which is what a reader needs it to be.
+    Nothing here is a second design. The ground is the tile's amber_action, the mark is the same
+    AMBER_GROUND rectangles out of the same drawable at the same proportions, and the type is
+    Bricolage Grotesque (2026-09-24, replacing Outfit) saying the name and the short description
+    the listing already carries. Seen small beside other entries it is the icon with a name next
+    to it, which is what a reader needs it to be.
     """
     banner = Image.new("RGB", BANNER_SIZE, hex_rgb(shipped_ground()))
-    on_tile = hex_rgb(M.CANVAS)     # the mark's colour, and so the type's
+    on_tile = hex_rgb(M.AMBER_GROUND)     # the mark's colour, and so the type's
     where = banner_layout()
 
     mark = mark_block(BANNER_MARK)
@@ -399,14 +421,14 @@ def write_store():
         return round(mark_x + (x - block_x) * arm), round(mark_y + (y - block_y) * arm)
 
     for image, path, at in ((icon, STORE_ICON, icon_at), (banner, STORE_BANNER, banner_at)):
-        print("wrote {} ({} x {} {}) on @color/ink = {}, mark {}".format(
+        print("wrote {} ({} x {} {}) on @color/amber_action = {}, mark {}".format(
             path.relative_to(ROOT).as_posix(), image.width, image.height, image.mode,
-            ground, M.CANVAS))
+            ground, M.AMBER_GROUND))
         for what, point in (("field", (0, 0)),
                             ("mark centre", at(54, 54)),
                             ("top-left arm", at(33, 33))):
             found = "#%02X%02X%02X" % image.getpixel(point)
-            expected = ground if what != "top-left arm" else M.CANVAS
+            expected = ground if what != "top-left arm" else M.AMBER_GROUND
             assert found.upper() == expected.upper(), (
                 "{} at {} is {}, expected {}".format(what, point, found, expected))
             print("    {:14} {} {}".format(what, point, found))

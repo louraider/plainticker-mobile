@@ -13,6 +13,10 @@ The mark is "Two corners", cell 4a of the founder's own selection gallery: two r
 corners on the 108 viewport, top-left and bottom-right, and an empty centre between them. It
 replaces the tracking gauge, which replaced the JetBrains Mono P shipped in DT3.
 
+2026-09-24: refit for Amber's tile (marks.py's own note on TWO_CORNERS, DESIGN.md section 9,
+"Two corners, refit"). The arrangement is unchanged; the block pulled inside the plain 36-unit
+circle a launcher actually cuts and the tile moved onto AMBER_ACTION, Amber's own accent.
+
 The background layer is written here rather than kept beside the drawables, and that is the whole
 point of this round. Four icon attempts were rejected and all four put a Canvas tile on a
 near-black drawer wallpaper, where it measures 1.03 to 1 across its own edge and is not a tile at
@@ -55,9 +59,11 @@ def main():
     print('"{}" on a {} ground: x {} to {}, y {} to {}'.format(
         mark.title, mark.ground,
         marks.number(x0), marks.number(x1), marks.number(y0), marks.number(y1)))
-    print("  furthest corner {:.2f} units, past the 33 the circle guarantee asked for and "
+    radius = mark.radius()
+    print("  furthest corner {:.2f} units, {} the {} the circle guarantee once asked for and "
           "{:+.2f} inside the superellipse of exponent {} a launcher cuts".format(
-              mark.radius(), mark.mask_clearance(), marks.number(marks.MASK_EXPONENT)))
+              radius, "past" if radius > marks.SAFE_RADIUS else "inside",
+              marks.number(marks.SAFE_RADIUS), mark.mask_clearance(), marks.number(marks.MASK_EXPONENT)))
     for rect in mark.rects:
         print("  {:26} {:g} x {:g} units, {:.2f} x {:.2f} dp at 48dp".format(
             rect.name, rect.width, rect.height, rect.width * 48 / 72, rect.height * 48 / 72))

@@ -18,9 +18,10 @@
          core-splashscreen draws it on every release the app runs on; MainActivity.installSplashScreen
          then switches to Theme.PlainTicker.
          The icon here is ic_brand_mark and not the adaptive icon's foreground layer. They are the
-         same four rectangles, but the foreground is drawn in amber_ground for the amber_ink tile the
-         launcher shows, and amber_ground on amber_ground is nothing at all. glyph.py writes both
-         from the same geometry so they cannot drift apart.
+         same four rectangles, but the foreground is drawn in amber_ground for the amber_action tile
+         the launcher shows (DESIGN.md section 9, "Two corners, refit"), and amber_ground on
+         amber_ground is nothing at all. glyph.py writes both from the same geometry so they cannot
+         drift apart.
          Theme.SplashScreen is a DayNight theme, so on a light system theme it would ask for dark
          status and navigation bar icons over the near-black amber_ground; both flags are pinned to
          light icons here. windowLightNavigationBar exists from API 27 and is ignored on 26. -->

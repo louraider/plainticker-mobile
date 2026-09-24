@@ -2,7 +2,7 @@
 <!--
   Brand mark, DESIGN.md section 9: "Offset",
   two rules of equal length, the NYSE close and the token, and the premium the token runs past it.
-  Drawn over a #0B0F14 background layer; glyph.py writes the chosen mark's own ground
+  Drawn over a #16130D background layer; glyph.py writes the chosen mark's own ground
   into res/values/ic_launcher_background.xml, so the tile cannot drift from it.
   Block 30 to 78 across, 39 to 69 down.
   Furthest corner 28.30 units from the center, +11.17 units inside the
@@ -16,10 +16,10 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M30 39H66V51H30Z" />
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M30 57H66V69H30Z" />
     <path
         android:fillColor="#5AA9E6"

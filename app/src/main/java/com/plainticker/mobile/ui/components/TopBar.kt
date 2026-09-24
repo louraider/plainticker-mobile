@@ -31,8 +31,11 @@ import com.plainticker.mobile.ui.theme.PlainTickerType
  * own instance, the onboarding backdrop's picture of the old List), so [colors] defaults to the
  * system-following [defaultAmberColors] rather than Instrument's fixed-dark [Ink]/[Accent]/[Muted]:
  * a bar that stayed dark on top of a light Stocks or Detail screen is exactly the "assumes dark"
- * fault this pass exists to find. [PlainTickerType.wordmark] stays the type (Instrument's word
- * style is unchanged by the redesign, DESIGN.md section 3), only the three colours move.
+ * fault this pass exists to find. [PlainTickerType.wordmark] itself moved on 2026-09-24 (DESIGN.md
+ * section 9, "Two corners, refit"): Bricolage 700 replacing Outfit SemiBold, the one deliberate
+ * exception to "Instrument's word style is unchanged by the redesign" the rest of this bar still
+ * is, so the app finally draws "PlainTicker" in the same face the web's TopNav lockup does.
+ * [TopBarTest] proves the wider glyphs still clear this row's own one-line clipping budget.
  *
  * @param insets the inset the bar absorbs; pass `WindowInsets(0)` when a parent already pads it.
  * @param onTitleLongPress debug builds only: a long press on the wordmark opens the gallery.

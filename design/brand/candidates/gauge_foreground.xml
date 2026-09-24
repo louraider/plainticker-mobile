@@ -2,7 +2,7 @@
 <!--
   Brand mark, DESIGN.md section 9: "Gauge",
   the tracking gauge at icon weight: the scale, the reference graduation under it, the token over it.
-  Drawn over a #0B0F14 background layer; glyph.py writes the chosen mark's own ground
+  Drawn over a #16130D background layer; glyph.py writes the chosen mark's own ground
   into res/values/ic_launcher_background.xml, so the tile cannot drift from it.
   Block 26 to 82 across, 32 to 76 down.
   Furthest corner 29.73 units from the center, +8.00 units inside the
@@ -16,10 +16,10 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M26 54H82V62H26Z" />
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M50 62H58V76H50Z" />
     <path
         android:fillColor="#5AA9E6"
