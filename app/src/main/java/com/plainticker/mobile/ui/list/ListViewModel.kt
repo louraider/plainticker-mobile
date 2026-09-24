@@ -12,12 +12,12 @@ import com.plainticker.mobile.data.snapshot.toSummaryRow
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.snapshot.toXStockAsset
-import com.plainticker.mobile.data.xstocks.MarketHours
 import com.plainticker.mobile.data.xstocks.MarketSource
 import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.MarketClock
 import com.plainticker.mobile.repo.CatalogUpdate
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
@@ -343,6 +343,15 @@ class ListViewModel(
     private var refreshJob: Job? = null
     private var priceJob: Job? = null
     private var bannerJob: Job? = null
+
+    /**
+     * The venue behind the hours banner, as a clock rather than a photograph: the same
+     * [MarketClock] Today runs, so Stocks and Today can never disagree about where the NYSE is,
+     * and neither keeps showing the status the catalog cache was fetched under.
+     */
+    private val marketClock = MarketClock(clock, catalog, viewModelScope) { market ->
+        _state.update { it.copy(market = market) }
+    }
     private var bannerGracePassed = false
     private var pricesQueued = false
     private var pricedMints: List<String>? = null
@@ -364,6 +373,12 @@ class ListViewModel(
      * this morning could not be seen at all until tomorrow, whatever the reader did.
      */
     fun refresh() = load(userAsked = true)
+
+    /** Stocks came back to the foreground: recompute the venue now and at every boundary after. */
+    fun onResume() = marketClock.onResume()
+
+    /** Stocks left the foreground: the boundary job stops. */
+    fun onPause() = marketClock.onPause()
 
     /**
      * Asks every source again and draws whatever comes back.
@@ -616,7 +631,7 @@ class ListViewModel(
                 allStaleDays = staleDays(allAnalyzed),
                 // Read off the same catalog the rows were joined against, so the banner cannot
                 // describe a venue the screen is not showing.
-                market = MarketHours.ofCatalog(assets, clock.nowMillis()),
+                market = marketClock.setAssets(assets),
                 generatedAt = generatedAt,
                 snapshotBannerDue = bannerGracePassed,
             )

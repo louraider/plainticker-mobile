@@ -120,6 +120,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenGallery: (() -> Unit)? = null,
     initialTab: Int = HomeTab.LIST.ordinal,
+    /** Today's digest line and You's digest link: the digest screen, a route of its own. */
+    onOpenDigest: (() -> Unit)? = null,
 ) {
     val initialDestination = homeTabFrom(initialTab).toAmberDestination()
     var selectedOrdinal by rememberSaveable { mutableIntStateOf(initialDestination.ordinal) }
@@ -168,6 +170,8 @@ fun HomeScreen(
                             onBrowseStocks = { select(AmberDestination.STOCKS) },
                             // The same gate the gallery and the wallet spike sit behind.
                             onRunCheck = if (BuildConfig.DEBUG) watchlistViewModel::runCheckNow else null,
+                            onOpenVote = { select(AmberDestination.VOTE) },
+                            onOpenDigest = onOpenDigest,
                             header = header,
                         )
                     }
@@ -210,6 +214,7 @@ fun HomeScreen(
                         // mid flight and this device's entitlement survive a destination switch.
                         passViewModel = viewModel(factory = factory),
                         onOpenTab = ::selectTab,
+                        onOpenDigest = onOpenDigest,
                         header = header,
                     )
                 }

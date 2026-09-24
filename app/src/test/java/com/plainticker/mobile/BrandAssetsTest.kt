@@ -369,6 +369,7 @@ class BrandAssetsTest {
             "ic_launcher_foreground.xml",
             "ic_launcher_monochrome.xml",
             "ic_brand_mark.xml",
+            "ic_brand_mark_tight.xml",
             "ic_stat_plainticker.xml",
         ).forEach { name ->
             val layer = vector(name)
@@ -434,6 +435,37 @@ class BrandAssetsTest {
         }
         // 2 of the 24 viewport is 2dp in the status bar, the floor for a silhouette.
         stat.boxes().forEach { assertTrue("$it is thinner than 2dp in the status bar", it.thinnest >= 2.0) }
+    }
+
+    /**
+     * The TopBar lockup's mark (2026-09-24). Drawn from the 108 launcher grid at a text size, the
+     * glyph fills only its central 46 units, so it renders at about 43 percent of its own box: the
+     * lesson the web's TopNav learned first. The lockup's drawable is the same four rectangles
+     * moved to the origin of a viewport exactly as big as their block, so the glyph is the box,
+     * in white for the TopBar to tint.
+     */
+    @Test
+    fun `the topbar mark is the launcher mark cropped tight to its own block`() {
+        val tight = vector("ic_brand_mark_tight.xml")
+        val launcher = vector("ic_launcher_foreground.xml").boxes()
+        val left = launcher.minOf { it.left }
+        val top = launcher.minOf { it.top }
+        val side = launcher.maxOf { it.right } - left
+        assertEquals("the viewport is the block, not the launcher grid", side, tight.size.toDouble(), 0.0)
+        assertEquals(setOf("#FFFFFF"), tight.fills.toSet())
+        val boxes = tight.boxes()
+        assertEquals(launcher.size, boxes.size)
+        boxes.zip(launcher).forEach { (small, big) ->
+            assertEquals("across", big.left - left, small.left, 0.011)
+            assertEquals("down", big.top - top, small.top, 0.011)
+            assertEquals("width", big.width, small.width, 0.011)
+            assertEquals("height", big.height, small.height, 0.011)
+        }
+        // The glyph touches all four edges: nothing of the box is margin.
+        assertEquals(0.0, boxes.minOf { it.left }, 0.0)
+        assertEquals(0.0, boxes.minOf { it.top }, 0.0)
+        assertEquals(tight.size.toDouble(), boxes.maxOf { it.right }, 0.0)
+        assertEquals(tight.size.toDouble(), boxes.maxOf { it.bottom }, 0.0)
     }
 
     // ---- Splash and manifest ------------------------------------------------------------------

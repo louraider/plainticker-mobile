@@ -133,6 +133,8 @@ fun YouScreen(
     passViewModel: PassViewModel,
     onOpenTab: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** The daily digest screen: its own route, reached from here and from Today's "Read it". */
+    onOpenDigest: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -161,6 +163,7 @@ fun YouScreen(
             onRefreshEntitlement = passViewModel::refreshEntitlement,
             onPay = passViewModel::pay,
             onOpenTab = onOpenTab,
+            onOpenDigest = onOpenDigest,
             onEnableNotifications = {
                 context.startActivity(
                     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -191,6 +194,7 @@ internal fun YouContent(
     onOpenTab: (Int) -> Unit,
     modifier: Modifier = Modifier,
     onEnableNotifications: (() -> Unit)? = null,
+    onOpenDigest: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
 ) {
     val colors = amberColors()
@@ -233,6 +237,7 @@ internal fun YouContent(
         item(key = "notifications") {
             NotificationsLine(notificationsOn = state.notificationsOn, onEnable = onEnableNotifications, colors = colors)
         }
+        onOpenDigest?.let { open -> item(key = "digest-link") { DigestLink(onOpen = open, colors = colors) } }
         item(key = "footer") { Footer() }
         item(key = "licenses-heading") {
             AmberSectionHead(title = stringResource(R.string.you_heading_licenses), colors = colors)
@@ -395,6 +400,23 @@ private fun NotificationsLine(notificationsOn: Boolean, onEnable: (() -> Unit)?,
         }
     }
 }
+
+/**
+ * The daily digest, one tap away: it left Today's first viewport (direction A, 2026-09-24) and
+ * lives on its own screen, beside the notifications line that says whether it will notify.
+ */
+@Composable
+private fun DigestLink(onOpen: () -> Unit, colors: AmberColors) {
+    TextAction(
+        label = stringResource(R.string.you_digest_link),
+        onClick = onOpen,
+        color = colors.actionText,
+        modifier = Modifier.padding(start = Side - DigestLinkInset),
+    )
+}
+
+/** TextAction's own 16dp start padding, taken back so the link lines up with the line above it. */
+private val DigestLinkInset = 16.dp
 
 /**
  * The version in mono, then the disclaimer every screen owes a reader. Kept to the exact call

@@ -10,6 +10,9 @@ object Routes {
     const val SPIKE = "spike"
     const val GALLERY = "gallery"
 
+    /** The daily digest under You: the last digest, when it landed, and the notifications setting. */
+    const val DIGEST = "digest"
+
     /**
      * Home with the tab to open on, as an optional query argument so that plain [HOME] still
      * matches it and the start destination is unchanged. The receipt's "View in Portfolio" is

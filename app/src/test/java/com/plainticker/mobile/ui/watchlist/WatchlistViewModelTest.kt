@@ -34,7 +34,9 @@ import com.plainticker.mobile.watchlist.WatchlistFacts
 import com.plainticker.mobile.watchlist.WatchlistScheduler
 import java.time.Duration
 import java.time.LocalDate
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -405,6 +407,193 @@ class WatchlistViewModelTest {
         assertFalse(settled.todayLoading)
         assertFalse("prices have now answered too", settled.trackedLoading)
         assertEquals("AAPLx", settled.nextUpLeader?.display)
+    }
+
+    // ---- The venue as a clock (Today direction A, the stale "Closed" of 24 Sep 2026) ---------------
+
+    /** A clock the test moves, the way the phone's own clock moves while Today sits in the background. */
+    private class MovingClock(var now: Long) : Clock {
+        override fun nowMillis(): Long = now
+    }
+
+    private fun utc(text: String): Long = java.time.Instant.parse(text).toEpochMilli()
+
+    /** A catalog whose one live block answers [live], counting who asked. */
+    private class LiveCatalog(
+        private val inner: FakeCatalogRepository,
+        var live: Trading? = null,
+    ) : com.plainticker.mobile.repo.CatalogRepository by inner {
+        val asked = mutableListOf<String>()
+        override suspend fun liveTrading(symbol: String): Trading? {
+            asked += symbol
+            return live
+        }
+    }
+
+    private fun clockedViewModel(clock: Clock, catalogRepo: com.plainticker.mobile.repo.CatalogRepository) = WatchlistViewModel(
+        watchlist = InMemoryWatchlistStore(),
+        facts = WatchlistFacts(summaries, catalogRepo, prices),
+        digests = digests,
+        notifier = notifier,
+        scheduler = scheduler,
+        clock = clock,
+        summaries = summaries,
+        catalog = catalogRepo,
+        prices = prices,
+        nextUpRepo = nextUp,
+    )
+
+    private fun cachedBlock(period: TradingPeriod, openNow: Boolean, nextChangeAt: String) {
+        catalog.assets = Result.success(
+            listOf(xStockTrading("AAPLx", "AAPL", "mint-AAPL", Trading(currentPeriod = period, openNow = openNow, nextChangeAt = nextChangeAt))),
+        )
+    }
+
+    /**
+     * The Seeker's own bug as a unit test. The catalog was cached before the open, when the venue
+     * said "closed, changing at 13:30 UTC". Today was left in the background and brought back at
+     * 19:22 UTC, mid-session. Before the fix, nothing recomputed the venue on resume and the block
+     * was replayed verbatim: "Closed". Now the resume ticks, the expired block stops answering, and
+     * the calendar says the session is on.
+     */
+    @Test
+    fun `resume after the snapshot's nextChangeAt flips a stale closed venue to open`() = runTest {
+        cachedBlock(TradingPeriod.CLOSED, openNow = false, nextChangeAt = "2026-09-24T13:30:00Z")
+        val clock = MovingClock(utc("2026-09-24T12:00:00Z"))
+        val vm = clockedViewModel(clock, catalog)
+        advanceUntilIdle()
+        val before = vm.state.value.market!!
+        assertFalse("before the open the venue's block is fresh and says closed", before.regularSession)
+        assertEquals(MarketSource.VENUE, before.source)
+
+        clock.now = utc("2026-09-24T19:22:00Z")
+        try {
+            vm.onResume()
+            val after = vm.state.value.market!!
+            assertTrue("the resume recomputed the venue: the session is on", after.regularSession)
+            assertEquals("and it says the calendar answered, not the venue", MarketSource.LOCAL_SCHEDULE, after.source)
+            assertEquals("the next change is the close", utc("2026-09-24T20:00:00Z"), after.nextChangeAtMillis)
+        } finally {
+            vm.onPause()
+        }
+    }
+
+    @Test
+    fun `an expired block is refreshed with one asset's live block, once`() = runTest {
+        cachedBlock(TradingPeriod.CLOSED, openNow = false, nextChangeAt = "2026-09-24T13:30:00Z")
+        val live = LiveCatalog(catalog, Trading(currentPeriod = TradingPeriod.MARKET, openNow = true, nextChangeAt = "2026-09-24T20:00:00Z"))
+        val clock = MovingClock(utc("2026-09-24T19:22:00Z"))
+        val vm = clockedViewModel(clock, live)
+        advanceUntilIdle()
+        try {
+            vm.onResume()
+            runCurrent()
+            val market = vm.state.value.market!!
+            assertEquals("the live block answers once it lands", MarketSource.VENUE, market.source)
+            assertTrue(market.regularSession)
+            assertEquals(listOf("AAPLx"), live.asked)
+            vm.onPause()
+            vm.onResume()
+            runCurrent()
+            assertEquals("a fresh block is not asked for again", listOf("AAPLx"), live.asked)
+        } finally {
+            vm.onPause()
+        }
+    }
+
+    @Test
+    fun `while resumed the boundary job ticks at the close, and paused nothing ticks`() = runTest {
+        cachedBlock(TradingPeriod.MARKET, openNow = true, nextChangeAt = "2026-09-24T20:00:00Z")
+        val clock = MovingClock(utc("2026-09-24T19:59:00Z"))
+        val vm = clockedViewModel(clock, catalog)
+        advanceUntilIdle()
+        try {
+            vm.onResume()
+            assertTrue(vm.state.value.market!!.regularSession)
+
+            // Resumed: the job sleeps until a second past the close, then ticks.
+            clock.now = utc("2026-09-24T20:00:01Z")
+            advanceTimeBy(61_001)
+            runCurrent()
+            assertFalse("the boundary job flipped it at the close, with no resume", vm.state.value.market!!.regularSession)
+
+            // Paused: the clock passes the next boundary and nothing recomputes.
+            vm.onPause()
+            clock.now = utc("2026-09-25T13:31:00Z")
+            advanceTimeBy(24 * 60 * 60 * 1_000L)
+            runCurrent()
+            assertFalse("paused, the venue is not recomputed in the background", vm.state.value.market!!.regularSession)
+
+            // And the next resume catches up.
+            vm.onResume()
+            assertTrue(vm.state.value.market!!.regularSession)
+        } finally {
+            vm.onPause()
+        }
+    }
+
+    /**
+     * One price read: the Seeker drew METAx at +0.15% in Watched and +0.13% in Tracked on one
+     * screen, because each block priced it separately. A watched row now takes its figure from
+     * Today's own read whenever that read covers it, whichever of the two loads lands first.
+     */
+    @Test
+    fun `a watched row is priced from today's own read, so two blocks never disagree`() = runTest {
+        serving("AAPL", "TSLA")
+        val split = object : com.plainticker.mobile.repo.PriceRepository {
+            override suspend fun prices(mints: Collection<String>) = pricesFirst(mints.toList()).priced
+            override suspend fun pricesFirst(mints: List<String>, limit: Int): com.plainticker.mobile.data.jupiter.PriceFetch {
+                // Today's join asks for every analyzed mint; the watched load for its one.
+                val aapl = if (mints.size > 1) price(usd = 101.0, reference = 100.0) else price(usd = 102.0, reference = 100.0)
+                return com.plainticker.mobile.data.jupiter.PriceFetch(
+                    priced = mapOf("mint-AAPL" to aapl, "mint-TSLA" to price(usd = 100.0, reference = 100.0)).filterKeys { it in mints },
+                )
+            }
+        }
+        val vm = WatchlistViewModel(
+            watchlist = InMemoryWatchlistStore(setOf("AAPL")),
+            facts = WatchlistFacts(summaries, catalog, split),
+            digests = digests,
+            notifier = notifier,
+            scheduler = scheduler,
+            clock = clock,
+            summaries = summaries,
+            catalog = catalog,
+            prices = split,
+            nextUpRepo = nextUp,
+        )
+        advanceUntilIdle()
+        val state = vm.state.value
+        assertFalse(state.trackedLoading)
+        val row = state.rows.single()
+        assertEquals("the watched row reads today's own price", 1.0, row.premiumPct!!, 1e-9)
+        assertEquals(setOf("AAPL"), state.watchedTickers)
+    }
+
+    @Test
+    fun `watch from Today asks for notifications once, after the first watch, and never again`() = runTest {
+        val prompts = com.plainticker.mobile.prefs.InMemoryNotificationPromptStore()
+        val store = InMemoryWatchlistStore()
+        val vm = WatchlistViewModel(
+            watchlist = store,
+            facts = WatchlistFacts(summaries, catalog, prices),
+            digests = digests,
+            notifier = notifier,
+            scheduler = scheduler,
+            clock = clock,
+            summaries = summaries,
+            catalog = catalog,
+            prices = prices,
+            nextUpRepo = nextUp,
+            prompts = prompts,
+        )
+        assertTrue("the first watch asks", vm.watch("NVDA"))
+        assertEquals(setOf("NVDA"), store.tickers.value)
+        assertFalse("a second watch does not ask again", vm.watch("COIN"))
+        assertFalse("a ticker already watched is not watched twice, and asks nothing", vm.watch("NVDA"))
+        store.remove("NVDA")
+        store.remove("COIN")
+        assertFalse("a refusal is an answer: emptying the list and watching again does not re-ask", vm.watch("TSLA"))
     }
 
     private companion object {

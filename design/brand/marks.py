@@ -246,6 +246,23 @@ class Mark:
     def stat(self):
         return vector(STAT_VIEWPORT, self.stat_rects(), WHITE, self.header("stat"))
 
+    def tight_rects(self):
+        """
+        The same rectangles moved to the origin of a viewport exactly as big as the block they
+        fill, for the TopBar lockup (2026-09-24). The launcher's 108 grid keeps the mark inside the
+        central 72 and then inside a mask, so on that grid the glyph fills only 46 of 108 units:
+        drawn at a text size, a 108-grid drawable renders the mark at about 43 percent of its own
+        box, the lesson the web's TopNav learned first. Cropped here, the glyph is the box.
+        """
+        x0, y0, x1, y1 = self.bounds()
+        assert (x1 - x0) == (y1 - y0), "{}: the block is not square, so no one size fits it".format(self.key)
+        return [Rect(r.name, r.x0 - x0, r.y0 - y0, r.x1 - x0, r.y1 - y0, r.color) for r in self.rects]
+
+    def tight(self):
+        """The mark cropped to its own block, in white; the TopBar tints it with actionText."""
+        x0, _, x1, _ = self.bounds()
+        return vector(x1 - x0, self.tight_rects(), WHITE, self.header("tight"))
+
     def splash(self):
         """
         The mark in Amber's own ink (AMBER_INK) on transparent, for the splash screen.
@@ -296,6 +313,12 @@ class Mark:
                 "  launcher tile's ground, which is not this ground, so the splash needs the mark in the\n"
                 "  color the splash background can show.\n"
                 + where
+            )
+        if layer == "tight":
+            return (
+                "  TopBar lockup: the mark cropped to its own block, so the glyph fills the box. White\n"
+                "  on transparent; the TopBar tints it with the actionText token, so it follows dark and\n"
+                "  light, and sizes it to the wordmark's cap height.\n" + where
             )
         return (
             "  Notification small icon: the mark in white on transparent, the system tints it.\n"

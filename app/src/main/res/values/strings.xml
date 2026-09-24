@@ -514,20 +514,50 @@
          Never shown for Loading, NotServed or Disabled: those are not a fault to report. -->
     <string name="detail_read_unavailable">The read is unavailable</string>
 
-    <!-- Today (docs/design-research-2026-09-21.md section 3). Block 2, Yours, is the Watchlist
-         copy below, kept rather than duplicated: folding Watchlist into Today was the point. -->
-    <string name="today_venue_state_open">Open</string>
-    <string name="today_venue_state_closed">Closed</string>
-    <string name="today_venue_open">The NYSE is open, the price tracks live.</string>
+    <!-- Today, direction A, "One line, then yours" (2026-09-24). The venue is one line in the
+         reader's own time; the state phrase before the first period is drawn in weight 600, so every
+         status string keeps its state in that first sentence. Pre-market and after hours say
+         plainly that tokens still trade on thinner pools. -->
+    <string name="today_status_open">NYSE open. Closes at %1$s your time</string>
+    <string name="today_status_open_short_day">NYSE open, short day. Closes at %1$s your time</string>
+    <string name="today_status_open_calendar">NYSE open by the exchange calendar. Closes at %1$s your time</string>
+    <string name="today_status_open_untimed">NYSE open.</string>
+    <string name="today_status_pre">NYSE opens at %1$s your time. Tokens still trade, on thinner pools</string>
+    <string name="today_status_after_today">NYSE closed for the day. Opens today at %1$s your time. Tokens still trade, on thinner pools</string>
+    <string name="today_status_after_tomorrow">NYSE closed for the day. Opens tomorrow at %1$s your time. Tokens still trade, on thinner pools</string>
+    <string name="today_status_after_day">NYSE closed for the day. Opens %1$s at %2$s your time. Tokens still trade, on thinner pools</string>
+    <string name="today_status_closed_today">NYSE closed. Opens today at %1$s your time</string>
+    <string name="today_status_closed_tomorrow">NYSE closed. Opens tomorrow at %1$s your time</string>
+    <string name="today_status_closed_day">NYSE closed. Opens %1$s at %2$s your time</string>
+    <string name="today_status_holiday_today">NYSE closed for a holiday. Opens today at %1$s your time</string>
+    <string name="today_status_holiday_tomorrow">NYSE closed for a holiday. Opens tomorrow at %1$s your time</string>
+    <string name="today_status_holiday_day">NYSE closed for a holiday. Opens %1$s at %2$s your time</string>
+    <string name="today_hours_title">Market hours</string>
+    <string name="today_hours_open_label">Open market hours</string>
+    <string name="today_hours_body">Tokens trade on xStocks around the clock on weekdays. They follow the share most closely while the NYSE is open. Before the open and after the close the pools are thinner, so a token can sit further from its share.</string>
+    <string name="today_hours_calendar">The venue has not answered for now, so this line reads the exchange calendar: weekends, NYSE holidays and early closes.</string>
     <string name="today_venue_freshness">Analysis %1$s, prices %2$s.</string>
+    <!-- First open: one step, then real tracked stocks with Watch on each. -->
+    <string name="today_start_title">Watch a stock to follow it here</string>
+    <string name="today_start_body">You see its next report date and how closely the token follows the share, plus one short digest a day.</string>
+    <string name="action_find_stock">Find a stock</string>
+    <!-- The figure's meaning, said once above the watched rows instead of on every row. -->
+    <string name="today_figure_live">The figure is how far each token sits from the share price now.</string>
+    <string name="today_figure_close">The figure is how far each token sits from the last NYSE close.</string>
     <string name="today_heading_tracked">Tracked today</string>
-    <!-- The lede (research section 3): a coverage fact, not a movement one, so it stays true
-         whether nothing has moved, everything has, or the day's first refresh has not landed. -->
-    <string name="today_tracked_lede">%1$s of %2$s analyzed can be tracked today</string>
-    <string name="today_tracked_context">vs NYSE close</string>
-    <string name="today_tracked_all">All %1$s tracked</string>
-    <string name="today_next_up_round_closes">Round %1$s closes %2$s</string>
-    <string name="today_footer_count">%1$s analyzed, %2$s without analysis</string>
+    <string name="today_tracked_lede">Tokens with enough trading to follow their share.</string>
+    <string name="today_tracked_all">All %1$s in Stocks</string>
+    <string name="today_digest_link_today">Last digest today at %1$s.</string>
+    <string name="today_digest_link_day">Last digest %1$s at %2$s.</string>
+    <string name="today_digest_none">The first digest lands about twelve hours after you watch a stock.</string>
+    <string name="action_read_it">Read it</string>
+    <string name="today_next_up_title">Next up for analysis</string>
+    <string name="today_next_up_lede">Chosen by staked SKR. Round closes %1$s at %2$s your time.</string>
+    <!-- The digest screen, under You. -->
+    <string name="digest_screen_lede">One short check a day on the stocks you watch.</string>
+    <string name="digest_produced_today">Today at %1$s</string>
+    <string name="digest_produced_day">%1$s at %2$s</string>
+    <string name="you_digest_link">Read the daily digest</string>
 
     <!-- Watchlist. The row meta is the list's, joined by list_row_meta_join -->
     <string name="watchlist_heading_watched">Watched</string>

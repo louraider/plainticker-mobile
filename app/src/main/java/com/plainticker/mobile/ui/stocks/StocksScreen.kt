@@ -2,6 +2,7 @@ package com.plainticker.mobile.ui.stocks
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.plainticker.mobile.ui.list.ListScreen
 import com.plainticker.mobile.ui.list.ListViewModel
 import com.plainticker.mobile.ui.vote.VoteViewModel
@@ -23,6 +24,12 @@ fun StocksScreen(
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
 ) {
+    // The hours banner reads a clock, not a photograph: recomputed every time Stocks comes back
+    // and at every open or close while it stays on screen, stopped while it is away.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onResume()
+        onPauseOrDispose { viewModel.onPause() }
+    }
     ListScreen(
         viewModel = viewModel,
         voteViewModel = voteViewModel,

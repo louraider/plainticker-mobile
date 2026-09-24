@@ -4,6 +4,7 @@ import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.xstocks.CatalogCache
 import com.plainticker.mobile.data.xstocks.Multiplier
 import com.plainticker.mobile.data.xstocks.ProofOfReserves
+import com.plainticker.mobile.data.xstocks.Trading
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.data.xstocks.XStocksApi
 import kotlinx.coroutines.CompletableDeferred
@@ -72,6 +73,15 @@ interface CatalogRepository {
      * answers 200 with a JSON `null`, which is an absence and never a zero.
      */
     suspend fun proofOfReserves(symbol: String): ProofOfReserves?
+
+    /**
+     * One asset's live trading block, straight from the network, stepping over both catalog
+     * caches: the venue's state is the one field of the catalog that goes stale in hours rather
+     * than days, and asking for one asset costs a few hundred bytes where the catalog costs
+     * 4.31 MB. Null when the asset does not answer or carries no block. The default answers null,
+     * so a repository with no network (a fake, a preview) simply never refreshes.
+     */
+    suspend fun liveTrading(symbol: String): Trading? = null
 }
 
 /**
@@ -322,6 +332,15 @@ class CachedCatalogRepository(
         val at = clock.nowMillis()
         mutex.withLock { reserves[key] = Cached(fresh, at) }
         return fresh
+    }
+
+    /** Never cached: a caller asks exactly when the block it holds has expired. */
+    override suspend fun liveTrading(symbol: String): Trading? = try {
+        api.asset(symbol.trim()).trading
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
     }
 
     companion object {
