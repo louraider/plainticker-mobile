@@ -20,13 +20,13 @@ import org.w3c.dom.Element
 
 /**
  * Brand assets, DESIGN.md section 9, read straight from disk like [ManifestTest]: the adaptive
- * launcher icon is the "Two corners" mark in Amber's own dark ground over an Amber-ink tile,
+ * launcher icon is the "Two corners" mark in Amber's own dark ground over an Amber-action tile,
  * carries a monochrome layer with the same shapes, keeps every coordinate inside the mask a
  * launcher actually cuts, and no template bitmap is left in a mipmap folder. The splash theme
- * paints that same ground behind the same rectangles in that same ink, with light system bar
+ * paints Amber's own ground behind the same rectangles in Amber's own ink, with light system bar
  * icons, and hands over to the app theme; the notification icon is the same mark in white. Colors
  * are compared with [AmberDarkColors], not with copied literals, so a change to
- * [AmberDarkColors.surfaceGround] or [AmberDarkColors.textPrimary] cannot leave the icon behind.
+ * [AmberDarkColors.surfaceGround] or [AmberDarkColors.actionFill] cannot leave the icon behind.
  *
  * **2026-09-22: the colour pair, not the shapes.** Every assertion below used to read
  * Instrument's own fixed `Canvas` (`#0B0F14`) and `Ink` (`#E8ECF1`) Kotlin tokens, chosen on
@@ -35,11 +35,24 @@ import org.w3c.dom.Element
  * Instrument's retired, flat palette and had become, as of Amber, a colour nobody else in the app
  * drew any more, visible as a launcher tile that no longer matched the app and a cool-to-warm
  * flash on the splash in light mode. The shapes are untouched (the founder's own pick, not this
- * pass's to redraw); every colour assertion below now reads [AmberDarkColors.surfaceGround] and
+ * pass's to redraw); every colour assertion below read [AmberDarkColors.surfaceGround] and
  * [AmberDarkColors.textPrimary] in exactly the same two roles instead, mirrored into
  * `res/values/colors.xml` as `amber_ground` and `amber_ink` (`design/brand/marks.py`,
- * `AMBER_GROUND`/`AMBER_INK`). The launcher, the splash and the plain window background painted
- * before Compose's first frame now all agree on this one pair.
+ * `AMBER_GROUND`/`AMBER_INK`).
+ *
+ * **2026-09-24: the tile and the reach, not the colour pair's roles or the arrangement.**
+ * Direction A of a three-direction audit ("Two corners, refit," DESIGN.md section 9), the
+ * founder's pick: the launcher tile moved a second time, off [AmberDarkColors.textPrimary]
+ * (`amber_ink`) onto [AmberDarkColors.actionFill] (`amber_action`, `#FFC247`), so the icon is the
+ * one warm-yellow tile in the drawer instead of one more white one holding Amber's colours
+ * without any amber in it; the mark itself stays [AmberDarkColors.surfaceGround]. And the four
+ * rectangles pulled in from a 26-to-82 block with a 14-unit arm to a 31-to-77 block with a
+ * 12-unit arm, which moves the furthest corner from 39.60 units out to 32.53: inside not only the
+ * superellipse a launcher actually cuts but also the plain 36-unit circle a "Pixel-style"
+ * launcher cuts, which the arrangement used to miss entirely. The splash and the notification
+ * icon are untouched by either change (they never drew the tile), and the launcher, the splash
+ * and the plain window background painted before Compose's first frame still all agree on one
+ * ground.
  *
  * Four lessons are pinned here and every one of them was learned by shipping the wrong thing.
  *
@@ -57,22 +70,28 @@ import org.w3c.dom.Element
  *
  * Ground. Four icon attempts were rejected and all four put a Canvas tile on a near-black drawer
  * wallpaper, where it measured 1.03 to 1 across its own edge and was not a tile at all. The tile
- * is [AmberDarkColors.textPrimary] now and the mark on it is [AmberDarkColors.surfaceGround];
- * Instrument's own Ink-on-Canvas pair measured 15.48 to 1 in the real drawer, and Amber's own
- * pair computes to 16.0:1 by the same WCAG formula (AmberContrastTest's own pinned
- * textPrimary-over-surfaceGround figure for this exact pair; this file has no device to re-shoot
+ * is [AmberDarkColors.actionFill] now (`amber_action`, since the 2026-09-24 refit;
+ * [AmberDarkColors.textPrimary]/`amber_ink` before it) and the mark on it is
+ * [AmberDarkColors.surfaceGround]; Instrument's own Ink-on-Canvas pair measured 15.48 to 1 in the
+ * real drawer, the ink tile that replaced it computed to 16.0:1, and Amber's own action tile
+ * computes to 11.5:1, all by the same WCAG formula (AmberContrastTest's own pinned
+ * actionText-over-surfaceGround figure for this exact pair; this file has no device to re-shoot
  * the drawer photo with). So the background layer is asserted against
- * [AmberDarkColors.textPrimary] and asserted to differ from the fill the mark is drawn in,
+ * [AmberDarkColors.actionFill] and asserted to differ from the fill the mark is drawn in,
  * because a figure the same colour as its ground is the failure this replaces.
  *
  * Mask. Every earlier mark was asserted inside the central 66 circle, radius 33, on the grounds
- * that a launcher might cut a circle. This mark's corners sit 39.6 units out, so that rule would
- * refuse it. The rule was a proxy: the mask on the phone this ships to was lifted off a
- * neighbouring tile in a drawer screenshot and fits a superellipse of exponent 3.05, and
- * [MASK_EXPONENT] is that rounded down to 3.0 because the smaller exponent is the tighter shape. A
- * true circular mask would clip about 2% of this mark and would take the outer right-angle point
- * off both corners; design/brand/two-corners/gallery.html draws that, and it is the cost of the
- * arrangement the founder chose.
+ * that a launcher might cut a circle. This mark's corners sat 39.6 units out from 2026-09-15
+ * through 2026-09-22, so that rule would have refused it. The rule was a proxy: the mask on the
+ * phone this ships to was lifted off a neighbouring tile in a drawer screenshot and fits a
+ * superellipse of exponent 3.05, and [MASK_EXPONENT] is that rounded down to 3.0 because the
+ * smaller exponent is the tighter shape. A true circular mask would have clipped about 2% of the
+ * original placement and would have taken the outer right-angle point off both corners;
+ * design/brand/two-corners/gallery.html draws that. The 2026-09-24 refit (DESIGN.md section 9,
+ * "Two corners, refit") closes that cost rather than accepting it: the corners now sit 32.53
+ * units out, inside not only [MASK_EXPONENT]'s superellipse but also the plain 36-unit circle
+ * ([VISIBLE_HALF]) a "Pixel-style" launcher cuts, so a circular mask frames this mark instead of
+ * bevelling it.
  */
 class BrandAssetsTest {
 
@@ -134,12 +153,13 @@ class BrandAssetsTest {
     }
 
     @Test
-    fun `launcher background is amber's own text-primary token and the mark on it is amber's own ground`() {
+    fun `launcher background is amber's own action token and the mark on it is amber's own ground`() {
         // The ground is the part four rejected attempts got wrong: a near-black tile has no
         // boundary at all against this phone's drawer wallpaper, 1.03 to 1 measured. The tile is
-        // AmberDarkColors.textPrimary now (Instrument's retired Ink played this role before).
-        assertEquals(hex(AmberDarkColors.textPrimary), color("ic_launcher_background"))
-        assertEquals(hex(AmberDarkColors.textPrimary), color("amber_ink"))
+        // AmberDarkColors.actionFill now (2026-09-24, "Two corners, refit": the amber_ink tile
+        // that briefly played this role, 2026-09-15 through 2026-09-22, is retired in turn).
+        assertEquals(hex(AmberDarkColors.actionFill), color("ic_launcher_background"))
+        assertEquals(hex(AmberDarkColors.actionFill), color("amber_action"))
         assertEquals(hex(AmberDarkColors.surfaceGround), color("amber_ground"))
         // And the mark has to be a figure on that ground rather than the same colour as it.
         assertEquals(setOf(hex(AmberDarkColors.surfaceGround)), vector("ic_launcher_foreground.xml").fills.toSet())
@@ -243,17 +263,19 @@ class BrandAssetsTest {
     fun `foreground is two registration corners with an empty centre between them`() {
         val fg = vector("ic_launcher_foreground.xml")
         assertEquals(108, fg.size)
-        // Four rectangles, all in Amber's own dark ground over Amber's own ink tile. DESIGN.md
-        // section 2 allows one accent and this mark uses none, so nothing here may be either
-        // theme's action.fill (Amber's own accent), the same rule this test pinned against
-        // Instrument's retired Accent before the colour pair moved.
+        // Four rectangles, all in Amber's own dark ground; the tile under them is Amber's own
+        // action token as of the 2026-09-24 refit (a separate layer, res/values, not this
+        // vector), and DESIGN.md section 2 still allows one accent, which this mark's own paths
+        // still use none of: nothing here may be either theme's action.fill itself, the same rule
+        // this test pinned against Instrument's retired Accent before the colour pair moved.
         assertEquals(4, fg.paths.size)
         assertFalse("the mark carries an accent it was not drawn with", fg.fills.contains(hex(AmberDarkColors.actionFill)))
         assertFalse("the mark carries an accent it was not drawn with", fg.fills.contains(hex(AmberLightColors.actionFill)))
 
         val (topAcross, topDown, bottomAcross, bottomDown) = fg.boxes()
-        // Each corner is two arms meeting at one vertex: the top-left pair share (26, 26), the
-        // bottom-right pair share (82, 82). An L, twice, and nothing joining them.
+        // Each corner is two arms meeting at one vertex: the top-left pair share (31, 31), the
+        // bottom-right pair share (77, 77) (2026-09-24: pulled in from (26, 26)/(82, 82) by the
+        // refit). An L, twice, and nothing joining them.
         assertEquals("the top-left arms do not share a vertex", topAcross.left, topDown.left, 0.011)
         assertEquals("the top-left arms do not share a vertex", topAcross.top, topDown.top, 0.011)
         assertEquals("the bottom-right arms do not share a vertex", bottomAcross.right, bottomDown.right, 0.011)
@@ -263,10 +285,13 @@ class BrandAssetsTest {
         assertTrue("the corners are not on opposite diagonals", topDown.bottom < bottomAcross.top)
         // And the middle is empty. This is the mark: the place is kept and nothing is printed in
         // it, which is what the app does below the liquidity floor of DESIGN.md section 1.1.
+        // 22x22 as of the 2026-09-24 refit (28x28 before it): the block pulled in with the refit,
+        // and the kept centre pulled in with the block, in roughly the same proportion (28 of 56
+        // before, 22 of 46 now).
         val middle = Box(topDown.right, topAcross.bottom, bottomDown.left, bottomAcross.top)
         assertEquals("the empty centre is not centred", 54.0, middle.centerX, 0.011)
         assertEquals("the empty centre is not centred", 54.0, middle.centerY, 0.011)
-        assertTrue("the centre is not empty enough to read as kept: $middle", middle.thinnest >= 24.0)
+        assertTrue("the centre is not empty enough to read as kept: $middle", middle.thinnest >= 20.0)
     }
 
     @Test
@@ -297,8 +322,9 @@ class BrandAssetsTest {
             assertTrue("a $dp dp shape is not there at 48dp: $it", it.thinnest >= MIN_STROKE)
         }
         // The mask, not the circle. Every earlier mark was asserted inside the central 66 circle;
-        // this one's corners are 39.6 units out, and the circle was only ever a proxy for the
-        // superellipse a launcher really cuts. 3.05 was measured off the phone and 3.0 is tighter.
+        // the original placement's corners were 39.6 units out, and the circle was only ever a
+        // proxy for the superellipse a launcher really cuts. 3.05 was measured off the phone and
+        // 3.0 is tighter.
         fg.data.flatMap(::points).forEach { (x, y) ->
             val ax = abs(x - 54.0) / VISIBLE_HALF
             val ay = abs(y - 54.0) / VISIBLE_HALF
@@ -310,12 +336,22 @@ class BrandAssetsTest {
             // And still inside the 72 a launcher shows at all, mask or no mask.
             assertTrue("($x, $y) is outside the visible 72", ax <= 1.0 + 1e-9 && ay <= 1.0 + 1e-9)
         }
-        // The furthest corner is outside the 33 circle on purpose, and this pins how far: a
-        // launcher that cuts a true circle bevels the outer point of both corners, and that cost
-        // is accepted rather than discovered. Past 36 the corner would leave the visible 72.
+        // 2026-09-24, "Two corners, refit" (DESIGN.md section 9): every corner now sits inside
+        // the plain 36-unit circle (VISIBLE_HALF) a "Pixel-style" launcher cuts too, not just the
+        // tighter superellipse above, so a circular mask frames this mark instead of bevelling
+        // the outer right-angle point off both corners the way the original placement's 39.6
+        // units out used to.
+        fg.data.flatMap(::points).forEach { (x, y) ->
+            val fromCenter = hypot(x - 54.0, y - 54.0)
+            assertTrue(
+                "($x, $y) is $fromCenter units out, outside the 36-unit circle mask a launcher cuts",
+                fromCenter <= VISIBLE_HALF,
+            )
+        }
+        // And this pins how far in: comfortably inside even the deprecated 33-unit SAFE_RADIUS
+        // every earlier mark (before "Two corners") was asserted against.
         val furthest = fg.data.flatMap(::points).maxOf { (x, y) -> hypot(x - 54.0, y - 54.0) }
-        assertTrue("the mark no longer reaches past the 33 circle: $furthest", furthest > 33.0)
-        assertTrue("the mark has been pushed out past the visible 72: $furthest", furthest <= 39.61)
+        assertEquals("the furthest corner has moved off its own refit numbers", 32.53, furthest, 0.01)
         // And the block sits in the middle of the viewport, so no mask crops it unevenly.
         assertEquals(54.0, (boxes.minOf { it.left } + boxes.maxOf { it.right }) / 2, 0.011)
         assertEquals(54.0, (boxes.minOf { it.top } + boxes.maxOf { it.bottom }) / 2, 0.011)
@@ -366,8 +402,8 @@ class BrandAssetsTest {
     fun `the splash draws the same shapes in amber's own ink, because the foreground is drawn for a light tile`() {
         // The splash paints Amber's own ground and then this vector over it. It cannot be the
         // adaptive icon's foreground layer any more: that layer is the same ground, for the
-        // Amber-ink tile the launcher shows, and that ground on itself is nothing. Same
-        // rectangles, different color, one generator.
+        // Amber-action tile the launcher shows (2026-09-24, "Two corners, refit"), and that
+        // ground on itself is nothing. Same rectangles, different color, one generator.
         val fg = vector("ic_launcher_foreground.xml")
         val brand = vector("ic_brand_mark.xml")
         assertEquals(108, brand.size)

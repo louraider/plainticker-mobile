@@ -14,4 +14,12 @@
          own values. WCAG contrast against amber_ground is 16.0:1, matching AmberContrastTest's
          own pinned textPrimary-over-surfaceGround figure; see design/brand/marks.py. -->
     <color name="amber_ink">#F5EEDD</color>
+    <!-- Amber's own dark-set accent (Tokens.kt AmberPrimitive.fillDark, read through the public
+         AmberDarkColors.actionFill): the launcher tile as of the 2026-09-24 refit (DESIGN.md
+         section 9, "Two corners, refit"), replacing amber_ink in that one role so the icon is the
+         one warm-yellow tile in the drawer instead of one more white tile holding Amber's colours
+         without any amber in it. The mark on it stays amber_ground. WCAG contrast against
+         amber_ground is 11.5:1, matching AmberContrastTest's own pinned actionText-over-
+         surfaceGround figure; see design/brand/marks.py. -->
+    <color name="amber_action">#FFC247</color>
 </resources>

@@ -410,12 +410,15 @@ material3 1.4.0's stable component (section 10), 64dp on `surfaceRaised`, labels
 string, so no character budget applies. The pill's width-morph (research 5.3) is not built; what
 plays is `NavigationItem`'s own built-in selection transition.
 
-**`TopBar`** (`TopBar.kt`) still draws `PlainTickerType.wordmark` (Instrument's word style,
-unchanged by the redesign per section 3) but resolves `defaultAmberColors()` for its three colours.
-One slot on the right: a real action (`TextAction`), a picture of an action with no handler (the
-onboarding backdrop's "You"), or a short meta fragment (a wallet's short key). Never sticky;
-scrolls away with the content, covered when needed by `TopScrim` (`Insets.kt`), which paints
-nothing and holds no semantics of its own.
+**`TopBar`** (`TopBar.kt`) draws `PlainTickerType.wordmark` and resolves `defaultAmberColors()` for
+its three colours. The wordmark itself moved on 2026-09-24 (section 9, "Two corners, refit"):
+Bricolage 700 replacing Outfit SemiBold 15sp, the one deliberate exception to "Instrument's word
+style is unchanged by the redesign" every other `TopBar` slot still is, closing the one place the
+app and the web drew "PlainTicker" in two different faces (`TopBarTest` proves the wider glyphs
+still clear the bar's own one-line budget). One slot on the right: a real action (`TextAction`), a
+picture of an action with no handler (the onboarding backdrop's "You"), or a short meta fragment (a
+wallet's short key). Never sticky; scrolls away with the content, covered when needed by
+`TopScrim` (`Insets.kt`), which paints nothing and holds no semantics of its own.
 
 **`Banner`** (`Banner.kt`) is the one state slot under the header: `surfaceRaised`, a wrapping
 `text` (no `maxLines`, so no clip risk) and an optional `TextAction`. Restyled to resolve
@@ -442,7 +445,7 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `ListRow` | **Kept, one caller** | `GalleryScreen.kt` only (debug builds), to stay field-for-field comparable with `design/canvas/instrument.py`'s own artboards. Every product screen moved to `AmberTickerRow`. Do not add a second caller. |
 | `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak: `ListScreen.kt` (Stocks) draws `TodayStrip` beside the Watched chip whenever a reader has watched a ticker, directly on that screen's own `colors.surfaceGround`, and it was reading Instrument's fixed `Ink2`/`Line` there, near-invisible on Amber's light ground. The `pluralStringResource` calls behind that text still live only in `ListScreen.kt`, unmoved (`CopyLintTest`'s `CountCopyTest` pins them there; this fix only threads the screen's own `colors` through, not the copy). `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
 | `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. The digest block on Today now follows the system light/dark setting like the rest of the screen. |
-| `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept, Instrument type, Amber colour** | Anatomy and `PlainTickerType` styles unchanged; each now resolves `defaultAmberColors()` instead of a fixed dark token. Not an oversight: none of these needed a shape change to read correctly, only a colour source that follows the system theme. |
+| `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept, Instrument type (mostly), Amber colour** | Anatomy and `PlainTickerType` styles unchanged; each now resolves `defaultAmberColors()` instead of a fixed dark token. Not an oversight: none of these needed a shape change to read correctly, only a colour source that follows the system theme. One exception since 2026-09-24: `TopBar`'s own `PlainTickerType.wordmark` moved onto Bricolage 700 (section 9), so this row's "type unchanged" claim now holds for `Field`, `Skeleton`, `Banner` and `TextAction` only. |
 
 ## 5. Layout
 
@@ -699,11 +702,13 @@ registration corners on the adaptive icon's 108-unit viewport, top-left and bott
 opposite diagonals, with an empty centre between them: "the place the app keeps around a figure it
 has not printed," the mark's own docstring says, echoing section 1.1's liquidity floor before
 either Amber or this document's own restyle existed. Four axis-aligned rectangles, Amber's own
-dark-set ground (`#16130D`, `AmberDarkColors.surfaceGround`) on Amber's own dark-set primary text
-as the tile (`#F5EEDD`, `AmberDarkColors.textPrimary`); `BrandAssetsTest` pins both the geometry
-(rotationally symmetric about the centre, never mirror-symmetric top to bottom, so a flattened,
-one-colour silhouette still reads as itself rather than collapsing into a plus sign) and the two
-colours directly against `AmberDarkColors`. The same rectangles reappear as the splash icon (in
+dark-set ground (`#16130D`, `AmberDarkColors.surfaceGround`) on Amber's own dark-set accent as the
+tile (`#FFC247`, `AmberDarkColors.actionFill`, `amber_action` — `#F5EEDD`/`amber_ink` from
+2026-09-15 through 2026-09-24, see "Two corners, refit" below); `BrandAssetsTest` pins both the
+geometry (rotationally symmetric about the centre, never mirror-symmetric top to bottom, so a
+flattened, one-colour silhouette still reads as itself rather than collapsing into a plus sign,
+and every corner inside the 36-unit circle a launcher actually cuts) and the two colours directly
+against `AmberDarkColors`. The same rectangles reappear as the splash icon (in
 Amber's own ink, over Amber's own ground as the window background) and the notification icon (in
 white, fitted to the 24dp status-bar viewport).
 
@@ -750,13 +755,14 @@ exact pair) — not a fresh photograph of the real Seeker drawer the way the 202
 above were, since this fix had no device to retake one with, but the same formula every other
 number in this section already answers to.
 
-**One more fact, unrelated to colour but worth stating beside it** because it bears on any future
-revision: the mark's own corners
-sit 39.60 units from centre, well past the 33-unit circle every earlier mark was checked against,
-and clear the real superellipse mask a launcher actually cuts by only 0.81 of a unit (two device
-pixels on the Seeker). This is a property of the arrangement, not the colour, and nothing above
-changes it, but it means the mark is already at the edge of its own safe zone, which narrows how
-much room a future revision has to move these corners at all, whatever it does with colour.
+**One more fact, unrelated to colour but worth stating beside it, as of this fix (2026-09-22):**
+the mark's own corners sit 39.60 units from centre, well past the 33-unit circle every earlier
+mark was checked against, and clear the real superellipse mask a launcher actually cuts by only
+0.81 of a unit (two device pixels on the Seeker). This is a property of the arrangement, not the
+colour, and nothing above changes it, but it means the mark is already at the edge of its own safe
+zone, which narrows how much room a future revision has to move these corners at all, whatever it
+does with colour. (2026-09-24: a future revision did move them, closing exactly this; see "Two
+corners, refit" below.)
 
 **What this is not.** Not a recommendation to redraw it: that is a judgement about identity and
 cost the founder should make deliberately, against a concrete replacement, the same way section 10
@@ -764,6 +770,63 @@ asks for `1.5.0-alpha` to be decided against a concrete component rather than re
 default. What changed here is narrower: the arrangement still works and now the colour pair does
 too, on Amber's own values instead of Instrument's retired ones, closing the mismatch that used to
 be visible at the launcher and at cold launch in light mode.
+
+**2026-09-24: "Two corners, refit."** An audit of both repos (a comparison page built against the
+live SVG geometry, not a mockup) found the mark's own drawing still fine but two things still
+wrong with it, both from 2026-09-22's colour-only fix: the launcher tile carried Amber's colours
+without any amber in it (`amber_ink`, a cream near-white, so on a Seeker drawer the app was one
+more white tile among Google's, holding what reads as a crop button), and the "one more fact"
+noted just above — the corners sitting 39.60 units out, inside the superellipse a real launcher
+cuts but past the plain 36-unit circle (`VISIBLE / 2`) a "Pixel-style" one cuts — was still true, a
+cost accepted rather than closed. Three directions were drawn against that finding: keeping this
+mark and fixing both (direction A, "Two corners, refit"), a departures-board split-flap "P"
+(direction B), and two rectangles beside each other reading as sector-vs-stock (direction C, which
+an earlier round had already lost to reading as a split-screen toggle button). The founder picked
+A: the mark the app already shipped, the one the audit found nothing wrong with as a drawing, is
+still this product's own argument (a kept, empty place where a figure is not printed) regardless
+of which two numbers move under it.
+
+**The fix, in `design/brand/marks.py`'s `TWO_CORNERS`.** Two numbers, not a redraw. The four
+rectangles pulled in from a 26-to-82 block with a 14-unit arm to a 31-to-77 block with a 12-unit
+arm, which moves the furthest corner from 39.60 units out to 32.53: inside not only the
+superellipse `MASK_EXPONENT` already cleared but now also that plain 36-unit circle, and even the
+deprecated 33-unit `SAFE_RADIUS` this file used to report clearing by nothing at all. And
+`Mark.ground` moved a second time, off `AMBER_INK` (`amber_ink`, `AmberDarkColors.textPrimary`)
+onto `AMBER_ACTION` (`amber_action`, `#FFC247`, `AmberDarkColors.actionFill`, Tokens.kt
+`AmberPrimitive.fillDark`): the corners themselves stay `AMBER_GROUND`
+(`AmberDarkColors.surfaceGround`), the same near-black fill they always carried. Contrast against
+the new tile is 11.5:1 by the same WCAG formula `AmberContrastTest` uses for every other ratio in
+this document — `AmberContrastTest`'s own pinned `actionText`-over-`surfaceGround` figure for this
+exact pair, read either direction. `glyph.py` regenerates `ic_launcher_foreground.xml`,
+`ic_launcher_monochrome.xml`, `ic_brand_mark.xml` (the splash, unaffected by the tile move: it
+paints Amber's own ink over Amber's own ground, never the launcher tile) and
+`ic_stat_plainticker.xml` from the same geometry, and `res/values/colors.xml`/
+`ic_launcher_background.xml` from the same `Mark.ground`, so none of the five can drift from the
+other four. `BrandAssetsTest` pins the new tile against `AmberDarkColors.actionFill` and asserts
+every corner of the shipped drawable sits inside the 36-unit circle, not only the superellipse.
+
+**The store images and the app's own wordmark, in `design/brand/render_icons.py` and
+`ui/theme/Type.kt`.** `store/icon-512.png` and `store/banner-1024x500.png` were still Instrument's
+retired cool `#E8ECF1`/`#0B0F14` and the Outfit wordmark, rendered before even the 2026-09-22
+colour fix and never re-run; `render_icons.py` now reads the shipped drawable (so it cannot drift
+from it either) and sets the banner's own wordmark and line in the bundled Bricolage Grotesque,
+instantiated at each size's own `wght`/`wdth`/`opsz` the way `Type.kt`'s `bricolage()` already
+does for every `AmberType` style. And the app's own `TopBar` wordmark, `PlainTickerType.wordmark`,
+moved off Outfit SemiBold 15sp onto Bricolage 700: the audit's own finding was that plain Bricolage
+was already right and only the app had not moved onto it, since the web's TopNav lockup and both
+OG images already set "PlainTicker" in Bricolage Bold. Same 15sp point size, no manual tracking
+(Bricolage's own spacing, the same choice every `AmberType` style already makes). `TopBarTest`
+proves the wider glyphs still clear the bar's own one-line clipping budget against the widest real
+action label beside them ("Watching"), measured with fontTools against the bundled variable
+Bricolage at this exact instance, at font scale 1.0 and 1.3 — the same method `AmberTickerRowTest`
+uses, never a uiautomator dump.
+
+**What this still is not.** Still not a redraw, and still not the founder's call to make by
+default: directions B and C above are recorded (their own SVGs sit beside A's in the audit) for if
+a real rebrand is ever decided against a concrete alternative, the same standard section 10 holds
+`1.5.0-alpha` to. This fix is narrower again: the arrangement, unchanged since 2026-09-15, now
+also clears the mask a real launcher cuts with room to spare, and the tile, the store images and
+the app's own wordmark all read as the one product the web already does.
 
 ## 10. Material3 Expressive: what 1.4.0 actually has
 

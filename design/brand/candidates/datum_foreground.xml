@@ -2,7 +2,7 @@
 <!--
   Brand mark, DESIGN.md section 9: "Datum",
   the quiet one: one reference rule and one reading held off it, nothing else.
-  Drawn over a #0B0F14 background layer; glyph.py writes the chosen mark's own ground
+  Drawn over a #16130D background layer; glyph.py writes the chosen mark's own ground
   into res/values/ic_launcher_background.xml, so the tile cannot drift from it.
   Block 32 to 76 across, 38 to 70 down.
   Furthest corner 27.20 units from the center, +12.73 units inside the
@@ -16,7 +16,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#E8ECF1"
+        android:fillColor="#F5EEDD"
         android:pathData="M32 62H76V70H32Z" />
     <path
         android:fillColor="#5AA9E6"
