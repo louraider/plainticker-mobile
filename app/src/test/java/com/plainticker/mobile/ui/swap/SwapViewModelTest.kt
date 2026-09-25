@@ -16,7 +16,13 @@ import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.receipts.FakeReceiptStore
 import com.plainticker.mobile.data.respondJson
 import com.plainticker.mobile.data.rpc.TokenBalance
+import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeRpcRepository
+import com.plainticker.mobile.repo.FakeSecondSource
+import com.plainticker.mobile.repo.agreeingSecondRead
+import com.plainticker.mobile.repo.mintFacts
+import com.plainticker.mobile.repo.price
+import com.plainticker.mobile.repo.scaled
 import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
 import com.plainticker.mobile.wallet.TransactionGuard
@@ -170,6 +176,8 @@ class SwapViewModelTest {
         submitSwaps: Boolean = true,
         receipts: FakeReceiptStore = this.receipts,
         mints: com.plainticker.mobile.repo.MintRepository? = null,
+        secondSource: com.plainticker.mobile.repo.SecondSource = FakeSecondSource(),
+        prices: com.plainticker.mobile.repo.PriceRepository = tslaxPriced(),
     ) = SwapViewModel(
         swapApi = JupiterSwapApi(mock.client),
         wallet = wallet,
@@ -181,7 +189,16 @@ class SwapViewModelTest {
         // The receipt write stays on the test scheduler, so virtual time still orders it.
         ioDispatcher = mainDispatcher.dispatcher,
         mints = mints,
+        secondSource = secondSource,
+        prices = prices,
     )
+
+    /**
+     * TSLAx at the price Jupiter's own reverse order implies: inUsdValue 0.9960867 for 264,600
+     * base units (0.002646 TSLAx) is 376.45 a token, so the value check passes the real order.
+     */
+    private fun tslaxPriced(usd: Double = TSLAX_USD) =
+        FakePriceRepository(Result.success(mapOf(KnownMints.TSLAX to price(usd))))
 
     private val logged = mutableListOf<String>()
 
@@ -1051,7 +1068,9 @@ class SwapViewModelTest {
     fun `a split xStock is typed and sent in the right units, and Max is still the exact raw balance`() = runTest {
         // NFLXx's shape: an effective multiplier of 10, so 1 share in the wallet is 10^7 raw.
         val split = tslax.copy(multiplier = java.math.BigDecimal.TEN)
-        val vm = viewModel(jupiter(), wallet(), rpc = chain(tokenRaw = 272_557_048_309L))
+        // The public node reports the same split in force, so the second-source check agrees.
+        val second = FakeSecondSource(Result.success(agreeingSecondRead(mintFacts(scaledUiAmount = scaled(10.0)))))
+        val vm = viewModel(jupiter(), wallet(), rpc = chain(tokenRaw = 272_557_048_309L), secondSource = second)
 
         vm.state.test {
             awaitItem()
@@ -1085,7 +1104,16 @@ class SwapViewModelTest {
                 ),
             ),
         )
-        val vm = viewModel(jupiter(), wallet(), rpc = chain(tokenRaw = 10_000_000L), mints = mints)
+        // The public node reads the same mint at the same moment, so it finds the same 10 in force.
+        val second = FakeSecondSource(
+            Result.success(
+                agreeingSecondRead(
+                    mintFacts(scaledUiAmount = scaled(1.0, newMultiplier = 10.0, effectiveAtEpochSeconds = 1_763_337_300L)),
+                    readAtMillis = 1_790_208_000_000L,
+                ),
+            ),
+        )
+        val vm = viewModel(jupiter(), wallet(), rpc = chain(tokenRaw = 10_000_000L), mints = mints, secondSource = second)
 
         vm.state.test {
             awaitItem()
@@ -1107,6 +1135,273 @@ class SwapViewModelTest {
             vm.openOut(tslax.copy(multiplier = null))
             val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
             assertEquals(SwapFailure.CHAIN_UNREAD, failed.reason)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ---- Swap to USDC against a semi-trusted forwarder (security audit, 2026-09-26) -------------------
+
+    @Test
+    fun `inflated decimals refuse Swap to USDC before any quantity is offered or quoted`() = runTest {
+        // The audit's example: the forwarder answers decimals 10, so "1 TSLAx" would be the base
+        // units of 100. Whether the screen handed the token in or the mint read supplied it, the
+        // sheet stops at the plain chain error and never falls back to 8.
+        val second = FakeSecondSource()
+        val handedIn = viewModel(jupiter(), wallet(), rpc = chain(tokenRaw = 264_600L), secondSource = second)
+        handedIn.state.test {
+            awaitItem()
+            handedIn.openOut(tslax.copy(decimals = 10))
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.CHAIN_UNREAD, failed.reason)
+            assertNull("no balance was offered", failed.funds)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val mock = jupiter()
+        val mints = com.plainticker.mobile.repo.FakeMintRepository(
+            reading = Result.success(com.plainticker.mobile.repo.mintReading(mintFacts(decimals = 10))),
+        )
+        val readHere = viewModel(mock, wallet(), rpc = chain(tokenRaw = 264_600L), mints = mints, secondSource = second)
+        readHere.state.test {
+            awaitItem()
+            readHere.openOut(tslax.copy(multiplier = null))
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.CHAIN_UNREAD, failed.reason)
+            assertTrue("nothing was quoted", mock.requests.isEmpty())
+            assertTrue("refused before the second source was even needed", second.asked.isEmpty())
+            assertTrue(logged.any { "10 decimals" in it })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a multiplier the second source does not confirm refuses Swap to USDC, both ways round`() = runTest {
+        // The forwarder says unsplit; the public node says STRCx's real 1.086 is in force.
+        val missed = FakeSecondSource(Result.success(agreeingSecondRead(mintFacts(scaledUiAmount = scaled(1.0863570205637327)))))
+        // The forwarder says a tiny multiplier (more base units per typed share); the node says 1.
+        val tiny = FakeSecondSource()
+        val cases = listOf(tslax to missed, tslax.copy(multiplier = java.math.BigDecimal("0.01")) to tiny)
+        for ((token, second) in cases) {
+            val mock = jupiter()
+            val vm = viewModel(mock, wallet(), rpc = chain(tokenRaw = 264_600L), secondSource = second)
+            vm.state.test {
+                awaitItem()
+                vm.openOut(token)
+                val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+                assertEquals(SwapFailure.SECOND_SOURCE_MISMATCH, failed.reason)
+                assertEquals("a disagreement offers nothing but Close", FailureNext.NONE, failed.reason.next)
+                assertEquals(listOf(seeker.address to KnownMints.TSLAX), second.asked)
+                assertTrue("nothing was quoted", mock.requests.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+    }
+
+    @Test
+    fun `a second source that is down refuses Swap to USDC, and the holding is still shown`() = runTest {
+        val mock = jupiter()
+        val second = FakeSecondSource(Result.failure(java.io.IOException("public node unreachable")))
+        val rpc = chain(tokenRaw = 264_600L)
+        val vm = viewModel(mock, wallet(), rpc = rpc, secondSource = second)
+
+        vm.watchHolding(tslax)
+        runCurrent()
+        assertEquals("viewing does not depend on the second source", SwapHolding(tslax, 264_600L), vm.holding.value)
+        assertTrue(vm.holding.value!!.canSwapOut)
+
+        vm.state.test {
+            awaitItem()
+            vm.openOut(tslax)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.SECOND_SOURCE_UNREACHABLE, failed.reason)
+            assertEquals(FailureOutcome.NOTHING_SENT, failed.reason.outcome)
+            assertTrue("nothing was quoted", mock.requests.isEmpty())
+            assertTrue("the node's own words are logged, never drawn", logged.any { "public node unreachable" in it })
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals("and the holding is still there", SwapHolding(tslax, 264_600L), vm.holding.value)
+    }
+
+    @Test
+    fun `the flip into Swap to USDC is checked at the tap, since it never passed the opening`() = runTest {
+        val mock = jupiter()
+        val second = FakeSecondSource()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, rpc = chain(tokenRaw = 1_366_141L), secondSource = second)
+
+        vm.state.test {
+            awaitItem()
+            vm.open(tslax)
+            awaitUntil { it is SwapState.Amount }
+            assertTrue("USDC into the token needs no second source", second.asked.isEmpty())
+            vm.flip()
+            awaitUntil { it is SwapState.Amount && it.leg.input.mint == KnownMints.TSLAX }
+            vm.useMax()
+            awaitUntil { it is SwapState.Amount && it.input.isUsable }
+            second.result = Result.failure(java.io.IOException("down"))
+            vm.submit()
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.SECOND_SOURCE_UNREACHABLE, failed.reason)
+            assertTrue("nothing was quoted", mock.orders().isEmpty())
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a forged balance cannot raise the cap past what the second source shows`() = runTest {
+        orderResponse = reverseOrder
+        executePlan = listOf(reverseLanded to HttpStatusCode.OK)
+        val mock = jupiter()
+        // The forwarder claims 264.6 TSLAx; the public node shows the 0.002646 actually held.
+        val second = FakeSecondSource(Result.success(agreeingSecondRead(spendableRaw = 264_600L)))
+        val vm = viewModel(mock, wallet(), rpc = chain(tokenRaw = 26_460_000_000L), secondSource = second)
+
+        vm.state.test {
+            awaitItem()
+            vm.openOut(tslax)
+            val amount = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertEquals("the cap is the smaller balance", 264_600L, amount.balanceRaw)
+            vm.amountChanged("1")
+            val one = awaitUntil { it is SwapState.Amount && it.input.text == "1" } as SwapState.Amount
+            assertEquals("1 TSLAx is more than the wallet really has", AmountProblem.ABOVE_BALANCE, one.input.problem)
+            assertFalse(one.canSubmit)
+
+            vm.useMax()
+            val max = awaitUntil { it is SwapState.Amount && it.input.isUsable } as SwapState.Amount
+            assertEquals("Max is the confirmed balance, not the forged one", 264_600L, max.input.raw)
+            vm.submit()
+            awaitUntil { it is SwapState.Landed }
+            assertEquals("264600", mock.orders().single().url.parameters["amount"])
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a balance that shrank by the tap goes back to the amount step and quotes nothing`() = runTest {
+        orderResponse = reverseOrder
+        val mock = jupiter()
+        val second = FakeSecondSource()
+        val vm = viewModel(mock, wallet(), rpc = chain(tokenRaw = 264_600L), secondSource = second)
+
+        vm.state.test {
+            awaitItem()
+            openOutAndMax(vm, this)
+            second.result = Result.success(agreeingSecondRead(spendableRaw = 100_000L))
+            vm.submit()
+            val back = awaitUntil { it is SwapState.Amount && it.input.problem != null } as SwapState.Amount
+            assertEquals(AmountProblem.ABOVE_BALANCE, back.input.problem)
+            assertEquals(100_000L, back.balanceRaw)
+            assertTrue("nothing was quoted", mock.orders().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an order whose dollar value is far from the typed quantity at the shown price never reaches the wallet`() = runTest {
+        // The real reverse order is worth 0.996 USD. At a shown price 100 times lower, the typed
+        // 0.002646 TSLAx is worth a hundredth of that: the shape of an amount inflated by two
+        // decimals. At 10 percent off it is still refused; the bound is 5.
+        for (shown in listOf(TSLAX_USD / 100.0, TSLAX_USD * 1.10, TSLAX_USD * 0.90)) {
+            resetPerCase()
+            orderResponse = reverseOrder
+            val mock = jupiter()
+            val wallet = wallet()
+            val vm = viewModel(mock, wallet, rpc = chain(tokenRaw = 264_600L), prices = tslaxPriced(shown))
+            vm.state.test {
+                awaitItem()
+                openOutAndMax(vm, this)
+                vm.submit()
+                val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+                assertEquals("shown $shown", SwapFailure.VALUE_MISMATCH, failed.reason)
+                assertEquals("the wallet was never opened", 0, wallet.callCount)
+                assertTrue(mock.executes().isEmpty())
+                assertTrue(receipts.writes.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+    }
+
+    @Test
+    fun `an order within the value bound goes on to the wallet`() = runTest {
+        // 3 percent apart either way: price movement inside the price cache's 30 seconds.
+        for (shown in listOf(TSLAX_USD * 1.03, TSLAX_USD * 0.97)) {
+            resetPerCase()
+            orderResponse = reverseOrder
+            executePlan = listOf(reverseLanded to HttpStatusCode.OK)
+            val wallet = wallet()
+            val vm = viewModel(jupiter(), wallet, rpc = chain(tokenRaw = 264_600L), prices = tslaxPriced(shown))
+            vm.state.test {
+                awaitItem()
+                openOutAndMax(vm, this)
+                vm.submit()
+                awaitUntil { it is SwapState.Landed }
+                assertEquals(1, wallet.callCount)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+    }
+
+    @Test
+    fun `a value check that cannot be made is a refusal, not a pass`() = runTest {
+        val noPrice = FakePriceRepository(Result.success(emptyMap()))
+        val priceDown = FakePriceRepository(Result.failure(java.io.IOException("price v3 down")))
+        val noUsd = reverseOrder.replace(""""inUsdValue":0.9960867,""", "")
+        assertTrue("the fixture carries the field this case removes", noUsd != reverseOrder)
+        val cases = listOf(
+            reverseOrder to noPrice,
+            reverseOrder to priceDown,
+            noUsd to tslaxPriced(),
+        )
+        for ((order, prices) in cases) {
+            resetPerCase()
+            orderResponse = order
+            val wallet = wallet()
+            val vm = viewModel(jupiter(), wallet, rpc = chain(tokenRaw = 264_600L), prices = prices)
+            vm.state.test {
+                awaitItem()
+                openOutAndMax(vm, this)
+                vm.submit()
+                val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+                assertEquals(SwapFailure.VALUE_UNCHECKED, failed.reason)
+                assertEquals(0, wallet.callCount)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+    }
+
+    @Test
+    fun `USDC into a token is not held to the Swap to USDC checks`() = runTest {
+        val second = FakeSecondSource(Result.failure(java.io.IOException("down")))
+        val prices = FakePriceRepository(Result.success(emptyMap()))
+        val wallet = wallet()
+        val vm = viewModel(jupiter(), wallet, secondSource = second, prices = prices)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Landed }
+            assertTrue(second.asked.isEmpty())
+            assertTrue(prices.requested.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `swap back asks the second source for a balance no older than the landing's slot`() = runTest {
+        val rpc = chain()
+        val second = FakeSecondSource()
+        val vm = viewModel(jupiter(), wallet(), rpc = rpc, secondSource = second)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Landed }
+            rpc.balances = Result.success(listOf(balance(KnownMints.USDC, 15_200_000L, 6), balance(KnownMints.TSLAX, 1_360_941L, 8)))
+            vm.swapBack()
+            val back = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertEquals(1_360_941L, back.balanceRaw)
+            assertEquals(listOf<Long?>(367_000_000L), second.slots)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1289,6 +1584,9 @@ class SwapViewModelTest {
     private companion object {
         const val START = 1_757_600_000_000L
         const val TICK = 100L
+
+        /** TSLAx in USD as the real 2026-09-24 reverse order priced it (see tslaxPriced). */
+        const val TSLAX_USD = 376.45
         const val REQUEST_ID = "01a08b00-0000-7000-8000-00000000f00d"
 
         /** 88 characters of base58 padding, a placeholder and never a real signature. */

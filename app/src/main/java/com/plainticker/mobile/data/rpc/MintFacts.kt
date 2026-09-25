@@ -34,7 +34,10 @@ import java.math.BigInteger
  * networking, no formatting.
  */
 data class MintFacts(
-    /** On-chain decimals. 8 on every xStock ([XSTOCK_DECIMALS]); read, never assumed. */
+    /**
+     * On-chain decimals. Always [XSTOCK_DECIMALS]: [from] refuses any other value, because every
+     * xStock mint carries 8 and a different number is a forged read, not a new token.
+     */
     val decimals: Int,
     /** Total supply in base units, as the u64 the node sent. */
     val supplyRaw: BigInteger,
@@ -67,7 +70,12 @@ data class MintFacts(
         /** Every xStock mint is owned by this program, verified live on 2026-09-12. */
         const val PROGRAM = KnownPrograms.TOKEN_2022
 
-        /** Every xStock mint carries 8 decimals, verified live on 2026-09-12. */
+        /**
+         * Every xStock mint carries 8 decimals. Verified live on 2026-09-12 against TSLAx, and on
+         * 2026-09-26 against all 1124 Solana mints in the xStocks catalog, read straight from a
+         * public node: 1124 of 1124 are Token-2022 with 8 decimals. [from] pins it, so it is a
+         * rule and not a fallback.
+         */
         const val XSTOCK_DECIMALS = 8
 
         /** What jsonParsed calls the owning program of a Token-2022 account. */
@@ -87,6 +95,11 @@ data class MintFacts(
          * account, the classic token program, a token account rather than a mint, a node that
          * answered base64 instead of jsonParsed, or a mint payload carrying no decimals or no
          * supply. Every one of those is unknown, never "no risk".
+         *
+         * Decimals other than [XSTOCK_DECIMALS] read as null too (security audit 2026-09-26). The
+         * swap turns a typed quantity into base units with these decimals, so a server that
+         * answered 10 would turn "1 TSLAx" into the base units of 100 and have the wallet approve
+         * that. No xStock carries anything but 8, so any other value is a read to refuse.
          */
         fun from(account: RpcAccount?): MintFacts? {
             if (account == null) return null
@@ -95,6 +108,7 @@ data class MintFacts(
             if (account.parsedType != PARSED_TYPE) return null
             val info = account.parsedInfo ?: return null
             val decimals = int(info["decimals"]) ?: return null
+            if (decimals != XSTOCK_DECIMALS) return null
             val supply = bigInteger(info["supply"]) ?: return null
 
             val extensions = extensions(info)
