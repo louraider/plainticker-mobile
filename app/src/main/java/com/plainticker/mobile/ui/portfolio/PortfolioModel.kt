@@ -1,6 +1,7 @@
 package com.plainticker.mobile.ui.portfolio
 
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.receipts.SwapReceipt
 import com.plainticker.mobile.ui.Copy
@@ -224,9 +225,19 @@ fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
  * What this device's receipts say the app put in the wallet, netted per mint.
  *
  * Both sides of every swap count: an output adds and an input subtracts, so a token swapped back
- * out leaves no row rather than a row the wallet has not held since. USDC drops out by the same
- * arithmetic, because it is only ever paid and never received here, and a mint that nets to zero
- * or below is not a holding.
+ * out leaves no row rather than a row the wallet has not held since. A mint that nets to zero or
+ * below is not a holding.
+ *
+ * **USDC is never one of these rows (QA 2026-09-26, D2), even though "Swap to USDC" can now land it
+ * on the output side of a receipt.** This list is [RecordedHolding]'s own claim, "one xStock this
+ * app's own receipts say it swapped into": USDC is the cash the receipts are denominated in, never
+ * an xStock, and drawing it through the same row as TSLAx or METAx would state things about it that
+ * are only true of an xStock. [RecordedRow]'s meta line says a quantity is "quantity not rescaled"
+ * when the multiplier at landing is stale; USDC has no Token-2022 scaled-UI split to be stale about,
+ * so that sentence would be describing a risk USDC does not carry. The proceeds of a
+ * "Swap to USDC" are not hidden: the swap itself already states them once, honestly, on the swap row
+ * under "Recent swaps" ([swapRow]'s own `received`), the one place this file's own doc already names
+ * as owning a disclosure so it cannot drift from a second copy of it here.
  *
  * A receipt whose fill was never reported ([SwapReceipt.outputAmountRaw] null) adds nothing. That
  * understates rather than invents, which is the only direction this file is allowed to be wrong
@@ -267,13 +278,28 @@ fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
             receipt.inputMultiplier,
         )
     }
-    return net.values.filter { it.amountRaw > 0L }.sortedBy { it.symbol }
+    return net.values.filter { it.amountRaw > 0L && it.mint != KnownMints.USDC }.sortedBy { it.symbol }
 }
 
 /**
  * One recorded holding as a row. The quantity is drawn where a position draws its dollar value,
  * because on this screen in this state it is the only number there is and the symbol beside it
  * says what it counts. The meta is the provenance: when the swap behind it landed.
+ *
+ * **QA 2026-09-26, D2.** [R.string.portfolio_recorded_meta_unscaled] used to read "Swapped %1$s ·
+ * as recorded, current split not read": the full [Fmt.utc] stamp already runs to 21 characters, and
+ * that clause added 36 more, past what [AmberTickerRow]'s `context` slot (`maxLines = 2`) can fit
+ * at font scale 1.3 beside this row's own `figure`, which clipped it mid-word on the device
+ * ("…as recorded, c…"). The section's own lede (`portfolio_recorded_lede`) already states once,
+ * above every row, that these are the app's own record and not a chain read, so repeating "as
+ * recorded" on each row was saying the same thing twice; shortened to "quantity not rescaled," the
+ * one fact this clause actually needs to add. fontTools 4.63 against
+ * `res/font/bricolage_grotesque.ttf`, 2026-09-26, `context`'s 14sp/400 instance: the shortened
+ * string is 340.830dp at 1.0x and 443.079dp at 1.3x, against a two-line capacity of 524.060dp /
+ * 484.478dp beside this row's own widest realistic figure (`AmberTickerRow`'s own "31,209.9,"
+ * 65.970dp / 85.761dp, [AmberTickerRowTest]'s "widest realistic figure this row draws across every
+ * screen"), so it wraps to a real second line rather than clipping. `PortfolioModelTest` pins the
+ * string and the arithmetic.
  */
 fun recordedRow(holding: RecordedHolding): RecordedRow = RecordedRow(
     ticker = holding.ticker,

@@ -48,6 +48,27 @@ class WatchlistModelTest {
         assertEquals(words(R.string.watchlist_row_unserved), row.report)
     }
 
+    /**
+     * QA 2026-09-26, D3. `WatchedTicker.analyzed` is false both when `/summary` genuinely no longer
+     * carries a ticker and when `/summary` did not answer at all (`WatchlistFacts.kt`'s own rule:
+     * a source that failed leaves every row's `analyzed` false, not just the ones actually dropped).
+     * `analysisUnavailable` is the flag that tells the two apart; without it, an offline reader was
+     * told a stock had been removed from coverage rather than that the app could not check.
+     */
+    @Test
+    fun `offline, the same unanalyzed shape says the network failed, not that the ticker was dropped`() {
+        val row = watchRow(watched("MCD", analyzed = false, nextReport = null), analysisUnavailable = true)
+
+        assertEquals(words(R.string.watchlist_row_load_failed), row.report)
+    }
+
+    @Test
+    fun `once summary answers again, the unanalyzed shape reads as a real drop`() {
+        val row = watchRow(watched("MCD", analyzed = false, nextReport = null), analysisUnavailable = false)
+
+        assertEquals(words(R.string.watchlist_row_unserved), row.report)
+    }
+
     @Test
     fun `a thin pool states the pool where the premium would be`() {
         // APPx as measured on 2026-09-12: a pool of $34 behind an +89 percent quote.

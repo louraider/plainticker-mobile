@@ -180,8 +180,8 @@ data class TodayWatchRow(
     val poolNote: Copy?,
 )
 
-fun todayWatchRow(row: WatchedTicker): TodayWatchRow {
-    val base = watchRow(row)
+fun todayWatchRow(row: WatchedTicker, analysisUnavailable: Boolean = false): TodayWatchRow {
+    val base = watchRow(row, analysisUnavailable)
     val quality = row.tracking
     val premium = (quality as? TrackingQuality.Tracked)?.premiumPct
     return TodayWatchRow(

@@ -186,4 +186,76 @@ class CabinetFitTest {
             Regex("""softWrap = false""").findAll(screen).count(),
         )
     }
+
+    // ---- CabinetRow's own vertical budget (QA 2026-09-26, D4: "Sign out" drew as "Sian out") -----
+
+    /**
+     * Not a re-run of the width tests above: a text action can clip vertically too, if the row that
+     * hosts it ever gave its content less height than the real font needs. `CabinetRow`'s own doc
+     * comment has the story: the actual cause of D4 was one level up (`YouContent`'s `LazyColumn`
+     * clipping a partially visible last row at its own viewport edge, in the one state whose `Plan`
+     * group is short enough to put "Sign out" near that edge), but this pins that the row's own
+     * budget is not also part of the problem, and that a future edit cannot quietly shrink it back
+     * to something that would be.
+     *
+     * fontTools 4.63 against `res/font/outfit_semibold.ttf`, 2026-09-26, `hhea`/`OS2` (typo metrics
+     * govern here: `fsSelection`'s `USE_TYPO_METRICS` bit is set, and typo and hhea agree) at 14sp,
+     * the exact instance [PlainTickerType.textAction] draws: ascent 14.0dp, descent 3.64dp, so a
+     * natural (ascent + descent) line height of 17.64dp. The "g" glyph's own bounding box reaches
+     * 2.996dp below the baseline, less than the font's own 3.64dp descent metric.
+     */
+    private val outfitSemiBoldAscent14Sp = 14.0
+    private val outfitSemiBoldDescent14Sp = 3.64
+    private val outfitSemiBoldNaturalLineHeight14Sp = outfitSemiBoldAscent14Sp + outfitSemiBoldDescent14Sp
+    private val gGlyphBelowBaseline14Sp = 2.996
+
+    @Test
+    fun `the text action's own declared line height already clears the real descender, before any row padding`() {
+        // PlainTickerType.textAction: 14sp, 20sp line height, LineHeightStyle(Center, Trim.None), so
+        // the (20 - 17.64) = 2.36dp of extra space this style adds over the font's own natural line
+        // height splits evenly above and below the natural ascent/descent box.
+        val declaredLineHeight = 20.0
+        assertTrue(
+            "the declared line height must exceed the font's own natural one, or centring it adds " +
+                "no margin at all",
+            declaredLineHeight > outfitSemiBoldNaturalLineHeight14Sp,
+        )
+        val halfLeading = (declaredLineHeight - outfitSemiBoldNaturalLineHeight14Sp) / 2
+        // Margin from the real "g" ink to the bottom of the declared 20sp line box: the half-leading
+        // below the natural descent line, plus the slack the font's own descent metric already
+        // carries past this particular glyph's real ink.
+        val margin = halfLeading + (outfitSemiBoldDescent14Sp - gGlyphBelowBaseline14Sp)
+        assertTrue("\"g\" must not reach the line box's own bottom edge", margin > 0.0)
+        assertEquals(1.824, margin, 0.01)
+    }
+
+    @Test
+    fun `CabinetRow's own padding was widened from 10dp, and TextAction's box adds real margin on top of it`() {
+        val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }.canonicalFile
+        val source = File(module, "src/main/java/com/plainticker/mobile/ui/you/YouScreen.kt").readText()
+        assertTrue(
+            "RowVerticalPadding must be declared and used for both the row's own top and bottom " +
+                "padding, not a literal that could drift from it",
+            "private val RowVerticalPadding = 12.dp" in source,
+        )
+        assertTrue(
+            "the row must apply RowVerticalPadding on both edges, not a stray literal",
+            ".padding(start = RowPadding, end = RowPadding, top = RowVerticalPadding, bottom = RowVerticalPadding)" in source,
+        )
+        val rowVerticalPaddingDp = 12.0
+        assertTrue("this must be wider than the 10dp this row shipped D4 with", rowVerticalPaddingDp > 10.0)
+
+        // TextAction's own trailing padding below its 20sp line box (TextActionPadding's bottom).
+        val textActionBottomPaddingDp = 14.0
+        // From the fontTools measurement above: the real "g" ink already sits 1.824dp inside the
+        // declared line box's own bottom edge before either padding is even counted.
+        val inkToLineBoxMarginDp = 1.824
+        val totalMarginBelowInkDp = inkToLineBoxMarginDp + textActionBottomPaddingDp + rowVerticalPaddingDp
+        // A comfortable, explicit budget: this is what a clip landing at this row's own trailing
+        // edge would have to cross before it could ever reach real ink, which CabinetRow's own doc
+        // comment is careful not to claim as a guarantee against a clip that lands inside the row
+        // instead of at its edge (the actual mechanism behind D4, owned by the LazyColumn above it).
+        assertEquals(27.824, totalMarginBelowInkDp, 0.01)
+        assertTrue("the widened padding must not have narrowed this margin", totalMarginBelowInkDp > 25.824)
+    }
 }

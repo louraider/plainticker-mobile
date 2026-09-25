@@ -66,14 +66,30 @@ data class DigestFooter(
  *
  * The report half and the tracking half are independent: a ticker with no date still shows its
  * premium, and a token below the liquidity floor still shows its report date.
+ *
+ * **QA 2026-09-26, D3.** [WatchedTicker.analyzed] is false in two different situations that used to
+ * draw the same sentence: `/summary` answered and genuinely no longer carries this ticker (a real
+ * delisting from the analyzed leaderboard, the one thing here a reader might act on), and `/summary`
+ * did not answer at all (`WatchedFacts.analysisUnavailable`, `WatchlistFacts.kt`'s own doc comment
+ * rule 1: "a source that did not answer is reported as a flag beside the rows"), which leaves every
+ * row's `analyzed` false regardless of what the leaderboard actually carries. Offline, that read
+ * [watchlist_row_unserved] as "Not in the analysis list," a sentence built for the first case,
+ * stated as fact in the second where the app does not know it. [analysisUnavailable] is the flag
+ * that tells them apart, threaded in from the same [com.plainticker.mobile.ui.watchlist.WatchlistUiState]
+ * field both callers already read; when it is set, the row says the network failed instead of
+ * implying the ticker was dropped.
  */
-fun watchRow(row: WatchedTicker): WatchRow = WatchRow(
+fun watchRow(row: WatchedTicker, analysisUnavailable: Boolean = false): WatchRow = WatchRow(
     ticker = row.ticker,
     symbol = row.display,
     company = row.company,
     report = when {
-        // The leaderboard has dropped it. That is not "no date": it is the analysis being gone,
-        // and it is the one thing on this row a reader might act on.
+        // The network failed, not the leaderboard: say so honestly rather than implying a drop
+        // this device has no way to have observed.
+        !row.analyzed && analysisUnavailable -> words(R.string.watchlist_row_load_failed)
+        // /summary did answer, and it genuinely no longer carries this ticker. That is not "no
+        // date": it is the analysis being gone, and it is the one thing on this row a reader
+        // might act on.
         !row.analyzed -> words(R.string.watchlist_row_unserved)
         row.nextReport != null -> words(R.string.watchlist_row_reports, Fmt.monthDay(row.nextReport))
         else -> words(R.string.watchlist_row_no_date)

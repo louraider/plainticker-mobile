@@ -187,6 +187,7 @@ internal fun WatchlistContent(
                     last = index == state.rows.lastIndex,
                     onUnwatch = onUnwatch,
                     onOpenDetail = onOpenDetail,
+                    analysisUnavailable = state.analysisUnavailable,
                 )
             }
         }
@@ -246,8 +247,9 @@ private fun Watched(
     last: Boolean,
     onUnwatch: (String) -> Unit,
     onOpenDetail: (String) -> Unit,
+    analysisUnavailable: Boolean = false,
 ) {
-    val watch = watchRow(row)
+    val watch = watchRow(row, analysisUnavailable)
     val report = watch.report.text()
     val tracking = watch.tracking?.text()
     val meta = tracking?.let { stringResource(R.string.list_row_meta_join, report, it) } ?: report

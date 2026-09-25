@@ -385,7 +385,7 @@
     <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
     <string name="portfolio_recorded_lede">What this app recorded when its own swaps landed. The wallet itself has not been read.</string>
     <string name="portfolio_recorded_meta">Swapped %1$s</string>
-    <string name="portfolio_recorded_meta_unscaled">Swapped %1$s · as recorded, current split not read</string>
+    <string name="portfolio_recorded_meta_unscaled">Swapped %1$s · quantity not rescaled</string>
     <string name="portfolio_swap_to_usdc">Swap to USDC</string>
     <string name="portfolio_swap_to_usdc_a11y">Swap %1$s to USDC</string>
     <string name="portfolio_connecting">Waiting for the wallet to answer</string>
@@ -564,6 +564,7 @@
     <string name="watchlist_row_reports">Reports %1$s</string>
     <string name="watchlist_row_no_date">No report date</string>
     <string name="watchlist_row_unserved">Not in the analysis list</string>
+    <string name="watchlist_row_load_failed">Couldn\'t load right now</string>
     <string name="watchlist_heading_digest">Daily digest</string>
     <string name="watchlist_digest_none">No digest yet. The first one lands about twelve hours after you watch a stock.</string>
     <string name="watchlist_notifications_on">Notifications on, one check a day.</string>
