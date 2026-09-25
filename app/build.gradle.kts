@@ -55,6 +55,15 @@ android {
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Sign in with Google (docs/google-sign-in.md): the WEB OAuth client id, passed to Credential
+        // Manager as the server client id so the ID token's audience is the one
+        // POST /api/v1/auth/google verifies. Public by design, not a secret.
+        buildConfigField(
+            "String",
+            "GOOGLE_SERVER_CLIENT_ID",
+            "\"256856154538-vk2k3l1ug7g1ud0dbe2jdiff740juemf.apps.googleusercontent.com\"",
+        )
     }
 
     signingConfigs {
@@ -108,6 +117,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.googleid)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -168,6 +181,10 @@ val auditReleaseSerializers = tasks.register("auditReleaseSerializers") {
         "com.plainticker.mobile.data.plainticker.SummaryResponse",
         "com.plainticker.mobile.data.plainticker.SummaryRow",
         "com.plainticker.mobile.data.plainticker.NextUpRow",
+        // Sign in with Google: a stripped serializer here would sign a person in server side and
+        // leave the app unable to read who it signed in as.
+        "com.plainticker.mobile.data.auth.GoogleAuthResponse",
+        "com.plainticker.mobile.data.auth.GoogleAuthUser",
     )
 
     doLast {

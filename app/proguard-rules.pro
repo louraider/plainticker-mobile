@@ -42,3 +42,13 @@
 -keepclasseswithmembers @kotlinx.serialization.Serializable class com.plainticker.mobile.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# ---- Credential Manager (Sign in with Google, docs/google-sign-in.md) --------------------------
+# Credential Manager finds its Play services provider by reflection. Recent
+# credentials-play-services-auth releases ship this rule as a consumer rule; it is repeated here,
+# exactly as Android's Credential Manager guide gives it, so a release build keeps the provider
+# even if a future release of that artifact drops the bundled copy.
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** {
+  *;
+}

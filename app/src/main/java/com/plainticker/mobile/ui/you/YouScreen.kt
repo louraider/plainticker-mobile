@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
+import com.plainticker.mobile.auth.CredentialManagerGoogleSource
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSecondaryAction
@@ -126,11 +127,18 @@ import kotlinx.coroutines.withContext
  * reads the shipped OFL text itself (`app/src/main/assets/licenses/`) on request rather than
  * retyping it: a license's own wording is not this screen's copy to author or run through
  * strings.xml's formatting.
+ *
+ * **Account (docs/google-sign-in.md).** Sign in with Google sits after the Pro facts and their
+ * action, because what it gives is exactly that Pro, shared with plainticker.com. [AccountSection]
+ * draws it; [AccountViewModel] owns the flow. Each finished sign-in re-reads the entitlement
+ * through [PassViewModel.refreshEntitlement], the same refresh the Wallet block's Refresh runs, so
+ * a Pro bought on the web shows in the Pro cell above as soon as the server has linked the device.
  */
 @Composable
 fun YouScreen(
     viewModel: YouViewModel,
     passViewModel: PassViewModel,
+    accountViewModel: AccountViewModel,
     onOpenTab: (Int) -> Unit,
     modifier: Modifier = Modifier,
     /** The daily digest screen: its own route, reached from here and from Today's "Read it". */
@@ -140,7 +148,16 @@ fun YouScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pro by passViewModel.pro.collectAsStateWithLifecycle()
     val pass by passViewModel.state.collectAsStateWithLifecycle()
+    val account by accountViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // An Activity context: Credential Manager draws Google's sheet over it.
+    val credentials = remember(context) { CredentialManagerGoogleSource(context, BuildConfig.GOOGLE_SERVER_CLIENT_ID) }
+
+    // A sign-in that finished linked this device to the account server side, so the device may be
+    // Pro now: re-read it through the one refresh every screen shares.
+    LaunchedEffect(accountViewModel, passViewModel) {
+        accountViewModel.signedIn.collect { passViewModel.refreshEntitlement() }
+    }
 
     // The one piece of this screen that can change while the app is away: a reader who took the
     // Enable action went to the system settings and came back (the same rule WatchlistScreen
@@ -164,6 +181,9 @@ fun YouScreen(
             onPay = passViewModel::pay,
             onOpenTab = onOpenTab,
             onOpenDigest = onOpenDigest,
+            account = account,
+            onSignIn = { accountViewModel.signIn(credentials) },
+            onSignOut = accountViewModel::signOut,
             onEnableNotifications = {
                 context.startActivity(
                     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -195,6 +215,9 @@ internal fun YouContent(
     modifier: Modifier = Modifier,
     onEnableNotifications: (() -> Unit)? = null,
     onOpenDigest: (() -> Unit)? = null,
+    account: AccountUiState = AccountUiState.Restoring,
+    onSignIn: () -> Unit = {},
+    onSignOut: () -> Unit = {},
     header: @Composable () -> Unit = {},
 ) {
     val colors = amberColors()
@@ -231,6 +254,9 @@ internal fun YouContent(
         }
         if (actions.primary != null) {
             item(key = "action") { ActionButtons(actions = actions, onConnect = onConnect, onPay = onPay, colors = colors) }
+        }
+        item(key = "account") {
+            AccountSection(state = account, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors)
         }
         item(key = "device-heading") { AmberSectionHead(title = stringResource(R.string.you_heading_device), colors = colors) }
         item(key = "device-grid") { FactGrid(cells = deviceCells(state, onOpenTab), colors = colors, numeric = true) }

@@ -602,6 +602,17 @@ cost sits.
 `AmberRowFrame`-grouped rows or local fact cells; see section 4.1 and 4.4 for why each has its own
 per-row or local grouping rather than `AmberTickerRowGroup` directly.
 
+**You's Account section** (`AccountSection.kt`, added 2026-09-25, docs/google-sign-in.md) sits
+after the Pro facts and their action and before "On this device": an `AmberSectionHead` whose lede
+is the one-line pitch, then either Sign in with Google as an `AmberSecondaryAction` (never a filled
+one, since the action block above may already draw one) or the signed-in block: the email on its
+own wrapping line, each linked wallet as a mono short key on a line of its own, and Sign out as a
+`TextAction`. The only one-line slots are the two button labels, measured with fontTools against
+`bricolage_grotesque.ttf` at `button`'s exact instance (wght 600, wdth 100, opsz 16): "Sign in with
+Google" is 191.05dp at 1.3x against the button's 320dp of content on a 400dp frame, "Signing in"
+98.18dp (`AccountSectionTest`). Every message, the pitch and the email carry no `maxLines`, so they
+wrap rather than clip.
+
 **Detail** keeps its pre-Amber section order (hero, verdict, price, gauge, fundamentals, method,
 what to check next); only the components under each section moved. The hero sits directly on
 `surfaceGround`; the gauge and track capsules are the one place `surfaceHigh` is used for a drawn

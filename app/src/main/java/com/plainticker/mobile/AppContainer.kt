@@ -1,9 +1,12 @@
 package com.plainticker.mobile
 
 import android.content.Context
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStoreFile
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.jupiter.JupiterPriceApi
+import com.plainticker.mobile.data.auth.GoogleAuthApi
 import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.EntitlementApi
@@ -22,6 +25,8 @@ import com.plainticker.mobile.data.rpc.SolanaRpcApi
 import com.plainticker.mobile.data.xstocks.CatalogCache
 import com.plainticker.mobile.data.xstocks.FileCatalogCache
 import com.plainticker.mobile.data.xstocks.XStocksApi
+import com.plainticker.mobile.prefs.AccountStore
+import com.plainticker.mobile.prefs.DataStoreAccountStore
 import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.OnboardingStore
@@ -84,6 +89,9 @@ interface AppContainer {
 
     /** Paying for Pro from the app: the server builds the transfer, this app signs it (task A6). */
     val passApi: PassApi
+
+    /** Sign in with Google: trades a Google ID token for the shared account (docs/google-sign-in.md). */
+    val googleAuthApi: GoogleAuthApi
     val xStocksApi: XStocksApi
     val jupiterPriceApi: JupiterPriceApi
     val jupiterSwapApi: JupiterSwapApi
@@ -117,6 +125,9 @@ interface AppContainer {
     /** This device's own code for Pro entitlement (task A6): generated once, kept on the device. */
     val devicePassStore: DevicePassStore
 
+    /** The signed-in Google account, for display only; kept apart from [devicePassStore]'s file. */
+    val accountStore: AccountStore
+
     /** The app's own record of the pass payments it landed (task A6 review); survives process death. */
     val passReceiptStore: PassReceiptStore
 
@@ -149,6 +160,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val entitlementApi: EntitlementApi by lazy { EntitlementApi(httpClient) }
     override val readApi: ReadApi by lazy { ReadApi(httpClient) }
     override val passApi: PassApi by lazy { PassApi(httpClient) }
+    override val googleAuthApi: GoogleAuthApi by lazy { GoogleAuthApi(httpClient) }
     override val xStocksApi: XStocksApi by lazy { XStocksApi(httpClient) }
     override val jupiterPriceApi: JupiterPriceApi by lazy { JupiterPriceApi(httpClient) }
     override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }
@@ -199,6 +211,15 @@ class DefaultAppContainer(context: Context) : AppContainer {
     // reason to pay for a second file. See DevicePassStore for what surviving process death and
     // a wallet change each mean for the code it keeps.
     override val devicePassStore: DevicePassStore by lazy { SharedPrefsDevicePassStore(prefs) }
+
+    // Its own DataStore file (files/datastore/account.preferences_pb), never the preferences file
+    // above that keeps the device code: signing out clears this file and cannot reach the code.
+    // One instance per process, as DataStore requires.
+    override val accountStore: AccountStore by lazy {
+        DataStoreAccountStore(
+            PreferenceDataStoreFactory.create { app.preferencesDataStoreFile(DataStoreAccountStore.FILE_NAME) },
+        )
+    }
 
     // filesDir, not cache: same reasoning as voteReceiptStore above, a pass receipt is the only
     // record of a signature between the wallet answering and pass/confirm resolving.
