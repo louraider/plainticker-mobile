@@ -598,20 +598,60 @@ costs the same climb the descent down did. This is recorded in `VoteScreen.kt`'s
 rather than fixed; if this layout is ever revisited, that field, not the header, is where the real
 cost sits.
 
-**Portfolio** and **You** both use a hero `AmberFigure` (the total; the identity block) followed by
-`AmberRowFrame`-grouped rows or local fact cells; see section 4.1 and 4.4 for why each has its own
-per-row or local grouping rather than `AmberTickerRowGroup` directly.
+**Portfolio** uses a hero `AmberFigure` (the total) followed by `AmberRowFrame`-grouped rows; see
+section 4.1 for why it rebuilds the grouping per row rather than using `AmberTickerRowGroup`.
 
-**You's Account section** (`AccountSection.kt`, added 2026-09-25, docs/google-sign-in.md) sits
-after the Pro facts and their action and before "On this device": an `AmberSectionHead` whose lede
-is the one-line pitch, then either Sign in with Google as an `AmberSecondaryAction` (never a filled
-one, since the action block above may already draw one) or the signed-in block: the email on its
-own wrapping line, each linked wallet as a mono short key on a line of its own, and Sign out as a
-`TextAction`. The only one-line slots are the two button labels, measured with fontTools against
-`bricolage_grotesque.ttf` at `button`'s exact instance (wght 600, wdth 100, opsz 16): "Sign in with
-Google" is 191.05dp at 1.3x against the button's 320dp of content on a 400dp frame, "Signing in"
-98.18dp (`AccountSectionTest`). Every message, the pitch and the email carry no `maxLines`, so they
-wrap rather than clip.
+**You** is the account cabinet (2026-09-25, matching plainticker.com's own cabinet, web PR #145,
+at the founder's request). It replaced a long stack with no single headline (a wallet block, Pro
+and Staked SKR fact cards, a full-width Connect wallet button, an Account section, a three-card
+device grid, a notifications line, the footer, three license blocks). One `LazyColumn`, top to
+bottom:
+
+1. **The hero card**: a 28dp `surfaceRaised` card at the 16dp group inset (a 1dp light-only
+   border, the same exception as the row groups). Identity first: the Google account's email when
+   signed in, else the connected wallet's short key in JetBrains Mono, else "Not signed in". Then
+   the plan as the headline, 28sp Bricolage 700 (`figureLarge`'s own opsz 34 instance, tabular
+   figures off): "Pro until 20 Oct 2026", "Pro while staked", "Free", "Plan not read". Then a
+   line or two: days left ("26 days left.", counted copy), what Free opens (formatted from
+   `OPEN_EXAMPLE_TICKER`, "AAPL is open to everyone as a full example", never a preset count), a
+   pending payment. Then at most one action, the only amber fill on the screen (`youHero`,
+   `YouModel.kt`): no identity offers Sign in with Google with Connect wallet as a centred text
+   action under it (nothing while the stored account is still read; a disabled "Signing in" while
+   one is in flight); otherwise Free offers Get Pro, a pass offers Extend Pro, and a stake, a web
+   subscription or a still-loading plan offer none. Pay is offered only where `payOffered` allows.
+   Headline dates are UTC, the same clock as the Plan group's full "Valid until" timestamp.
+2. **Plan**: source, valid until (with days left), how to extend, the staked SKR figure, a pending
+   payment. The pass flow appears here as a Get Pro or Extend Pro text action whenever the hero
+   does not carry it, so it is always one tap away and never drawn twice; Refresh sits where the
+   old wallet block offered it (a connected wallet) and on a failed read.
+3. **Sign-in methods** (`AccountSection.kt`), the one-line pitch as the lede: Google (the email
+   with Sign out, or Sign in), the Solana wallet (the short key with Copy and Disconnect, or
+   Connect; "Asked to connect on each launch. No key or session is kept."), and the wallets the
+   server returned as linked to the Google account, only if there are any. Sign out is a two-step
+   inline confirm: the first tap asks in the row, Sign out or Cancel answers it. Every sign-in
+   message is drawn under the Google row, or beside the hero's button when the hero offers Sign in.
+4. **On this device**: swaps recorded, votes cast, stocks watched, each a row whose whole width
+   opens its tab, the count as an amber `figureRow` on the right.
+5. **Notifications**: the Watchlist's delivery line with Enable while off, and the daily digest.
+6. **About**: version, the disclaimer, and Fonts and licenses as one row whose Show opens the three
+   bundled fonts in place, each still able to read its shipped OFL text.
+
+Every group is a run of `CabinetRow`s (`YouScreen.kt`) in `AmberTickerRowGroup`'s container: a
+56dp minimum, an optional meta label, the value and an optional sub in one weighted column that
+wraps, then either a figure or one `TextAction` on the right; two actions move to their own
+right-aligned line under the text. There is no card grid on You any more, so the grid's clip
+history (five fixes) has no slot left to recur in. The only one-line slots are measured in
+`CabinetFitTest` with fontTools against the font each is drawn in (400dp frame; 288dp of hero
+button content; 336dp of row content):
+
+| Slot | Font and instance | Worst real content, 1.0x / 1.3x | Budget | Margin at 1.3x |
+|---|---|---|---|---|
+| Hero button label | Bricolage 600 opsz 16, 16sp | "Sign in with Google", 146.96 / 191.05dp | 288dp | 96.95dp |
+| Row text action (beside the key) | Outfit SemiBold 14sp | "Read license", 78.78 / 102.41dp, plus 16dp inset | 336dp less the key | 112.29dp |
+| Two actions on their own line | Outfit SemiBold 14sp | "Copied" + "Disconnect", 182.44dp with insets at 1.3x | 336dp | 153.56dp |
+| Wallet short key | JetBrains Mono Regular 15sp | nine characters, 81.0 / 105.3dp | column beside the widest action | 112.29dp |
+| Device figure | Bricolage 600 opsz 18 tnum, 18sp | "999,999", 69.44 / 90.28dp | 336dp less 12dp gap and the widest label word (83.58dp) | 150.14dp |
+| Hero headline (wraps, not clipped) | Bricolage 700 opsz 34 at 28sp | "Pro until 30 May 2030", 292.99 / 380.89dp | 328dp | one line at 1.0x (35.01dp), two at 1.3x |
 
 **Detail** keeps its pre-Amber section order (hero, verdict, price, gauge, fundamentals, method,
 what to check next); only the components under each section moved. The hero sits directly on
@@ -639,7 +679,7 @@ this is the whole list, not a sample of it:
 |---|---|---|---|
 | `AmberChip`'s corner radius, selecting/deselecting | `spring(dampingRatio = NoBouncy, stiffness = MediumLow)` on the radius `Dp`, 8dp to full | `rememberMotionEnabled()` | The selected or unselected end shape |
 | `TodayScreen`'s block entrance (the status line, Tracked today, Next up; the reader's own rows and the start block stay still) | The same no-bounce, medium-low spring, on alpha and an 8dp rise, staggered 40ms per block, once, the first time a block has something to draw | `rememberMotionEnabled()` | Alpha 1, no translation |
-| Portfolio's Total card; You's Pro/Staked SKR pair | `tween(150ms, LinearOutSlowInEasing)`, the research's "quick" token, once on first composition | `rememberMotionEnabled()` | Alpha 1 |
+| Portfolio's Total card; You's hero card | `tween(150ms, LinearOutSlowInEasing)`, the research's "quick" token, once on first composition | `rememberMotionEnabled()` | Alpha 1 |
 | `SkeletonSwitch` (Detail's `Hero` company name; every other skeleton-to-content switch in the app) | `tween(200ms, EaseOut)` alpha fade, never a spinner | `rememberMotionEnabled()` | Alpha 1 |
 | `Track`'s position marker | `tween(400ms, CubicBezierEasing(.2, .8, .2, 1))`, unchanged since before this restyle | `rememberMotionEnabled()` | The target position |
 | `LiveBar`'s breathing bar | `infiniteRepeatable(tween(1200ms, EaseInOut), reverse)`, alpha 1 to 0.45, while `live` is true | `rememberMotionEnabled()` | Alpha 1 (stops breathing, does not disappear) |
@@ -649,7 +689,7 @@ Two spring families do the orchestrated work (`AmberChip`'s morph and `TodayScre
 `Spring.DampingRatioNoBouncy` at `Spring.StiffnessMediumLow`: a settle, never a bounce, because a
 bouncy alpha can overshoot past fully opaque and read as a flicker on a small block, and a bouncy
 shape morph would read as wobble on a 32dp chip. A single "quick" 150ms linear-ease tween is the
-one-shot reveal token (Portfolio's Total, You's identity pair), distinct from the spring family and
+one-shot reveal token (Portfolio's Total, You's hero card), distinct from the spring family and
 from `Skeleton`'s own, older 200ms ease-out fade and `Track`'s 400ms cubic-bezier settle, both
 predating Amber's motion pass and left untouched because nothing about this restyle changed what
 either one settles.

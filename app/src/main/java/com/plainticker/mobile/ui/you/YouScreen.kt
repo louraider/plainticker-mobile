@@ -8,22 +8,25 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,12 +43,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -52,17 +52,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.auth.CredentialManagerGoogleSource
+import com.plainticker.mobile.data.plainticker.EntitlementSource
+import com.plainticker.mobile.prefs.SignedInAccount
+import com.plainticker.mobile.ui.components.AmberDisabledAction
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
-import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
-import com.plainticker.mobile.ui.components.FactCell
-import com.plainticker.mobile.ui.components.FactTone
+import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.focusOutline
 import com.plainticker.mobile.ui.components.rememberMotionEnabled
-import com.plainticker.mobile.ui.components.spoken
 import com.plainticker.mobile.ui.home.HomeTab
 import com.plainticker.mobile.ui.pass.PassActions
 import com.plainticker.mobile.ui.pass.PassSheet
@@ -75,64 +75,42 @@ import com.plainticker.mobile.ui.theme.AmberLightColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.theme.JetBrainsMono
-import com.plainticker.mobile.ui.theme.TABULAR_NUMERALS
-import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.wallet.WalletAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * You (docs/plan-app-uiux-2026-09-21.md, task U1; restyled to Amber, docs/design-research-2026-09-21.md
- * section 5.3/5.5). Not a profile and not a nav destination of its own; reached from the bottom bar
- * like every other Amber destination now (HomeScreen.kt).
+ * You, the account cabinet (2026-09-25). The founder asked for the app's cabinet to match the one
+ * plainticker.com just shipped (web PR #145), so the screen that used to stack a wallet block, two
+ * fact cards, a big Connect button, an Account section, a device trio, a notifications line, the
+ * footer and three license blocks now reads, top to bottom:
  *
- * The wallet, the pass and the stake, this device's own record, the notifications line the
- * Watchlist already draws, and the version and the disclaimer every screen owes a reader, in that
- * order, unchanged by this pass. Nothing here computes: [YouModel.kt] picks every sentence and
- * every numeral arrives already formatted, the split every screen in this app keeps.
+ * 1. **The hero card** ([Hero]): who (the Google account, else the wallet's short key, else "Not
+ *    signed in"), the plan as the headline ("Pro until 20 Oct 2026", "Pro while staked", "Free"),
+ *    the days-left or what-Free-opens line, and at most one action ([youHero] owns the matrix).
+ * 2. **Plan** ([planRows]): source, valid until, how to extend, the staked SKR figure, a pending
+ *    payment. The pass entry lands here as a text action whenever the hero does not carry it.
+ * 3. **Sign-in methods** ([AccountSection]): Google and the Solana wallet as rows of one group,
+ *    then the wallets linked to the Google account, if the server returned any.
+ * 4. **On this device**: swaps, votes and stocks watched, each a row that opens its tab.
+ * 5. **Notifications**: the delivery line with Enable, and the daily digest.
+ * 6. **About**: version, disclaimer, and Fonts and licenses behind one row that shows them.
  *
- * **The trap this screen carries, and what changed under it.** This is where the app's worst
- * recurring defect lives: a fact cell's value is drawn `maxLines = 1, softWrap = false` beside a
- * fixed-width sibling, so anything the type does not fit clips mid-character rather than wrapping
- * (v0.12.0: "no wallet connected" clipped to "no wallet c"). Amber changes the face and the size
- * (Instrument's 24sp JetBrains Mono to 18sp Bricolage Grotesque, [AmberType.figureRow]'s own size),
- * so the character budget the previous pass pinned is wrong for this pass and is recomputed below,
- * measured against the font file itself rather than assumed (see [YouModelTest]'s own comment for
- * the fontTools numbers). No value moved to a sub-line: every real value still fits the recomputed
- * budget with room to spare.
+ * Nothing here computes: [YouModel.kt] picks every sentence and every numeral arrives formatted.
  *
- * **The fifth clip was the label and the sub-line, never measured by the fourth fix above.** The
- * earlier budget work measured [FactCell.value] alone; [FactCell.label] and [FactCell.sub] are
- * longer and are what actually clipped on "On this device" ("Swaps recorded" to "Swaps record…"
- * at 1.0x; every label and sub at 1.3x). [FactCardView]'s own doc comment has the fix (the label
- * wraps to two lines, the sub to three) and the fontTools arithmetic behind it.
- *
- * **No Amber [com.plainticker.mobile.ui.components.FactGrid] exists yet** (DESIGN.md section 4:
- * "not yet restyled"; it is also shared with Detail, outside this task's file set), so the two
- * fact groups on this screen (Pro plus Staked SKR; On this device) are drawn by a local `FactGrid`
- * defined at the bottom of this file, reusing [FactCell] (a plain data holder, not a styled
- * component) rather than the shared composable. It keeps the exact call shape YouScreenTest
- * already pins (`FactGrid(cells = listOf(proCell(pro), stakeCell(pro)))`,
- * `FactGrid(cells = deviceCells(state, onOpenTab))`), so the section-order test needs no change.
+ * **The clipping rule, and why the fact cards went.** The two- and three-card fact grids this
+ * screen used to draw were the app's worst recurring clip ("no wallet c", then "Swaps record…").
+ * The cabinet draws no card grid at all: every group is [CabinetRow]s in [AmberTickerRowGroup]'s
+ * tonal container, where the text column is weighted and wraps and the only one-line slots are a
+ * row's trailing figure or text action, and the hero's buttons. `CabinetFitTest` measures every
+ * one of those with fontTools against the bundled font each is drawn in, at 1.0x and 1.3x.
  *
  * The device's own code ([com.plainticker.mobile.prefs.DevicePassStore]) is a bearer credential
- * and never appears here or on any other screen: this file reads only [PassViewModel]'s already
- * resolved [ProUiState], never the store itself, and DeviceCodeNeverDrawnTest scans every
- * composable under ui/ so a later change cannot draw it by accident.
+ * and never appears here: this file reads only [PassViewModel]'s resolved [ProUiState], and
+ * DeviceCodeNeverDrawnTest scans every composable under ui/ so a later change cannot draw it.
  *
- * **Fonts and licenses, after the footer (task U11).** [bundledFontLicenses] names every face the
- * app ships today, not the two U11 was written against: Amber added Bricolage Grotesque
- * (docs/fonts.md), so this list is the current three, Outfit and JetBrains Mono from Instrument
- * alongside it. Each [LicenseRow] states the font and its copyright as its own sentence, then
- * reads the shipped OFL text itself (`app/src/main/assets/licenses/`) on request rather than
- * retyping it: a license's own wording is not this screen's copy to author or run through
- * strings.xml's formatting.
- *
- * **Account (docs/google-sign-in.md).** Sign in with Google sits after the Pro facts and their
- * action, because what it gives is exactly that Pro, shared with plainticker.com. [AccountSection]
- * draws it; [AccountViewModel] owns the flow. Each finished sign-in re-reads the entitlement
- * through [PassViewModel.refreshEntitlement], the same refresh the Wallet block's Refresh runs, so
- * a Pro bought on the web shows in the Pro cell above as soon as the server has linked the device.
+ * A finished sign-in re-reads the entitlement through [PassViewModel.refreshEntitlement], so a Pro
+ * bought on the web shows in the hero as soon as the server has linked the device.
  */
 @Composable
 fun YouScreen(
@@ -167,10 +145,8 @@ fun YouScreen(
         onPauseOrDispose { }
     }
 
-    // A sibling of the LazyColumn, exactly as PortfolioScreen used to host it: the sheet is a
-    // modal surface and draws in its own window, so where it sits in this tree does not matter,
-    // only that it outlives the block that opened it. PassSheet itself is unchanged Instrument:
-    // ui/pass/* is outside this task's file set.
+    // A sibling of the LazyColumn: the sheet is a modal surface and draws in its own window, so
+    // where it sits in this tree does not matter, only that it outlives the row that opened it.
     Box(modifier.fillMaxSize()) {
         YouContent(
             state = state,
@@ -219,9 +195,12 @@ internal fun YouContent(
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     header: @Composable () -> Unit = {},
+    nowMillis: Long = System.currentTimeMillis(),
 ) {
     val colors = amberColors()
-    val actions = youActions(pro)
+    val hero = youHero(account, state.account, pro, nowMillis)
+    val plan = planRows(pro, hero.action, nowMillis)
+    val heroMessage = (account as? AccountUiState.SignedOut)?.message?.takeIf { hero.action == HeroAction.SIGN_IN }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.surfaceGround),
         // The tab content ends above the navigation bar; the padding is part of the scroll.
@@ -229,46 +208,49 @@ internal fun YouContent(
     ) {
         item(key = "header") { header() }
         item(key = "heading") { AmberSectionHead(title = stringResource(R.string.you_heading), colors = colors) }
-        item(key = "wallet") {
-            WalletBlock(account = state.account, onRefresh = onRefreshEntitlement, onDisconnect = onDisconnect, colors = colors)
-        }
-        item(key = "pro-grid") {
-            // Motion: the one moment on this screen the research's "quick, 150ms fade"
-            // (docs/design-research-2026-09-21.md section 4) means something rather than
-            // decorating a fact a reader would read the same way either way, because Pro and
-            // Staked SKR are what this cabinet actually vouches for about the reader. Gated by
-            // rememberMotionEnabled: at animator scale 0 (the smoke script's own setting) it snaps
-            // to fully opaque on the first frame, so nothing here is readable only because it
-            // finished animating.
+        item(key = "hero") {
+            // Motion: the one moment on this screen the research's "quick, 150ms fade" means
+            // something, because the hero is what this cabinet vouches for about the reader. Gated
+            // by rememberMotionEnabled: at animator scale 0 it snaps to fully opaque on the first
+            // frame, so nothing here is readable only because it finished animating.
             val motion = rememberMotionEnabled()
             var revealed by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) { revealed = true }
             val alpha by animateFloatAsState(
                 targetValue = if (revealed) 1f else 0f,
                 animationSpec = if (motion) tween(durationMillis = 150, easing = LinearOutSlowInEasing) else snap(),
-                label = "you-identity-reveal",
+                label = "you-hero-reveal",
             )
             Box(Modifier.graphicsLayer { this.alpha = alpha }) {
-                FactGrid(cells = listOf(proCell(pro), stakeCell(pro)), colors = colors)
+                Hero(hero = hero, message = heroMessage, onSignIn = onSignIn, onConnect = onConnect, onPay = onPay, colors = colors)
             }
         }
-        if (actions.primary != null) {
-            item(key = "action") { ActionButtons(actions = actions, onConnect = onConnect, onPay = onPay, colors = colors) }
+        item(key = "plan") {
+            PlanGroup(rows = plan, onPay = onPay, onRefresh = onRefreshEntitlement, colors = colors)
         }
-        item(key = "account") {
-            AccountSection(state = account, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors)
+        item(key = "methods") {
+            AccountSection(
+                state = account,
+                wallet = state.account,
+                onSignIn = onSignIn,
+                onSignOut = onSignOut,
+                onConnect = onConnect,
+                onDisconnect = onDisconnect,
+                colors = colors,
+                showMessage = heroMessage == null,
+            )
         }
-        item(key = "device-heading") { AmberSectionHead(title = stringResource(R.string.you_heading_device), colors = colors) }
-        item(key = "device-grid") { FactGrid(cells = deviceCells(state, onOpenTab), colors = colors, numeric = true) }
+        item(key = "device") { DeviceGroup(state = state, onOpenTab = onOpenTab, colors = colors) }
         item(key = "notifications") {
-            NotificationsLine(notificationsOn = state.notificationsOn, onEnable = onEnableNotifications, colors = colors)
+            NotificationsGroup(
+                notificationsOn = state.notificationsOn,
+                onEnable = onEnableNotifications,
+                onOpenDigest = onOpenDigest,
+                colors = colors,
+            )
         }
-        onOpenDigest?.let { open -> item(key = "digest-link") { DigestLink(onOpen = open, colors = colors) } }
-        item(key = "footer") { Footer() }
-        item(key = "licenses-heading") {
-            AmberSectionHead(title = stringResource(R.string.you_heading_licenses), colors = colors)
-        }
-        items(bundledFontLicenses, key = { it.assetPath }) { license -> LicenseRow(license = license, colors = colors) }
+        item(key = "about") { AboutGroup(colors = colors) }
+        item(key = "end") { Box(Modifier.padding(bottom = EndGap)) }
     }
 }
 
@@ -276,206 +258,224 @@ internal fun YouContent(
 @Composable
 private fun amberColors(): AmberColors = if (isSystemInDarkTheme()) AmberDarkColors else AmberLightColors
 
-/** Which callback a [YouAction] fires, so the label text is never parsed to find out. */
-private fun YouAction.handler(onConnect: () -> Unit, onPay: () -> Unit): () -> Unit = when (kind) {
-    YouActionKind.CONNECT -> onConnect
-    YouActionKind.PAY -> onPay
-}
+// ---- The hero ------------------------------------------------------------------------------
 
 /**
- * Exactly one 56dp button per state (plan section 1.2), never two Accent fills:
- * [AmberPrimaryAction] for the primary slot, [AmberSecondaryAction][
- * com.plainticker.mobile.ui.components.AmberSecondaryAction] for the one case that pairs Connect
- * wallet with Pay for Pro. Until this pass [AmberSecondaryAction][
- * com.plainticker.mobile.ui.components.AmberSecondaryAction] was a private copy living only in this
- * file ("no shared Amber equivalent exists yet"); it is now the shared component `SecondaryButton`
- * retired in favour of, so this call site and the swap, pass and vote sheets reach for the same
- * function rather than two that mean the same thing.
+ * Who, the plan as a headline, and at most one action, in one 28dp card (DESIGN.md 5.2's status
+ * card radius). The only amber fill on You: Get Pro, Extend Pro or Sign in with Google, each an
+ * [AmberPrimaryAction]; a sign-in in flight is an [AmberDisabledAction] in the same slot. Connect
+ * wallet sits under Sign in as a text action, the web cabinet's own "or a Solana wallet".
+ *
+ * The headline ([HeroHeadlineStyle], 28/700) carries no `maxLines`: "Pro until 30 May 2030", the
+ * widest date the headline can print (every day, month and year to 2039, fontTools), is 292.99dp
+ * at 1.0x against the card's 328dp, and wraps at 1.3x rather than clipping (`CabinetFitTest`).
+ * Every line under it wraps too.
  */
 @Composable
-private fun ActionButtons(actions: YouActions, onConnect: () -> Unit, onPay: () -> Unit, colors: AmberColors) {
+private fun Hero(
+    hero: YouHero,
+    message: AccountMessage?,
+    onSignIn: () -> Unit,
+    onConnect: () -> Unit,
+    onPay: () -> Unit,
+    colors: AmberColors,
+) {
+    val shape = RoundedCornerShape(HeroRadius)
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side, vertical = BlockGap),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = GroupSide)
+            .padding(top = 8.dp)
+            .clip(shape)
+            .background(colors.surfaceRaised)
+            .then(if (colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier)
+            .padding(HeroPadding),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        actions.primary?.let {
-            AmberPrimaryAction(label = it.label.text(), onClick = it.handler(onConnect, onPay), colors = colors)
+        hero.identityLabel?.let {
+            Text(text = it.text(), style = AmberType.meta, color = colors.textTertiary(AmberSurface.RAISED))
         }
-        actions.secondary?.let {
-            AmberSecondaryAction(label = it.label.text(), onClick = it.handler(onConnect, onPay), colors = colors)
-        }
-    }
-}
-
-/**
- * Short key in mono (DESIGN.md section 3: on-chain identifiers stay JetBrains Mono under Amber),
- * or the state word for no session; Refresh and Disconnect trail when connected.
- */
-@Composable
-private fun WalletBlock(account: WalletAccount?, onRefresh: () -> Unit, onDisconnect: () -> Unit, colors: AmberColors) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = BlockGap).padding(horizontal = Side),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(text = stringResource(R.string.you_wallet_label), style = AmberType.meta, color = colors.textTertiary(AmberSurface.GROUND))
         Text(
-            text = walletValue(account).text(),
-            style = if (account != null) WalletKeyStyle else AmberType.body,
+            text = hero.identity.text(),
+            style = if (hero.identityKind == IdentityKind.WALLET) KeyStyle else AmberType.body,
+            color = if (hero.identityKind == IdentityKind.NONE) colors.textSecondary else colors.textPrimary,
+        )
+        Text(
+            text = hero.headline.text(),
+            style = HeroHeadlineStyle,
             color = colors.textPrimary,
+            modifier = Modifier.padding(top = 10.dp),
         )
-        Text(
-            text = stringResource(R.string.you_wallet_note),
-            style = AmberType.context,
-            color = colors.textSecondary,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-        if (account != null) {
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
-                TextAction(label = stringResource(R.string.action_refresh), onClick = onRefresh, color = colors.actionText)
-                TextAction(label = stringResource(R.string.action_disconnect), onClick = onDisconnect, color = colors.actionText)
+        hero.lines.forEach { line ->
+            Text(text = line.text(), style = AmberType.context, color = colors.textSecondary)
+        }
+        message?.let {
+            Text(
+                text = stringResource(accountMessageRes(it)),
+                style = AmberType.context,
+                color = colors.stateCaution,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        hero.action?.let { action ->
+            Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                HeroButton(action = action, onSignIn = onSignIn, onPay = onPay, colors = colors)
+                if (hero.offersConnect) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        TextAction(
+                            label = stringResource(R.string.action_connect_wallet),
+                            onClick = onConnect,
+                            color = colors.actionText,
+                            contentPadding = CenteredTextActionPadding,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-private val WalletKeyStyle = TextStyle(fontFamily = JetBrainsMono, fontSize = 15.sp, lineHeight = 20.sp)
-
-/** The Pro cell: a fact word, plus the mono "until" sub line when the source carries a date. */
+/** The hero's one button; the label is picked by [HeroAction], never parsed. */
 @Composable
-private fun proCell(pro: ProUiState): FactCell {
-    val fact = proFact(pro)
-    return FactCell(
-        label = stringResource(R.string.you_pro_label),
-        value = fact.value.text(),
-        sub = fact.until?.text(),
-        subMono = true,
-    )
+private fun HeroButton(action: HeroAction, onSignIn: () -> Unit, onPay: () -> Unit, colors: AmberColors) {
+    when (action) {
+        HeroAction.SIGN_IN ->
+            AmberPrimaryAction(label = stringResource(R.string.account_sign_in), onClick = onSignIn, colors = colors)
+        HeroAction.SIGNING_IN ->
+            AmberDisabledAction(label = stringResource(R.string.account_signing_in), colors = colors)
+        HeroAction.GET_PRO ->
+            AmberPrimaryAction(label = stringResource(R.string.you_action_get_pro), onClick = onPay, colors = colors)
+        HeroAction.EXTEND ->
+            AmberPrimaryAction(label = stringResource(R.string.you_action_extend), onClick = onPay, colors = colors)
+    }
 }
+
+// ---- Plan ----------------------------------------------------------------------------------
+
+@Composable
+private fun PlanGroup(rows: List<PlanRow>, onPay: () -> Unit, onRefresh: () -> Unit, colors: AmberColors) {
+    Column(Modifier.fillMaxWidth()) {
+        AmberSectionHead(title = stringResource(R.string.you_heading_plan), colors = colors)
+        AmberTickerRowGroup(colors = colors) {
+            rows.forEach { row ->
+                CabinetRow(
+                    colors = colors,
+                    label = row.label.text(),
+                    value = row.value.text(),
+                    sub = row.sub?.text(),
+                    actions = listOfNotNull(row.action?.let { planRowAction(it, onPay, onRefresh) }),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun planRowAction(action: PlanAction, onPay: () -> Unit, onRefresh: () -> Unit): RowAction = when (action) {
+    PlanAction.GET_PRO -> RowAction(stringResource(R.string.you_action_get_pro), onPay)
+    PlanAction.EXTEND -> RowAction(stringResource(R.string.you_action_extend), onPay)
+    PlanAction.REFRESH -> RowAction(stringResource(R.string.action_refresh), onRefresh)
+}
+
+// ---- On this device ------------------------------------------------------------------------
 
 /**
- * The stake cell: a short value word (never a verdict about the wallet), the figure or the reason
- * there is none as the mono sub line beneath it, the same shape [proCell] already uses.
+ * Swaps recorded, votes cast, stocks watched: each a row whose figure sits on the right, the whole
+ * row one tap target that opens the tab listing them. The label and the "Listed under" line wrap;
+ * the figure is the one-line slot ("999,999" is 90.28dp at 1.3x against the row's 336dp).
  */
 @Composable
-private fun stakeCell(pro: ProUiState): FactCell {
-    val fact = stakeFact(pro)
-    return FactCell(
-        label = stringResource(R.string.you_stake_label),
-        value = fact.value.text(),
-        sub = fact.sub?.text(),
-        subMono = true,
-    )
-}
-
-/** Swaps recorded, votes cast, stocks watched: each a numeral, each cell opening its own tab. */
-@Composable
-private fun deviceCells(state: YouUiState, onOpenTab: (Int) -> Unit): List<FactCell> {
+private fun DeviceGroup(state: YouUiState, onOpenTab: (Int) -> Unit, colors: AmberColors) {
     val facts = deviceFacts(state)
-    return listOf(
-        deviceCell(
-            label = R.string.you_fact_swaps,
-            value = facts.swaps,
-            sub = R.string.you_fact_sub_portfolio,
-            tab = HomeTab.PORTFOLIO,
-            onOpenTab = onOpenTab,
-        ),
-        deviceCell(
-            label = R.string.you_fact_votes,
-            value = facts.votes,
-            sub = R.string.you_fact_sub_vote,
-            tab = HomeTab.VOTE,
-            onOpenTab = onOpenTab,
-        ),
-        deviceCell(
-            label = R.string.you_fact_watched,
-            value = facts.watched,
-            sub = R.string.you_fact_sub_watchlist,
-            tab = HomeTab.WATCHLIST,
-            onOpenTab = onOpenTab,
-        ),
-    )
+    Column(Modifier.fillMaxWidth()) {
+        AmberSectionHead(title = stringResource(R.string.you_heading_device), colors = colors)
+        AmberTickerRowGroup(colors = colors) {
+            DeviceRow(R.string.you_fact_swaps, facts.swaps, R.string.you_fact_sub_portfolio, HomeTab.PORTFOLIO, onOpenTab, colors)
+            DeviceRow(R.string.you_fact_votes, facts.votes, R.string.you_fact_sub_vote, HomeTab.VOTE, onOpenTab, colors)
+            DeviceRow(R.string.you_fact_watched, facts.watched, R.string.you_fact_sub_watchlist, HomeTab.WATCHLIST, onOpenTab, colors)
+        }
+    }
 }
 
 @Composable
-private fun deviceCell(label: Int, value: String, sub: Int, tab: HomeTab, onOpenTab: (Int) -> Unit): FactCell {
+private fun DeviceRow(label: Int, value: String, sub: Int, tab: HomeTab, onOpenTab: (Int) -> Unit, colors: AmberColors) {
     val tabLabel = stringResource(tab.label)
-    return FactCell(
-        label = stringResource(label),
-        value = value,
+    CabinetRow(
+        colors = colors,
+        value = stringResource(label),
         sub = stringResource(sub),
+        figure = value,
         onTap = { onOpenTab(tab.ordinal) },
         tapLabel = stringResource(R.string.you_open_tab, tabLabel),
     )
 }
 
-/** The Watchlist's own delivery line, and its Enable action when notifications are off. */
+// ---- Notifications -------------------------------------------------------------------------
+
+/** The Watchlist's own delivery line with Enable when off, then the daily digest, one tap away. */
 @Composable
-private fun NotificationsLine(notificationsOn: Boolean, onEnable: (() -> Unit)?, colors: AmberColors) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = BlockGap).padding(horizontal = Side),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = notificationLine(notificationsOn).text(),
-            style = AmberType.context,
-            color = colors.textSecondary,
-            modifier = Modifier.weight(1f),
-        )
-        if (!notificationsOn && onEnable != null) {
-            TextAction(label = stringResource(R.string.action_enable), onClick = onEnable, color = colors.actionText)
+private fun NotificationsGroup(
+    notificationsOn: Boolean,
+    onEnable: (() -> Unit)?,
+    onOpenDigest: (() -> Unit)?,
+    colors: AmberColors,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        AmberSectionHead(title = stringResource(R.string.you_heading_notifications), colors = colors)
+        AmberTickerRowGroup(colors = colors) {
+            CabinetRow(
+                colors = colors,
+                value = notificationLine(notificationsOn).text(),
+                actions = listOfNotNull(
+                    onEnable?.takeIf { !notificationsOn }?.let { RowAction(stringResource(R.string.action_enable), it) },
+                ),
+            )
+            onOpenDigest?.let { open ->
+                val digest = stringResource(R.string.you_digest_link)
+                CabinetRow(colors = colors, value = digest, onTap = open, tapLabel = digest, valueKind = RowValueKind.LINK)
+            }
+        }
+    }
+}
+
+// ---- About ---------------------------------------------------------------------------------
+
+/**
+ * The version, the disclaimer every screen owes a reader, and Fonts and licenses collapsed behind
+ * one row: Show opens the three bundled fonts' [LicenseRow]s in place, each able to read its own
+ * shipped OFL text (task U11), and Hide folds them away again.
+ */
+@Composable
+private fun AboutGroup(colors: AmberColors) {
+    var licensesOpen by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        AmberSectionHead(title = stringResource(R.string.you_heading_about), colors = colors)
+        AmberTickerRowGroup(colors = colors) {
+            CabinetRow(colors = colors, value = stringResource(R.string.you_version, BuildConfig.VERSION_NAME))
+            CabinetRow(colors = colors, value = stringResource(R.string.onboarding_body_disclaimer), valueKind = RowValueKind.QUIET)
+            CabinetRow(
+                colors = colors,
+                value = stringResource(R.string.you_heading_licenses),
+                sub = stringResource(R.string.you_license_terms),
+                actions = listOf(
+                    RowAction(
+                        stringResource(if (licensesOpen) R.string.you_action_hide else R.string.you_action_show),
+                        { licensesOpen = !licensesOpen },
+                    ),
+                ),
+            )
+            if (licensesOpen) {
+                bundledFontLicenses.forEach { license -> LicenseRow(license = license, colors = colors) }
+            }
         }
     }
 }
 
 /**
- * The daily digest, one tap away: it left Today's first viewport (direction A, 2026-09-24) and
- * lives on its own screen, beside the notifications line that says whether it will notify.
- */
-@Composable
-private fun DigestLink(onOpen: () -> Unit, colors: AmberColors) {
-    TextAction(
-        label = stringResource(R.string.you_digest_link),
-        onClick = onOpen,
-        color = colors.actionText,
-        modifier = Modifier.padding(start = Side - DigestLinkInset),
-    )
-}
-
-/** TextAction's own 16dp start padding, taken back so the link lines up with the line above it. */
-private val DigestLinkInset = 16.dp
-
-/**
- * The version in mono, then the disclaimer every screen owes a reader. Kept to the exact call
- * shape `Footer()` (YouScreenTest pins the substring), so colours are resolved inside rather than
- * threaded in as a parameter, the same trick [com.plainticker.mobile.ui.portfolio.PortfolioScreen]'s
- * own `Total(state)` uses for the same reason.
- */
-@Composable
-private fun Footer() {
-    val colors = amberColors()
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side, vertical = FooterGap),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.you_version, BuildConfig.VERSION_NAME),
-            style = AmberType.meta,
-            color = colors.textTertiary(AmberSurface.GROUND),
-        )
-        Text(
-            text = stringResource(R.string.onboarding_body_disclaimer),
-            style = AmberType.context,
-            color = colors.textTertiary(AmberSurface.GROUND),
-        )
-    }
-}
-
-/**
- * One bundled font (task U11): its device-facing name and credit line, always on screen, then the
- * license terms sentence and a text action that reads the OFL text itself in place. The body is
- * read from `app/src/main/assets/` on first open and kept for the life of this composition
- * ([remember] keyed on the asset path), never retyped as copy: a license's own wording is not this
- * app's to author or to run through strings.xml's formatting and pluralization.
+ * One bundled font (task U11): its device-facing name and credit line, then a text action that
+ * reads the OFL text itself in place. The body is read from `app/src/main/assets/` on first open
+ * and kept for the life of this composition ([remember] keyed on the asset path), never retyped
+ * as copy: a license's own wording is not this app's to author or run through strings.xml.
  */
 @Composable
 private fun LicenseRow(license: BundledFontLicense, colors: AmberColors) {
@@ -489,188 +489,158 @@ private fun LicenseRow(license: BundledFontLicense, colors: AmberColors) {
             }
         }
     }
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = BlockGap).padding(horizontal = Side),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+    CabinetRow(
+        colors = colors,
+        label = stringResource(license.creditRes),
+        value = stringResource(license.nameRes),
+        actions = listOf(
+            RowAction(
+                stringResource(if (expanded) R.string.action_hide_license else R.string.action_read_license),
+                { expanded = !expanded },
+            ),
+        ),
     ) {
-        Text(text = stringResource(license.nameRes), style = AmberType.body, color = colors.textPrimary)
-        Text(text = stringResource(license.creditRes), style = AmberType.context, color = colors.textSecondary)
-        Text(text = stringResource(R.string.you_license_terms), style = AmberType.context, color = colors.textSecondary)
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
-            TextAction(
-                label = stringResource(if (expanded) R.string.action_hide_license else R.string.action_read_license),
-                onClick = { expanded = !expanded },
-                color = colors.actionText,
-            )
-        }
         if (expanded) {
             Text(
                 text = body ?: stringResource(R.string.you_license_unavailable),
                 style = AmberType.meta,
                 color = colors.textSecondary,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 6.dp),
             )
         }
     }
 }
 
-private val Side = 20.dp
-private val BlockGap = 20.dp
-private val FooterGap = 28.dp
+// ---- The cabinet row -----------------------------------------------------------------------
 
-// ---- The fact grid, local to this screen ---------------------------------------------------
+/** How a row's value is set: words, an on-chain key in mono, a quieter sentence, or a link. */
+internal enum class RowValueKind { WORDS, KEY, QUIET, LINK }
 
-/**
- * You's own two- and three-cell fact groups (Pro plus Staked SKR; On this device), restyled to
- * Amber: see this file's own top doc comment for why this is a local reimplementation rather than
- * a fork of the shared, not-yet-restyled `FactGrid`. Each [FactCell] draws as its own rounded
- * 16dp [AmberColors.surfaceRaised] card in a row of equal-weight cards (two for the entitlement
- * pair, three for the device facts), which is why the two calls below end up with genuinely
- * different card widths and, therefore, two different character budgets
- * ([YouModelTest.maxFactWordValueLength], [YouModelTest.maxFactCountValueLength]) rather than one.
- *
- * [numeric] switches the value between [AmberType.figureRow] (tabular figures, amber, for a plain
- * count: "1,234" on the device-fact cells) and [FactValueWordStyle], the same size and weight with
- * tabular figures off, for a state word ("Pass," "No wallet"): DESIGN.md section 3's rule under
- * Amber is that tnum belongs to number styles only, never a word style, and research finding 2 is
- * the historical reason this matters here specifically ("Pass and No wallet at 40sp in code font…
- * is the tell of a rule run past its purpose").
- */
-@Composable
-private fun FactGrid(cells: List<FactCell>, colors: AmberColors, numeric: Boolean = false) {
-    if (cells.isEmpty()) return
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
-        horizontalArrangement = Arrangement.spacedBy(FactCardGap),
-    ) {
-        cells.forEach { cell ->
-            FactCardView(cell = cell, colors = colors, numeric = numeric, modifier = Modifier.weight(1f))
-        }
-    }
-}
+/** A row's text action: a label and what it does. */
+internal class RowAction(val label: String, val onClick: () -> Unit)
 
 /**
- * The fifth clip this project has shipped, on the same "On this device" trio the value budget
- * above already had to fix once: the earlier pass measured [FactCell.value] against the card's
- * width and stopped there, never [FactCell.label] or [FactCell.sub], which are longer and are
- * what actually clipped ("Swaps recorded" to "Swaps record…" at 1.0x; every label and every sub
- * at 1.3x). The rule (DESIGN.md's clipping rule, section 4: a slot on one line with no wrapping
- * beside a fixed-width sibling clips) applied here too; the label was drawn `maxLines = 1` with no
- * real reason, and the sub's existing `maxLines = 2` wrap was sized for 1.0x only.
+ * One row of a cabinet group, the web cabinet's calm row: an optional small label, the value, an
+ * optional sub line, all in one weighted column that wraps, then either a figure (tabular, amber)
+ * or one text action on the right. Two actions (Copy and Disconnect; Sign out and Cancel) move
+ * onto their own right-aligned line under the text, so they never squeeze the column between them.
  *
- * **The fix is anatomy, not type size**: let the label wrap to its own second line
- * ([FactLabelMaxLines]) and give the sub a third line ([FactSubMaxLines]), rather than shrinking
- * either face. Both budgets are proven against the real font file, word by word, in
- * [YouModelTest.factLabelWordWidthAt13xDp] and [YouModelTest.factSubWordWidthAt13xDp]: every word
- * in every real label or sub (fontTools against `res/font/bricolage_grotesque.ttf`, `wght` 400,
- * `wdth` 100, at [AmberType.meta]'s opsz 12 for the label and [AmberType.context]'s opsz 14 for
- * the sub, 2026-09-22) fits inside the trio card's own 90.667dp content width even grown to 1.3x,
- * so a greedy word-wrap never needs more lines than the word count itself: two words for the
- * longest label ("Swaps recorded", "Stocks watched"), three for every "Listed under …" sub. No
- * real content on this screen needs a fourth line; a slot that ever did would still ellipsize
- * rather than clip mid-character, the same backstop `AmberTickerRow`'s own worst-case rows keep.
+ * **The clipping rule** (DESIGN.md section 4): the only one-line slots are the figure and a text
+ * action's label, both unweighted and measured first; the column gets the rest and wraps. Every
+ * label and figure that can land here is measured in `CabinetFitTest` against the row's 336dp of
+ * content on a 400dp frame (16dp group inset, 16dp row padding, each side).
+ *
+ * [onTap] makes the whole row one 56dp tap target with a role and [tapLabel], and the shared 2dp
+ * focus ring; the pressed row steps to `surfaceHigh`, the move every Amber row makes.
  */
 @Composable
-private fun FactCardView(cell: FactCell, colors: AmberColors, numeric: Boolean, modifier: Modifier = Modifier) {
-    val description = buildString {
-        append(cell.label).append(": ").append(spoken(cell.value))
-        cell.sub?.let { append(", ").append(spoken(it)) }
-    }
-    val tap = cell.onTap
+internal fun CabinetRow(
+    colors: AmberColors,
+    value: String,
+    label: String? = null,
+    valueKind: RowValueKind = RowValueKind.WORDS,
+    sub: String? = null,
+    subCaution: Boolean = false,
+    figure: String? = null,
+    actions: List<RowAction> = emptyList(),
+    onTap: (() -> Unit)? = null,
+    tapLabel: String? = null,
+    extra: @Composable ColumnScope.() -> Unit = {},
+) {
     val interactionSource = remember { MutableInteractionSource() }
-    val interaction = if (tap != null) {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val interaction = if (onTap != null) {
         Modifier.clickable(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
+            onClickLabel = tapLabel,
             role = Role.Button,
-            onClick = tap,
+            onClick = onTap,
         )
     } else {
-        Modifier
+        Modifier.semantics(mergeDescendants = actions.isEmpty()) {}
     }
-    val valueColor = when {
-        cell.tone == FactTone.Caution -> colors.stateCaution
-        numeric -> colors.actionText
-        else -> colors.textPrimary
-    }
+    val inline = actions.singleOrNull()
     Column(
-        modifier = modifier
+        modifier = Modifier
+            .fillMaxWidth()
             .focusOutline(interactionSource, colors)
-            .clip(RoundedCornerShape(FactCardRadius))
-            .background(colors.surfaceRaised)
+            .background(if (pressed) colors.surfaceHigh else colors.surfaceRaised)
             .then(interaction)
-            .padding(horizontal = FactCardPaddingH, vertical = FactCardPaddingV)
-            // The cell speaks one sentence, so its own text nodes are cleared; a tappable cell has
-            // to put its action back, since clearing took the clickable's semantics with it.
-            .clearAndSetSemantics {
-                contentDescription = description
-                if (tap != null) {
-                    role = Role.Button
-                    onClick(label = cell.tapLabel) { tap(); true }
-                }
-            },
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .defaultMinSize(minHeight = RowMinHeight)
+            .padding(start = RowPadding, end = RowPadding, top = 10.dp, bottom = 10.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = cell.label,
-            style = AmberType.meta,
-            color = colors.textTertiary(AmberSurface.RAISED),
-            maxLines = FactLabelMaxLines,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = cell.value,
-            style = if (numeric) AmberType.figureRow else FactValueWordStyle,
-            color = valueColor,
-            maxLines = 1,
-            softWrap = false,
-        )
-        cell.sub?.let { sub ->
-            Text(
-                text = sub,
-                style = if (cell.subMono) FactSubTabularStyle else AmberType.context,
-                color = colors.textSecondary,
-                maxLines = FactSubMaxLines,
-                overflow = TextOverflow.Ellipsis,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                label?.let { Text(text = it, style = AmberType.meta, color = colors.textTertiary(AmberSurface.RAISED)) }
+                Text(
+                    text = value,
+                    style = when (valueKind) {
+                        RowValueKind.KEY -> KeyStyle
+                        RowValueKind.QUIET -> AmberType.context
+                        else -> AmberType.body
+                    },
+                    color = when (valueKind) {
+                        RowValueKind.QUIET -> colors.textSecondary
+                        RowValueKind.LINK -> colors.actionText
+                        else -> colors.textPrimary
+                    },
+                )
+                sub?.let {
+                    Text(text = it, style = AmberType.context, color = if (subCaution) colors.stateCaution else colors.textSecondary)
+                }
+            }
+            figure?.let {
+                Text(
+                    text = it,
+                    style = AmberType.figureRow,
+                    color = colors.actionText,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(start = FigureGap),
+                )
+            }
+            inline?.let { TextAction(label = it.label, onClick = it.onClick, color = colors.actionText) }
         }
+        if (actions.size > 1) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                actions.forEach { TextAction(label = it.label, onClick = it.onClick, color = colors.actionText) }
+            }
+        }
+        extra()
     }
 }
 
-/**
- * Two lines for the label, up to the longest real one ("Swaps recorded", "Stocks watched") word
- * by word: [FactCardView]'s own doc comment has the fontTools numbers. `internal`, not `private`,
- * so [YouModelTest]'s own word-budget tests assert against the real constant rather than a copy
- * that could silently drift from it.
- */
-internal const val FactLabelMaxLines = 2
-
-/** Three lines for the sub, up to the longest real one ("Listed under Portfolio"): see above. */
-internal const val FactSubMaxLines = 3
-
-/** A gap between two cards, not a hairline inside one shared container (DESIGN.md section 8). */
-private val FactCardGap = 8.dp
-private val FactCardRadius = 16.dp
-private val FactCardPaddingH = 12.dp
-private val FactCardPaddingV = 14.dp
+/** An on-chain key: JetBrains Mono 15sp, the one role DESIGN.md section 3 keeps the mono face for. */
+private val KeyStyle = TextStyle(fontFamily = JetBrainsMono, fontSize = 15.sp, lineHeight = 20.sp)
 
 /**
- * [AmberType.figureRow] (18/600, opsz 18) with tabular figures switched off: the same size and
- * weight the row figure uses, for a cell whose value is a word rather than a number. Built with
- * [TextStyle.copy] on the published style rather than a new size, so the physical font instance
- * (opsz 18, wght 600, wdth 100) stays exactly what [AmberType] already bundles.
+ * The hero's plan headline: [AmberType.figureLarge]'s own font instance (wght 700, opsz 34, the
+ * one AmberFigure's hero figure bundles) drawn at 28sp, tabular figures off because it is a
+ * sentence with a date in it, not a figure. Sized between the 22sp section heads and the 34sp
+ * figure so "Pro until 20 Oct 2026" stays one line at 1.0x on a 400dp frame (`CabinetFitTest`).
  */
-private val FactValueWordStyle = AmberType.figureRow.copy(fontFeatureSettings = null)
+private val HeroHeadlineStyle = AmberType.figureLarge.copy(fontSize = 28.sp, lineHeight = 32.sp, fontFeatureSettings = null)
 
-/** [AmberType.context] with tabular figures switched on, for a sub line that carries a figure. */
-private val FactSubTabularStyle = AmberType.context.copy(fontFeatureSettings = TABULAR_NUMERALS)
+/** TextAction's own padding, balanced so the label centres under the hero's button. */
+private val CenteredTextActionPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+
+/** AmberTickerRowGroup's own 16dp side inset, shared by the hero so every block lines up. */
+private val GroupSide = 16.dp
+private val HeroRadius = 28.dp
+private val HeroPadding = 20.dp
+private val RowPadding = 16.dp
+private val RowMinHeight = 56.dp
+private val FigureGap = 12.dp
+private val EndGap = 28.dp
 
 // ---- Previews ------------------------------------------------------------------------------
 
 private val PreviewAccount = WalletAccount(publicKey = ByteArray(32) { 7 }, label = "Seed Vault Wallet")
 
-private val PreviewNoWalletNotPro = YouUiState(swapsRecorded = 2, votesCast = 1, stocksWatched = 4)
-private val PreviewProState = ProUiState(entitlementLoading = false, walletConnected = true)
+private val PreviewDevice = YouUiState(swapsRecorded = 2, votesCast = 1, stocksWatched = 4)
+private val PreviewFree = ProUiState(entitlementLoading = false, walletConnected = false)
 private val PreviewProPass = ProUiState(
     entitlementLoading = false,
     pro = true,
@@ -679,35 +649,41 @@ private val PreviewProPass = ProUiState(
     walletConnected = true,
     stakeRaw = 31_209_870_777L,
 )
+private const val PreviewNow = 1_790_000_000_000L
 
 @InstrumentPreviews
 @Composable
-private fun YouNoWalletPreview() {
+private fun YouSignedOutPreview() {
     AmberPreviewCanvas {
         YouContent(
-            state = PreviewNoWalletNotPro,
-            pro = PreviewProState,
+            state = PreviewDevice,
+            pro = PreviewFree,
             onConnect = {},
             onDisconnect = {},
             onRefreshEntitlement = {},
             onPay = {},
             onOpenTab = {},
+            account = AccountUiState.SignedOut(),
+            nowMillis = PreviewNow,
         )
     }
 }
 
 @InstrumentPreviews
 @Composable
-private fun YouWalletProPreview() {
+private fun YouProPassPreview() {
     AmberPreviewCanvas {
         YouContent(
-            state = PreviewNoWalletNotPro.copy(account = PreviewAccount, notificationsOn = true),
+            state = PreviewDevice.copy(account = PreviewAccount, notificationsOn = true),
             pro = PreviewProPass,
             onConnect = {},
             onDisconnect = {},
             onRefreshEntitlement = {},
             onPay = {},
             onOpenTab = {},
+            account = AccountUiState.SignedIn(SignedInAccount("ann@example.com", "Ann", emptyList())),
+            onOpenDigest = {},
+            nowMillis = PreviewNow,
         )
     }
 }

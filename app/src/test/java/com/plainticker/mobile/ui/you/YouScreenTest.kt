@@ -11,8 +11,8 @@ import org.junit.Test
  * WatchlistScreenTest read theirs. What the screen *says* is [YouModelTest]'s job; this file pins
  * what a device walk would otherwise have to prove and a later edit could quietly undo:
  *
- * 1. the section order the plan fixes, top to bottom, which is also the traversal order because
- *    the screen is one list and nothing overlaps;
+ * 1. the section order the cabinet fixes (hero, Plan, Sign-in methods, On this device,
+ *    Notifications, About), which is also the traversal order because the screen is one list;
  * 2. no arithmetic in the composition: every numeral and every sentence arrives decided;
  * 3. every "On this device" fact opens the tab it belongs to, and is labelled for a screen reader;
  * 4. the device's own code never reaches this file at all, not even a hash of it drawn as text.
@@ -77,28 +77,48 @@ class YouScreenTest {
     }
 
     @Test
-    fun `the sections are drawn in the order the plan fixes`() {
-        // KotlinScan blanks the contents of every string literal (including item()'s own "key"
-        // argument) out of `code`, so the order is read off the calls each item wraps, the same
-        // way PortfolioScreenTest and WatchlistScreenTest read theirs.
+    fun `the sections are drawn in the order the cabinet fixes`() {
+        // Updated for the cabinet pass (2026-09-25): the founder asked for the app's You to match
+        // plainticker.com's new account cabinet, so the old order (wallet block, Pro/stake cards,
+        // action buttons, device trio, notifications line, digest link, footer, licenses) is
+        // replaced by the cabinet's: one hero card, then Plan, Sign-in methods, On this device,
+        // Notifications and About. KotlinScan blanks string literals (item keys included), so the
+        // order is read off the calls each item wraps, as before.
         assertOrder(
             "YouContent",
-            body("internal fun YouContent(", "private fun YouAction.handler("),
+            body("internal fun YouContent(", "private fun amberColors("),
             listOf(
                 "header()",
                 "R.string.you_heading)",
-                "WalletBlock(",
-                "FactGrid(cells = listOf(proCell",
-                "ActionButtons(",
-                "R.string.you_heading_device",
-                "FactGrid(cells = deviceCells",
-                "NotificationsLine(",
-                "DigestLink(",
-                "Footer()",
-                "R.string.you_heading_licenses",
-                "LicenseRow(",
+                "Hero(hero = hero",
+                "PlanGroup(",
+                "AccountSection(",
+                "DeviceGroup(",
+                "NotificationsGroup(",
+                "AboutGroup(",
             ),
         )
+    }
+
+    @Test
+    fun `about keeps the version, the disclaimer and every license, licenses behind one row`() {
+        val about = body("private fun AboutGroup(", "private fun LicenseRow(")
+        assertOrder(
+            "AboutGroup",
+            about,
+            listOf("R.string.you_version", "R.string.onboarding_body_disclaimer", "R.string.you_heading_licenses", "LicenseRow("),
+        )
+        assertTrue("the licenses are collapsed until asked for", "if (licensesOpen)" in about)
+        assertTrue("each license still reads its shipped OFL text", "context.assets.open(license.assetPath)" in scan.code)
+    }
+
+    @Test
+    fun `the notifications group keeps enable and the digest`() {
+        val group = body("private fun NotificationsGroup(", "private fun AboutGroup(")
+        assertTrue("notificationLine(notificationsOn)" in group)
+        assertTrue("Enable is offered only while notifications are off", "takeIf { !notificationsOn }" in group)
+        assertTrue("R.string.action_enable" in group)
+        assertTrue("the digest opens from here", "onOpenDigest?.let { open ->" in group)
     }
 
     @Test
@@ -129,18 +149,39 @@ class YouScreenTest {
     }
 
     @Test
-    fun `the button matrix never draws two accent fills`() {
-        val actions = body("private fun ActionButtons(", "private fun WalletBlock(")
-        // Amber restyle: AmberPrimaryAction and AmberSecondaryAction, both now the shared
-        // components in ui/components/AmberPrimaryAction.kt (AmberSecondaryAction was a private
-        // copy living only in this file until Instrument's PrimaryButton and SecondaryButton
-        // retired), keeping the same one-fill, never-a-text-link rule (U2).
-        assertTrue("the primary slot is an AmberPrimaryAction", "AmberPrimaryAction(label = it.label.text()" in actions)
-        assertTrue(
-            "the secondary slot is an AmberSecondaryAction, never a text action",
-            "AmberSecondaryAction(label = it.label.text()" in actions,
-        )
-        assertEquals("Pay for Pro is never drawn as a text action", 0, count("TextAction(label = it.label"))
+    fun `only the hero draws an amber fill, and every hero action has its own label`() {
+        // Was "the button matrix never draws two accent fills", pinned against the retired
+        // ActionButtons block. The rule is the same (never two amber fills); the one place a fill
+        // can appear is now the hero's own button, and every other action on You is a TextAction.
+        val hero = body("private fun HeroButton(", "private fun PlanGroup(")
+        assertEquals("every AmberPrimaryAction on You lives in HeroButton", count("AmberPrimaryAction("), hero.split("AmberPrimaryAction(").size - 1)
+        listOf(
+            "HeroAction.SIGN_IN ->",
+            "HeroAction.SIGNING_IN ->",
+            "HeroAction.GET_PRO ->",
+            "HeroAction.EXTEND ->",
+        ).forEach { assertTrue("HeroButton does not handle $it", it in hero) }
+        assertTrue("a sign-in in flight is a disabled button, never a missing one", "AmberDisabledAction(label = stringResource(R.string.account_signing_in)" in hero)
+        assertEquals("Get Pro and Extend Pro both open the pass flow", 2, hero.split("onClick = onPay").size - 1)
+        assertTrue("Sign in with Google runs the sign-in", "stringResource(R.string.account_sign_in), onClick = onSignIn" in hero)
+        assertTrue("Connect wallet sits under Sign in as a text action", "R.string.action_connect_wallet" in body("private fun Hero(", "private fun HeroButton("))
+    }
+
+    @Test
+    fun `the plan group's pay entry and refresh reach the real handlers`() {
+        val action = body("private fun planRowAction(", "private fun DeviceGroup(")
+        assertTrue("PlanAction.GET_PRO -> RowAction(stringResource(R.string.you_action_get_pro), onPay)" in action)
+        assertTrue("PlanAction.EXTEND -> RowAction(stringResource(R.string.you_action_extend), onPay)" in action)
+        assertTrue("PlanAction.REFRESH -> RowAction(stringResource(R.string.action_refresh), onRefresh)" in action)
+        assertTrue("the Plan group refreshes through the shared entitlement refresh", "onRefresh = onRefreshEntitlement" in scan.code)
+    }
+
+    @Test
+    fun `a finished pay sheet still sits beside the list`() {
+        assertTrue("PassSheet(" in scan.code)
+        assertTrue("onPay = passViewModel::pay" in scan.code)
+        assertTrue("onConnect = viewModel::connect" in scan.code)
+        assertTrue("onDisconnect = viewModel::disconnect" in scan.code)
     }
 
     @Test
