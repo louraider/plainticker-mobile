@@ -289,7 +289,7 @@ private fun TodayWatchedBlock(state: WatchlistUiState, onOpenDetail: (String) ->
         } else {
             AmberTickerRowGroup(colors = colors) {
                 state.rows.forEach { ticker ->
-                    val row = todayWatchRow(ticker)
+                    val row = todayWatchRow(ticker, state.analysisUnavailable)
                     val report = row.report.text()
                     val context = row.poolNote?.let { stringResource(R.string.list_row_meta_join, report, it.text()) } ?: report
                     AmberTickerRow(

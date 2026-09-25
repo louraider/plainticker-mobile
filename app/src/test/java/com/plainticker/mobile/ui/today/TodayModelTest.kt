@@ -205,6 +205,23 @@ class TodayModelTest {
         assertNull(unpriced.poolNote)
     }
 
+    /**
+     * QA 2026-09-26, D3. `/summary` failing to answer at all leaves every row's [WatchedTicker.analyzed]
+     * false, the same shape a genuine drop from the leaderboard leaves it in; `todayWatchRow`'s own
+     * [Boolean] parameter is how Today's Watched card tells "the network failed" apart from "not in
+     * the list," reading `WatchlistUiState.analysisUnavailable` the way `TodayScreen.kt` threads it.
+     */
+    @Test
+    fun `offline, a dropped-looking row says the network failed rather than that it was delisted`() {
+        val unserved = watched(poolUsd = 250_000.0).copy(analyzed = false)
+        val offline = todayWatchRow(unserved, analysisUnavailable = true)
+        assertEquals("Couldn't load right now", ShippedCopy.render(offline.report))
+
+        // The same shape, once /summary has actually answered: a real drop reads as one.
+        val backOnline = todayWatchRow(unserved, analysisUnavailable = false)
+        assertEquals("Not in the analysis list", ShippedCopy.render(backOnline.report))
+    }
+
     // ---- Digest ------------------------------------------------------------------------------------------
 
     @Test

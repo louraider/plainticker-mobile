@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.portfolio
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.receipts.SwapReceipt
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.ShippedCopy
 import com.plainticker.mobile.wallet.testAccount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -259,6 +260,71 @@ class PortfolioModelTest {
     fun `a refresh over drawn rows shows no skeletons`() {
         val state = state(position()).copy(isLoading = true)
         assertFalse(state.isCold)
+    }
+
+    // ---- QA 2026-09-26, D2: the recorded row's unscaled meta line, measured not guessed --------
+
+    /**
+     * [R.string.portfolio_recorded_meta_unscaled] used to read "Swapped %1$s · as recorded, current
+     * split not read," which clipped mid-word ("…as recorded, c…") at font scale 1.3 in
+     * [com.plainticker.mobile.ui.components.AmberTickerRow]'s own `context` slot
+     * (`maxLines = 2`) beside this row's `figure`. The section's own lede already says once, above
+     * every row, that these are the app's own record rather than a chain read, so "as recorded" was
+     * repeating that; the shortened string keeps only the one new fact this clause adds.
+     *
+     * fontTools 4.63 against `res/font/bricolage_grotesque.ttf`, 2026-09-26, `context`'s 14sp/400
+     * instance (advance widths, no kerning, the same conservative direction `AmberTickerRowTest`
+     * measures in) for the full rendered sentence with `Fmt.utc`'s own worst case (21 characters,
+     * every stamp is this long); `figureRow`'s 18sp/600 tnum instance for
+     * [com.plainticker.mobile.ui.components.AmberTickerRowTest]'s own "the widest realistic figure
+     * this row draws across every screen," "31,209.9," which this row's own `figure` slot shares
+     * the meta line's 336dp content width with the same way every other caller of that row does.
+     */
+    @Test
+    fun `the unscaled meta line clears AmberTickerRow's two-line budget beside the widest realistic figure, at 1_3x`() {
+        // The template itself, unfilled: this is what a future edit could quietly lengthen back
+        // toward the old defect, so it is pinned as its own literal rather than only through one
+        // rendered example.
+        assertEquals(
+            "Swapped %1\$s · quantity not rescaled",
+            ShippedCopy.strings.getValue("portfolio_recorded_meta_unscaled"),
+        )
+
+        // Fmt.utc's own shape is fixed-length whenever the day is two digits (dayOfMonth is never
+        // zero-padded, so a single-digit day is one character shorter than this, never longer):
+        // "D Sep YYYY HH:MM UTC", 21 characters. This exact stamp, "10 Sep 2026 14:55 UTC," is the
+        // one fontTools measured below; any other two-digit-day stamp sums to the same order of
+        // width, since every character in it is a digit, a space or one of a fixed set of letters.
+        val rendered = ShippedCopy.string("portfolio_recorded_meta_unscaled", "10 Sep 2026 14:55 UTC")
+        assertEquals("Swapped 10 Sep 2026 14:55 UTC · quantity not rescaled", rendered)
+        assertEquals(21, "10 Sep 2026 14:55 UTC".length)
+
+        val contentWidthDp = 336.0
+        val gapDp = 8.0
+        val figureWidthDp = 65.970 // "31,209.9" at figureRow's 18sp/600 tnum, 1.0x.
+        val contextWidthDp = 340.830 // the rendered sentence above, at context's 14sp/400, 1.0x.
+
+        val budgetDp = contentWidthDp - figureWidthDp - gapDp
+        assertEquals(262.030, budgetDp, 0.01)
+        // Two lines, not one: this sentence carries a full timestamp and does not need to clear a
+        // single line, only the row's real two-line ceiling, the same backstop
+        // `AmberTickerRowTest`'s own watchlist test already accepts for a join this long.
+        assertTrue(
+            "the unscaled meta must clear one full line at 1.0x, or nothing below needs measuring",
+            contextWidthDp <= budgetDp * 2,
+        )
+
+        val figureWidthAt13xDp = figureWidthDp * 1.3
+        val contextWidthAt13xDp = contextWidthDp * 1.3
+        val budgetAt13xDp = contentWidthDp - figureWidthAt13xDp - gapDp
+        assertEquals(242.239, budgetAt13xDp, 0.01)
+        assertEquals(443.079, contextWidthAt13xDp, 0.01)
+        assertTrue(
+            "the unscaled meta (\"$rendered\", $contextWidthAt13xDp dp at 1.3x) must clear the " +
+                "row's own two-line ceiling ($budgetAt13xDp dp per line) beside the widest " +
+                "realistic figure, or it clips again",
+            contextWidthAt13xDp <= budgetAt13xDp * 2,
+        )
     }
 
     @Test

@@ -532,6 +532,27 @@ internal class RowAction(val label: String, val onClick: () -> Unit)
  *
  * [onTap] makes the whole row one 56dp tap target with a role and [tapLabel], and the shared 2dp
  * focus ring; the pressed row steps to `surfaceHigh`, the move every Amber row makes.
+ *
+ * **QA 2026-09-26, D4: "Sign out" drew as "Sian out."** Not a font or line-height defect: fontTools
+ * against `res/font/outfit_semibold.ttf` puts Outfit SemiBold 14sp's real ascent-to-descent span at
+ * 17.64dp, comfortably inside [PlainTickerType.textAction]'s declared 20sp line height, itself
+ * centred inside [TextAction]'s own 48dp box with 14dp of padding on each side, itself inside this
+ * row's own [RowVerticalPadding]; nothing in this row's own budget was ever tight enough to clip a
+ * "g" on its own, and `CabinetFitTest` pins that budget so it cannot silently shrink.
+ *
+ * The actual cause sits one level up, in `YouContent`'s `LazyColumn`, not in this row: a scrolling
+ * list clips whatever is left of its last, partially visible item at its own viewport edge, the
+ * ordinary way any list shows a sliver of what is next. This only read as broken, rather than as an
+ * obviously partial row, because that edge happened to fall inside "Sign out"'s own ink rather than
+ * in the blank space around it, and only in the offline, entitlement-unavailable state: that state's
+ * `Plan` group draws three shorter rows instead of four (no "Valid until," no "How to extend,"
+ * neither known without a read that failed), which changes how much of this screen fits above the
+ * fold before a first scroll. Widening this row's own vertical margin (was 10dp) narrows how often a
+ * viewport edge can land inside its ink rather than around it, but it is a mitigation at the row
+ * level for a coincidence that is decided one level up, by how tall the groups above it happen to
+ * be; nothing at this level can prove no future combination of states puts some row's own ink back
+ * at that same edge, the same honest limit `AmberTickerRow`'s own 54-character company outlier
+ * already accepts for a different clip.
  */
 @Composable
 internal fun CabinetRow(
@@ -568,7 +589,7 @@ internal fun CabinetRow(
             .background(if (pressed) colors.surfaceHigh else colors.surfaceRaised)
             .then(interaction)
             .defaultMinSize(minHeight = RowMinHeight)
-            .padding(start = RowPadding, end = RowPadding, top = 10.dp, bottom = 10.dp),
+            .padding(start = RowPadding, end = RowPadding, top = RowVerticalPadding, bottom = RowVerticalPadding),
         verticalArrangement = Arrangement.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -632,6 +653,13 @@ private val HeroRadius = 28.dp
 private val HeroPadding = 20.dp
 private val RowPadding = 16.dp
 private val RowMinHeight = 56.dp
+/**
+ * The row's own top and bottom clearance around its content, widened from 10dp (QA 2026-09-26, D4,
+ * this file's own [CabinetRow] doc comment): real margin between a trailing single-line action's
+ * ink and the row's own edge, so a clip that lands at that edge (a scrolling list's own viewport
+ * bound, never this row's fault on its own) falls in blank space rather than through a descender.
+ */
+private val RowVerticalPadding = 12.dp
 private val FigureGap = 12.dp
 private val EndGap = 28.dp
 
