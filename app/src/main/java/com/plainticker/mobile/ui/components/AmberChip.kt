@@ -80,7 +80,7 @@ fun AmberChip(
             // the database's 48dp touch target (Database rule "Touch Target Size" High) without
             // the chip row's rhythm growing to match.
             .minimumInteractiveComponentSize()
-            .focusOutline(interactionSource)
+            .focusOutline(interactionSource, colors)
             .clip(shape)
             .background(background)
             .then(if (selected || colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier)

@@ -199,7 +199,7 @@ fun AmberTickerRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .focusOutline(interactionSource)
+            .focusOutline(interactionSource, colors)
             // One step up the surface ladder while pressed, the same tonal move surfaceHigh
             // already means everywhere else (DESIGN.md section 2: "a selected chip, a sheet").
             .background(if (pressed) colors.surfaceHigh else colors.surfaceRaised)

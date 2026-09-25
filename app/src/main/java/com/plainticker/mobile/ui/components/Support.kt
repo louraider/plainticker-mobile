@@ -66,11 +66,20 @@ fun AmberPreviewCanvas(colors: AmberColors = AmberDarkColors, content: @Composab
 @Composable
 fun defaultAmberColors(): AmberColors = if (isSystemInDarkTheme()) AmberDarkColors else AmberLightColors
 
-/** Keyboard or switch-access focus: a 2dp Accent outline, never removed (DESIGN.md section 6). */
+/**
+ * Keyboard or switch-access focus: a 2dp outline in the theme's own action colour, never removed
+ * (DESIGN.md section 6). Previously a hard-coded Instrument [Accent] regardless of which theme was
+ * drawing the rest of the screen: a blue with no relationship to Amber's palette and, unlike
+ * [AmberColors.actionText] (`AmberContrastTest` pins it at 11.5:1 dark, 6.4:1 light against
+ * `surfaceGround`), no contrast ratio anyone had measured. [colors] defaults the same way every
+ * other shared component in this package does ([defaultAmberColors]), so a call site that already
+ * computed its own [AmberColors] can thread it straight through instead of paying for a second
+ * [isSystemInDarkTheme] read.
+ */
 @Composable
-fun Modifier.focusOutline(interactionSource: InteractionSource): Modifier {
+fun Modifier.focusOutline(interactionSource: InteractionSource, colors: AmberColors = defaultAmberColors()): Modifier {
     val focused by interactionSource.collectIsFocusedAsState()
-    return if (focused) this.border(2.dp, Accent) else this
+    return if (focused) this.border(2.dp, colors.actionText) else this
 }
 
 /**

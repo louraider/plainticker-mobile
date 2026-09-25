@@ -338,6 +338,17 @@ class FmtTest {
     // ---- The reader's own time -------------------------------------------------------------
 
     @Test
+    fun `local date time reads the reader's own zone and carries no UTC label`() {
+        val closeInSeptember = Instant.parse("2026-09-24T20:00:00Z").toEpochMilli()
+        assertEquals("24 Sep 2026 23:00", Fmt.localDateTime(closeInSeptember, java.time.ZoneId.of("Europe/Kyiv")))
+        assertEquals("24 Sep 2026 16:00", Fmt.localDateTime(closeInSeptember, java.time.ZoneId.of("America/New_York")))
+        // A zone ahead of UTC can carry the stamp into the next calendar day, the same as utc()
+        // would for a different instant; this is the same day/month/year math, zone-shifted.
+        val lateUtc = Instant.parse("2026-09-24T23:30:00Z").toEpochMilli()
+        assertEquals("25 Sep 2026 08:30", Fmt.localDateTime(lateUtc, java.time.ZoneId.of("+09:00")))
+    }
+
+    @Test
     fun `clock reads the reader's own zone, 24-hour, through daylight saving`() {
         val closeInSeptember = Instant.parse("2026-09-24T20:00:00Z").toEpochMilli()
         assertEquals("23:00", Fmt.clock(closeInSeptember, java.time.ZoneId.of("Europe/Kyiv")))

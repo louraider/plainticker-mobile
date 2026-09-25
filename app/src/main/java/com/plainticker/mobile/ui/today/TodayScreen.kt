@@ -6,7 +6,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -446,20 +445,30 @@ private const val ColdRowCap = 3
  * The settle this screen's class doc names: a block fades in and rises [EntranceRise] into place,
  * once, the first time it has something to draw, staggered by [step] positions of
  * [StaggerStepMillis] each. Damping is [Spring.DampingRatioNoBouncy] on purpose: a settle, not a
- * bounce, since a bouncy alpha can overshoot past fully opaque and read as a flicker. At animator
- * scale 0 the delay is skipped and `snap()` replaces the spring, so the block is at alpha 1,
- * untranslated, on the very next frame.
+ * bounce, since a bouncy alpha can overshoot past fully opaque and read as a flicker.
+ *
+ * **Motion off returns [this] untouched, before `remember` or `LaunchedEffect` ever run.** The
+ * animator-zero stall (docs/qa-checklist.md, 2026-09-22) was traced past the data-loading fix in
+ * [com.plainticker.mobile.ui.watchlist.WatchlistViewModel.loadToday] to this function itself: even
+ * with `animationSpec = snap()`, [animateFloatAsState] still routes through [Animatable]'s frame
+ * clock, so the settled value only lands "on the next frame" the platform delivers one, and with
+ * all three animator scales at 0 a cold Seeker sometimes does not schedule that frame until a
+ * scroll or other input forces one, leaving the block on its unsettled first value (alpha 0,
+ * translated) indefinitely. No animation object, no coroutine and no frame pulse is on this path
+ * when motion is off, so the block is drawn at its settled state in the very same composition pass
+ * that first draws it, the same guarantee every other read on this screen already has.
  */
 @Composable
 private fun Modifier.amberBlockEntrance(step: Int, motionEnabled: Boolean = rememberMotionEnabled()): Modifier {
+    if (!motionEnabled) return this
     var settled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        if (motionEnabled) delay(step * StaggerStepMillis)
+        delay(step * StaggerStepMillis)
         settled = true
     }
     val progress by animateFloatAsState(
         targetValue = if (settled) 1f else 0f,
-        animationSpec = if (motionEnabled) EntranceSpring else snap(),
+        animationSpec = EntranceSpring,
         label = "today-block-entrance-$step",
     )
     return this.graphicsLayer {
