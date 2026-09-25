@@ -15,7 +15,10 @@ import com.plainticker.mobile.data.receipts.SwapReceipt
 import com.plainticker.mobile.data.SplitMultiplier
 import com.plainticker.mobile.data.rpc.TokenBalance
 import com.plainticker.mobile.repo.MintRepository
+import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.RpcRepository
+import com.plainticker.mobile.repo.SecondRead
+import com.plainticker.mobile.repo.SecondSource
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
@@ -69,6 +72,13 @@ fun interface SwapDebugLog {
  *    signed, nothing was sent, nothing is owed, so it returns to [SwapState.Amount] with the typed
  *    amount intact and a neutral note, and the sentence claims no fault.
  *
+ * When the xStock is the side being spent (Swap to USDC) three more checks run, all before the
+ * wallet opens, because the base units sent are computed from what the forwarder said about the
+ * mint and the balance (security audit, 2026-09-26; [SwapTrust]): the decimals must be 8, the
+ * multiplier and the balance are read again from [secondSource] and must agree, and Jupiter's
+ * dollar value of the order must match the typed quantity at the price the app shows. A second
+ * source that does not answer refuses the swap; viewing the holding is unaffected.
+ *
  * [submitSwaps] is BuildConfig.SUBMIT_SWAPS, false in every debug build, so a debug build signs
  * and stops at [SwapState.Signed]: no /execute, no money, and no receipt.
  *
@@ -91,6 +101,13 @@ class SwapViewModel(
      * not already know it. Null only in tests that open with a known multiplier.
      */
     private val mints: MintRepository? = null,
+    /**
+     * The independent read Swap to USDC is checked against: the mint and this wallet's balance of
+     * it, from a node PlainTicker does not run. Required, so no build can leave the check out.
+     */
+    private val secondSource: SecondSource,
+    /** The price the app shows for a token, which the order's own dollar value must agree with. */
+    private val prices: PriceRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SwapState>(SwapState.Closed())
@@ -150,9 +167,26 @@ class SwapViewModel(
             // No quantity of the xStock is stated until its multiplier is known: a split token
             // read as unsplit would put a balance ten times off on the screen and in the field.
             val token = resolveScale(requested.token) ?: return@launch failOpen(requested, SwapFailure.CHAIN_UNREAD)
+            // Every xStock mint carries 8 decimals, and the typed amount becomes base units through
+            // this number, so any other value is refused here, whoever supplied it. Never replaced
+            // by the constant: a read that says 10 is a read to distrust, not one to correct.
+            if (!SwapTrust.decimalsPinned(token.decimals)) {
+                debugLog.raw("mint ${token.mint} read with ${token.decimals} decimals, refused")
+                return@launch failOpen(requested, SwapFailure.CHAIN_UNREAD)
+            }
             val leg = requested.withToken(token)
-            val funds = readFunds(owner, leg.token, minContextSlot)
+            val read = readFunds(owner, leg.token, minContextSlot)
                 ?: return@launch failOpen(leg, SwapFailure.CHAIN_UNREAD)
+            // Swap to USDC: the scale and the balance agree with a second source before any
+            // quantity of the xStock is offered, and Max and the cap use the smaller balance.
+            val funds = if (leg.intoToken) {
+                read
+            } else {
+                when (val checked = confirmOut(leg, read, minContextSlot)) {
+                    is Confirmation.Refused -> return@launch failOpen(leg, checked.reason)
+                    is Confirmation.Capped -> checked.funds
+                }
+            }
             _state.value = SwapState.Amount(leg, funds, AmountInput.EMPTY)
         }
     }
@@ -263,10 +297,28 @@ class SwapViewModel(
     @Suppress("DEPRECATION")
     private suspend fun attempt(start: SwapState.Amount) {
         val leg = start.leg
-        val funds = start.funds
         val input = start.input
         var timing = SwapTiming.started(clock.nowMillis())
         var requote = false
+
+        // ---- Swap to USDC is checked again at the tap, whatever path reached the amount step:
+        // the flip from the other direction never passed the check at opening. A balance that
+        // shrank below the typed amount goes back to the amount step to say so.
+        val funds = if (leg.intoToken) {
+            start.funds
+        } else {
+            _state.value = SwapState.Quoting(leg, start.funds, input, requote, timing)
+            when (val checked = confirmOut(leg, start.funds)) {
+                is Confirmation.Refused -> return fail(leg, start.funds, input, checked.reason, null, requote, timing)
+                is Confirmation.Capped -> {
+                    if (input.raw > checked.funds.tokenRaw) {
+                        _state.value = amountStep(leg, checked.funds, input)
+                        return
+                    }
+                    checked.funds
+                }
+            }
+        }
 
         while (true) {
             // ---- Quoting: GET /order, at the tap.
@@ -318,6 +370,26 @@ class SwapViewModel(
             if (verdict is TransactionGuard.Verdict.Refuse) {
                 debugLog.raw("order ${quote.requestId} refused before the wallet: ${verdict.reason}")
                 return fail(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing)
+            }
+
+            // ---- The dollar value against what was typed (security audit, 2026-09-26). The guard
+            // proves the bytes spend input.raw; it cannot know whether input.raw is what the person
+            // meant. Jupiter's value of the order it built must match the typed quantity at the
+            // price the app shows, within SwapTrust.VALUE_BOUND. Swap to USDC only: the other
+            // direction spends USDC, whose decimals are pinned in SwapLeg.USDC.
+            if (!leg.intoToken) {
+                val price = priceOf(leg.input.mint)
+                when (val value = SwapTrust.checkValue(leg.input.ui(input.raw), price, order.inUsdValue)) {
+                    is SwapTrust.ValueVerdict.Consistent -> Unit
+                    is SwapTrust.ValueVerdict.Mismatch -> {
+                        debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
+                        return fail(leg, funds, input, SwapFailure.VALUE_MISMATCH, quote, requote, timing)
+                    }
+                    is SwapTrust.ValueVerdict.Unchecked -> {
+                        debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
+                        return fail(leg, funds, input, SwapFailure.VALUE_UNCHECKED, quote, requote, timing)
+                    }
+                }
             }
 
             // ---- Dust. A quote that delivers nothing, or whose floor is nothing, is fees for no
@@ -564,6 +636,60 @@ class SwapViewModel(
         val multiplier = facts.scaledUiAmount?.let { SplitMultiplier.ofMint(it).effectiveAt(reading.readAtMillis) }
             ?: SplitMultiplier.NONE
         return token.copy(decimals = facts.decimals, multiplier = BigDecimal.valueOf(multiplier))
+    }
+
+    /** The outcome of checking the xStock side against [secondSource]. */
+    private sealed interface Confirmation {
+        /** Agreed; [funds] carries the smaller of the two balances. */
+        data class Capped(val funds: SwapFunds) : Confirmation
+
+        data class Refused(val reason: SwapFailure) : Confirmation
+    }
+
+    /**
+     * [funds] checked against a second, independent read of the xStock being spent. Unreachable
+     * is a refusal and not a pass: this is the one path where a wrong number is somebody's money.
+     */
+    private suspend fun confirmOut(leg: SwapLeg, funds: SwapFunds, minContextSlot: Long? = null): Confirmation {
+        // The same patience as [readFunds]: right after a landing the public node may be a slot or
+        // two behind, so the fresh read is asked for twice before the plain one stands. A plain
+        // read that trails only makes the cap smaller, never larger.
+        val slots = if (minContextSlot == null) listOf(null) else listOf(minContextSlot, minContextSlot, null)
+        var second: SecondRead? = null
+        for ((attemptIndex, slot) in slots.withIndex()) {
+            if (attemptIndex > 0) delay(FRESH_READ_RETRY_MS)
+            try {
+                second = secondSource.read(funds.owner, leg.token.mint, slot)
+                break
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugLog.raw("second source: ${e::class.simpleName}: ${e.message}")
+            }
+        }
+        if (second == null) return Confirmation.Refused(SwapFailure.SECOND_SOURCE_UNREACHABLE)
+        return when (val verdict = SwapTrust.confirmScale(leg.token, funds.tokenRaw, second)) {
+            is SwapTrust.ScaleVerdict.Mismatch -> {
+                debugLog.raw("second source disagrees: ${verdict.reason}")
+                Confirmation.Refused(SwapFailure.SECOND_SOURCE_MISMATCH)
+            }
+            is SwapTrust.ScaleVerdict.Confirmed -> {
+                if (verdict.capRaw < funds.tokenRaw) {
+                    debugLog.raw("balance capped from ${funds.tokenRaw} to ${verdict.capRaw} by the second source")
+                }
+                Confirmation.Capped(funds.copy(tokenRaw = verdict.capRaw))
+            }
+        }
+    }
+
+    /** The price the app shows for [mint], or null when there is none to check against. */
+    private suspend fun priceOf(mint: String): Double? = try {
+        prices.prices(listOf(mint))[mint]?.usdPrice
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        debugLog.raw("price: ${e::class.simpleName}: ${e.message}")
+        null
     }
 
     private fun receiptOf(leg: SwapLeg, quote: SwapQuote, fill: SwapFill, nowMillis: Long): SwapReceipt =

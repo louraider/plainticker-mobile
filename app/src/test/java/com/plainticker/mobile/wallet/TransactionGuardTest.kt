@@ -416,6 +416,29 @@ class TransactionGuardTest {
         }
     }
 
+    /**
+     * ApproveChecked is [source, mint, delegate, owner], so its delegate is account 2, where Approve
+     * keeps it at account 1 (security audit, 2026-09-26). Reading account 1 for both compared the
+     * mint with the wallet: an approve to the wallet itself was refused, and one that put the wallet
+     * in the mint slot passed whoever the delegate was. Still strict: only the wallet may be named.
+     */
+    @Test
+    fun `swap - ApproveChecked is judged by its delegate, allowed to the wallet and refused to anyone else`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val source = TransactionGuard.ata(c.taker, KnownMints.USDC, KnownPrograms.TOKEN)
+            fun approveChecked(accounts: List<String>) =
+                m.plus(KnownPrograms.TOKEN, accounts, leData(13.toByte(), 1L, 6.toByte())).transaction()
+
+            assertAllowed(checkSwap(o, approveChecked(listOf(source, KnownMints.USDC, c.taker, c.taker)), c.taker))
+            assertRefused(checkSwap(o, approveChecked(listOf(source, KnownMints.USDC, attacker, c.taker)), c.taker), "ApproveChecked")
+            assertRefused(checkSwap(o, approveChecked(listOf(source, c.taker, attacker, c.taker)), c.taker), "ApproveChecked")
+            // A truncated account list names no delegate at all, which is not the wallet.
+            assertRefused(checkSwap(o, approveChecked(listOf(source, KnownMints.USDC)), c.taker), "ApproveChecked")
+        }
+    }
+
     @Test
     fun `swap - an unknown program, a top-level transfer, or lamports out of the wallet are refused`() = runTest {
         for (c in swaps) {

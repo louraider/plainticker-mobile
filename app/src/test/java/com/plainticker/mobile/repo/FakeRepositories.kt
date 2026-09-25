@@ -396,3 +396,33 @@ class HeldPriceRepository(
         }
     }
 }
+
+/**
+ * Answers [SecondSource] from a fixed reading, or throws to stand in for a public node that is out.
+ *
+ * The default agrees with anything an honest forwarder says about an unsplit xStock: 8 decimals,
+ * no scaled amount (a multiplier of one), and a balance no smaller than any the forwarder could
+ * report, so the cap stays the forwarder's own. A test about the check names what disagrees.
+ */
+class FakeSecondSource(
+    var result: Result<SecondRead> = Result.success(agreeingSecondRead()),
+) : SecondSource {
+    /** Each read as (owner, mint), in order. */
+    val asked = mutableListOf<Pair<String, String>>()
+
+    /** The minContextSlot each read asked for, in order; null for a read that named none. */
+    val slots = mutableListOf<Long?>()
+
+    override suspend fun read(owner: String, mint: String, minContextSlot: Long?): SecondRead {
+        asked += owner to mint
+        slots += minContextSlot
+        return result.getOrThrow()
+    }
+}
+
+/** A second read that agrees: [facts] as given, a balance that never caps, read at [readAtMillis]. */
+fun agreeingSecondRead(
+    facts: MintFacts? = mintFacts(),
+    spendableRaw: Long = Long.MAX_VALUE,
+    readAtMillis: Long = 0L,
+): SecondRead = SecondRead(facts = facts, spendableRaw = spendableRaw, readAtMillis = readAtMillis)

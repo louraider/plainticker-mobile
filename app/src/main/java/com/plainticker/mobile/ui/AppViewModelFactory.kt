@@ -59,6 +59,8 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.receiptStore,
             container.clock,
             mints = container.mintRepository,
+            secondSource = container.secondSource,
+            prices = container.priceRepository,
         )
     }
     initializer {

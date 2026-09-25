@@ -513,6 +513,36 @@ class SwapSheetModelTest {
         assertTrue("no quote, so no cost block", content.cells.isEmpty())
     }
 
+    /**
+     * The Swap to USDC checks (security audit, 2026-09-26) are refusals before the wallet, so each
+     * says nothing was sent. The one for a second source that did not answer is honest about what
+     * it costs: the swap is paused, viewing is not.
+     */
+    @Test
+    fun `the Swap to USDC checks say plainly why the swap stopped and that nothing was sent`() {
+        fun text(reason: SwapFailure) = ShippedCopy.render(words(reason.text))
+        val checks = listOf(
+            SwapFailure.SECOND_SOURCE_UNREACHABLE,
+            SwapFailure.SECOND_SOURCE_MISMATCH,
+            SwapFailure.VALUE_MISMATCH,
+            SwapFailure.VALUE_UNCHECKED,
+        )
+        checks.forEach {
+            assertEquals(it.name, FailureOutcome.NOTHING_SENT, it.outcome)
+            assertFalse(it.name, '!' in text(it))
+        }
+        assertEquals(
+            "A second check of this token did not answer, so Swap to USDC is paused. Nothing was sent, and your holding still shows.",
+            text(SwapFailure.SECOND_SOURCE_UNREACHABLE),
+        )
+        assertTrue("never reached the wallet" in text(SwapFailure.VALUE_MISMATCH))
+        assertTrue("Nothing was sent" in text(SwapFailure.SECOND_SOURCE_MISMATCH))
+        // Refused while opening, there is no amount to go back to and nothing to retry with.
+        val opened = SwapState.Failed(leg, funds = null, input = null, reason = SwapFailure.SECOND_SOURCE_UNREACHABLE).shown()
+        assertNull(opened.primary)
+        assertEquals(SheetActionKind.Close, opened.secondary?.kind)
+    }
+
     @Test
     fun `a failure that had a quote keeps the cost block that explains it`() {
         val content = SwapState.Failed(leg, funds, amount(), SwapFailure.SWAP_REFUSED, quote, false, timing).shown()

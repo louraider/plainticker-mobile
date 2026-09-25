@@ -322,6 +322,10 @@
     <string name="swap_failed_quote_gone">The quote went twice over. Start again from the amount.</string>
     <string name="swap_failed_swap_refused">The swap did not land. Nothing was swapped.</string>
     <string name="swap_failed_guard_refused">The transaction did not match this swap, so it never reached the wallet</string>
+    <string name="swap_failed_second_source_unreachable">A second check of this token did not answer, so Swap to USDC is paused. Nothing was sent, and your holding still shows.</string>
+    <string name="swap_failed_second_source_mismatch">The details of this token did not match a second source, so the swap stopped before the wallet. Nothing was sent.</string>
+    <string name="swap_failed_value_mismatch">The dollar value of the quote is far from your amount at the price shown, so it never reached the wallet</string>
+    <string name="swap_failed_value_unchecked">The price needed to check this quote did not come back, so it never reached the wallet</string>
     <string name="swap_failed_dust">This amount is too small. The quote returns nothing for it.</string>
     <string name="swap_failed_wallet_changed">The wallet disconnected or changed before signing. Nothing was signed.</string>
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>

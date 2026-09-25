@@ -517,6 +517,35 @@ enum class SwapFailure(
     GUARD_REFUSED(R.string.swap_failed_guard_refused, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 
     /**
+     * Swap to USDC reads the xStock's mint and this wallet's balance of it a second time, from a
+     * public node PlainTicker does not run ([com.plainticker.mobile.repo.SecondSource]), before
+     * any amount of it is quoted. That node did not answer, so the swap is refused: this is a
+     * money path, and a check that could not be made is not a check that passed. Viewing the
+     * holding is unaffected. Security audit, 2026-09-26.
+     */
+    SECOND_SOURCE_UNREACHABLE(R.string.swap_failed_second_source_unreachable, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /**
+     * The second read disagrees with the forwarder's: another multiplier, decimals other than 8,
+     * or an account that is not an xStock mint. The base units the sheet would send are computed
+     * from exactly those facts, so nothing is quoted and nothing is offered but Close.
+     */
+    SECOND_SOURCE_MISMATCH(R.string.swap_failed_second_source_mismatch, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
+
+    /**
+     * Jupiter's dollar value of the order it built is further than
+     * [SwapTrust.VALUE_BOUND] from the typed quantity at the price the app shows. The wallet was
+     * never opened for it.
+     */
+    VALUE_MISMATCH(R.string.swap_failed_value_mismatch, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /**
+     * The value check could not be made: no price for the token, or an order carrying no dollar
+     * value. Refused rather than waved on, because the check exists for the case it cannot see.
+     */
+    VALUE_UNCHECKED(R.string.swap_failed_value_unchecked, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /**
      * The quote answered and would deliver nothing: an estimate or a floor of zero base units.
      * An xStock amount worth less than a millionth of a dollar rounds to no USDC at all. Refused
      * before the wallet, because paying fees to receive nothing is not a swap.

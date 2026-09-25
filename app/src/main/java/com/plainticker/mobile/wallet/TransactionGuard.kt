@@ -93,6 +93,12 @@ object TransactionGuard {
     private const val TOKEN_BURN_CHECKED = 15
     private const val TOKEN_SYNC_NATIVE = 17
 
+    /** The delegate's place in Approve's accounts: [source, delegate, owner]. */
+    private const val APPROVE_DELEGATE = 1
+
+    /** The delegate's place in ApproveChecked's accounts: [source, mint, delegate, owner]. */
+    private const val APPROVE_CHECKED_DELEGATE = 2
+
     private const val SYSTEM_TRANSFER = 2
 
     // ---- The three flows -------------------------------------------------------------------
@@ -305,8 +311,15 @@ object TransactionGuard {
                     val tag = data.firstOrNull()?.toInt()?.and(0xff)
                         ?: return@guarded refuse("token instruction without data")
                     when (tag) {
-                        TOKEN_APPROVE, TOKEN_APPROVE_CHECKED ->
-                            if (acc.getOrNull(1) != wallet) return@guarded refuse("swap carries an Approve to another delegate")
+                        // The delegate is account 1 of Approve [source, delegate, owner] and
+                        // account 2 of ApproveChecked [source, mint, delegate, owner]. Reading slot 1
+                        // for both compared ApproveChecked's mint with the wallet (security audit,
+                        // 2026-09-26): an honest approve to the wallet itself was refused, and one
+                        // naming the wallet in the mint slot passed whoever the delegate was.
+                        TOKEN_APPROVE ->
+                            if (acc.getOrNull(APPROVE_DELEGATE) != wallet) return@guarded refuse("swap carries an Approve to another delegate")
+                        TOKEN_APPROVE_CHECKED ->
+                            if (acc.getOrNull(APPROVE_CHECKED_DELEGATE) != wallet) return@guarded refuse("swap carries an ApproveChecked to another delegate")
                         TOKEN_SET_AUTHORITY -> {
                             val newAuthority = setAuthorityTarget(data)
                             if (newAuthority != wallet) return@guarded refuse("swap carries a SetAuthority to another key")

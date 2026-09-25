@@ -15,6 +15,7 @@ Which field feeds which cell, from the live sources as of 2026-09-11. Screens an
 | Solana mint (forwarder) | `getAccountInfo(mint, jsonParsed)` | 60 s server-side | extensions list below |
 | Token accounts (forwarder) | `getTokenAccountsByOwner(owner, programId = Token-2022 and classic)` | per open | raw amount, decimals |
 | SKR stake (forwarder) | pinned `getProgramAccounts` | per open | principal u64 LE at slice 105/8 |
+| Second source (public node) | `getAccountInfo(mint, jsonParsed)` and `getTokenAccountsByOwner(owner, Token-2022)` at `api.mainnet-beta.solana.com` | none, read at open and at the tap | Swap to USDC only: decimals, multiplier and balance must agree with the forwarder (see "Swap to USDC does not take the forwarder's word") |
 
 ## Detail payload v1.1 (live shape, AAPL)
 
@@ -718,6 +719,54 @@ The chain carries no cost basis, so the app writes its own record when a swap la
 | `allInCostPct` | the cost actually paid, the quote's all-in corrected by the fill ratio; null when the fill or the order's dollar values are missing |
 | `route` | `Order.router`, as a name ("Metis") |
 | `landedAtMillis`, `slot` | wall clock at the landing; `/execute` `slot` |
+
+#### Swap to USDC does not take the forwarder's word for the amount (security audit, 2026-09-26)
+
+The typed quantity becomes base units through the mint's `decimals` and `scaledUiAmountConfig`
+multiplier, and it is capped at the token account balance. All three used to come from our own
+`/api/v1/rpc` forwarder only. `TransactionGuard` checks the bytes against the amount the app
+computed, so it could not see a wrong input. A compromised server answering `decimals: 10` would
+turn "1 TSLAx" into an order for 100, the guard would pass it, and the wallet would be asked to
+approve it.
+
+When the xStock is the side being spent, the sheet now runs four checks before the wallet opens
+(`ui/swap/SwapTrust.kt`, `repo/SecondSource.kt`):
+
+| Check | Rule | Refusal |
+|---|---|---|
+| Decimals | exactly 8. `MintFacts.from` reads any other value as an unreadable mint, and the sheet refuses a token that carries anything else, whoever handed it in. It is never replaced by the constant. Verified 2026-09-26: 1124 of the 1124 Solana mints in the xStocks catalog, read from the public node, are Token-2022 with 8 decimals | `CHAIN_UNREAD` |
+| Multiplier | the multiplier in force (`SplitMultiplier.effectiveAt`) must equal what the public node reports, within 1e-9 relative. On 2026-09-26, 89 catalog mints carried a multiplier other than 1: dividends paid in shares, up to about 1.09, and NFLXx at 10 | `SECOND_SOURCE_MISMATCH` |
+| Balance | the amount is capped at the smaller of the forwarder's and the public node's spendable balance, so a forged balance can never raise the cap | back to the amount step, `ABOVE_BALANCE` |
+| Value | Jupiter's `inUsdValue` for the order must sit within 5 percent of the typed quantity times the Price v3 `usdPrice` the app shows. A missing price or a missing `inUsdValue` is refused as well | `VALUE_MISMATCH`, `VALUE_UNCHECKED` |
+
+**The second source is the public mainnet node**, `https://api.mainnet-beta.solana.com`. It is
+keyless, the Solana Foundation runs it rather than PlainTicker, and it answers the same
+`getAccountInfo` and `getTokenAccountsByOwner` calls, so both reads go through the same parser. The
+xStocks `/multiplier` endpoint reported the same effective multipliers on 2026-09-26 (STRCx
+1.0863570205637327, BACx 1.0179352667683526, NFLXx 10), but it knows nothing about a wallet's
+balance, so it could not back the cap. The check runs when the sheet opens, so Max already uses the
+confirmed balance, and again at the tap, which covers the flip from the other direction. After a
+landing it asks for the landing's slot, with the same two tries as the forwarder read.
+
+**If the public node does not answer, Swap to USDC is refused** with
+`swap_failed_second_source_unreachable`: "A second check of this token did not answer, so Swap to
+USDC is paused. Nothing was sent, and your holding still shows." This is a money path, and a check
+that could not be made has not passed. Detail, Portfolio and the holding read do not depend on the
+second source, so viewing is unchanged. USDC into a token skips these checks, because the side being
+spent is USDC and its decimals are pinned in `SwapLeg.USDC`.
+
+**Why the value bound is 5 percent.** Both figures come from Jupiter. The shown price is cached for
+at most 30 seconds, so an honest gap is half a minute of price movement plus rounding, well under 1
+percent (the widest all-in cost measured, 1.98 percent on XRXx, is cost and not valuation). The
+smallest forgery this layer has to catch on its own is a forwarder dropping a real multiplier back
+to 1: STRCx at 1.086 means 8.6 percent more base units, which is outside the bound. A forged scale
+inside 5 percent is caught exactly by the multiplier check, so the two layers cover each other.
+
+**TransactionGuard, same audit.** ApproveChecked is `[source, mint, delegate, owner]`, so its
+delegate is account 2. The guard read account 1 for Approve and ApproveChecked alike. For
+ApproveChecked that compared the mint with the wallet, so an approve to the wallet itself was
+refused, and one that named the wallet in the mint slot was accepted whoever the delegate was. It
+now reads each instruction's own delegate slot and still accepts only the wallet.
 
 ### Portfolio (T11)
 

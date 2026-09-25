@@ -47,7 +47,9 @@ import com.plainticker.mobile.repo.PlainTickerSummaryRepository
 import com.plainticker.mobile.repo.AssetSource
 import com.plainticker.mobile.repo.BundledSnapshotRepository
 import com.plainticker.mobile.repo.PriceRepository
+import com.plainticker.mobile.repo.PublicRpcSecondSource
 import com.plainticker.mobile.repo.RpcRepository
+import com.plainticker.mobile.repo.SecondSource
 import com.plainticker.mobile.repo.SnapshotRepository
 import com.plainticker.mobile.repo.SummaryRepository
 import com.plainticker.mobile.wallet.MwaWalletSession
@@ -105,6 +107,12 @@ interface AppContainer {
     val priceRepository: PriceRepository
     val rpcRepository: RpcRepository
     val mintRepository: MintRepository
+
+    /**
+     * The mint and balance read again from a public node PlainTicker does not run, which Swap to
+     * USDC must agree with before any amount of an xStock is quoted (security audit, 2026-09-26).
+     */
+    val secondSource: SecondSource
     val snapshotRepository: SnapshotRepository
 
     val walletAdapter: MobileWalletAdapter
@@ -180,6 +188,9 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val priceRepository: PriceRepository by lazy { CachedPriceRepository(jupiterPriceApi, clock) }
     override val rpcRepository: RpcRepository by lazy { ForwarderRpcRepository(rpcApi) }
     override val mintRepository: MintRepository by lazy { ForwarderMintRepository(rpcRepository, clock) }
+    override val secondSource: SecondSource by lazy {
+        PublicRpcSecondSource(SolanaRpcApi(httpClient, PublicRpcSecondSource.PUBLIC_RPC_URL), clock)
+    }
 
     // The bundled outage snapshot lives in assets; a missing one simply means no fallback.
     override val snapshotRepository: SnapshotRepository by lazy {

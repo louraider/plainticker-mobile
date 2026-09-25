@@ -168,6 +168,30 @@ class MintFactsTest {
         assertNull("the info object is missing", MintFacts.from(inline(NO_INFO_ACCOUNT)))
     }
 
+    /**
+     * Security audit, 2026-09-26: the swap turns a typed quantity into base units with these
+     * decimals, so a forwarder answering 10 would make "1 TSLAx" the base units of 100. Every one
+     * of the 1124 Solana xStock mints carries 8 (read from a public node that day), so any other
+     * value reads as unknown, and nothing downstream falls back to the constant in its place.
+     */
+    @Test
+    fun `a mint reporting decimals other than eight is not an xStock this app reads`() {
+        assertNotNull(MintFacts.from(inline(mint(info = """"decimals":8,"supply":"1000""""))))
+        for (decimals in listOf(0, 6, 7, 9, 10, 18)) {
+            assertNull("decimals $decimals", MintFacts.from(inline(mint(info = """"decimals":$decimals,"supply":"1000""""))))
+        }
+        // The live TSLAx capture with only its decimals changed: every other fact still reads,
+        // and the mint is refused all the same.
+        val tslax = Fixtures.read(FIXTURE_LIVE)
+        val inflated = tslax.replace(""""decimals": 8""", """"decimals": 10""")
+        assertTrue("the fixture carries the field this test changes", inflated != tslax)
+        val envelope = HttpClientFactory.json.decodeFromString(
+            RpcResponse.serializer(ContextValue.serializer(RpcAccount.serializer())),
+            inflated,
+        ).result!!
+        assertNull(MintFacts.from(envelope.value))
+    }
+
     @Test
     fun `an unrecognised default account state is unknown rather than open`() {
         val odd = MintFacts.from(
