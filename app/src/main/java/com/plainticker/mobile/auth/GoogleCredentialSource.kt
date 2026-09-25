@@ -32,21 +32,31 @@ sealed interface GoogleCredentialResult {
     /** No Google Play services (or no credential provider at all) on this device. */
     data object NoPlayServices : GoogleCredentialResult
 
-    /** Anything else: an interrupted request, an answer that was not a Google ID token. */
+    /**
+     * Android or Google itself could not run this request: the Android OAuth client is missing
+     * or misconfigured in Google Cloud, or the platform reports no usable credential provider.
+     * [GoogleCredentialFailureClassifier] also reaches this from a generic exception that carries
+     * a setup failure's message, or a cancellation-shaped one that arrived too fast to be a real
+     * tap. Never the reader's doing, so it must never read as "cancelled".
+     */
+    data object SetupProblem : GoogleCredentialResult
+
+    /** The request was interrupted before it could finish; nothing was decided, safe to retry. */
+    data object Interrupted : GoogleCredentialResult
+
+    /** Anything else: an answer that was not a Google ID token, or a token that failed to parse. */
     data object Failed : GoogleCredentialResult
 }
 
 /**
  * The nonce this app puts in every Google sign-in request (`setNonce`), and the check that the
- * token that came back carries it.
- *
- * **What it protects today, and what it does not.** `POST /api/v1/auth/google` does not verify a
- * nonce (the web repo's lib/auth/google-id-token.ts checks signature, issuer, audience, expiry,
- * `sub` and `email_verified`, and nothing else), so the server cannot yet refuse a replayed
- * token. The nonce is sent anyway so the server can start checking it without an app release, and
- * the app itself refuses a token whose `nonce` claim is not the one it just asked for, which keeps
- * a token minted for some other request out of this flow. The claim is read without verifying
- * the signature: that is the server's job, and this check only compares a value the app chose.
+ * token that came back carries it. `AccountViewModel.fetchServerNonce` asks the server for this
+ * value before the sheet opens (docs/google-sign-in.md, "The nonce"); [create] is only the local
+ * fallback for when that fetch failed. Either way, this object's own [matches] check runs: it
+ * refuses a token whose `nonce` claim is not the one just asked for, which keeps a token minted
+ * for some other request out of this flow regardless of what the server does with its copy. The
+ * claim is read without verifying the signature: that is the server's job, and this check only
+ * compares a value the app itself chose or received.
  */
 object SignInNonce {
     private const val BYTES = 32

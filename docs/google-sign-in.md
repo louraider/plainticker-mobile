@@ -7,15 +7,22 @@ is the web repo's `POST /api/v1/auth/google` (PR #140, `server/auth/README.md`, 
 ## The flow
 
 1. The reader taps **Sign in with Google** in You, under Account.
-2. `AccountViewModel` makes a fresh nonce (`SignInNonce`, 256 random bits, base64url).
+2. `AccountViewModel` asks `GoogleAuthApi.fetchNonce()` for a server nonce before opening
+   Google's sheet at all. Any failure — a 404 from a server that predates the route, a network
+   error, or anything else, a blank or unparsable answer included — falls back silently to a
+   fresh local nonce (`SignInNonce`, 256 random bits, base64url), the only kind this app ever
+   sent before this endpoint existed.
 3. `CredentialManagerGoogleSource` asks Android Credential Manager for a
    `GetSignInWithGoogleOption` with `serverClientId` set to the **web** OAuth client id
-   (`BuildConfig.GOOGLE_SERVER_CLIENT_ID`) and that nonce. Google shows its own sheet.
+   (`BuildConfig.GOOGLE_SERVER_CLIENT_ID`) and that nonce (the server's, or the local fallback).
+   Google shows its own sheet.
 4. The ID token that comes back must carry the same `nonce` claim. If it does not, it is dropped
    and never sent.
-5. The token goes to `POST https://www.plainticker.com/api/v1/auth/google` as `{ "idToken" }`,
-   with the device code in the `X-PT-Code` header, the same header and base URL every other
-   `/api/v1` call in the app uses (`GoogleAuthApi`).
+5. The token goes to `POST https://www.plainticker.com/api/v1/auth/google` as
+   `{ "idToken", "nonce" }`, with the device code in the `X-PT-Code` header, the same header and
+   base URL every other `/api/v1` call in the app uses (`GoogleAuthApi`). `nonce` is the server's
+   value from step 2; on a local fallback the field is left out entirely, so a server that has
+   not deployed nonce checking yet sees exactly the one-field body it always has.
 6. The server verifies the token, finds or creates the shared account, links this device to it
    and answers with the user, the linked wallets and the Pro status.
 7. The app keeps only what it draws: the email, the name and the linked wallets
@@ -34,22 +41,66 @@ state; a source scan refuses any log call that names an ID token and any Ktor lo
 
 ## The nonce
 
-The app sends a nonce on every request and refuses a token that does not carry it. **The server
-does not check it yet**: `lib/auth/google-id-token.ts` in the web repo verifies the signature,
-issuer, audience, expiry, `iat`, `sub` and `email_verified`, and nothing else. So a captured,
-still-valid ID token for the web client id could be replayed against the endpoint until it
-expires (about an hour). Closing that needs a server change: the route has to issue or accept a
-nonce and compare it to the token's `nonce` claim. The app already sends one, so no app release
-is needed when the server starts checking.
+`POST /api/v1/auth/google/nonce` hands out a nonce (`{ nonce, expiresAt }`) the app puts straight
+into the Google request and echoes back to `POST /api/v1/auth/google` as `nonce`, so the server
+can check the token's `nonce` claim against the one it issued: a captured, still-valid ID token
+for the web client id can no longer be replayed once that nonce has expired. The app keeps its
+own local check too (`SignInNonce.matches`, `AccountViewModel`), comparing the token's claim
+against whichever nonce it actually asked Google for, server-issued or a local fallback.
+
+**The fallback.** Fetching the nonce can fail — a 404 from a server that predates the route, a
+network error, or anything else the fetch throws or fails to parse. Any of these falls back to a
+fresh local random nonce, sent to Google exactly as before this endpoint existed, with no `nonce`
+field at all in the `/api/v1/auth/google` body. This is why the app never needed a release when
+the nonce endpoint was added: it degrades to its old behavior against an old server, and upgrades
+itself the moment the new route answers.
 
 ## What each outcome says
 
 Every outcome is one plain line under the button (`AccountModel.kt`, strings `account_msg_*`):
-cancelled, no Google account on the phone, no Play services, Google returned nothing usable, a
-nonce mismatch, a network failure, and each server code in the README's table (`bad_request`,
-`bad_device_code`, `invalid_token`, `expired_token`, `wrong_audience`, `email_not_verified`,
+cancelled, no Google account on the phone, no Play services, a setup problem (Android or Google
+itself could not run the request — see "Mapping a Credential Manager failure" below), an
+interrupted request, Google returned nothing usable, a local nonce mismatch, a network failure,
+and each server code in the README's table (`bad_request`, `bad_device_code`, `invalid_token`,
+`expired_token`, `wrong_audience`, `nonce_invalid`, `nonce_expired`, `email_not_verified`,
 `rate_limited`, `internal`, `auth_disabled`, `not_configured`, `jwks_unavailable`), plus a 404
 (route not deployed) and anything unrecognized.
+
+## Mapping a Credential Manager failure
+
+`GoogleCredentialFailureClassifier` turns the exception Credential Manager throws into one of the
+outcomes above:
+
+| Exception | Outcome |
+|---|---|
+| `GetCredentialCancellationException` | cancelled, unless the heuristic below says otherwise |
+| `NoCredentialException` | no Google account on the phone |
+| `GetCredentialProviderConfigurationException` | setup problem |
+| `GetCredentialUnsupportedException` | setup problem |
+| `GetCredentialInterruptedException` | interrupted, try again |
+| any other `GetCredentialException` | checked by the same heuristic, else credential failed |
+
+**The heuristic, and why it exists.** A founder once picked an account on a real device and the
+app said "Sign-in was cancelled. Nothing changed." What had actually happened: the Android OAuth
+client did not exist yet in Google Cloud, so Google's servers answered "This android application
+is not registered to use OAuth2.0, please confirm the package name and SHA-1 certificate
+fingerprint match" (Play services' own log). The app only saw a generic framework error, because
+Credential Manager has no dedicated "the caller is not registered" exception type — Play
+services' provider folds that failure into the same shape it uses for a plain cancel, sometimes
+even the literal `GetCredentialCancellationException` type.
+
+Two signals catch this, either one enough on its own:
+
+1. **Timing.** `CredentialManagerGoogleSource` times its own `getCredential` call. A cancellation
+   that lands in under one second could not have followed a person reading the sheet and deciding
+   against an account; it reads as a setup problem instead.
+2. **Message.** When the framework does pass the provider's words through, they mention OAuth, a
+   client id, a package name or a certificate; the classifier matches on those regardless of
+   timing.
+
+A slow cancellation whose message names none of this still reads as a genuine cancel. See
+`GoogleCredentialFailureClassifier`'s own doc comment for the exact wording matched and the
+tradeoff this makes.
 
 ## What the founder has to set up in Google Cloud
 
@@ -57,8 +108,9 @@ Sign in with Google on Android fails until an **Android** OAuth client exists fo
 Cloud project as the web client. The app never uses this client's id. Google uses it only to
 recognise the app's package and signing certificate. Only the project owner can create it.
 Without it, Google answers with a developer-configuration error that reaches the app as a generic
-Credential Manager failure, so the reader sees "Google did not return a sign-in" or "There is no
-Google account on this phone" even though the phone has one.
+Credential Manager failure; `GoogleCredentialFailureClassifier` ("Mapping a Credential Manager
+failure" above) reads that as a setup problem and the reader sees "Google did not accept this
+app's sign-in setup. Try again later." rather than a false "cancelled".
 
 1. Open <https://console.cloud.google.com/> and select the project that owns the web client
    `170602485636-fo86ia1lc6r34ip5fj6id0v0ku8ffaib.apps.googleusercontent.com` (the project

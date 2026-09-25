@@ -10,6 +10,11 @@ import java.io.IOException
  * Every error `POST /api/v1/auth/google` can answer (server/auth/README.md, section 1, "Errors"),
  * one constant per `error` code, plus [NOT_OPEN] for a 404 (the route never answers 404 itself, so
  * a 404 means the deployment does not carry it yet) and [UNKNOWN] for anything outside the table.
+ *
+ * [NONCE_INVALID] and [NONCE_EXPIRED] are the two codes the route answers once the server starts
+ * checking the `nonce` field `AccountViewModel` sends alongside the ID token (docs/google-sign-in.md,
+ * "The nonce"): both 401, distinct from [INVALID_TOKEN] and [EXPIRED_TOKEN], which are about the
+ * token itself rather than the nonce it carries.
  */
 enum class GoogleAuthFailure(val wire: String?) {
     BAD_REQUEST("bad_request"),
@@ -17,6 +22,8 @@ enum class GoogleAuthFailure(val wire: String?) {
     INVALID_TOKEN("invalid_token"),
     EXPIRED_TOKEN("expired_token"),
     WRONG_AUDIENCE("wrong_audience"),
+    NONCE_INVALID("nonce_invalid"),
+    NONCE_EXPIRED("nonce_expired"),
     EMAIL_NOT_VERIFIED("email_not_verified"),
     RATE_LIMITED("rate_limited"),
     INTERNAL("internal"),
