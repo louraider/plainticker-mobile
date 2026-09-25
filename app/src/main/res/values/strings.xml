@@ -657,6 +657,39 @@
     <string name="action_read_license">Read license</string>
     <string name="action_hide_license">Hide license</string>
 
+    <!-- Account (docs/google-sign-in.md): Sign in with Google, POST /api/v1/auth/google. One
+         account shared with plainticker.com; the device is linked to it, so its Pro counts here.
+         One plain line per way a sign-in can end, including every server error code in the web
+         repo's server/auth/README.md. Never the ID token and never the device code. -->
+    <string name="account_heading">Account</string>
+    <string name="account_pitch">Use the same account and Pro on plainticker.com and here.</string>
+    <string name="account_sign_in">Sign in with Google</string>
+    <string name="account_signing_in">Signing in</string>
+    <string name="account_signed_in_label">Signed in with Google</string>
+    <string name="account_identity_fallback">Google account</string>
+    <string name="account_wallets_label">Linked wallets</string>
+    <string name="account_wallets_none">No wallets are linked to this account yet.</string>
+    <string name="account_sign_out">Sign out</string>
+    <string name="account_msg_cancelled">Sign-in was cancelled. Nothing changed.</string>
+    <string name="account_msg_no_account">There is no Google account on this phone. Add one in Settings, then try again.</string>
+    <string name="account_msg_no_play_services">Google sign-in needs Google Play services, and this phone does not have them.</string>
+    <string name="account_msg_credential_failed">Google did not return a sign-in. Try again.</string>
+    <string name="account_msg_nonce_mismatch">Google\'s answer did not match this request, so it was not used. Try again.</string>
+    <string name="account_msg_network">PlainTicker could not be reached. Check the connection and try again.</string>
+    <string name="account_msg_bad_request">PlainTicker did not accept the request. Try again.</string>
+    <string name="account_msg_bad_device_code">PlainTicker did not accept this phone\'s code, so nothing was linked.</string>
+    <string name="account_msg_invalid_token">PlainTicker could not check Google\'s answer. Try again.</string>
+    <string name="account_msg_expired_token">The Google sign-in expired on the way. Try again.</string>
+    <string name="account_msg_wrong_audience">This build of the app is not set up for Google sign-in.</string>
+    <string name="account_msg_email_not_verified">Google has not verified this account\'s email, so it cannot sign in.</string>
+    <string name="account_msg_rate_limited">Too many sign-in attempts. Wait a minute, then try again.</string>
+    <string name="account_msg_internal">PlainTicker could not finish the sign-in. Try again.</string>
+    <string name="account_msg_auth_disabled">Sign-in is switched off on PlainTicker right now.</string>
+    <string name="account_msg_not_configured">Google sign-in is not set up on PlainTicker yet.</string>
+    <string name="account_msg_jwks_unavailable">PlainTicker could not reach Google to check the sign-in. Try again later.</string>
+    <string name="account_msg_not_open">Sign-in is not open on PlainTicker yet.</string>
+    <string name="account_msg_unknown">The sign-in did not finish. Try again.</string>
+
     <!-- Amber's bottom navigation bar (docs/design-research-2026-09-21.md section 3): the
          redesign's own five destinations, Today, Stocks, Vote, Portfolio, You, not the current
          four-tab-plus-You shape com.plainticker.mobile.ui.home.HomeTab still names. Vote and

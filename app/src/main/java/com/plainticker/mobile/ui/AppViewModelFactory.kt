@@ -15,6 +15,7 @@ import com.plainticker.mobile.ui.swap.SwapViewModel
 import com.plainticker.mobile.ui.vote.VoteTabViewModel
 import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
+import com.plainticker.mobile.ui.you.AccountViewModel
 import com.plainticker.mobile.ui.you.DigestViewModel
 import com.plainticker.mobile.ui.you.YouViewModel
 
@@ -132,5 +133,8 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.watchlistStore,
             container.digestNotifier,
         )
+    }
+    initializer {
+        AccountViewModel(container.googleAuthApi, container.accountStore, container.devicePassStore)
     }
 }

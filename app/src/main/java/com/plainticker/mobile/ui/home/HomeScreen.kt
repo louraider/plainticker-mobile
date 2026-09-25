@@ -213,6 +213,7 @@ fun HomeScreen(
                         // Scoped to the home entry like every other ViewModel here, so a payment
                         // mid flight and this device's entitlement survive a destination switch.
                         passViewModel = viewModel(factory = factory),
+                        accountViewModel = viewModel(factory = factory),
                         onOpenTab = ::selectTab,
                         onOpenDigest = onOpenDigest,
                         header = header,
