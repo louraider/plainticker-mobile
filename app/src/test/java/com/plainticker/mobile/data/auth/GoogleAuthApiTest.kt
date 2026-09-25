@@ -99,6 +99,8 @@ class GoogleAuthApiTest {
         Triple(401, "invalid_token", GoogleAuthFailure.INVALID_TOKEN),
         Triple(401, "expired_token", GoogleAuthFailure.EXPIRED_TOKEN),
         Triple(401, "wrong_audience", GoogleAuthFailure.WRONG_AUDIENCE),
+        Triple(401, "nonce_invalid", GoogleAuthFailure.NONCE_INVALID),
+        Triple(401, "nonce_expired", GoogleAuthFailure.NONCE_EXPIRED),
         Triple(403, "email_not_verified", GoogleAuthFailure.EMAIL_NOT_VERIFIED),
         Triple(429, "rate_limited", GoogleAuthFailure.RATE_LIMITED),
         Triple(500, "internal", GoogleAuthFailure.INTERNAL),
@@ -167,5 +169,58 @@ class GoogleAuthApiTest {
     @Test
     fun `the request model never prints its token`() {
         assertFalse(token in GoogleAuthRequest(token).toString())
+    }
+
+    // ---- The nonce (docs/google-sign-in.md, "The nonce") --------------------------------------
+
+    @Test
+    fun `fetchNonce posts to the nonce route and parses the nonce and its expiry`() = runTest {
+        val mock = MockApi { respondJson("""{"nonce":"a1b2c3","expiresAt":"2026-09-25T00:05:00.000Z"}""") }
+        val answer = GoogleAuthApi(mock.client).fetchNonce()
+
+        assertEquals("a1b2c3", answer.nonce)
+        assertEquals("2026-09-25T00:05:00.000Z", answer.expiresAt)
+        val request = mock.lastRequest
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("https://www.plainticker.com/api/v1/auth/google/nonce", request.url.toString())
+    }
+
+    @Test
+    fun `a missing nonce key falls back to blank, not a crash`() = runTest {
+        val mock = MockApi { respondJson("""{"expiresAt":"2026-09-25T00:05:00.000Z"}""") }
+        val answer = GoogleAuthApi(mock.client).fetchNonce()
+        assertEquals("", answer.nonce)
+    }
+
+    @Test
+    fun `a 404 on the nonce route is NOT_OPEN, the same as the sign-in route`() = runTest {
+        val mock = MockApi { respondJson("""{"error":"not_found"}""", HttpStatusCode.NotFound) }
+        val error = expectThrows<GoogleAuthError> { GoogleAuthApi(mock.client).fetchNonce() }
+        assertEquals(GoogleAuthFailure.NOT_OPEN, error.failure)
+    }
+
+    @Test
+    fun `a network failure fetching the nonce surfaces as an IOException`() = runTest {
+        val mock = MockApi { throw IOException("no route to host") }
+        expectThrows<IOException> { GoogleAuthApi(mock.client).fetchNonce() }
+    }
+
+    @Test
+    fun `signIn sends the nonce field when given one, and omits it entirely when not`() = runTest {
+        val withNonce = MockApi { respondJson(ok) }
+        GoogleAuthApi(withNonce.client).signIn(token, "ABCDE12345", nonce = "server-nonce-1")
+        val bodyWithNonce = Json.parseToJsonElement(withNonce.lastRequest.bodyText()).jsonObject
+        assertEquals(setOf("idToken", "nonce"), bodyWithNonce.keys)
+        assertEquals("server-nonce-1", bodyWithNonce.getValue("nonce").jsonPrimitive.content)
+
+        val withoutNonce = MockApi { respondJson(ok) }
+        GoogleAuthApi(withoutNonce.client).signIn(token, "ABCDE12345")
+        val bodyWithoutNonce = Json.parseToJsonElement(withoutNonce.lastRequest.bodyText()).jsonObject
+        assertEquals("a local fallback sends no nonce field at all", setOf("idToken"), bodyWithoutNonce.keys)
+    }
+
+    @Test
+    fun `the request model never prints the token even when it carries a nonce`() {
+        assertFalse(token in GoogleAuthRequest(token, nonce = "server-nonce-1").toString())
     }
 }

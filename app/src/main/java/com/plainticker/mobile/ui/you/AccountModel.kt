@@ -21,6 +21,8 @@ fun accountMessageRes(message: AccountMessage): Int = when (message) {
     AccountMessage.NO_ACCOUNT -> R.string.account_msg_no_account
     AccountMessage.NO_PLAY_SERVICES -> R.string.account_msg_no_play_services
     AccountMessage.CREDENTIAL_FAILED -> R.string.account_msg_credential_failed
+    AccountMessage.SETUP_PROBLEM -> R.string.account_msg_setup_problem
+    AccountMessage.INTERRUPTED -> R.string.account_msg_interrupted
     AccountMessage.NONCE_MISMATCH -> R.string.account_msg_nonce_mismatch
     AccountMessage.NETWORK -> R.string.account_msg_network
     AccountMessage.BAD_REQUEST -> R.string.account_msg_bad_request
@@ -28,6 +30,8 @@ fun accountMessageRes(message: AccountMessage): Int = when (message) {
     AccountMessage.INVALID_TOKEN -> R.string.account_msg_invalid_token
     AccountMessage.EXPIRED_TOKEN -> R.string.account_msg_expired_token
     AccountMessage.WRONG_AUDIENCE -> R.string.account_msg_wrong_audience
+    AccountMessage.NONCE_INVALID -> R.string.account_msg_nonce_invalid
+    AccountMessage.NONCE_EXPIRED -> R.string.account_msg_nonce_expired
     AccountMessage.EMAIL_NOT_VERIFIED -> R.string.account_msg_email_not_verified
     AccountMessage.RATE_LIMITED -> R.string.account_msg_rate_limited
     AccountMessage.INTERNAL -> R.string.account_msg_internal

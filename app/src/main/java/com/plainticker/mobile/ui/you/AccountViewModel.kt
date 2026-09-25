@@ -1,9 +1,8 @@
 package com.plainticker.mobile.ui.you
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.plainticker.mobile.BuildConfig
+import com.plainticker.mobile.auth.AccountDebugLog
 import com.plainticker.mobile.auth.GoogleCredentialResult
 import com.plainticker.mobile.auth.GoogleCredentialSource
 import com.plainticker.mobile.auth.SignInNonce
@@ -25,25 +24,18 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * The Account section's debug log. It is handed class names and failure codes only: never the ID
- * token, never the device code, never an email. AccountViewModelTest records every line and
- * asserts the token appears in none of them.
- */
-fun interface AccountDebugLog {
-    fun raw(line: String)
-
-    companion object {
-        val ANDROID = AccountDebugLog { line -> if (BuildConfig.DEBUG) Log.d("Account", line) }
-    }
-}
-
 /** Why the last sign-in did not finish, one per case the You screen names in one line. */
 enum class AccountMessage {
     CANCELLED,
     NO_ACCOUNT,
     NO_PLAY_SERVICES,
     CREDENTIAL_FAILED,
+
+    /** Android or Google itself was not set up for this app (GoogleCredentialFailureClassifier). */
+    SETUP_PROBLEM,
+
+    /** The Credential Manager request was interrupted; nothing was decided. */
+    INTERRUPTED,
     NONCE_MISMATCH,
     NETWORK,
     BAD_REQUEST,
@@ -51,6 +43,12 @@ enum class AccountMessage {
     INVALID_TOKEN,
     EXPIRED_TOKEN,
     WRONG_AUDIENCE,
+
+    /** The server rejected the nonce this device sent (docs/google-sign-in.md, "The nonce"). */
+    NONCE_INVALID,
+
+    /** The nonce this device fetched had already expired by the time the server saw it. */
+    NONCE_EXPIRED,
     EMAIL_NOT_VERIFIED,
     RATE_LIMITED,
     INTERNAL,
@@ -68,6 +66,8 @@ enum class AccountMessage {
             GoogleAuthFailure.INVALID_TOKEN -> INVALID_TOKEN
             GoogleAuthFailure.EXPIRED_TOKEN -> EXPIRED_TOKEN
             GoogleAuthFailure.WRONG_AUDIENCE -> WRONG_AUDIENCE
+            GoogleAuthFailure.NONCE_INVALID -> NONCE_INVALID
+            GoogleAuthFailure.NONCE_EXPIRED -> NONCE_EXPIRED
             GoogleAuthFailure.EMAIL_NOT_VERIFIED -> EMAIL_NOT_VERIFIED
             GoogleAuthFailure.RATE_LIMITED -> RATE_LIMITED
             GoogleAuthFailure.INTERNAL -> INTERNAL
@@ -97,10 +97,14 @@ sealed interface AccountUiState {
 /**
  * Sign in with Google (docs/google-sign-in.md). One pass through [signIn]:
  *
- * 1. a fresh [SignInNonce] goes into the Google request;
- * 2. the token that comes back must carry that nonce, or it is refused here;
- * 3. the token goes to `POST /api/v1/auth/google` with this device's code in `X-PT-Code`;
- * 4. what the server returns for display (email, name, linked wallets) is stored, the token is
+ * 1. [fetchServerNonce] asks the server for a nonce before the sheet opens; any failure falls
+ *    back to a fresh local [SignInNonce] instead, sent to Google exactly as before that endpoint
+ *    existed;
+ * 2. that nonce (server-issued or local) goes into the Google request;
+ * 3. the token that comes back must carry that same nonce, or it is refused here;
+ * 4. the token goes to `POST /api/v1/auth/google` with this device's code in `X-PT-Code`, and the
+ *    server nonce alongside it when there was one (never the local fallback);
+ * 5. what the server returns for display (email, name, linked wallets) is stored, the token is
  *    dropped, and [signedIn] fires so the screen re-reads the entitlement through the refresh
  *    every other screen uses, which is what makes a Pro bought on the web count here at once.
  *
@@ -172,12 +176,15 @@ class AccountViewModel(
     }
 
     private suspend fun runSignIn(credentials: GoogleCredentialSource): Outcome {
-        val nonce = nonces()
+        val serverNonce = fetchServerNonce()
+        val nonce = serverNonce ?: nonces()
         val idToken = when (val result = credentials.requestIdToken(nonce)) {
             is GoogleCredentialResult.Token -> result.idToken
             GoogleCredentialResult.Cancelled -> return Outcome.Failed(AccountMessage.CANCELLED)
             GoogleCredentialResult.NoAccount -> return Outcome.Failed(AccountMessage.NO_ACCOUNT)
             GoogleCredentialResult.NoPlayServices -> return Outcome.Failed(AccountMessage.NO_PLAY_SERVICES)
+            GoogleCredentialResult.SetupProblem -> return Outcome.Failed(AccountMessage.SETUP_PROBLEM)
+            GoogleCredentialResult.Interrupted -> return Outcome.Failed(AccountMessage.INTERRUPTED)
             GoogleCredentialResult.Failed -> return Outcome.Failed(AccountMessage.CREDENTIAL_FAILED)
         }
         if (!SignInNonce.matches(idToken, nonce)) {
@@ -185,7 +192,7 @@ class AccountViewModel(
             return Outcome.Failed(AccountMessage.NONCE_MISMATCH)
         }
         val response = try {
-            api.signIn(idToken = idToken, deviceCode = devicePassStore.code())
+            api.signIn(idToken = idToken, deviceCode = devicePassStore.code(), nonce = serverNonce)
         } catch (e: CancellationException) {
             throw e
         } catch (e: GoogleAuthError) {
@@ -202,6 +209,24 @@ class AccountViewModel(
         )
         store.save(account)
         return Outcome.Done(account)
+    }
+
+    /**
+     * The server nonce for the Google request that follows, fetched fresh before every attempt
+     * (docs/google-sign-in.md, "The nonce"). Any failure to fetch one — a 404 from a server that
+     * predates the route, a network error, or anything else, blank or unparsable answers included
+     * — falls back to null: [runSignIn] then asks Google for [nonces]'s local random nonce instead
+     * and tells the server nothing about it, so this device keeps working against a server that
+     * has not deployed the route yet, or is briefly unavailable, exactly as before this endpoint
+     * existed. The local check in `SignInNonce.matches` runs either way.
+     */
+    private suspend fun fetchServerNonce(): String? = try {
+        api.fetchNonce().nonce.takeIf { it.isNotBlank() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        debugLog.raw("nonce: fetch failed, falling back to a local nonce (${e::class.simpleName})")
+        null
     }
 
     /** Clears the message after the reader has seen it act; a new attempt clears it too. */

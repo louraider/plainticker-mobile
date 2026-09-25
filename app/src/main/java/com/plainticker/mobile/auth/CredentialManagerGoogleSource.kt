@@ -4,14 +4,12 @@ import android.content.Context
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
-import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
-import androidx.credentials.exceptions.GetCredentialUnsupportedException
-import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import com.plainticker.mobile.core.Clock
+import com.plainticker.mobile.core.WallClock
 
 /**
  * Sign in with Google through Android Credential Manager (docs/google-sign-in.md).
@@ -25,10 +23,19 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
  *
  * [context] must be an Activity context: Credential Manager draws its sheet over it. The token is
  * returned to the caller and nowhere else: no log line, no field, no file.
+ *
+ * Every [GetCredentialException] is turned into the right [GoogleCredentialResult] by
+ * [GoogleCredentialFailureClassifier], which this class times: [clock] marks the moment
+ * `getCredential` is called, and the classifier gets the elapsed milliseconds when it fails, to
+ * tell a real cancel from a setup failure the framework dressed up as one. [debugLog] gets the
+ * exception's class and, for a [GetCredentialException], its `type` string, in debug builds only,
+ * and nothing else: never the token, never a claim.
  */
 class CredentialManagerGoogleSource(
     private val context: Context,
     private val serverClientId: String,
+    private val debugLog: AccountDebugLog = AccountDebugLog.ANDROID,
+    private val clock: Clock = WallClock,
 ) : GoogleCredentialSource {
 
     override suspend fun requestIdToken(nonce: String): GoogleCredentialResult {
@@ -38,6 +45,7 @@ class CredentialManagerGoogleSource(
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(option)
             .build()
+        val startedAt = clock.nowMillis()
         return try {
             val credential = CredentialManager.create(context).getCredential(context, request).credential
             if (credential is CustomCredential &&
@@ -47,20 +55,14 @@ class CredentialManagerGoogleSource(
             } else {
                 GoogleCredentialResult.Failed
             }
-        } catch (e: GetCredentialCancellationException) {
-            GoogleCredentialResult.Cancelled
-        } catch (e: NoCredentialException) {
-            GoogleCredentialResult.NoAccount
-        } catch (e: GetCredentialProviderConfigurationException) {
-            // credentials-play-services-auth found no usable provider: Play services missing or
-            // too old to serve Credential Manager.
-            GoogleCredentialResult.NoPlayServices
-        } catch (e: GetCredentialUnsupportedException) {
-            GoogleCredentialResult.NoPlayServices
         } catch (e: GoogleIdTokenParsingException) {
+            debugLog.raw("credential: ${e::class.simpleName}")
             GoogleCredentialResult.Failed
         } catch (e: GetCredentialException) {
-            GoogleCredentialResult.Failed
+            val elapsedMs = clock.nowMillis() - startedAt
+            val result = GoogleCredentialFailureClassifier.classify(e, elapsedMs)
+            debugLog.raw("credential: ${e::class.simpleName} type=${e.type} elapsedMs=$elapsedMs -> $result")
+            result
         }
     }
 }

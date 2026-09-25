@@ -4,13 +4,20 @@ import kotlinx.serialization.Serializable
 
 /**
  * The body of `POST /api/v1/auth/google` (server/auth/README.md, section 1 of the web repo): the
- * Google ID token and nothing else. The device code is never a body field; it travels only in
- * the `X-PT-Code` header, and the server ignores a body field that tries to carry it.
+ * Google ID token, and the server-issued [nonce] `GoogleAuthApi.fetchNonce` returned, when there
+ * was one to send (docs/google-sign-in.md, "The nonce"). The device code is never a body field;
+ * it travels only in the `X-PT-Code` header, and the server ignores a body field that tries to
+ * carry it.
+ *
+ * [nonce] is null on a local fallback (the nonce endpoint was unreachable or predates this
+ * server), and `Json.explicitNulls = false` ([com.plainticker.mobile.data.net.HttpClientFactory])
+ * then drops the key entirely rather than sending `"nonce":null`, so an older server sees exactly
+ * the one-field body it always has.
  */
 @Serializable
-internal data class GoogleAuthRequest(val idToken: String) {
+internal data class GoogleAuthRequest(val idToken: String, val nonce: String? = null) {
     /** An ID token is a bearer credential: a data class's generated toString would print it. */
-    override fun toString(): String = "GoogleAuthRequest(idToken=<redacted>)"
+    override fun toString(): String = "GoogleAuthRequest(idToken=<redacted>, nonce=${nonce ?: "null"})"
 }
 
 /**
@@ -32,4 +39,16 @@ data class GoogleAuthResponse(
 data class GoogleAuthUser(
     val email: String? = null,
     val name: String? = null,
+)
+
+/**
+ * The 200 answer of `POST /api/v1/auth/google/nonce` (docs/google-sign-in.md, "The nonce"): a
+ * fresh nonce for the Google request that follows, and when it stops being valid. A blank
+ * [nonce] (missing key, or a server that answers something this app cannot parse) is treated by
+ * `GoogleAuthApi.fetchNonce`'s caller exactly like a fetch failure: fall back to a local one.
+ */
+@Serializable
+data class GoogleAuthNonceResponse(
+    val nonce: String = "",
+    val expiresAt: String? = null,
 )

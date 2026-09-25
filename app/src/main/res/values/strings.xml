@@ -674,6 +674,8 @@
     <string name="account_msg_no_account">There is no Google account on this phone. Add one in Settings, then try again.</string>
     <string name="account_msg_no_play_services">Google sign-in needs Google Play services, and this phone does not have them.</string>
     <string name="account_msg_credential_failed">Google did not return a sign-in. Try again.</string>
+    <string name="account_msg_setup_problem">Google did not accept this app\'s sign-in setup. Try again later.</string>
+    <string name="account_msg_interrupted">Google sign-in was interrupted. Try again.</string>
     <string name="account_msg_nonce_mismatch">Google\'s answer did not match this request, so it was not used. Try again.</string>
     <string name="account_msg_network">PlainTicker could not be reached. Check the connection and try again.</string>
     <string name="account_msg_bad_request">PlainTicker did not accept the request. Try again.</string>
@@ -681,6 +683,8 @@
     <string name="account_msg_invalid_token">PlainTicker could not check Google\'s answer. Try again.</string>
     <string name="account_msg_expired_token">The Google sign-in expired on the way. Try again.</string>
     <string name="account_msg_wrong_audience">This build of the app is not set up for Google sign-in.</string>
+    <string name="account_msg_nonce_invalid">PlainTicker did not accept this sign-in\'s nonce. Try again.</string>
+    <string name="account_msg_nonce_expired">This sign-in took too long and its nonce expired. Try again.</string>
     <string name="account_msg_email_not_verified">Google has not verified this account\'s email, so it cannot sign in.</string>
     <string name="account_msg_rate_limited">Too many sign-in attempts. Wait a minute, then try again.</string>
     <string name="account_msg_internal">PlainTicker could not finish the sign-in. Try again.</string>
