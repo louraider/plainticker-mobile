@@ -29,14 +29,17 @@ class AccountSectionTest {
     // ---- Placement ---------------------------------------------------------------------------
 
     @Test
-    fun `the section sits after the Pro facts and their action, before On this device`() {
+    fun `the section sits after the plan, before On this device`() {
+        // Updated for the cabinet pass (2026-09-25): the Account section became the cabinet's
+        // "Sign-in methods" group, which follows the hero and the Plan group (the web cabinet's own
+        // order) rather than the retired Pro fact cards and their ActionButtons block.
         val code = screenScan.code
-        val body = code.substring(code.indexOf("internal fun YouContent("), code.indexOf("private fun YouAction.handler("))
-        val action = body.indexOf("ActionButtons(")
+        val body = code.substring(code.indexOf("internal fun YouContent("), code.indexOf("private fun amberColors("))
+        val plan = body.indexOf("PlanGroup(")
         val account = body.indexOf("AccountSection(")
-        val device = body.indexOf("R.string.you_heading_device")
+        val device = body.indexOf("DeviceGroup(")
         assertTrue("YouContent never draws the Account section", account >= 0)
-        assertTrue("Account comes after the Pro action", action in 0 until account)
+        assertTrue("Account comes after the Plan group", plan in 0 until account)
         assertTrue("Account comes before On this device", account < device)
     }
 
@@ -49,9 +52,39 @@ class AccountSectionTest {
     }
 
     @Test
-    fun `the sign-in button is never a second amber fill`() {
-        assertTrue("AmberSecondaryAction(label = stringResource(R.string.account_sign_in)" in sectionScan.code)
-        assertEquals("no filled action in the Account section", 0, sectionScan.code.split("AmberPrimaryAction(").size - 1)
+    fun `the section draws no amber fill, and every action reaches its handler`() {
+        // Was "the sign-in button is never a second amber fill", pinned on an AmberSecondaryAction
+        // in this file. The rule holds more strictly now: the hero is the only place You draws a
+        // fill (Sign in with Google is its AmberPrimaryAction when there is no identity), and this
+        // group's Sign in, Sign out, Connect and Disconnect are all text actions.
+        val code = sectionScan.code
+        assertEquals("no filled action in the section", 0, code.split("AmberPrimaryAction(").size - 1)
+        assertTrue("RowAction(stringResource(R.string.you_action_sign_in), onSignIn)" in code)
+        assertTrue("RowAction(stringResource(R.string.you_action_connect), onConnect)" in code)
+        assertTrue("RowAction(stringResource(R.string.action_disconnect), onDisconnect)" in code)
+        assertTrue("sign-in messages are drawn from the one mapping", "accountMessageRes(it)" in code)
+        assertTrue("the hero is handed the message when it offers Sign in", "showMessage = heroMessage == null" in screenScan.code)
+    }
+
+    @Test
+    fun `sign out is a two-step inline confirm, never a one-tap loss`() {
+        val code = sectionScan.code
+        val row = code.substring(code.indexOf("private fun SignedInRow("), code.indexOf("private fun WalletRow("))
+        assertTrue("the first tap only asks", "RowAction(signOut, { confirming = true })" in row)
+        assertTrue("the second tap signs out", "RowAction(signOut, { confirming = false; onSignOut() })" in row)
+        assertTrue("Cancel folds the question away", "R.string.you_action_cancel), { confirming = false })" in row)
+        assertTrue("the question says what happens", "R.string.you_sign_out_confirm" in row)
+        assertEquals("onSignOut is called in exactly one place", 1, code.split("onSignOut()").size - 1)
+    }
+
+    @Test
+    fun `linked wallets draw only when the server returned some`() {
+        assertTrue("if (keys.isNotEmpty())" in sectionScan.code)
+    }
+
+    @Test
+    fun `the wallet copies its full address, never the short key`() {
+        assertTrue("ClipData.newPlainText(clipLabel, wallet.address)" in sectionScan.code)
     }
 
     @Test
@@ -104,47 +137,7 @@ class AccountSectionTest {
         assertEquals(listOf("4Nd1…DB4T"), keys)
     }
 
-    // ---- The clipping rule -------------------------------------------------------------------
-
-    /**
-     * A button label is the only slot here drawn on one line (`maxLines = 1`, AmberPrimaryAction.kt).
-     * Its content width on the Seeker's 400dp frame: 400 minus You's 20dp side margins minus the
-     * button's own 20dp horizontal padding each side = **320dp**.
-     */
-    private val buttonContentDp = 400.0 - 2 * 20.0 - 2 * 20.0
-
-    /**
-     * fontTools against `res/font/bricolage_grotesque.ttf`, instantiated at [AmberType.button]'s
-     * exact coordinates (`wght` 600, `wdth` 100, `opsz` 16), 16sp, summed advance widths (no
-     * kerning, which only narrows a real render), grown to 1.3x; 2026-09-25.
-     */
-    private val buttonLabelWidthAt13xDp = mapOf(
-        "Sign in with Google" to 191.048,
-        "Signing in" to 98.176,
-    )
-
-    @Test
-    fun `both button labels fit the button at 1_3x, measured against the font file`() {
-        listOf("account_sign_in", "account_signing_in").forEach { name ->
-            val text = ShippedCopy.strings.getValue(name)
-            val width = buttonLabelWidthAt13xDp[text] ?: error(
-                "\"$text\" ($name) has no measured width; remeasure it with fontTools against " +
-                    "res/font/bricolage_grotesque.ttf at wght 600, wdth 100, opsz 16 before shipping it",
-            )
-            assertTrue("\"$text\" is $width dp at 1.3x, past the $buttonContentDp dp button", width <= buttonContentDp)
-        }
-    }
-
-    /**
-     * A wallet's short key, JetBrains Mono Regular 15sp (`jetbrains_mono_regular.ttf`), nine
-     * characters including the ellipsis: 81.0dp at 1.0x, 105.3dp at 1.3x (fontTools, 2026-09-25),
-     * on a line of its own 360dp wide. Every short key is nine monospace characters, so this one
-     * measurement covers every wallet.
-     */
-    @Test
-    fun `a short wallet key fits its own line at 1_3x`() {
-        val lineDp = 400.0 - 2 * 20.0
-        assertTrue(105.3 <= lineDp)
-        assertEquals(9, linkedWalletKeys(SignedInAccount(null, null, listOf("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"))).single().length)
-    }
+    // The clipping measurements this file used to carry (the sign-in button labels and the wallet
+    // key) moved to CabinetFitTest with every other one-line slot on You, re-derived for the
+    // hero's own button width.
 }

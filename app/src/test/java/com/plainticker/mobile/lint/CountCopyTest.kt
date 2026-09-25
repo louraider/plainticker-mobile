@@ -121,6 +121,12 @@ class CountCopyTest {
             Case(1, listOf("1"), "+1 sector"),
             Case(5, listOf("5"), "+5 sectors"),
         ),
+        // You's hero and Plan "Valid until" row (ui/you/YouModel.kt's daysLeft): a pass or a
+        // subscription's days left, "day" singular at one.
+        "you_days_left" to listOf(
+            Case(1, listOf("1"), "1 day left."),
+            Case(26, listOf("26"), "26 days left."),
+        ),
     )
 
     private data class Case(val quantity: Int, val args: List<String>, val reads: String)

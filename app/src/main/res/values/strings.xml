@@ -589,44 +589,63 @@
     <string name="notification_channel_watchlist_description">One digest a day about the stocks you watch.</string>
     <string name="notification_digest_title">Daily digest</string>
 
-    <!-- You (task U1, docs/plan-app-uiux-2026-09-21.md section 1.2): the cabinet. The wallet
-         session, the entitlement and the stake the Portfolio used to carry, this device's own
-         record and the notifications line the Watchlist already draws. Never the device code
-         itself: DeviceCodeNeverDrawnTest scans every composable under ui/ for that. -->
+    <!-- You, the account cabinet (2026-09-25, matching plainticker.com's cabinet, web PR #145):
+         one hero card (who, the plan as a headline, one action), then row groups for Plan,
+         Sign-in methods, On this device, Notifications and About. Never the device code itself:
+         DeviceCodeNeverDrawnTest scans every composable under ui/ for that. The Free copy is
+         formatted from OPEN_EXAMPLE_TICKER (YouModel.kt), never a retyped ticker. -->
     <string name="you_action">You</string>
     <string name="you_heading">You</string>
-    <string name="you_wallet_label">Wallet</string>
-    <string name="you_wallet_none">Not connected</string>
-    <string name="you_wallet_note">The wallet is asked to connect on each launch. No key or session is kept.</string>
-    <!-- Every value below is a half-width FactGrid mono cell at the default 24sp valueSize:
-         FactCellView draws it maxLines = 1, softWrap = false, so anything past about 10 characters
-         clips mid-character rather than wrapping (v0.12.0, "no wallet c"). YouModelTest pins the
-         10-character budget for every one of these; the detail that does not fit belongs in the
-         cell's sub line instead, which wraps and is never clipped. -->
+    <string name="you_identity_none">Not signed in</string>
+    <string name="you_hero_loading">Reading your plan</string>
+    <string name="you_hero_free">Free</string>
+    <string name="you_hero_pro">Pro</string>
+    <string name="you_hero_pro_until">Pro until %1$s</string>
+    <string name="you_hero_stake">Pro while staked</string>
+    <string name="you_hero_unread">Plan not read</string>
+    <string name="you_hero_free_line">%1$s is open to everyone as a full example. Pro opens every covered ticker.</string>
+    <string name="you_hero_stake_line">No end date. Pro lasts while the stake stays in place.</string>
+    <plurals name="you_days_left">
+        <item quantity="one">%1$s day left.</item>
+        <item quantity="other">%1$s days left.</item>
+    </plurals>
+    <string name="you_ends_today">Ends today.</string>
+    <string name="you_action_get_pro">Get Pro</string>
+    <string name="you_action_extend">Extend Pro</string>
+
+    <string name="you_heading_plan">Plan</string>
+    <string name="you_plan_status_label">Status</string>
+    <string name="you_plan_source_label">Source</string>
+    <string name="you_plan_source_pass">A thirty day pass, paid from a wallet</string>
+    <string name="you_plan_source_stake">Staked SKR on the connected wallet</string>
+    <string name="you_plan_source_subscription">A subscription on plainticker.com</string>
+    <string name="you_plan_source_unnamed">Pro on this device. The server did not name the source.</string>
+    <string name="you_plan_until_label">Valid until</string>
+    <string name="you_plan_until_stake">No end date, while the stake stays in place</string>
+    <string name="you_plan_extend_label">How to extend</string>
+    <string name="you_plan_extend_pass">A pass does not renew. When it ends, pay for another one here.</string>
+    <string name="you_plan_extend_stake">Nothing to do while the stake stays in place.</string>
+    <string name="you_plan_extend_subscription">It does not renew by itself. Extend it on plainticker.com.</string>
+    <string name="you_plan_free_label">Free, your plan</string>
+    <string name="you_plan_free_value">The full read for %1$s, open to everyone. No end date.</string>
     <string name="you_pro_label">Pro</string>
-    <string name="you_pro_pass">Pass</string>
-    <string name="you_pro_stake">Stake</string>
-    <!-- Was "Subscription" (12 characters, clips); a plan is what a subscription is. -->
-    <string name="you_pro_subscription">Plan</string>
-    <!-- Pro true with no recognized source (ProModel.kt's entitlementLine keeps the same
-         fallback): a plain yes, symmetric with you_pro_none below. -->
-    <string name="you_pro_active">Yes</string>
-    <string name="you_pro_none">No</string>
-    <string name="you_pro_unread">Not read</string>
-    <!-- Was "Not offered" (11 characters, clips); "not open" is this app's own word for the same
-         503 monetization_disabled state elsewhere (pass_not_open, vote_tab_not_open). -->
-    <string name="you_pro_disabled">Not open</string>
-    <string name="you_pro_until">until %1$s</string>
+    <string name="you_plan_pro_value">Every covered ticker, with the classification and every figure.</string>
     <string name="you_stake_label">Staked SKR</string>
-    <!-- The value: a short word, never the figure itself (a plausible stake can run to 20
-         characters, SkrStakeBound.STAKED_SUPPLY_RAW's own worst case). "No wallet" reads as there
-         being no subject to read, not as a reading of zero: a wallet that stakes nothing and a
-         wallet this screen never read are different facts. -->
-    <string name="you_stake_no_wallet">No wallet</string>
-    <string name="you_stake_read">Read</string>
-    <!-- The sub line for the no-wallet state above: unlike the value, a FactGrid sub wraps rather
-         than clips, so the full reason is safe here. -->
-    <string name="you_stake_none_wallet">no wallet connected</string>
+    <string name="you_plan_payment_label">Payment</string>
+
+    <string name="you_heading_methods">Sign-in methods</string>
+    <string name="you_method_google">Google</string>
+    <string name="you_wallet_method">Solana wallet</string>
+    <string name="you_wallet_none">Not connected</string>
+    <string name="you_wallet_note">Asked to connect on each launch. No key or session is kept.</string>
+    <string name="you_action_sign_in">Sign in</string>
+    <string name="you_action_connect">Connect</string>
+    <string name="you_action_copy">Copy</string>
+    <string name="you_action_copied">Copied</string>
+    <string name="you_copy_clip_label">Wallet address</string>
+    <string name="you_sign_out_confirm">Sign out on this phone? It stays linked to the account and keeps that account\'s Pro.</string>
+    <string name="you_action_cancel">Cancel</string>
+
     <string name="you_heading_device">On this device</string>
     <string name="you_fact_swaps">Swaps recorded</string>
     <string name="you_fact_votes">Votes cast</string>
@@ -639,6 +658,11 @@
          corrected to the destination it actually opens. -->
     <string name="you_fact_sub_watchlist">Listed under Today</string>
     <string name="you_open_tab">Open %1$s</string>
+
+    <string name="you_heading_notifications">Notifications</string>
+    <string name="you_heading_about">About</string>
+    <string name="you_action_show">Show</string>
+    <string name="you_action_hide">Hide</string>
     <string name="you_version">Version %1$s</string>
 
     <!-- Fonts and licenses (U11): the OFL texts ship as assets (app/src/main/assets/licenses/,
@@ -661,14 +685,12 @@
          account shared with plainticker.com; the device is linked to it, so its Pro counts here.
          One plain line per way a sign-in can end, including every server error code in the web
          repo's server/auth/README.md. Never the ID token and never the device code. -->
-    <string name="account_heading">Account</string>
     <string name="account_pitch">Use the same account and Pro on plainticker.com and here.</string>
     <string name="account_sign_in">Sign in with Google</string>
     <string name="account_signing_in">Signing in</string>
     <string name="account_signed_in_label">Signed in with Google</string>
     <string name="account_identity_fallback">Google account</string>
     <string name="account_wallets_label">Linked wallets</string>
-    <string name="account_wallets_none">No wallets are linked to this account yet.</string>
     <string name="account_sign_out">Sign out</string>
     <string name="account_msg_cancelled">Sign-in was cancelled. Nothing changed.</string>
     <string name="account_msg_no_account">There is no Google account on this phone. Add one in Settings, then try again.</string>
