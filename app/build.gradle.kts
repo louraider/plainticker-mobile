@@ -62,7 +62,7 @@ android {
         buildConfigField(
             "String",
             "GOOGLE_SERVER_CLIENT_ID",
-            "\"256856154538-vk2k3l1ug7g1ud0dbe2jdiff740juemf.apps.googleusercontent.com\"",
+            "\"170602485636-fo86ia1lc6r34ip5fj6id0v0ku8ffaib.apps.googleusercontent.com\"",
         )
     }
 

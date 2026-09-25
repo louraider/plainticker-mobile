@@ -61,8 +61,8 @@ Credential Manager failure, so the reader sees "Google did not return a sign-in"
 Google account on this phone" even though the phone has one.
 
 1. Open <https://console.cloud.google.com/> and select the project that owns the web client
-   `256856154538-vk2k3l1ug7g1ud0dbe2jdiff740juemf.apps.googleusercontent.com` (the project
-   number is `256856154538`).
+   `170602485636-fo86ia1lc6r34ip5fj6id0v0ku8ffaib.apps.googleusercontent.com` (the project
+   number is `170602485636`, project `analyst-495717`).
 2. Go to **APIs & Services > OAuth consent screen** (Google Auth Platform > Branding) and confirm
    the consent screen is configured and **published** (In production). While it is in Testing,
    only listed test users can sign in.
