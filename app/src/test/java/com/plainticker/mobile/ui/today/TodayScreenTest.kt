@@ -207,12 +207,40 @@ class TodayScreenTest {
     }
 
     @Test
-    fun `the entrance is gated by rememberMotionEnabled and snaps instantly when motion is off`() {
+    fun `the entrance is gated by rememberMotionEnabled and springs in when motion is on`() {
         val fn = body("private fun Modifier.amberBlockEntrance(", "private val EntranceSpring")
         assertTrue("rememberMotionEnabled" in fn)
-        assertTrue("snap()" in fn)
         assertTrue("EntranceSpring" in fn)
         assertTrue("targetValue = if (settled) 1f else 0f" in fn)
+    }
+
+    /**
+     * The animator-zero stall's second half (docs/qa-checklist.md, 2026-09-22; the ViewModel-level
+     * half is [com.plainticker.mobile.ui.watchlist.WatchlistViewModelTest]'s own regression test).
+     * `animateFloatAsState` still needs a platform frame to apply even a `snap()` spec, and a cold
+     * device with every animator scale at 0 does not reliably deliver one before a scroll forces
+     * it, so motion off must never enter that machinery at all: the modifier has to come back
+     * unchanged, before `remember` or `LaunchedEffect` run, so the block is at its settled state in
+     * the same composition pass that first draws it rather than one the animation clock owes it
+     * later.
+     */
+    @Test
+    fun `motion off returns the block unchanged, before any remember, effect or animation runs`() {
+        val fn = body("private fun Modifier.amberBlockEntrance(", "private val EntranceSpring")
+        val functionOpenBrace = fn.indexOf('{')
+        val guard = fn.indexOf("if (!motionEnabled) return this")
+        assertTrue("the guard exists", guard >= 0)
+        assertTrue(
+            "nothing but whitespace sits between the function's opening brace and the guard",
+            fn.substring(functionOpenBrace + 1, guard).isBlank(),
+        )
+        val remember = fn.indexOf("remember {")
+        val launchedEffect = fn.indexOf("LaunchedEffect(")
+        val animateFloatAsState = fn.indexOf("animateFloatAsState(")
+        assertTrue("no remembered state is created before the motion-off guard", guard in 0..<remember)
+        assertTrue("no effect runs before the motion-off guard", guard in 0..<launchedEffect)
+        assertTrue("no animation is started before the motion-off guard", guard in 0..<animateFloatAsState)
+        assertFalse("motion off must not fall back to snap() on the animation clock", "snap()" in fn)
     }
 
     @Test

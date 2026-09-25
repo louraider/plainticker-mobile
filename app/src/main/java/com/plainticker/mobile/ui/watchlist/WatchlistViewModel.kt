@@ -310,17 +310,21 @@ class WatchlistViewModel(
      *
      * **Two settles, not one.** The animator-zero stall (docs/qa-checklist.md, 2026-09-22:
      * venue card and "Tracked today" undrawn or skeletal for three to four seconds at normal
-     * motion, eight to eleven with the animator forced to zero) was traced to this function, not
-     * to motion: `amberBlockEntrance` already snaps to its settled state on the frame after the
-     * data arrives regardless of the animator scale (`TodayScreenTest` pins exactly that), so a
-     * block already gated by state cannot become *slower* to read because motion is off. What
-     * actually held the venue line, Next up and the footer back was this function publishing
-     * every field in one `_state.update` at the very end, after awaiting [prices.pricesFirst] -
-     * Jupiter's own paced fetch, several seconds by design ([PriceRepository]'s own doc) - even
-     * though none of those three blocks reads a price. [todayLoading] now flips the moment the
-     * fast three have answered, in its own update, with [market], [nextUpLeader], [voteRound] and
-     * the two coverage totals already on state; [trackedLoading] flips separately once prices have
-     * answered, because block 3's rows are the one thing here that actually needs one.
+     * motion, eight to eleven with the animator forced to zero) was traced first to this function,
+     * not to motion: what held the venue line, Next up and the footer back was this function
+     * publishing every field in one `_state.update` at the very end, after awaiting
+     * [prices.pricesFirst] - Jupiter's own paced fetch, several seconds by design
+     * ([PriceRepository]'s own doc) - even though none of those three blocks reads a price.
+     * [todayLoading] now flips the moment the fast three have answered, in its own update, with
+     * [market], [nextUpLeader], [voteRound] and the two coverage totals already on state;
+     * [trackedLoading] flips separately once prices have answered, because block 3's rows are the
+     * one thing here that actually needs one. That closed most of the gap but not all of it: a
+     * second stall remained in `amberBlockEntrance` itself (`ui/today/TodayScreen.kt`) - it read
+     * this state correctly but still relied on `animateFloatAsState` to *apply* the settled value,
+     * which needs a platform frame to fire, and a cold device with every animator scale at 0
+     * sometimes never schedules that frame before a scroll forces one. That function's own doc
+     * comment has the fix: motion off now returns the unmodified block, never touching the
+     * animation clock at all.
      *
      * Never throws: a source that did not answer costs its own facts (the fields below stay at
      * their [WatchlistUiState] defaults, which is what [com.plainticker.mobile.ui.today.TodayModel.kt]'s

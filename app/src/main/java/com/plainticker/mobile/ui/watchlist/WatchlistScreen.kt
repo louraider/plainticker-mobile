@@ -17,6 +17,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,10 +39,12 @@ import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.spoken
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.theme.PlainTickerType
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * The Watchlist (T12, DT8; design/canvas/instrument.py screen_watchlist). One scrolling column:
@@ -278,22 +281,30 @@ private fun AmberRowDivider(last: Boolean, content: @Composable () -> Unit) {
 }
 
 /**
- * The digest Panel: the time it was produced in mono meta, the digest itself under it.
+ * The digest Panel: when it was produced, in the reader's own zone, the digest itself under it.
  *
  * Reads [defaultAmberColors] rather than Instrument's fixed-dark `Ink`/`Muted`: this panel sits on
  * Today's Yours block, the first thing a reader sees, over [com.plainticker.mobile.ui.home.HomeScreen]'s
  * own live `AmberTheme` surface, so a fixed-dark colour here would draw near-invisible text in
  * light mode rather than resolving with the rest of the screen.
+ *
+ * **Polish batch, 2026-09-25.** The stamp used to print [PlainTickerType]'s mono meta in
+ * [Fmt.utc][com.plainticker.mobile.ui.Fmt.utc], the pre-Amber shape DESIGN.md section 1 never
+ * asked for on this screen: [Fmt.localDateTime][com.plainticker.mobile.ui.Fmt.localDateTime] in
+ * [AmberType] now matches the digest's own successor screen,
+ * [com.plainticker.mobile.ui.you.DigestScreen]'s `digestStamp`. `zone` is computed once, the same
+ * [remember] every other screen's own zone read uses (`TodayScreen`, `DigestScreen`).
  */
 @Composable
 private fun Digest(record: DigestRecord) {
     val colors = defaultAmberColors()
-    val panel = digestPanel(record)
+    val zone = remember { ZoneId.systemDefault() }
+    val panel = digestPanel(record, zone)
     Panel(colors = colors) {
         panel.producedAt?.let {
-            Text(text = it, style = PlainTickerType.meta, color = colors.textTertiary(AmberSurface.RAISED))
+            Text(text = it, style = AmberType.meta, color = colors.textTertiary(AmberSurface.RAISED))
         }
-        Text(text = panel.body.text(), style = PlainTickerType.panelBody, color = colors.textPrimary)
+        Text(text = panel.body.text(), style = AmberType.body, color = colors.textPrimary)
     }
 }
 

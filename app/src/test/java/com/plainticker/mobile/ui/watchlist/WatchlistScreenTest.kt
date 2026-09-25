@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.watchlist
 import com.plainticker.mobile.lint.KotlinScan
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -130,9 +131,27 @@ class WatchlistScreenTest {
         // resolves defaultAmberColors and hands it to Panel instead of Panel reading Instrument's
         // fixed-dark Elevated/Line on its own); still the digest's one container either way.
         assertTrue("the Panel is the digest container", "Panel(" in panel)
-        assertTrue("it draws what the model read out of the record", "digestPanel(record)" in panel)
+        assertTrue("it draws what the model read out of the record, stamped in the reader's own zone", "digestPanel(record, zone)" in panel)
         assertEquals("the screen must not assemble a digest", 0, count("digest("))
         assertTrue("the model reads the stored text raw", "raw(text)" in modelScan.code)
+    }
+
+    /**
+     * Polish batch, 2026-09-25: the stamp used to print Instrument's mono `PlainTickerType.meta`
+     * off [Fmt.utc][com.plainticker.mobile.ui.Fmt.utc], the pre-Amber shape a screenshot of the
+     * old card showed (a monospace UTC timestamp in a bordered box). The box is Amber's own, kept
+     * on purpose for light-theme contrast (`Panel`'s own doc comment, DESIGN.md section 4's
+     * `Panel` row); only the type and the zone were still pre-Amber, and this pins both fixed.
+     */
+    @Test
+    fun `the digest stamp is drawn in Amber's own type, in the reader's own zone, never Instrument's mono UTC`() {
+        val panel = body("private fun Digest(", "private fun Footer(")
+        assertTrue("the stamp is Amber's own meta style", "style = AmberType.meta" in panel)
+        assertTrue("the body is Amber's own body style", "style = AmberType.body" in panel)
+        assertFalse("no more Instrument type on this panel", "PlainTickerType" in panel)
+        assertTrue("the zone is read once and passed to the model, the same as TodayScreen and DigestScreen", "remember { ZoneId.systemDefault() }" in panel)
+        assertFalse("the model must not still be asked for a UTC stamp", "Fmt.utc" in modelScan.code)
+        assertTrue("the model reads the reader's own zone instead", "Fmt.localDateTime" in modelScan.code)
     }
 
     @Test

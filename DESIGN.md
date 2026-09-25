@@ -41,9 +41,19 @@ nothing about the redesign touches it.
 A tracking figure is drawn only where the pool behind it can carry one. Measured live on
 2026-09-12 (`docs/data-map.md`): of the 157 analyzed xStocks on the list Jupiter priced 55; the 13
 pools at or above $100k all tracked the NYSE close within 0.8 percent; the 6 between $10k and
-$100k deviated plausibly; below $10k the quoted premium was arithmetic off a dead pool. The floor
-is **$10,000**, and it lives in exactly one place, `TrackingQuality` in the data layer, so the
-list row and the gauge can never disagree about it.
+$100k deviated plausibly; below $10k the quoted premium was arithmetic off a dead pool. That first
+pass set the floor at $10,000. Re-measured the next day, 2026-09-13, at four candidate floors
+(`docs/data-map.md`, "Decided 2026-09-13: the floor drops to $4,000"): $10,000 kept a premium on 19
+rows, $4,000 on 22, $2,500 on 25 and $1,000 on 29, and the widest premium in the tracked set did
+not move between any of the top three, because it already belonged to INTCx at $26,205, far above
+all of them. **$4,000 buys three readable rows for nothing**: NFLXx at $9,370 reads -1.95 percent,
+PEPx at $5,351 reads +0.11, ORCLx at $4,444 reads -0.78. One step further down is where it breaks:
+Vx at $2,513 prints +6.64 and JPMx at $2,002 prints +37.98, pool arithmetic and not a price. The
+floor is **$4,000**, and it lives in exactly one place, `TrackingQuality.MIN_POOL_USD` in the data
+layer, so the list row and the gauge can never disagree about it. The same measurement widened the
+gauge's own scale, `TrackingQuality.TRACKED_SPREAD_PCT`, from 2.5 to **4.5** percent: three of the
+22 tracked rows (INTCx, HOODx, XOMx) had already run past the narrower scale one day after it was
+set.
 
 Above the floor nothing changes: the row keeps the signed premium against the NYSE close, Detail
 draws the gauge. Below it neither is drawn and the surface states the pool instead, in one short

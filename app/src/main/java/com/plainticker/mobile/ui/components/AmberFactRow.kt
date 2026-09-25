@@ -97,7 +97,7 @@ private fun AmberFactRow(fact: AmberFact, colors: AmberColors) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .focusOutline(interactionSource)
+            .focusOutline(interactionSource, colors)
             .background(if (pressed) colors.surfaceHigh else colors.surfaceRaised)
             .then(interaction)
             .defaultMinSize(minHeight = 56.dp)

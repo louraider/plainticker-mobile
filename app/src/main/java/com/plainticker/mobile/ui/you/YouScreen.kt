@@ -569,7 +569,7 @@ private fun FactCardView(cell: FactCell, colors: AmberColors, numeric: Boolean, 
     }
     Column(
         modifier = modifier
-            .focusOutline(interactionSource)
+            .focusOutline(interactionSource, colors)
             .clip(RoundedCornerShape(FactCardRadius))
             .background(colors.surfaceRaised)
             .then(interaction)

@@ -81,7 +81,7 @@ fun TopTabs(
                     Modifier
                 } else {
                     Modifier
-                        .focusOutline(interactionSource)
+                        .focusOutline(interactionSource, colors)
                         .selectable(
                             selected = on,
                             interactionSource = interactionSource,

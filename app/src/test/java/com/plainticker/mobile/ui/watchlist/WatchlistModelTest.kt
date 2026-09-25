@@ -78,30 +78,35 @@ class WatchlistModelTest {
 
     // ---- The digest Panel -----------------------------------------------------------------
 
+    private val kyiv: java.time.ZoneId = java.time.ZoneId.of("Europe/Kyiv")
+
     @Test
     fun `no digest yet is one sentence that says when the first one lands`() {
-        val panel = digestPanel(DigestRecord.NONE)
+        val panel = digestPanel(DigestRecord.NONE, kyiv)
 
         assertNull("nothing was produced, so there is no time to print", panel.producedAt)
         assertEquals(words(R.string.watchlist_digest_none), panel.body)
     }
 
     @Test
-    fun `the Panel draws the stored digest as it was sent`() {
+    fun `the Panel draws the stored digest as it was sent, stamped in the reader's own zone`() {
         val text = "3 stocks watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days."
-        val panel = digestPanel(
-            DigestRecord(text = text, producedAtMillis = Instant.parse("2026-09-13T08:00:00Z").toEpochMilli()),
-        )
+        val record = DigestRecord(text = text, producedAtMillis = Instant.parse("2026-09-13T08:00:00Z").toEpochMilli())
 
-        assertEquals("13 Sep 2026 08:00 UTC", panel.producedAt)
+        val panel = digestPanel(record, kyiv)
+        assertEquals("13 Sep 2026 11:00", panel.producedAt)
         assertEquals(Copy.Raw(text), panel.body)
+
+        // A different reader, a different stamp of the same instant: not silently still UTC.
+        val newYork = digestPanel(record, java.time.ZoneId.of("America/New_York"))
+        assertEquals("13 Sep 2026 04:00", newYork.producedAt)
     }
 
     @Test
     fun `a stored time with no text is still no digest`() {
         assertEquals(
             words(R.string.watchlist_digest_none),
-            digestPanel(DigestRecord(producedAtMillis = 1L)).body,
+            digestPanel(DigestRecord(producedAtMillis = 1L), kyiv).body,
         )
     }
 

@@ -9,6 +9,7 @@ import com.plainticker.mobile.ui.words
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
 import java.time.Instant
+import java.time.ZoneId
 
 /**
  * What the Watchlist screen says, decided away from the composition (task T12, design task DT8).
@@ -42,7 +43,11 @@ data class WatchRow(
 
 /** The digest Panel: when it was produced above, what it said below. */
 data class DigestPanel(
-    /** The mono meta line, or null when there has never been a digest. */
+    /**
+     * The meta line, in the reader's own zone ([Fmt.localDateTime], not [Fmt.utc]: polish batch,
+     * 2026-09-25), or null when there has never been a digest. Drawn in Amber's own type, not
+     * mono; the field's own name never said "mono", only the composable that draws it did.
+     */
     val producedAt: String?,
     val body: Copy,
 )
@@ -97,14 +102,20 @@ private fun trackingCopy(quality: TrackingQuality?): Copy? = when (quality) {
  * The Panel. A digest that has never been produced is not an empty card: it is one sentence that
  * says when the first one lands, which is the only thing a reader who has just watched their first
  * stock actually wants to know.
+ *
+ * [zone] is the reader's own, never read here (polish batch, 2026-09-25: this used to print
+ * [Fmt.utc], a conversion no other absolute stamp on this screen asks a reader to do; the digest's
+ * own successor, [com.plainticker.mobile.ui.you.DigestScreen]'s `digestStamp`, already read the
+ * reader's own zone). [zone] is passed in rather than read from the system default here, the same
+ * reason [Fmt.clock] and every other reader-zone function in this codebase stays pure.
  */
-fun digestPanel(record: DigestRecord): DigestPanel {
+fun digestPanel(record: DigestRecord, zone: ZoneId): DigestPanel {
     val text = record.text
     val producedAt = record.producedAtMillis
     if (text == null || producedAt == null) {
         return DigestPanel(producedAt = null, body = words(R.string.watchlist_digest_none))
     }
-    return DigestPanel(producedAt = Fmt.utc(producedAt), body = raw(text))
+    return DigestPanel(producedAt = Fmt.localDateTime(producedAt, zone), body = raw(text))
 }
 
 /**

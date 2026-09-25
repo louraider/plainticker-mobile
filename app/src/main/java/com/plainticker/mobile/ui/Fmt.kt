@@ -179,6 +179,17 @@ object Fmt {
         return "${two(t.hour)}:${two(t.minute)}"
     }
 
+    /**
+     * An absolute time in the reader's own zone, the same shape [utc] prints but with no "UTC"
+     * label, since it is not one: "10 Sep 2026 14:55". For a surface that needs a full date and
+     * not only a time of day ([clock]) and reads on the reader's own clock rather than a fixed
+     * one, the same reason [clock] exists.
+     */
+    fun localDateTime(epochMillis: Long, zone: ZoneId): String {
+        val t = Instant.ofEpochMilli(epochMillis).atZone(zone)
+        return "${t.dayOfMonth} ${MONTHS[t.monthValue - 1]} ${t.year} ${two(t.hour)}:${two(t.minute)}"
+    }
+
     /** The weekday in the reader's own zone, in sentence case: "Monday". */
     fun weekday(epochMillis: Long, zone: ZoneId): String =
         WEEKDAYS[Instant.ofEpochMilli(epochMillis).atZone(zone).dayOfWeek.value - 1]

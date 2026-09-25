@@ -277,7 +277,7 @@ private fun ConsentCheckbox(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .focusOutline(interactionSource)
+            .focusOutline(interactionSource, colors)
             .toggleable(
                 value = checked,
                 interactionSource = interactionSource,
