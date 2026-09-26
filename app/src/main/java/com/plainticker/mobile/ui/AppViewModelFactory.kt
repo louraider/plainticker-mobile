@@ -117,6 +117,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         PassViewModel(
             container.passApi,
             container.entitlementApi,
+            container.promoApi,
             container.walletSession,
             container.rpcRepository,
             container.devicePassStore,

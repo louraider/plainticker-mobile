@@ -64,6 +64,10 @@ class CabinetFitTest {
         "Hide" to (29.372 to 38.184),
         "Read license" to (78.778 to 102.411),
         "Hide license" to (75.152 to 97.698),
+        // Promo redeem (task promo-redeem, 2026-09-26): "Have a code?" and "Apply" alongside You's
+        // own Cancel, measured the same way as every row above.
+        "Have a code?" to (84.616 to 110.001),
+        "Apply" to (37.296 to 48.485),
     )
 
     /** The wallet's short key, nine monospace characters, JetBrains Mono Regular 15sp. */
@@ -99,6 +103,7 @@ class CabinetFitTest {
         "action_disconnect", "you_action_connect", "you_action_copy", "you_action_copied",
         "action_refresh", "action_enable", "you_action_get_pro", "you_action_extend",
         "you_action_show", "you_action_hide", "action_read_license", "action_hide_license",
+        "promo_action_have_code", "promo_action_apply",
     )
 
     @Test
@@ -118,7 +123,10 @@ class CabinetFitTest {
     @Test
     fun `two actions on their own line fit the row, at 1_3x`() {
         // Copy (or Copied) with Disconnect; Sign out with Cancel.
-        listOf(listOf("Copied", "Disconnect"), listOf("Copy", "Disconnect"), listOf("Sign out", "Cancel")).forEach { pair ->
+        listOf(
+            listOf("Copied", "Disconnect"), listOf("Copy", "Disconnect"), listOf("Sign out", "Cancel"),
+            listOf("Apply", "Cancel"),
+        ).forEach { pair ->
             val total = pair.sumOf { width(textActionWidths, it, it).second + textActionInsetDp }
             assertTrue("$pair need $total dp at 1.3x, past the row's $rowContentDp dp", total <= rowContentDp)
         }

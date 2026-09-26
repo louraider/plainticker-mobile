@@ -12,6 +12,7 @@ import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.EntitlementApi
 import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.data.plainticker.PassApi
+import com.plainticker.mobile.data.plainticker.PromoApi
 import com.plainticker.mobile.data.receipts.FakePassReceiptStore
 import com.plainticker.mobile.data.receipts.PassReceipt
 import com.plainticker.mobile.data.respondHtml
@@ -103,6 +104,9 @@ class PassViewModelTest {
     private fun entitlementMock(body: String = """{"pro":false,"source":null,"until":null}""") =
         mockApi { respondJson(body) }
 
+    private fun promoMock(body: String = """{"pro":true,"source":"promo","until":"2026-10-19T00:00:00.000Z"}""") =
+        mockApi { respondJson(body) }
+
     private fun wallet(connected: Boolean = true) = FakeWalletSession().apply { if (connected) connectedAs(payer) }
 
     private fun staking(stakeRaw: Long) =
@@ -121,6 +125,7 @@ class PassViewModelTest {
     private fun machine(
         pass: MockApi = passMock(),
         entitlement: MockApi = entitlementMock(),
+        promo: MockApi = promoMock(),
         wallet: FakeWalletSession = wallet(),
         rpc: FakeRpcRepository = staking(0L),
         store: InMemoryDevicePassStore = devicePassStore,
@@ -129,6 +134,7 @@ class PassViewModelTest {
     ) = PassViewModel(
         PassApi(pass.client),
         EntitlementApi(entitlement.client),
+        PromoApi(promo.client),
         wallet,
         rpc,
         store,
@@ -490,6 +496,195 @@ class PassViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
         assertEquals(2, entitlement.requests.size)
+    }
+
+    // ---- Promo code redemption ---------------------------------------------------------------
+
+    private fun TestScope.promoTrail(machine: PassViewModel): List<PromoState> {
+        val seen = mutableListOf<PromoState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { machine.promo.toList(seen) }
+        return seen
+    }
+
+    @Test
+    fun `promo starts idle, and opening it shows an empty editing field`() = runTest {
+        val vm = machine()
+        assertEquals(PromoState.Idle, vm.promo.value)
+        vm.openPromo()
+        assertEquals(PromoState.Editing(""), vm.promo.value)
+    }
+
+    @Test
+    fun `typing normalizes uppercase, no spaces, no dashes, the same way the server does`() = runTest {
+        val vm = machine()
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa bbbb-cccc")
+        assertEquals(PromoState.Editing("PTAAAABBBBCCCC"), vm.promo.value)
+    }
+
+    @Test
+    fun `a blank apply reads as an invalid code, and never calls the server`() = runTest {
+        val promo = promoMock()
+        val vm = machine(promo = promo)
+        vm.openPromo()
+        vm.promoInputChanged("   ")
+        vm.applyPromo()
+        assertEquals(PromoState.Failed("", PromoRefusal.INVALID_CODE), vm.promo.value)
+        assertTrue("a blank code never reaches the network", promo.requests.isEmpty())
+    }
+
+    @Test
+    fun `applying goes through applying to success, and refreshes entitlement`() = runTest {
+        val promo = promoMock("""{"pro":true,"source":"promo","until":"2026-10-19T00:00:00.000Z"}""")
+        // Free on the first read (init's own refresh), Pro by promo on the second (the refresh
+        // applyPromo runs after a successful redeem): the entitlement route answering identically
+        // both times would never let the second, distinguishing read prove anything happened.
+        var reads = 0
+        val entitlement = mockApi {
+            reads++
+            if (reads == 1) {
+                respondJson("""{"pro":false,"source":null,"until":null}""")
+            } else {
+                respondJson("""{"pro":true,"source":"promo","until":"2026-10-19T00:00:00.000Z"}""")
+            }
+        }
+        val vm = machine(promo = promo, entitlement = entitlement)
+        val trail = promoTrail(vm)
+
+        vm.pro.test {
+            awaitUntil { !it.entitlementLoading }
+
+            vm.openPromo()
+            vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+            vm.applyPromo()
+            awaitUntil { it.pro && it.source == EntitlementSource.PROMO }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(PromoState.Success(1_792_368_000_000L), vm.promo.value)
+        assertTrue("Applying was reached before Success", trail.any { it is PromoState.Applying && it.input == "PTAAAABBBBCCCC" })
+        assertEquals(
+            "success runs the existing entitlement refresh, a second read after the redeem itself",
+            2,
+            entitlement.requests.size,
+        )
+    }
+
+    @Test
+    fun `the device code rides in the header only, never in the body, and is never logged`() = runTest {
+        val logged = mutableListOf<String>()
+        // A refusal, not a success: applyPromo's own debugLog.raw line only runs on that path, and
+        // this test wants to prove the code stays out of a line that actually gets written, not
+        // rely on a success path that happens to write none at all.
+        val promo = mockApi { respondJson("""{"error":"That code was not recognized.","code":"invalid_code"}""", HttpStatusCode.BadRequest) }
+        val vm = PassViewModel(
+            PassApi(passMock().client),
+            EntitlementApi(entitlementMock().client),
+            PromoApi(promo.client),
+            wallet(),
+            staking(0L),
+            devicePassStore,
+            FakePassReceiptStore(),
+            clock = Clock { now },
+            debugLog = PassDebugLog { logged += it },
+            ioDispatcher = mainDispatcherRule.dispatcher,
+        ).also { machines += it }
+
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm.promo.test {
+            awaitItem()
+            vm.applyPromo()
+            awaitUntil { it !is PromoState.Applying }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        val request = promo.lastRequest
+        assertEquals(devicePassStore.code(), request.headers[PromoApi.HEADER_CODE])
+        assertFalse("the device code never enters the body", devicePassStore.code() in request.bodyText())
+        assertTrue("the refusal path must actually have logged something, or this proves nothing", logged.isNotEmpty())
+        assertTrue("no debug log line ever carries the device's own code", logged.none { devicePassStore.code() in it })
+    }
+
+    @Test
+    fun `every error the contract names ends in its own refusal, one plain state per code`() = runTest {
+        val table = listOf(
+            Triple(400, """{"error":"bad","code":"bad_request"}""", PromoRefusal.BAD_REQUEST),
+            Triple(400, """{"error":"bad","code":"invalid_code"}""", PromoRefusal.INVALID_CODE),
+            Triple(410, """{"error":"bad","code":"expired_code"}""", PromoRefusal.EXPIRED_CODE),
+            Triple(409, """{"error":"bad","code":"already_redeemed"}""", PromoRefusal.ALREADY_REDEEMED),
+            Triple(409, """{"error":"bad","code":"already_applied"}""", PromoRefusal.ALREADY_APPLIED),
+            Triple(429, """{"error":"bad","code":"rate_limited"}""", PromoRefusal.RATE_LIMITED),
+            Triple(404, """{"error":"not_found"}""", PromoRefusal.NOT_OPEN),
+            Triple(500, """{"error":"internal"}""", PromoRefusal.UNAVAILABLE),
+        )
+        table.forEach { (status, body, expected) ->
+            val promo = mockApi { respondJson(body, HttpStatusCode.fromValue(status)) }
+            val vm = machine(promo = promo)
+            vm.openPromo()
+            vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+            vm.promo.test {
+                awaitItem()
+                vm.applyPromo()
+                val failed = awaitUntil { it is PromoState.Failed } as PromoState.Failed
+                assertEquals("status $status", expected, failed.reason)
+                assertEquals("PTAAAABBBBCCCC", failed.input)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+    }
+
+    @Test
+    fun `a 200 this app cannot parse is unavailable, never a crash`() = runTest {
+        val promo = mockApi { respondJson("not json") }
+        val vm = machine(promo = promo)
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm.promo.test {
+            awaitItem()
+            vm.applyPromo()
+            val failed = awaitUntil { it is PromoState.Failed } as PromoState.Failed
+            assertEquals(PromoRefusal.UNAVAILABLE, failed.reason)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `touching a failed field again resumes editing, dropping the error`() = runTest {
+        val promo = mockApi { respondJson("""{"error":"bad","code":"invalid_code"}""", HttpStatusCode.BadRequest) }
+        val vm = machine(promo = promo)
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm.promo.test {
+            awaitItem()
+            vm.applyPromo()
+            awaitUntil { it is PromoState.Failed }
+            vm.promoInputChanged("pt-dddd-eeee-ffff")
+            val editing = awaitUntil { it is PromoState.Editing } as PromoState.Editing
+            assertEquals("PTDDDDEEEEFFFF", editing.input)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `dismiss collapses the field from any settled state, but not mid flight`() = runTest {
+        val vm = machine()
+        vm.openPromo()
+        vm.dismissPromo()
+        assertEquals(PromoState.Idle, vm.promo.value)
+
+        val promo = mockApi { respondJson("""{"error":"bad","code":"invalid_code"}""", HttpStatusCode.BadRequest) }
+        val vm2 = machine(promo = promo)
+        vm2.openPromo()
+        vm2.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm2.promo.test {
+            awaitItem()
+            vm2.applyPromo()
+            awaitUntil { it is PromoState.Failed }
+            cancelAndIgnoreRemainingEvents()
+        }
+        vm2.dismissPromo()
+        assertEquals(PromoState.Idle, vm2.promo.value)
     }
 
     // ---- The wallet's own stake, read for the Portfolio block -------------------------------

@@ -31,13 +31,14 @@ data class EntitlementResponse(
 }
 
 /**
- * The three ways a wallet carries Pro (docs/plan-monetisation-2026-09-19.md section 1.2): a paid
- * 30-day pass, a staked SKR principal at or above the threshold, or a web subscription reached
- * through a linked wallet. Read honestly and stated as one of these, never collapsed into a
- * single "Pro" badge that hides which one is actually carrying it.
+ * The four ways a wallet carries Pro (docs/plan-monetisation-2026-09-19.md section 1.2, extended
+ * for the hackathon promo codes): a paid 30-day pass, a staked SKR principal at or above the
+ * threshold, a web subscription reached through a linked wallet, or a redeemed promo code. Read
+ * honestly and stated as one of these, never collapsed into a single "Pro" badge that hides which
+ * one is actually carrying it.
  */
 enum class EntitlementSource {
-    PASS, STAKE, SUBSCRIPTION;
+    PASS, STAKE, SUBSCRIPTION, PROMO;
 
     companion object {
         /** Null for a blank, missing or unrecognized source: an unread source says nothing rather than guesses. */
@@ -45,6 +46,7 @@ enum class EntitlementSource {
             "pass" -> PASS
             "stake" -> STAKE
             "subscription" -> SUBSCRIPTION
+            "promo" -> PROMO
             else -> null
         }
     }
