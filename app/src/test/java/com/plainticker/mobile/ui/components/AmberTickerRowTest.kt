@@ -228,10 +228,15 @@ class AmberTickerRowTest {
      * beside the catalog's own worst case above, because it was the *pair* the old, unweighted
      * design never accounted for.
      */
+    /**
+     * Updated 2026-09-26 (audit, item 4): the age reads "2 days old", not "2 d old", so the same
+     * clause is three characters longer. Its width at context 14/400 is now 215.852dp (was
+     * 192.444dp); the budget test below takes the new width.
+     */
     @Test
     fun `the real worst-case meta clause is exactly what the meta line's own budget sizes against`() {
-        val longestMeta = "$2.7k behind, too thin · 2 d old"
-        assertTrue(longestMeta.length == 32)
+        val longestMeta = "$2.7k behind, too thin · 2 days old"
+        assertTrue(longestMeta.length == 35)
     }
 
     // ---- Proof by arithmetic: the real budget this anatomy gives company and context -------------
@@ -301,12 +306,24 @@ class AmberTickerRowTest {
         assertEquals(214.780, worstCaseContextBudgetDp, 0.01)
 
         // list_row_meta_join's own worst join, the exact clause this file's own worst-case-meta
-        // test above pins the length of, measured at context's 14sp/400: 192.444dp.
-        val longestMetaWidthDp = 192.444
+        // test above pins the length of, measured at context's 14sp/400: 215.852dp since the age
+        // is counted in words (2026-09-26). That clause is drawn on Stocks rows only, beside
+        // Stocks' own figures, never beside "31,209.9 SKR" (a Vote weight), so it is proven twice:
+        // against the real Stocks figures on one line, and against the app's widest figure within
+        // the row's two-line ceiling.
+        val longestMetaWidthDp = 215.852
+        val widestStocksFigureDp = 95.724 // "$12,345.67", a price-only row, figureRow 18/600 tnum.
+        val scoreFigureDp = 85.842 // "score 100", an analyzed row, figureRow 18/600 tnum.
+        val stocksBudgetDp = contentWidthDp - maxOf(widestStocksFigureDp, scoreFigureDp) - gapDp
+        assertEquals(232.276, stocksBudgetDp, 0.01)
         assertTrue(
-            "the longest real meta clause ($longestMetaWidthDp dp) must fit the worst-case " +
-                "context budget ($worstCaseContextBudgetDp dp), or it wraps to two lines needlessly",
-            longestMetaWidthDp <= worstCaseContextBudgetDp,
+            "the longest real meta clause ($longestMetaWidthDp dp) must fit one line beside Stocks' " +
+                "own widest figure ($stocksBudgetDp dp)",
+            longestMetaWidthDp <= stocksBudgetDp,
+        )
+        assertTrue(
+            "and within two lines beside the app's widest figure at 1.3x, or it clips",
+            longestMetaWidthDp * 1.3 <= (contentWidthDp - worstFigureWidthDp * 1.3 - gapDp) * 2,
         )
     }
 
@@ -433,7 +450,7 @@ class AmberTickerRowTest {
         // and nothing to share it with.
 
         // watchlist_row_reports joined with list_row_meta_premium's own worst premium clause
-        // (list_row_meta_join), at context's 14sp/400: "Reports Oct 22 · $2.7k behind, too thin".
+        // (list_row_meta_join), at context's 14sp/400: "Reports 22 Oct · $2.7k behind, too thin".
         val realisticJoinWidthDp = 246.568
         assertTrue(
             "the realistic join ($realisticJoinWidthDp dp) must clear the 1.0x budget " +

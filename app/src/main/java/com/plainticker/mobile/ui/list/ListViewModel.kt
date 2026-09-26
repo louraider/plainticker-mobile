@@ -176,7 +176,7 @@ data class ListUiState(
      * without it.
      */
     val nextUp: List<NextUpRow> = emptyList(),
-    /** How many tickers are watched, for the Today strip; the strip is hidden at zero. */
+    /** How many tickers are watched, for the Watched chip. */
     val watched: Int = 0,
     /**
      * The watched tickers themselves, uppercase (the same normal form [WatchlistStore] keeps),

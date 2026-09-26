@@ -186,7 +186,8 @@ class TodayModelTest {
     fun `a watched row above the floor draws one figure, the premium, and no pool note`() {
         val row = todayWatchRow(watched(poolUsd = 250_000.0, price = 100.15, reference = 100.0))
         assertEquals("+0.15%", row.figure)
-        assertEquals("Reports Oct 27", ShippedCopy.render(row.report))
+        // Day first since 2026-09-26: one short date format app-wide, matching "Monday 28 Sep".
+        assertEquals("Reports 27 Oct", ShippedCopy.render(row.report))
         assertNull(row.poolNote)
         assertEquals("METAx", row.symbol)
     }

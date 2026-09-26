@@ -321,7 +321,7 @@ at this size and weight) while the colour is always Amber's. Carried forward, no
 unselected, `surfaceHigh` with a 1dp border ring selected, `minimumInteractiveComponentSize()`
 reserving the 48dp touch target without growing the visual chip. The corner radius morphs 8dp to
 full (16dp) with a spring on selection (section 6). `label` is `maxLines = 1` with ellipsis; every
-caller (a sector name, a tracked/watched count) is short, bounded content, so no arithmetic budget
+caller (a sector name, a deep-pool/watched count) is short, bounded content, so no arithmetic budget
 is pinned the way the ticker row's is. Light theme draws the same 1dp border ring unselected too,
 for the reason given above.
 
@@ -471,7 +471,7 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `SecondaryButton` (shared, and a private `YouScreen.kt` copy) | Retired | Both replaced by one shared `AmberSecondaryAction`. |
 | `Sheet`, `SheetSurface` | Retired | Replaced by `AmberSheet`/`AmberSheetSurface` (28dp top radius, `surfaceHigh`, amber handle, versus Instrument's square, neutral one). |
 | `ListRow` | **Kept, one caller** | `GalleryScreen.kt` only (debug builds), to stay field-for-field comparable with `design/canvas/instrument.py`'s own artboards. Every product screen moved to `AmberTickerRow`. Do not add a second caller. |
-| `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak: `ListScreen.kt` (Stocks) draws `TodayStrip` beside the Watched chip whenever a reader has watched a ticker, directly on that screen's own `colors.surfaceGround`, and it was reading Instrument's fixed `Ink2`/`Line` there, near-invisible on Amber's light ground. The `pluralStringResource` calls behind that text still live only in `ListScreen.kt`, unmoved (`CopyLintTest`'s `CountCopyTest` pins them there; this fix only threads the screen's own `colors` through, not the copy). `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
+| `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak on Stocks at the time. Since 2026-09-26 no product screen draws `TodayStrip` at all: Stocks dropped it (it repeated Today's own screen) and so did the onboarding backdrop (see below), so it survives for the gallery only. `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
 | `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. Since Today direction A (2026-09-24) Today no longer draws `WatchlistContent`: the digest lives on its own screen under You (`ui/you/DigestScreen.kt`), whose `Panel` resolves the same colours. |
 | `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept, Instrument type (mostly), Amber colour** | Anatomy and `PlainTickerType` styles unchanged; each now resolves `defaultAmberColors()` instead of a fixed dark token. Not an oversight: none of these needed a shape change to read correctly, only a colour source that follows the system theme. One exception since 2026-09-24: `TopBar`'s own `PlainTickerType.wordmark` moved onto Bricolage 700 (section 9), so this row's "type unchanged" claim now holds for `Field`, `Skeleton`, `Banner` and `TextAction` only. |
 
@@ -596,7 +596,20 @@ search field, the chips and every sticky heading; the list now takes `weight(1f)
 narrows it rather than sitting over it), and a wrapping filter row (`FlowRow`, so 1.3x font scale
 grows the row instead of hiding a chip past an edge). One filter active at a time, because the jump
 index already reaches a sector without narrowing anything, so a sector chip's own job is holding
-one still rather than stacking with Tracked/Watched.
+one still rather than stacking with Deep pool/Watched.
+
+Plain copy on Stocks (audit 2026-09-26): the first chip reads "Deep pool 21", not "Tracked 21",
+and while it is selected one line under the chips says what it means once ("Deep pool means at
+least $4k sits in the token's trading pool, so its price follows the share closely", the floor
+formatted from `TrackingQuality.MIN_POOL_USD`). An analyzed row's figure reads "score 66", not a
+bare "66": the widest real value, "score 100", is 85.842dp at `figureRow` (111.595dp at 1.3x),
+narrower than the "31,209.9 SKR" figure (113.220dp) every row budget in 4.1 is already proven
+against. The analysis age reads "2 days old" (counted copy, `list_row_age_days`), not "2 d old".
+The jump rail keeps its three-letter labels ("Com", "Dis", "Sta"), because no set of full words
+fits 48dp at 1.3x ("Staples" 54.96dp, "Utilities" 55.57dp, "Industry" 61.65dp at `meta`); each
+label carries the sector's full name as its content description, so a screen reader never says
+"Com". The "Today: 1 stock watched" strip that used to sit above Stocks' banner is gone: it
+repeated Today's own screen.
 
 **Vote** lays out a header, an explainer, the round header, Leaders, Your votes, Last round, a
 search field, then the ballot, all in one `LazyColumn` with no sticky header at all. Last round
@@ -756,6 +769,10 @@ and because these came from the founder's own backtests and from legal exposure,
 - **No em or en dash**, anywhere in `strings.xml` or a UI string literal; use a period, comma,
   colon or hyphen.
 - **At most one middle dot per line.**
+- **One short date format, day first**: "27 Oct" (`Fmt.dayMonth`), "Monday 28 Sep", "12 Sep 2026".
+  The month-first "Oct 27" (`Fmt.monthDay`) was retired on 2026-09-26, after Today drew "Reports
+  Oct 27" beside "Monday 28 Sep". A count with a unit is a word, not a letter: "2 days old", never
+  "2 d old".
 - **Sentence case.** No word of four or more capitals outside a short initialism list (NYSE,
   NASDAQ, USDC, EDGAR, XBRL), no uppercase transform, no small-caps font feature.
 - **A count of one is phrased as one.** A summary sentence spells out the word ("One held, one

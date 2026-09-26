@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -64,7 +65,6 @@ import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
-import com.plainticker.mobile.ui.components.TodayStrip
 import com.plainticker.mobile.ui.components.rememberMotionEnabled
 import com.plainticker.mobile.ui.stocks.ActiveChapter
 import com.plainticker.mobile.ui.stocks.SectorChipRow
@@ -116,12 +116,10 @@ import java.time.LocalDate
  *   It is not built. Search and the Next-up strip stay the only two routes to an uncovered row.
  * - The frame's Today strip (watched count, next report) does not appear on the Stocks board at
  *   all; the research's information architecture (section 3) folds it into Today's own "Yours"
- *   block and a Watched filter chip here. [CopyLintTest]'s `CountCopyTest` pins two literal
- *   `pluralStringResource` calls to this exact file, and this pass could not confirm from inside
- *   an isolated worktree whether Today's own screen (built in parallel) already carries the
- *   content those pins describe, so [TodayStrip] stays rather than risk breaking a lint gate
- *   shared by every screen over a duplication this pass could not verify was resolved. It now
- *   sits beside the Watched chip, which reads the same count.
+ *   block and a Watched filter chip here. An earlier pass kept a Today strip on this screen
+ *   anyway, unsure whether Today already carried it; it did, and the audit of 2026-09-26 found
+ *   "Today: 1 stock watched" drawn above this screen's own banner as a pure repeat, so the strip
+ *   and its two counted strings are gone from here. The Watched chip still reads the count.
  *
  * **Performance, for roughly 830 rows under sticky headers:** every row is its own `LazyColumn`
  * item with its own stable key (`"a:" + ticker`, `"p:" + ticker`, `"n:" + ticker`, unchanged from
@@ -405,7 +403,8 @@ private fun StocksChrome(
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
                 .semantics { heading() },
         )
-        if (state.watched > 0) TodayStrip(text = todayText(state), colors = colors)
+        // No Today strip here any more (audit 2026-09-26): "Today: 1 stock watched" repeated
+        // Today's own screen one tab away, above this screen's own banner.
         state.banner?.let { StateBanner(banner = it, onRetry = onRetry) }
         Spacer(Modifier.height(SearchTopGap))
         SearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)
@@ -420,6 +419,14 @@ private fun StocksChrome(
                 onSelect = onFilterSelect,
                 colors = colors,
             )
+            if (activeFilter == StocksFilter.Tracked) {
+                Text(
+                    text = stringResource(R.string.stocks_filter_tracked_note, Fmt.compactMoney(TrackingQuality.MIN_POOL_USD)),
+                    style = AmberType.meta,
+                    color = colors.textSecondary,
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                )
+            }
         }
     }
 }
@@ -619,6 +626,9 @@ private fun StocksJumpIndex(
             val label = if (resId != null) stringResource(resId) else chapter.sector.orEmpty().take(3)
             val fullName = chapter.sector ?: stringResource(R.string.list_heading_no_sector)
             val isActive = active != null && active.sector == chapter.sector
+            // "Com", "Dis", "Sta" stay: a full word does not fit the 48dp rail at 1.3x ("Staples"
+            // 54.96dp, "Utilities" 55.57dp, fontTools at meta 12sp/400). A screen reader hears the
+            // sector's full name instead of the abbreviation (audit 2026-09-26).
             Text(
                 text = label,
                 style = AmberType.meta,
@@ -632,6 +642,7 @@ private fun StocksJumpIndex(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = JumpEntryMinHeight)
+                    .semantics { contentDescription = fullName }
                     .clickable(
                         onClickLabel = stringResource(R.string.stocks_jump_action, fullName),
                         role = Role.Button,
@@ -746,7 +757,13 @@ private val RowGapHeight = 1.dp
  */
 @Composable
 private fun AnalyzedRow(row: ListRow, modifier: Modifier = Modifier, colors: AmberColors, onOpenDetail: (String) -> Unit) {
-    val figure = if (row.locked) stringResource(R.string.pro_locked_value) else row.composite?.let { Fmt.decimal(it, decimals = 0) }
+    // "score 66", not a bare "66" (audit 2026-09-26). Widest real value "score 100", figureRow
+    // 18sp/600 tnum: 85.842dp at 1.0x, 111.595dp at 1.3x (fontTools, AmberTickerRowTest).
+    val figure = if (row.locked) {
+        stringResource(R.string.pro_locked_value)
+    } else {
+        row.composite?.let { stringResource(R.string.list_row_score, Fmt.decimal(it, decimals = 0)) }
+    }
     AmberTickerRow(
         ticker = row.display,
         company = row.company,
@@ -873,23 +890,6 @@ private fun EmptyLine(text: String, action: String? = null, onAction: (() -> Uni
 }
 
 /**
- * The Today strip (docs/data-map.md, List (T8)): how many are watched, and the next report among
- * them when the daily check has found one. The count alone stands until it has.
- */
-@Composable
-private fun todayText(state: ListUiState): String {
-    val report = state.nextReport
-        ?: return pluralStringResource(R.plurals.list_today_watched, state.watched, Fmt.count(state.watched))
-    return pluralStringResource(
-        R.plurals.list_today,
-        state.watched,
-        Fmt.count(state.watched),
-        report.symbol,
-        Fmt.monthDay(report.on),
-    )
-}
-
-/**
  * "Next up, by staked SKR": the label over the leaders, the face a fact grid labels its cells in.
  * It sits under the section heading rather than being one, because the leaders are still tokens
  * without analysis and the strip is the front of that section.
@@ -934,7 +934,7 @@ private fun rowMeta(row: ListRow): String? {
 
         null -> null
     }
-    val age = row.ageForMeta?.let { Fmt.daysOld(it) }
+    val age = row.ageForMeta?.let { pluralStringResource(R.plurals.list_row_age_days, it, Fmt.count(it)) }
     return when {
         quote != null && age != null -> stringResource(R.string.list_row_meta_join, quote, age)
         quote != null -> quote
@@ -968,7 +968,12 @@ private fun StateBanner(banner: ListBanner, onRetry: () -> Unit) {
         )
 
         is ListBanner.Stale ->
-            Banner(text = stringResource(R.string.list_stale_banner, Fmt.daysOld(banner.newestDays)))
+            Banner(
+                text = stringResource(
+                    R.string.list_stale_banner,
+                    pluralStringResource(R.plurals.list_row_age_days, banner.newestDays, Fmt.count(banner.newestDays)),
+                ),
+            )
 
         // The hours tier, in Detail's own words out of Detail's own strings: the caveat a reader
         // meets one tap away must not be worded differently on the screen they came from.

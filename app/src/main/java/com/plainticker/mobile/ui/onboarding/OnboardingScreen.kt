@@ -53,7 +53,7 @@ import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.list.RowState
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.PlainTickerType
-import java.time.Instant
+import java.time.LocalDate
 
 /**
  * The one-time onboarding (DT11; plan section 13 Pass 3, design/canvas/instrument.py
@@ -152,7 +152,7 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
                 BackdropWatched,
                 Fmt.count(BackdropWatched),
                 BackdropNextReport.ticker,
-                Fmt.monthDay(BackdropNextReport.reportsAt),
+                Fmt.dayMonth(BackdropNextReport.reportsOn),
             ),
         )
         // The settled List draws a sector chapter heading here, its row count as the meta, never
@@ -168,7 +168,7 @@ private fun ListBackdrop(modifier: Modifier = Modifier) {
                     context = stringResource(
                         R.string.list_row_meta_join,
                         stringResource(R.string.list_row_meta_premium, Fmt.percent(row.premiumPct)),
-                        Fmt.daysOld(row.ageDays),
+                        pluralStringResource(R.plurals.list_row_age_days, row.ageDays, Fmt.count(row.ageDays)),
                     ),
                 )
             }
@@ -328,7 +328,7 @@ private data class BackdropRow(
     val state: RowState,
 )
 
-private data class BackdropReport(val ticker: String, val reportsAt: Instant)
+private data class BackdropReport(val ticker: String, val reportsOn: LocalDate)
 
 /**
  * Illustrative sample data, the six analyzed rows of design/canvas/instrument.py, so the first
@@ -349,7 +349,7 @@ private val BackdropRows = listOf(
 private const val BackdropSector = "Technology"
 
 private const val BackdropWatched = 3
-private val BackdropNextReport = BackdropReport("TSLAx", Instant.parse("2026-10-22T20:00:00Z"))
+private val BackdropNextReport = BackdropReport("TSLAx", LocalDate.of(2026, 10, 22))
 
 // ---- Previews ----------------------------------------------------------------------------------
 

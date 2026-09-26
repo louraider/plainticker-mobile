@@ -121,7 +121,7 @@ class WatchlistScreenTest {
         assertEquals("the screen must not reach for the tracking rule itself", 0, count("TrackingQuality"))
         assertTrue("the model is what asks TrackingQuality", "TrackingQuality" in modelScan.code)
         assertEquals("the report date is formatted once, in the model", 0, count("Fmt."))
-        assertTrue("and the model is where Fmt lives", "Fmt.monthDay" in modelScan.code)
+        assertTrue("and the model is where Fmt lives", "Fmt.dayMonth" in modelScan.code)
     }
 
     @Test

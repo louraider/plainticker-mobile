@@ -29,7 +29,8 @@ class WatchlistModelTest {
 
         assertEquals("TSLAx", row.symbol)
         assertEquals("TSLA", row.ticker)
-        assertEquals(words(R.string.watchlist_row_reports, "Oct 22"), row.report)
+        // Day first since 2026-09-26 (Fmt.dayMonth): one short date format app-wide.
+        assertEquals(words(R.string.watchlist_row_reports, "22 Oct"), row.report)
         assertEquals(words(R.string.list_row_meta_premium, "+0.09%"), row.tracking)
     }
 
@@ -89,7 +90,7 @@ class WatchlistModelTest {
         val row = watchRow(watched("AAPL", nextReport = LocalDate.of(2026, 10, 28)))
 
         assertNull(row.tracking)
-        assertEquals(words(R.string.watchlist_row_reports, "Oct 28"), row.report)
+        assertEquals(words(R.string.watchlist_row_reports, "28 Oct"), row.report)
     }
 
     @Test
