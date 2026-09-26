@@ -241,65 +241,174 @@ class TodayModelTest {
         assertFalse(digestReadable(DigestRecord.NONE))
     }
 
-    // ---- Tracked today ------------------------------------------------------------------------------------
+    // ---- Reports this week --------------------------------------------------------------------------------
 
-    private fun tracked(ticker: String, pool: Double) = TrackedRow(ticker, "${ticker}x", "$ticker Inc.", 0.1, pool)
+    private fun reportRow(ticker: String, date: LocalDate, confirmed: Boolean? = true) =
+        ReportRow(ticker, "${ticker}x", "$ticker Inc.", date, confirmed)
+
+    private val monday = LocalDate.of(2026, 9, 28) // a Monday
+    private val comingSunday = LocalDate.of(2026, 10, 4) // the coming Sunday
 
     @Test
-    fun `tracked shows three rows and never a ticker the reader already watches`() {
-        val all = listOf(tracked("NVDA", 9e6), tracked("META", 8e6), tracked("TSLA", 7e6), tracked("COIN", 6e6), tracked("HOOD", 5e6))
-        val preview = trackedPreview(all, watched = setOf("meta ", "TSLA"))
-        assertEquals(listOf("NVDA", "COIN", "HOOD"), preview.map { it.ticker })
-        assertEquals(3, TrackedPreviewCount)
-        assertEquals("deepest first, capped", listOf("NVDA", "META", "TSLA"), trackedPreview(all, emptySet()).map { it.ticker })
+    fun `weekEnd is the coming Sunday, inclusive of today when today already is one`() {
+        assertEquals(comingSunday, weekEnd(monday))
+        assertEquals("Sunday itself is its own week end", comingSunday, weekEnd(comingSunday))
+        assertEquals("Saturday's coming Sunday is tomorrow", LocalDate.of(2026, 9, 27), weekEnd(LocalDate.of(2026, 9, 26)))
     }
 
     @Test
-    fun `all-tracked hands the rest to Stocks with the whole tracked total`() {
-        assertEquals("All 20 in Stocks", ShippedCopy.render(trackedAllCopy(20)))
-        assertEquals("All 1 in Stocks", ShippedCopy.render(trackedAllCopy(1)))
+    fun `this week keeps today through the coming Sunday and excludes both boundaries outside it`() {
+        val rows = listOf(
+            reportRow("YESTERDAY", monday.minusDays(1)),
+            reportRow("TODAY", monday),
+            reportRow("MIDWEEK", LocalDate.of(2026, 9, 30)),
+            reportRow("SUN", comingSunday),
+            reportRow("NEXTMON", comingSunday.plusDays(1)),
+        )
+        val week = reportsThisWeek(rows, monday)
+        assertEquals(listOf("TODAY", "MIDWEEK", "SUN"), week.map { it.ticker })
     }
 
     @Test
-    fun `a tracked row without a reference price draws the missing placeholder, not a crash`() {
-        val row = TrackedRow(ticker = "AAPL", symbol = "AAPLx", company = "Apple Inc.", premiumPct = null, poolUsd = 250_000.0)
-        assertEquals("-", row.figure)
-        assertEquals("AAPLx", row.display)
+    fun `this week sorts by date then ticker, a tie broken alphabetically`() {
+        val rows = listOf(
+            reportRow("NKE", LocalDate.of(2026, 9, 29)),
+            reportRow("CCL", LocalDate.of(2026, 9, 29)),
+            reportRow("PEP", LocalDate.of(2026, 10, 1)),
+        )
+        assertEquals(listOf("CCL", "NKE", "PEP"), reportsThisWeek(rows, monday).map { it.ticker })
     }
 
     @Test
-    fun `a tracked row with a premium formats it the same way every other screen's premium reads`() {
-        val row = TrackedRow(ticker = "TSLA", symbol = "TSLAx", company = "Tesla, Inc.", premiumPct = 0.09, poolUsd = 500_000.0)
-        assertEquals("+0.09%", row.figure)
-    }
-
-    @Test
-    fun `a token the catalog has not named yet falls back to the underlying ticker`() {
-        val row = TrackedRow(ticker = "MCD", symbol = null, company = null, premiumPct = -1.01, poolUsd = 26_205.0)
-        assertEquals("MCD", row.display)
+    fun `the cap is about five, and the preview is the first five of a longer week`() {
+        assertEquals(5, ReportsPreviewCount)
+        val week = (0..6).map { reportRow("T$it", monday.plusDays(it.toLong())) }
+        val all = reportsThisWeek(week, monday)
+        assertEquals(7, all.size)
+        assertEquals(listOf("T0", "T1", "T2", "T3", "T4"), all.take(ReportsPreviewCount).map { it.ticker })
     }
 
     /**
-     * The clipping rule (DESIGN.md 5.4) for the one new pairing on a first open: a Tracked row's
-     * meta line carries its figure and a Watch action, with no context. Measured with fontTools on
-     * 2026-09-24 against the bundled fonts: the widest real figure "+100.00%" at `figureRow`
-     * (Bricolage 600, 18sp, tnum) is 85.662dp; "Watch" at Outfit SemiBold 14sp is 42.322dp, drawn
-     * through TextAction with 16dp of start padding. AmberTickerRow's content width is 336dp (the
-     * 400dp frame less the group's 16dp and the row's own 16dp on each side). sp scales by the raw
-     * factor at 1.3x and dp padding does not, the same conservative assumption AmberTickerRowTest
-     * makes.
+     * A US date read late at night in Kyiv still prints as exactly what the calendar says:
+     * [ReportRow.date] is a bare [LocalDate], and [Fmt.weekday]/[Fmt.dayMonth] on a date take no
+     * zone at all, so there is no conversion left that could move it. Before this rule, the same
+     * fact off an [Instant] re-read in Kyiv (UTC+3 in September, hours ahead of New York) could
+     * print a different calendar day depending on the hour, exactly the bug [reportsThisWeek]'s own
+     * doc comment refuses to reintroduce.
      */
     @Test
-    fun `a first-open tracked row's figure and Watch clear the row's meta line at 1_0x and 1_3x`() {
-        val content = 336.0
-        val figure = 85.662
-        val watch = 42.322
-        val gap = 16.0
-        assertTrue(figure + gap + watch <= content)
-        assertEquals(192.016, content - (figure + gap + watch), 0.01)
-        val at13 = figure * 1.3 + gap + watch * 1.3
-        assertTrue(at13 <= content)
-        assertEquals(153.621, content - at13, 0.01)
+    fun `a report's calendar day is never re-zoned, whatever the reader's own time is`() {
+        val row = reportRow("NKE", LocalDate.of(2026, 9, 29))
+        assertEquals("Tuesday 29 Sep", row.dateLabel)
+    }
+
+    @Test
+    fun `only an explicit false reads as estimated, confirmed and unknown do not`() {
+        assertFalse(reportRow("NKE", monday, confirmed = true).estimated)
+        assertTrue(reportRow("NKE", monday, confirmed = false).estimated)
+        assertFalse("an unknown confirmation is not stated as a guess", reportRow("NKE", monday, confirmed = null).estimated)
+    }
+
+    @Test
+    fun `a watched ticker is matched case- and whitespace-insensitively, the same key every set here uses`() {
+        assertTrue(reportRowWatched("meta", setOf(" META ")))
+        assertTrue(reportRowWatched(" TSLA", setOf("tsla")))
+        assertFalse(reportRowWatched("NVDA", setOf("META", "TSLA")))
+    }
+
+    @Test
+    fun `the empty state says a quiet week plainly, or names the next known report after it`() {
+        assertEquals("No covered company reports this week.", ShippedCopy.render(reportsEmptyCopy(null)))
+        val next = reportRow("MU", LocalDate.of(2026, 10, 7))
+        assertEquals(
+            "No covered company reports this week. The next one is MU Inc., on Wednesday 7 Oct.",
+            ShippedCopy.render(reportsEmptyCopy(next)),
+        )
+    }
+
+    @Test
+    fun `the next known report after this week ignores a company this week already carries`() {
+        val rows = listOf(reportRow("NKE", LocalDate.of(2026, 9, 29)), reportRow("MU", LocalDate.of(2026, 10, 7)))
+        assertEquals("MU", nextReportAfterThisWeek(rows, monday)?.ticker)
+        assertNull("nothing known past this week", nextReportAfterThisWeek(listOf(reportRow("NKE", LocalDate.of(2026, 9, 29))), monday))
+    }
+
+    @Test
+    fun `the link to Stocks names no filtered count, since Stocks cannot sort or filter by report date`() {
+        assertEquals("See every covered company in Stocks", ShippedCopy.render(reportsAllCopy()))
+    }
+
+    /**
+     * The clipping rule (DESIGN.md 5.4), measured with fontTools on 2026-09-26 against the bundled
+     * fonts, the same way [com.plainticker.mobile.ui.components.AmberTickerRowTest] measures
+     * [com.plainticker.mobile.ui.components.AmberTickerRow]'s own budgets: `context` at 14sp/400
+     * (opsz 14), `figureRow` at 18sp/600 tnum (opsz 18, though tnum never touches a word), and
+     * `TextAction`'s label at Outfit SemiBold 14sp. Content width is 336dp (a 400dp frame less
+     * `AmberTickerRowGroup`'s 16dp and the row's own 16dp on each side, [AmberTickerRow]'s own doc
+     * comment). The widest realistic date sentence is any weekday paired with any day and any
+     * three-letter month abbreviation, brute-forced against the real font rather than assumed:
+     * "Wednesday 30 May", 130.676dp; joined with "estimated" through `list_row_meta_join`'s own
+     * pattern (one middle dot), "Wednesday 30 May (middle dot) estimated", 206.164dp.
+     *
+     * **The watched marker ("Watched", drawn in the [figure] slot the way the Pro-numbers lock's
+     * own "Pro" marker already does) never narrows an already-proven budget.** At 77.418dp it is
+     * shorter than the app's own widest real figure ("31,209.9 SKR", 113.220dp,
+     * `AmberTickerRowTest`'s own pinned number), so the context budget beside it (250.582dp at
+     * 1.0x, 227.357dp at 1.3x) is wider than the 214.780dp that figure already proves clear.
+     */
+    @Test
+    fun `the watched marker is comfortably the shortest content this slot ever draws, at 1_0x and 1_3x`() {
+        val watchedMarkerWidthDp = 77.418
+        val worstRealFigureWidthDp = 113.220
+        assertTrue(watchedMarkerWidthDp <= worstRealFigureWidthDp)
+        assertTrue(watchedMarkerWidthDp * 1.3 <= worstRealFigureWidthDp * 1.3)
+    }
+
+    @Test
+    fun `a watched row's date, plain or estimated, clears the context budget beside the Watched marker at 1_0x, and wraps rather than clips at 1_3x`() {
+        val contentWidthDp = 336.0
+        val gapDp = 8.0
+        val watchedMarkerWidthDp = 77.418
+        val budget10x = contentWidthDp - watchedMarkerWidthDp - gapDp
+        assertEquals(250.582, budget10x, 0.01)
+        val budget13x = contentWidthDp - watchedMarkerWidthDp * 1.3 - gapDp
+        assertEquals(227.357, budget13x, 0.01)
+
+        val datePlainDp = 130.676
+        val dateEstimatedDp = 206.164
+        assertTrue("the plain date clears one line at 1.0x", datePlainDp <= budget10x)
+        assertTrue("the plain date clears one line even at 1.3x", datePlainDp * 1.3 <= budget13x)
+        assertTrue("the worst estimated date clears one line at 1.0x", dateEstimatedDp <= budget10x)
+        assertFalse(
+            "the worst estimated date, regrown to 1.3x, is expected to miss this shrunk budget and " +
+                "wrap rather than clip: context keeps maxLines = 2",
+            dateEstimatedDp * 1.3 <= budget13x,
+        )
+        // The backstop actually backstops: two lines' own combined capacity at 1.3x comfortably
+        // exceeds even this worst case, so maxLines = 2 is a real ceiling here.
+        assertTrue(dateEstimatedDp * 1.3 <= budget13x * 2)
+    }
+
+    @Test
+    fun `a first-open row's date, plain or estimated, clears the context budget beside Watch at 1_0x, and wraps rather than clips at 1_3x`() {
+        val contentWidthDp = 336.0
+        val actionStartPaddingDp = 16.0
+        val watchLabelWidthDp = 42.322 // "Watch" (action_watch) at Outfit SemiBold 14sp.
+        val budget10x = contentWidthDp - (actionStartPaddingDp + watchLabelWidthDp)
+        assertEquals(277.678, budget10x, 0.01)
+        val budget13x = contentWidthDp - (actionStartPaddingDp + watchLabelWidthDp * 1.3)
+        assertEquals(264.981, budget13x, 0.01)
+
+        val datePlainDp = 130.676
+        val dateEstimatedDp = 206.164
+        assertTrue(datePlainDp <= budget10x)
+        assertTrue(datePlainDp * 1.3 <= budget13x)
+        assertTrue(dateEstimatedDp <= budget10x)
+        assertFalse(
+            "the worst estimated date regrown to 1.3x wraps rather than clips here too",
+            dateEstimatedDp * 1.3 <= budget13x,
+        )
+        assertTrue(dateEstimatedDp * 1.3 <= budget13x * 2)
     }
 
     // ---- Next up ------------------------------------------------------------------------------------------

@@ -41,8 +41,8 @@ class TodayScreenTest {
     // ---- The order, returning and first open ----------------------------------------------------------
 
     @Test
-    fun `returning, the blocks run status, watched, digest, tracked, next up`() {
-        val order = listOf("TodayStatusLine(", "TodayWatchedBlock(", "TodayDigestLine(", "TodayTrackedBlock(", "TodayNextUpBlock(")
+    fun `returning, the blocks run status, watched, digest, reports this week, next up`() {
+        val order = listOf("TodayStatusLine(", "TodayWatchedBlock(", "TodayDigestLine(", "TodayReportsBlock(", "TodayNextUpBlock(")
             .map { content.indexOf(it) }
         assertTrue("every block is drawn from TodayContent: $order", order.all { it >= 0 })
         assertEquals("in the order direction A draws", order.sorted(), order)
@@ -50,7 +50,7 @@ class TodayScreenTest {
 
     @Test
     fun `first open swaps Watched and the digest for the start block, and drops Next up`() {
-        val branch = content.substring(content.indexOf("if (firstOpen) {"), content.indexOf("TodayTrackedBlock("))
+        val branch = content.substring(content.indexOf("if (firstOpen) {"), content.indexOf("TodayReportsBlock("))
         assertTrue("the start block is the first-open branch", "TodayStartBlock(" in branch.substringBefore("} else {"))
         assertFalse("no Watched block on a first open", "TodayWatchedBlock(" in branch.substringBefore("} else {"))
         assertFalse("no digest line on a first open", "TodayDigestLine(" in branch.substringBefore("} else {"))
@@ -60,10 +60,17 @@ class TodayScreenTest {
     }
 
     @Test
-    fun `Watch on a tracked row exists only on a first open`() {
+    fun `Watch on a report row exists only on a first open, and never alongside the watched marker`() {
         assertTrue("onWatch = if (firstOpen) onWatch else null" in content)
-        val tracked = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        assertTrue("the action is AmberTickerRow's own trailing action, the pairing its budget proves", "trailingAction = onWatch?.let" in tracked)
+        val reports = body("private fun TodayReportsBlock(", "private fun TodayNextUpBlock(")
+        assertTrue(
+            "the action is AmberTickerRow's own trailing action, the pairing its budget proves",
+            "trailingAction = onWatch?.takeIf { !watched }?.let" in reports,
+        )
+        assertTrue(
+            "a watched ticker never gets a Watch action: the two are mutually exclusive by construction",
+            "onTrailingAction = onWatch?.takeIf { !watched }?.let" in reports,
+        )
     }
 
     @Test
@@ -93,15 +100,41 @@ class TodayScreenTest {
         assertTrue("statusLine(state.market, state.nowMillis, zone) ?: return" in fn)
     }
 
+    /**
+     * "Reports this week" replaced "Tracked today" (founder's pick of option B, 2026-09-26; see
+     * TodayScreen.kt's own class doc and DESIGN.md 5.3). Unlike the retired block, this one reads
+     * `/summary`'s own `next_report_date`/`next_report_confirmed` fields directly and needs no
+     * price at all, so it gates on [state.todayLoading] and [state.reportsKnown] rather than on a
+     * price fetch: the old test's premise ("gate on the price fetch, not todayLoading") no longer
+     * holds because there is no price-gated half left for this block to wait behind. Reused from
+     * the retired test: the block is undrawn (not merely empty) when nothing is known at all, and
+     * the count beside the heading is never a guess while still loading.
+     */
     @Test
-    fun `tracked rows are the preview, never a watched ticker, and gate on the price fetch, not todayLoading`() {
-        val fn = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        assertTrue("trackedPreview(state.tracked, state.watchedTickers)" in fn)
-        assertTrue("undrawn once settled with nothing analyzed", "if (!state.todayLoading && state.analyzedTotal <= 0) return" in fn)
-        assertTrue("the count is null, never a guess, while prices are out", "if (state.trackedLoading) null else Fmt.count(state.tracked.size)" in fn)
-        assertTrue("the skeleton shows only while prices are out", "if (state.trackedLoading) {" in fn && "SkeletonRows(" in fn)
-        assertFalse("todayLoading must not gate the skeleton (the animator-zero stall)", "state.todayLoading) {" in fn)
-        assertTrue("the rest is handed to Stocks", "trackedAllCopy(state.tracked.size)" in fn)
+    fun `reports this week is undrawn while the server field is unknown, and the skeleton gates on todayLoading only`() {
+        val fn = body("private fun TodayReportsBlock(", "private fun TodayNextUpBlock(")
+        assertTrue("reportsThisWeek(state.reports, today)" in fn)
+        assertTrue(
+            "undrawn entirely before the server has sent a date for anyone: showing an empty state " +
+                "here could be a false 'quiet week' rather than an undeployed field",
+            "if (!state.todayLoading && !state.reportsKnown) return" in fn,
+        )
+        assertTrue("the count is null, never a guess, while still loading", "if (state.todayLoading) null else Fmt.count(thisWeek.size)" in fn)
+        assertTrue("the skeleton shows only while todayLoading is out", "if (state.todayLoading) {" in fn && "SkeletonRows(" in fn)
+        assertTrue(
+            "the rest is handed to Stocks through the honest, argument-less link: Stocks cannot " +
+                "sort or filter by report date, so it never claims a filtered count",
+            "label = reportsAllCopy().text()" in fn,
+        )
+    }
+
+    @Test
+    fun `a watched ticker is marked in the figure slot, and the empty week's message replaces the lede`() {
+        val fn = body("private fun TodayReportsBlock(", "private fun TodayNextUpBlock(")
+        assertTrue("a watched ticker is marked, never dropped, unlike the retired Tracked block", "reportRowWatched(row.ticker, state.watchedTickers)" in fn)
+        assertTrue("the marker draws in the figure slot", "figure = if (watched) stringResource(R.string.today_reports_watched) else null" in fn)
+        assertTrue("estimated joins the date with one middle dot, list_row_meta_join's own pattern", "list_row_meta_join" in fn)
+        assertTrue("a quiet week's message replaces the lede rather than adding a second sentence", "reportsEmptyCopy(nextReportAfterThisWeek(state.reports, today))" in fn)
     }
 
     @Test
@@ -123,7 +156,7 @@ class TodayScreenTest {
 
     @Test
     fun `the digest line links to the digest only when there is one to read`() {
-        val fn = body("private fun TodayDigestLine(", "private fun TodayTrackedBlock(")
+        val fn = body("private fun TodayDigestLine(", "private fun TodayReportsBlock(")
         assertTrue("onOpenDigest != null && digestReadable(state.digest)" in fn)
     }
 
@@ -166,7 +199,7 @@ class TodayScreenTest {
 
     @Test
     fun `the digest sentence is the weighted sibling of a short fixed action`() {
-        val fn = body("private fun TodayDigestLine(", "private fun TodayTrackedBlock(")
+        val fn = body("private fun TodayDigestLine(", "private fun TodayReportsBlock(")
         assertTrue("modifier = Modifier.weight(1f)" in fn)
         assertFalse("maxLines" in fn)
         assertFalse(".width(" in fn)
@@ -184,11 +217,11 @@ class TodayScreenTest {
     // ---- The orchestrated moment ----------------------------------------------------------------------------
 
     @Test
-    fun `status, tracked and next up settle in, staggered in block order`() {
+    fun `status, reports this week and next up settle in, staggered in block order`() {
         assertTrue("amberBlockEntrance(step = StatusEntranceStep)" in body("private fun TodayStatusLine(", "private fun TodayStartBlock("))
-        assertTrue("amberBlockEntrance(step = TrackedEntranceStep)" in body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock("))
+        assertTrue("amberBlockEntrance(step = ReportsEntranceStep)" in body("private fun TodayReportsBlock(", "private fun TodayNextUpBlock("))
         assertTrue("amberBlockEntrance(step = NextUpEntranceStep)" in body("private fun TodayNextUpBlock(", "private fun TodayHoursSheet("))
-        val order = listOf("StatusEntranceStep = 0", "TrackedEntranceStep = 1", "NextUpEntranceStep = 2").map { source.indexOf(it) }
+        val order = listOf("StatusEntranceStep = 0", "ReportsEntranceStep = 1", "NextUpEntranceStep = 2").map { source.indexOf(it) }
         assertTrue(order.all { it >= 0 })
         assertEquals(order, order.sorted())
     }
@@ -202,8 +235,8 @@ class TodayScreenTest {
 
     @Test
     fun `the entrance settles once per block, not once per row`() {
-        val tracked = body("private fun TodayTrackedBlock(", "private fun TodayNextUpBlock(")
-        assertEquals(1, Regex("amberBlockEntrance\\(").findAll(tracked).count())
+        val reports = body("private fun TodayReportsBlock(", "private fun TodayNextUpBlock(")
+        assertEquals(1, Regex("amberBlockEntrance\\(").findAll(reports).count())
     }
 
     @Test

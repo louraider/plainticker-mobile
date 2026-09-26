@@ -66,6 +66,8 @@ import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.watchlist.WatchlistUiState
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
 import com.plainticker.mobile.ui.watchlist.bannerText
+import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.delay
 
@@ -83,25 +85,32 @@ import kotlinx.coroutines.delay
  *    figure's meaning said once in the lede instead of "vs NYSE close" on every row. A thin pool
  *    states itself instead of a figure. Then the digest as one line with "Read it"
  *    ([TodayDigestLine]), which opens the digest screen under You.
- * 3. **Tracked today** ([TodayTrackedBlock]): three rows, never a watched ticker, then "All N in
- *    Stocks".
+ * 3. **Reports this week** ([TodayReportsBlock], the founder's pick of option B off the designer's
+ *    page, 2026-09-26, replacing "Tracked today": a beginner reading NVDAx at +0.21% had no way to
+ *    tell what "tracked" meant or why the list was there): up to [ReportsPreviewCount] covered
+ *    companies whose next report falls this week, soonest first, a watched ticker marked rather
+ *    than left out, then a plain pointer to Stocks (which cannot sort or filter by report date, so
+ *    the link says so by not promising a filtered count). Undrawn entirely before the server has
+ *    sent a report date for anyone at all, never a broken list ([WatchlistUiState.reportsKnown]'s
+ *    own doc has the reasoning).
  * 4. **Next up** ([TodayNextUpBlock]): one row, opening Vote.
  *
  * First open (nothing watched) swaps block 2 for [TodayStartBlock], one primary action, "Find a
- * stock", and gives every Tracked row a Watch, so the first real step can happen on this screen.
- * There is no digest line, no notifications line and no Next up on a first open: one goal per
- * session. The notification permission is asked once, right after the first watch, the same rule
- * Detail's Watch keeps; the setting itself lives in You and on the digest screen.
+ * stock", and gives every report row a Watch (never true at once with the "already watched" marker,
+ * since a first open's watched set is always empty), so the first real step can happen on this
+ * screen. There is no digest line, no notifications line and no Next up on a first open: one goal
+ * per session. The notification permission is asked once, right after the first watch, the same
+ * rule Detail's Watch keeps; the setting itself lives in You and on the digest screen.
  *
  * **The status is a clock.** [WatchlistViewModel.onResume] recomputes it every time Today comes
  * back and keeps it current at every open and close while Today stays on screen;
  * [WatchlistViewModel.onPause] stops that. [com.plainticker.mobile.repo.MarketClock] has the bug
  * this replaces.
  *
- * **Motion.** One orchestrated moment, as before: the status line, Tracked and Next up settle in
- * with the no-bounce spring, staggered 40ms ([amberBlockEntrance]). The reader's own rows and the
- * start block stay still: a stagger belongs to a block, never to a per-ticker list, and nothing
- * here needs motion to be legible (the smoke script runs at animator scale 0).
+ * **Motion.** One orchestrated moment, as before: the status line, "Reports this week" and Next up
+ * settle in with the no-bounce spring, staggered 40ms ([amberBlockEntrance]). The reader's own rows
+ * and the start block stay still: a stagger belongs to a block, never to a per-ticker list, and
+ * nothing here needs motion to be legible (the smoke script runs at animator scale 0).
  */
 @Composable
 fun TodayScreen(
@@ -154,7 +163,7 @@ fun TodayScreen(
     }
 }
 
-/** The whole screen, one list: header, status, then either the start block or Watched, Tracked, Next up. */
+/** The whole screen, one list: header, status, then either the start block or Watched, Reports this week, Next up. */
 @Composable
 internal fun TodayContent(
     state: WatchlistUiState,
@@ -172,6 +181,10 @@ internal fun TodayContent(
 ) {
     val colors = defaultAmberColors()
     val firstOpen = state.isEmpty
+    // The reader's own calendar day, off the same nowMillis/zone every other reader-time sentence
+    // on this screen reads: "Reports this week"'s own window is the reader's local week, never New
+    // York's (com.plainticker.mobile.ui.today.reportsThisWeek's own doc comment has the rule).
+    val today = remember(state.nowMillis, zone) { Instant.ofEpochMilli(state.nowMillis).atZone(zone).toLocalDate() }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.surfaceGround),
         // The content ends above the navigation bar; the padding is part of the scroll.
@@ -198,9 +211,10 @@ internal fun TodayContent(
             }
             item(key = "digest") { TodayDigestLine(state = state, zone = zone, onOpenDigest = onOpenDigest, colors = colors) }
         }
-        item(key = "tracked") {
-            TodayTrackedBlock(
+        item(key = "reports") {
+            TodayReportsBlock(
                 state = state,
+                today = today,
                 onOpenDetail = onOpenDetail,
                 onBrowseStocks = onFindStock,
                 onWatch = if (firstOpen) onWatch else null,
@@ -331,42 +345,76 @@ private fun TodayDigestLine(state: WatchlistUiState, zone: ZoneId, onOpenDigest:
 }
 
 /**
- * Tracked today: three rows, deepest pool first, never a watched ticker ([trackedPreview]), then
- * "All N in Stocks". Undrawn once settled with nothing analyzed; a skeleton only while Jupiter's
- * prices are out (the animator-zero stall, docs/qa-checklist.md 2026-09-22, gated this on
- * `todayLoading` once and must not again). On a first open each row carries Watch: the row's meta
- * line holds the figure and the action, the pairing AmberTickerRow's own budget proves for Vote's
- * leader row, and [TodayModelTest] re-proves for this one.
+ * "Reports this week" (the founder's pick of option B off the designer's page, 2026-09-26,
+ * replacing "Tracked today"): up to [ReportsPreviewCount] covered companies whose next report
+ * falls this week ([reportsThisWeek]), soonest first, a watched ticker marked in the [figure] slot
+ * rather than left out, then a plain pointer to Stocks (which cannot sort or filter by report date,
+ * so the link never claims a filtered count).
+ *
+ * **Undrawn entirely**, header included, once settled with the server field not yet known
+ * ([WatchlistUiState.reportsKnown] false): this app cannot tell "no covered company reports this
+ * week" apart from "`next_report_date` has not deployed, every row is null," and showing an empty
+ * state that might be a false "quiet week" is worse than showing nothing (task brief: "do not show
+ * a broken list"). A skeleton draws only while `todayLoading` is still out, the same gate the
+ * retired Tracked block's own `SkeletonRows` used, now correct rather than coincidental: this block
+ * needs nothing prices answer at all (`next_report_date`/`next_report_confirmed` ride on
+ * `/summary`, the fast half's own call), so there is no second, price-gated loading state left to
+ * confuse it with (the animator-zero stall, docs/qa-checklist.md 2026-09-22, is exactly that
+ * confusion and must not recur).
+ *
+ * **The empty state lives in the lede**, not a second sentence below it: a quiet week says so in
+ * place of the usual "Companies publish results..." line, with the next known date after this week
+ * closes when one exists ([reportsEmptyCopy]), matching the designer's own page ("No covered
+ * company reports this week. The next one is Micron, on Wednesday 7 Oct.") exactly.
+ *
+ * On a first open each row carries Watch instead of the watched marker (the two are never true at
+ * once: a first open's watched set is always empty): the row's meta line holds the context and the
+ * action, the pairing [AmberTickerRow]'s own budget proves for Vote's leader row, and
+ * [TodayModelTest] re-proves for this one.
  */
 @Composable
-private fun TodayTrackedBlock(
+private fun TodayReportsBlock(
     state: WatchlistUiState,
+    today: LocalDate,
     onOpenDetail: (String) -> Unit,
     onBrowseStocks: (() -> Unit)?,
     onWatch: ((String) -> Unit)?,
     colors: AmberColors,
 ) {
-    if (!state.todayLoading && state.analyzedTotal <= 0) return
-    val rows = trackedPreview(state.tracked, state.watchedTickers)
-    if (!state.trackedLoading && rows.isEmpty()) return
-    Column(modifier = Modifier.fillMaxWidth().padding(top = SectionGap).amberBlockEntrance(step = TrackedEntranceStep)) {
+    if (!state.todayLoading && !state.reportsKnown) return
+    val thisWeek = reportsThisWeek(state.reports, today)
+    val empty = !state.todayLoading && thisWeek.isEmpty()
+    val lede = if (empty) {
+        reportsEmptyCopy(nextReportAfterThisWeek(state.reports, today)).text()
+    } else {
+        stringResource(R.string.today_reports_lede)
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(top = SectionGap).amberBlockEntrance(step = ReportsEntranceStep)) {
         AmberSectionHead(
-            title = stringResource(R.string.today_heading_tracked),
-            meta = if (state.trackedLoading) null else Fmt.count(state.tracked.size),
-            lede = stringResource(R.string.today_tracked_lede),
+            title = stringResource(R.string.today_heading_reports),
+            meta = if (state.todayLoading) null else Fmt.count(thisWeek.size),
+            lede = lede,
             colors = colors,
         )
-        if (state.trackedLoading) {
-            SkeletonRows(count = TrackedPreviewCount, colors = colors)
-        } else {
+        if (state.todayLoading) {
+            SkeletonRows(count = ReportsPreviewCount, colors = colors)
+        } else if (!empty) {
             AmberTickerRowGroup(colors = colors) {
-                rows.forEach { row ->
+                thisWeek.take(ReportsPreviewCount).forEach { row ->
+                    val watched = reportRowWatched(row.ticker, state.watchedTickers)
+                    val dateText = row.dateLabel
+                    val context = if (row.estimated) {
+                        stringResource(R.string.list_row_meta_join, dateText, stringResource(R.string.today_reports_estimated))
+                    } else {
+                        dateText
+                    }
                     AmberTickerRow(
                         ticker = row.display,
                         company = row.company,
-                        figure = row.figure,
-                        trailingAction = onWatch?.let { stringResource(R.string.action_watch) },
-                        onTrailingAction = onWatch?.let { watch -> { watch(row.ticker) } },
+                        context = context,
+                        figure = if (watched) stringResource(R.string.today_reports_watched) else null,
+                        trailingAction = onWatch?.takeIf { !watched }?.let { stringResource(R.string.action_watch) },
+                        onTrailingAction = onWatch?.takeIf { !watched }?.let { watch -> { watch(row.ticker) } },
                         colors = colors,
                         onClick = { onOpenDetail(row.ticker) },
                         onClickLabel = stringResource(R.string.action_open_ticker, row.display),
@@ -375,7 +423,7 @@ private fun TodayTrackedBlock(
             }
             if (onBrowseStocks != null) {
                 TextAction(
-                    label = trackedAllCopy(state.tracked.size).text(),
+                    label = reportsAllCopy().text(),
                     onClick = onBrowseStocks,
                     color = colors.actionText,
                     modifier = Modifier.padding(start = Side - LinkInset),
@@ -481,7 +529,7 @@ private val EntranceSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoB
 private const val StaggerStepMillis = 40L
 private val EntranceRise = 8.dp
 
-/** Stagger order: the status line, Tracked today, Next up. The reader's own rows stay still. */
+/** Stagger order: the status line, Reports this week, Next up. The reader's own rows stay still. */
 private const val StatusEntranceStep = 0
-private const val TrackedEntranceStep = 1
+private const val ReportsEntranceStep = 1
 private const val NextUpEntranceStep = 2

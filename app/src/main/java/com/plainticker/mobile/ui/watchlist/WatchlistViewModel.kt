@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.jupiter.PriceEntry
-import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.prefs.NotificationPromptStore
@@ -15,8 +14,8 @@ import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SummaryRepository
+import com.plainticker.mobile.ui.today.ReportRow
 import com.plainticker.mobile.ui.today.TodayLeader
-import com.plainticker.mobile.ui.today.TrackedRow
 import com.plainticker.mobile.watchlist.DigestNotifier
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.DigestStore
@@ -51,8 +50,10 @@ data class WatchlistUiState(
     /** How many tickers are watched. The rows follow; this is what decides the empty state. */
     val watched: Int = 0,
     /**
-     * The watched tickers themselves, known before their rows are: Tracked today leaves these out,
-     * so no ticker is ever priced twice on Today, even while the watched rows are still cold.
+     * The watched tickers themselves, known before their rows are: "Reports this week" reads this
+     * set to mark a row the reader already watches ([com.plainticker.mobile.ui.today.reportRowWatched]),
+     * and it is also what lets a watched ticker's own figure be read from Today's one shared price
+     * read instead of being priced twice, even while the watched rows are still cold.
      */
     val watchedTickers: Set<String> = emptySet(),
     val isLoading: Boolean = false,
@@ -67,27 +68,32 @@ data class WatchlistUiState(
     /** Read when the screen loads and when it resumes; the "checked 3 h ago" line rests on it. */
     val nowMillis: Long = 0L,
     // ---- Today's other blocks (docs/design-research-2026-09-21.md section 3, blocks 1/3/4/5) ----
-    // The venue line, Tracked today and Next up read the wider universe Watched never did, off one
-    // join over the same repositories Stocks reads, so the two screens' coverage counts cannot
-    // disagree. True before that join has ever run: every field below is at a default that draws
-    // nothing rather than a guess (com.plainticker.mobile.ui.today.TodayModel.kt's functions all
-    // return null for an unknown fact instead of inventing one).
+    // The venue line, "Reports this week" and Next up read the wider universe Watched never did,
+    // off one join over the same repositories Stocks reads, so the two screens' coverage counts
+    // cannot disagree. True before that join has ever run: every field below is at a default that
+    // draws nothing rather than a guess (com.plainticker.mobile.ui.today.TodayModel.kt's functions
+    // all return null for an unknown fact instead of inventing one).
     /**
      * True until `/summary`, the catalog and the leaderboard have all answered once, success or
-     * failure alike: the fast half of the join, which blocks 1 (venue), 4 (next up) and 5 (the
-     * footer) read and none of which needs a price. Deliberately independent of [trackedLoading]:
-     * the animator-zero stall (docs/qa-checklist.md, 2026-09-22) was these three blocks sitting
-     * undrawn for as long as Jupiter's own paced fetch took, even though not one of them reads a
-     * price. See [WatchlistViewModel.loadToday]'s own doc for the fetch that used to delay them
-     * regardless.
+     * failure alike: the fast half of the join, which blocks 1 (venue), 3 ("Reports this week"), 4
+     * (next up) and 5 (the footer) all read and none of which needs a price - "Reports this week"
+     * reads `/summary`'s own `next_report_date`/`next_report_confirmed` fields directly, the same
+     * call this fast half already makes, unlike the retired Tracked block it replaced (which needed
+     * Jupiter's prices to find a pool's own depth). Deliberately independent of [pricesLoading]:
+     * the animator-zero stall (docs/qa-checklist.md, 2026-09-22) was these blocks sitting undrawn
+     * for as long as Jupiter's own paced fetch took, even though not one of them reads a price. See
+     * [WatchlistViewModel.loadToday]'s own doc for the fetch that used to delay them regardless.
      */
     val todayLoading: Boolean = true,
     /**
-     * True until Jupiter's prices have answered once, success or failure alike: the one thing
-     * block 3 (Tracked today) actually needs and the other three do not. Independent of
-     * [todayLoading] on purpose; see that field's own doc.
+     * True until Jupiter's prices have answered once, success or failure alike: what the Watched
+     * block's own figures need (the one thing here that does read a price) and nothing else on this
+     * screen does any more, since the retired Tracked block (renamed [pricesLoading] from
+     * `trackedLoading` when it went: task DESIGN.md's own brief, "remove the Tracked block and its
+     * now-dead code") was the other reader. Independent of [todayLoading] on purpose; see that
+     * field's own doc.
      */
-    val trackedLoading: Boolean = true,
+    val pricesLoading: Boolean = true,
     /** Where the venue is right now, or null while no catalog has answered at all. */
     val market: MarketStatus? = null,
     val analysisGeneratedAtMillis: Long? = null,
@@ -96,8 +102,21 @@ data class WatchlistUiState(
     /** Rows with a PlainTicker classification and a matching xStock, the same count Stocks shows. */
     val analyzedTotal: Int = 0,
     val withoutAnalysisTotal: Int = 0,
-    /** The tracked rows, deepest pool first, whether or not the screen draws all of them. */
-    val tracked: List<TrackedRow> = emptyList(),
+    /**
+     * "Reports this week"'s own candidates: every covered company with a known next-report date,
+     * not yet narrowed to the week or capped ([com.plainticker.mobile.ui.today.reportsThisWeek] does
+     * both). Needs no price, so it is on state as soon as [todayLoading] settles.
+     */
+    val reports: List<ReportRow> = emptyList(),
+    /**
+     * Whether the server has sent a next-report date for at least one row on `/summary`, anywhere,
+     * not only within this week: the one signal this app has for telling "the server has not
+     * deployed `next_report_date` yet, every row reads null" apart from "the field is live and a
+     * quiet week genuinely has nothing." False draws as though nothing is known, which is also its
+     * default before [todayLoading] first settles, since a field that has never answered is exactly
+     * the same shape as a field that does not exist yet.
+     */
+    val reportsKnown: Boolean = false,
     /** The vote leader Next up names, or null when nothing staked SKR chose can be read. */
     val nextUpLeader: TodayLeader? = null,
     val voteRound: VoteRound? = null,
@@ -145,7 +164,7 @@ class WatchlistViewModel(
     private val scheduler: WatchlistScheduler,
     private val clock: Clock,
     // Today's other blocks (docs/design-research-2026-09-21.md section 3, blocks 1/3/4/5): the
-    // venue line, Tracked today and Next up need the wider universe Watched never did.
+    // venue line, "Reports this week" and Next up need the wider universe Watched never did.
     private val summaries: SummaryRepository,
     private val catalog: CatalogRepository,
     private val prices: PriceRepository,
@@ -218,9 +237,9 @@ class WatchlistViewModel(
     fun unwatch(ticker: String) = watchlist.remove(ticker)
 
     /**
-     * Today's own Watch, on a Tracked row of a first open. True when the caller should now ask for
-     * the notification permission: this was the first ticker ever watched and nothing has asked
-     * before, the exact rule Detail's own Watch keeps ([com.plainticker.mobile.ui.detail.DetailViewModel.toggleWatch]),
+     * Today's own Watch, on a "Reports this week" row of a first open. True when the caller should
+     * now ask for the notification permission: this was the first ticker ever watched and nothing
+     * has asked before, the exact rule Detail's own Watch keeps ([com.plainticker.mobile.ui.detail.DetailViewModel.toggleWatch]),
      * read through the same [NotificationPromptStore], so the dialog comes once, after the first
      * watch, whichever screen that watch happened on.
      */
@@ -297,34 +316,36 @@ class WatchlistViewModel(
     }
 
     /**
-     * Blocks 1, 3 and 4 (docs/design-research-2026-09-21.md section 3): the venue line, Tracked
-     * today and Next up. One join, once per load, over `/summary`, the catalog, Jupiter's prices
-     * and the leaderboard, the same sources `ListViewModel`'s own join reads, so "22 of 160" here
-     * and Stocks' coverage counts can never print two different numbers.
+     * Blocks 1, 3 and 4 (docs/design-research-2026-09-21.md section 3): the venue line, "Reports
+     * this week" and Next up. One join, once per load, over `/summary`, the catalog and the
+     * leaderboard, the same sources `ListViewModel`'s own join reads, so "22 of 160" here and
+     * Stocks' coverage counts can never print two different numbers.
      *
-     * **Four network reads, not run one after another.** `/summary`, the catalog and the
+     * **Three network reads, not run one after another.** `/summary`, the catalog and the
      * leaderboard ([nextUpRepo]) answer three unrelated questions and none needs another's result
-     * to be *asked*, only Jupiter's prices do (a mint list built from `/summary` joined against the
-     * catalog). [summaryDeferred], [catalogDeferred] and [leaderAnswerDeferred] start together with
-     * [async], so the network cost of the fast three is one round trip, not their sum.
+     * to be *asked*. [summaryDeferred], [catalogDeferred] and [leaderAnswerDeferred] start together
+     * with [async], so the network cost is one round trip, not their sum.
      *
      * **Two settles, not one.** The animator-zero stall (docs/qa-checklist.md, 2026-09-22:
-     * venue card and "Tracked today" undrawn or skeletal for three to four seconds at normal
-     * motion, eight to eleven with the animator forced to zero) was traced first to this function,
-     * not to motion: what held the venue line, Next up and the footer back was this function
-     * publishing every field in one `_state.update` at the very end, after awaiting
+     * venue card and the old "Tracked today" undrawn or skeletal for three to four seconds at
+     * normal motion, eight to eleven with the animator forced to zero) was traced first to this
+     * function, not to motion: what held the venue line, Next up and the footer back was this
+     * function publishing every field in one `_state.update` at the very end, after awaiting
      * [prices.pricesFirst] - Jupiter's own paced fetch, several seconds by design
      * ([PriceRepository]'s own doc) - even though none of those three blocks reads a price.
      * [todayLoading] now flips the moment the fast three have answered, in its own update, with
-     * [market], [nextUpLeader], [voteRound] and the two coverage totals already on state;
-     * [trackedLoading] flips separately once prices have answered, because block 3's rows are the
-     * one thing here that actually needs one. That closed most of the gap but not all of it: a
-     * second stall remained in `amberBlockEntrance` itself (`ui/today/TodayScreen.kt`) - it read
-     * this state correctly but still relied on `animateFloatAsState` to *apply* the settled value,
-     * which needs a platform frame to fire, and a cold device with every animator scale at 0
-     * sometimes never schedules that frame before a scroll forces one. That function's own doc
-     * comment has the fix: motion off now returns the unmodified block, never touching the
-     * animation clock at all.
+     * [market], [nextUpLeader], [voteRound], the two coverage totals and, since 2026-09-26,
+     * ["Reports this week"][reports] itself already on state: `next_report_date` and
+     * `next_report_confirmed` are `/summary` row fields, not a price, so the block that replaced
+     * Tracked today needs nothing prices answer, unlike the block it replaced. [pricesLoading]
+     * (`trackedLoading` before that rename) flips separately once prices have answered, because
+     * the Watched block's own figures are the one thing here that still needs one. That closed
+     * most of the gap but not all of it: a second stall remained in `amberBlockEntrance` itself
+     * (`ui/today/TodayScreen.kt`) - it read this state correctly but still relied on
+     * `animateFloatAsState` to *apply* the settled value, which needs a platform frame to fire, and
+     * a cold device with every animator scale at 0 sometimes never schedules that frame before a
+     * scroll forces one. That function's own doc comment has the fix: motion off now returns the
+     * unmodified block, never touching the animation clock at all.
      *
      * Never throws: a source that did not answer costs its own facts (the fields below stay at
      * their [WatchlistUiState] defaults, which is what [com.plainticker.mobile.ui.today.TodayModel.kt]'s
@@ -332,7 +353,7 @@ class WatchlistViewModel(
      */
     private fun loadToday() {
         todayJob?.cancel()
-        _state.update { it.copy(todayLoading = true, trackedLoading = true) }
+        _state.update { it.copy(todayLoading = true, pricesLoading = true) }
         todayJob = viewModelScope.launch {
             val summaryDeferred = async { runCatching { summaries.summary() } }
             val catalogDeferred = async {
@@ -355,6 +376,26 @@ class WatchlistViewModel(
             val analyzedKeys = analyzed.mapTo(HashSet()) { (row, _) -> row.ticker.uppercase() } // lint-allow uppercase: map key
             val withoutAnalysisTotal = assets.count { it.underlyingTicker.uppercase() !in analyzedKeys } // lint-allow uppercase: map key
 
+            // "Reports this week"'s own candidates: every covered company with a known next-report
+            // date, not yet narrowed to the week (com.plainticker.mobile.ui.today.reportsThisWeek
+            // does that against the reader's own "today", which this join does not have). Needs no
+            // price, unlike the Tracked block this replaced.
+            val reports = analyzed.mapNotNull { (row, asset) ->
+                val date = row.nextReportLocalDate() ?: return@mapNotNull null
+                ReportRow(
+                    ticker = row.ticker,
+                    symbol = asset.symbol,
+                    company = row.company ?: asset.name,
+                    date = date,
+                    confirmed = row.nextReportConfirmed,
+                )
+            }
+            // Whether the server has sent this field at all, read off every /summary row (not only
+            // the analyzed ones): a server that predates it, or has not deployed it yet, answers
+            // every row with a null date, which is exactly the shape a genuinely quiet dataset would
+            // also have. This is this app's one signal for telling the two apart (WatchlistUiState.reportsKnown's own doc).
+            val reportsKnown = rows.any { it.nextReportLocalDate() != null }
+
             val leaderAnswer = leaderAnswerDeferred.await()
             val leaderRow = leaderAnswer?.rows?.firstOrNull()?.let { row ->
                 val raw = row.weightRaw() ?: return@let null
@@ -372,8 +413,8 @@ class WatchlistViewModel(
                 runCatching { Instant.parse(stamp).toEpochMilli() }.getOrNull()
             }
 
-            // The fast half settles here, before prices are ever asked for: the venue line, Next
-            // up and the footer need nothing below this point.
+            // The fast half settles here, before prices are ever asked for: the venue line,
+            // "Reports this week", Next up and the footer need nothing below this point.
             _state.update { current ->
                 current.copy(
                     todayLoading = false,
@@ -381,6 +422,8 @@ class WatchlistViewModel(
                     analysisGeneratedAtMillis = generatedAtMillis,
                     analyzedTotal = analyzed.size,
                     withoutAnalysisTotal = withoutAnalysisTotal,
+                    reports = reports,
+                    reportsKnown = reportsKnown,
                     nextUpLeader = leaderRow,
                     voteRound = leaderAnswer?.round,
                     nowMillis = clock.nowMillis(),
@@ -391,28 +434,13 @@ class WatchlistViewModel(
             val pricesAskedAt = clock.nowMillis()
             val fetch = if (mints.isEmpty()) null else runCatching { prices.pricesFirst(mints) }.getOrNull()
 
-            val tracked = analyzed.mapNotNull { (row, asset) ->
-                val mint = asset.solanaMint ?: return@mapNotNull null
-                val entry = fetch?.priced?.get(mint) ?: return@mapNotNull null
-                val quality = TrackingQuality.of(entry.usdPrice, entry.stockData?.price, entry.liquidity)
-                if (quality !is TrackingQuality.Tracked) return@mapNotNull null
-                TrackedRow(
-                    ticker = row.ticker,
-                    symbol = asset.symbol,
-                    company = row.company ?: asset.name,
-                    premiumPct = quality.premiumPct,
-                    poolUsd = quality.poolUsd,
-                )
-            }.sortedByDescending { it.poolUsd }
-
             val pricesFetchedAtMillis = if (fetch != null) pricesAskedAt else null
             fetch?.priced?.let { sharedPrices = sharedPrices + it }
 
             _state.update { current ->
                 current.copy(
-                    trackedLoading = false,
+                    pricesLoading = false,
                     pricesFetchedAtMillis = pricesFetchedAtMillis,
-                    tracked = tracked,
                     rows = current.rows.map(::sharedPrice),
                     nowMillis = clock.nowMillis(),
                 )

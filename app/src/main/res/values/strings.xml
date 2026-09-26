@@ -548,9 +548,14 @@
     <!-- The figure's meaning, said once above the watched rows instead of on every row. -->
     <string name="today_figure_live">The figure is how far each token sits from the share price now.</string>
     <string name="today_figure_close">The figure is how far each token sits from the last NYSE close.</string>
-    <string name="today_heading_tracked">Tracked today</string>
-    <string name="today_tracked_lede">Tokens with enough trading to follow their share.</string>
-    <string name="today_tracked_all">All %1$s in Stocks</string>
+    <!-- Reports this week (founder's pick of option B, 2026-09-26, replacing Tracked today). -->
+    <string name="today_heading_reports">Reports this week</string>
+    <string name="today_reports_lede">Companies publish results on these days, and prices often move around a report.</string>
+    <string name="today_reports_estimated">estimated</string>
+    <string name="today_reports_watched">Watched</string>
+    <string name="today_reports_all">See every covered company in Stocks</string>
+    <string name="today_reports_empty">No covered company reports this week.</string>
+    <string name="today_reports_empty_next">No covered company reports this week. The next one is %1$s, on %2$s.</string>
     <string name="today_digest_link_today">Last digest today at %1$s.</string>
     <string name="today_digest_link_day">Last digest %1$s at %2$s.</string>
     <string name="today_digest_none">The first digest lands about twelve hours after you watch a stock.</string>

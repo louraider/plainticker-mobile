@@ -26,7 +26,7 @@ import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.price
 import com.plainticker.mobile.repo.xStock
 import com.plainticker.mobile.repo.xStockTrading
-import com.plainticker.mobile.ui.today.TrackedRow
+import com.plainticker.mobile.ui.today.ReportRow
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.FakeDigestNotifier
 import com.plainticker.mobile.watchlist.InMemoryDigestStore
@@ -229,16 +229,24 @@ class WatchlistViewModelTest {
 
     // ---- Today's other blocks (docs/design-research-2026-09-21.md section 3, blocks 1/3/4/5) ---
 
+    /**
+     * "Reports this week" replaced the retired Tracked block (founder's pick of option B off the
+     * designer's page, 2026-09-26): what used to sort by pool depth and exclude a thin pool now
+     * carries each covered company's own `next_report_date`/`next_report_confirmed`, read straight
+     * off `/summary` with no price join at all. `analyzedTotal`/`withoutAnalysisTotal` are unchanged
+     * by the rename and stay pinned here for the same reason they always were: Stocks' own coverage
+     * counts must never disagree with Today's.
+     */
     @Test
-    fun `today's join reads the wider universe, tracked rows sorted by depth, thin pools excluded`() = runTest {
+    fun `today's join reads the wider universe, and reports this week carries each covered company's next report date`() = runTest {
         summaries.summaryResult = Result.success(
             SummaryResponse(
                 schema = "v1.1",
                 generatedAt = "2026-09-13T08:00:00.000Z",
                 rows = listOf(
-                    SummaryRow(ticker = "AAPL", company = "Apple Inc."),
-                    SummaryRow(ticker = "TSLA", company = "Tesla, Inc."),
-                    SummaryRow(ticker = "THIN", company = "Thin Pool Co."),
+                    SummaryRow(ticker = "AAPL", company = "Apple Inc.", nextReportDate = "2026-10-28", nextReportConfirmed = true),
+                    SummaryRow(ticker = "TSLA", company = "Tesla, Inc.", nextReportDate = "2026-10-21", nextReportConfirmed = false),
+                    SummaryRow(ticker = "NODATE", company = "No Date Co."),
                 ),
             ),
         )
@@ -246,32 +254,44 @@ class WatchlistViewModelTest {
             listOf(
                 xStock("AAPLx", "AAPL", "mint-AAPL"),
                 xStock("TSLAx", "TSLA", "mint-TSLA"),
-                xStock("THINx", "THIN", "mint-THIN"),
-                // Neither in /summary nor priced below: the one row without analysis.
+                xStock("NODATEx", "NODATE", "mint-NODATE"),
+                // Neither in /summary nor analyzed: the one row without analysis.
                 xStock("NOPRICEx", "NOPRICE", "mint-NOPRICE"),
-            ),
-        )
-        prices.result = Result.success(
-            mapOf(
-                "mint-AAPL" to price(usd = 232.54, reference = 232.52, liquidity = 250_000.0),
-                "mint-TSLA" to price(usd = 366.50, reference = 366.17, liquidity = 500_000.0),
-                // Below TrackingQuality.MIN_POOL_USD (4,000): thin, no tracked row anywhere.
-                "mint-THIN" to price(usd = 50.0, reference = 49.0, liquidity = 1_000.0),
             ),
         )
         val vm = viewModel()
 
         vm.state.test {
-            // The tracked rows are what prices answers, so this waits for trackedLoading, not
-            // todayLoading: todayLoading now settles before prices are even asked (see
-            // WatchlistViewModel.loadToday's own doc), and state.tracked would still be empty at
-            // that point.
-            val state = awaitUntil { !it.trackedLoading }
-            assertEquals("AAPL, TSLA and THIN all classify against a matching xStock", 3, state.analyzedTotal)
+            // Reports this week needs nothing prices answer, so it settles the moment todayLoading
+            // does, the fast half of the join (WatchlistViewModel.loadToday's own doc), unlike the
+            // Tracked block it replaced.
+            val state = awaitUntil { !it.todayLoading }
+            assertEquals("AAPL, TSLA and NODATE all classify against a matching xStock", 3, state.analyzedTotal)
             assertEquals("NOPRICEx is the one catalog asset with no classification", 1, state.withoutAnalysisTotal)
-            assertEquals("THIN's pool is below the floor, so it is not a tracked row", 2, state.tracked.size)
-            val tickers: List<String> = state.tracked.map(TrackedRow::ticker)
-            assertEquals("deepest pool first: TSLA at 500k, then AAPL at 250k", listOf("TSLA", "AAPL"), tickers)
+            assertEquals("NODATE carries no next-report date, so it is not a report candidate", 2, state.reports.size)
+            val byTicker: Map<String, ReportRow> = state.reports.associateBy { it.ticker }
+            assertEquals(LocalDate.of(2026, 10, 28), byTicker.getValue("AAPL").date)
+            assertEquals("AAPL's date is confirmed", true, byTicker.getValue("AAPL").confirmed)
+            assertEquals(LocalDate.of(2026, 10, 21), byTicker.getValue("TSLA").date)
+            assertEquals("TSLA's date is an estimate", false, byTicker.getValue("TSLA").confirmed)
+            assertTrue("the server has sent a date for at least one row", state.reportsKnown)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * The one signal [WatchlistUiState.reportsKnown] has for telling "the server has not deployed
+     * `next_report_date` yet" apart from "a quiet dataset genuinely has no dates": every row null.
+     */
+    @Test
+    fun `reportsKnown is false while every row's next report date is null`() = runTest {
+        serving("AAPL", "TSLA")
+        val vm = viewModel()
+
+        vm.state.test {
+            val state = awaitUntil { !it.todayLoading }
+            assertTrue("serving() sets no next-report date", state.reports.isEmpty())
+            assertFalse("nothing tells this apart from the field not existing yet", state.reportsKnown)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -290,7 +310,7 @@ class WatchlistViewModelTest {
 
         vm.state.test {
             // Next up reads no price, so it is on state as soon as todayLoading settles, not
-            // trackedLoading: this is the fast half of the join.
+            // pricesLoading: this is the fast half of the join.
             val state = awaitUntil { !it.todayLoading }
             val leader = requireNotNull(state.nextUpLeader)
             assertEquals("AMDx", leader.display)
@@ -318,10 +338,10 @@ class WatchlistViewModelTest {
         val vm = viewModel()
 
         vm.state.test {
-            // pricesFetchedAtMillis is trackedLoading's own field, published once prices answer,
+            // pricesFetchedAtMillis is pricesLoading's own field, published once prices answer,
             // not todayLoading's: waiting for the fuller settle is what this assertion on both
             // ages actually needs.
-            val state = awaitUntil { !it.trackedLoading }
+            val state = awaitUntil { !it.pricesLoading }
             assertTrue("the venue's own trading block says the session is on", state.market?.regularSession == true)
             assertEquals(MarketSource.VENUE, state.market?.source)
             assertTrue("the analysis age is read off generatedAt", state.analysisGeneratedAtMillis != null)
@@ -345,25 +365,38 @@ class WatchlistViewModelTest {
     }
 
     /**
-     * The animator-zero stall (docs/qa-checklist.md, 2026-09-22): Today's venue card and "Tracked
-     * today" sat undrawn or skeletal for three to four seconds after launch at normal motion, eight
-     * to eleven with every animator scale forced to zero. A motion agent's `amberBlockEntrance` was
-     * innocent - it already snaps to its settled state on the next frame when motion is off, which
-     * `TodayScreenTest` pins directly - so animation being off could not be *why* the screen took
-     * longer to read. The actual cause was here, one step further than the fix this test used to
-     * pin: [WatchlistViewModel.loadToday] already asked `/summary`, the catalog and the leaderboard
-     * concurrently, but it published every field from the join, including the venue line and Next
-     * up, in the one `_state.update` at the very end, after awaiting Jupiter's own paced price
-     * fetch (several seconds by [PriceRepository]'s own design), even though neither block reads a
-     * price. This test holds prices open and checks that the fast half - [todayLoading], [market]
-     * (by way of the catalog), [nextUpLeader] - is already on state regardless: in the coupled
-     * shape this test used to pin, [todayLoading] stayed true until the held gate released, which
-     * is the bug reproduced in a unit test rather than on a phone. Only [trackedLoading] (Tracked
-     * today's own rows, the one thing that does need a price) may still be true here.
+     * The animator-zero stall (docs/qa-checklist.md, 2026-09-22): Today's venue card and the
+     * retired "Tracked today" sat undrawn or skeletal for three to four seconds after launch at
+     * normal motion, eight to eleven with every animator scale forced to zero. A motion agent's
+     * `amberBlockEntrance` was innocent - it already snaps to its settled state on the next frame
+     * when motion is off, which `TodayScreenTest` pins directly - so animation being off could not
+     * be *why* the screen took longer to read. The actual cause was here, one step further than
+     * the fix this test used to pin: [WatchlistViewModel.loadToday] already asked `/summary`, the
+     * catalog and the leaderboard concurrently, but it published every field from the join,
+     * including the venue line and Next up, in the one `_state.update` at the very end, after
+     * awaiting Jupiter's own paced price fetch (several seconds by [PriceRepository]'s own design),
+     * even though neither block reads a price. This test holds prices open and checks that the fast
+     * half - [todayLoading], [market] (by way of the catalog), [nextUpLeader] - is already on state
+     * regardless: in the coupled shape this test used to pin, [todayLoading] stayed true until the
+     * held gate released, which is the bug reproduced in a unit test rather than on a phone.
+     *
+     * **"Reports this week" moved into the fast half entirely** (founder's pick of option B,
+     * 2026-09-26, replacing Tracked today): `next_report_date`/`next_report_confirmed` are
+     * `/summary` row fields, not a price, so unlike the block it replaced, [reports] is already
+     * populated here too, held prices notwithstanding. Only [pricesLoading] (`trackedLoading`
+     * before the rename that followed removing Tracked today's now-dead code) may still be true:
+     * the Watched block's own figures are the one thing left on this screen that needs a price.
      */
     @Test
-    fun `today's venue and Next up settle while prices are still out, not after them`() = runTest {
-        serving("AAPL")
+    fun `today's venue, Next up and reports this week settle while prices are still out, not after them`() = runTest {
+        summaries.summaryResult = Result.success(
+            SummaryResponse(
+                schema = "v1.1",
+                generatedAt = "2026-09-13T08:00:00.000Z",
+                rows = listOf(SummaryRow(ticker = "AAPL", company = "Apple Inc.", nextReportDate = "2026-10-28")),
+            ),
+        )
+        catalog.assets = Result.success(listOf(xStock("AAPLx", "AAPL", "mint-AAPL")))
         nextUp.answer = Result.success(
             NextUpAnswer.Open(rows = listOf(NextUpRow(ticker = "AAPL", weight = "1", voters = 1)), round = null, previous = null),
         )
@@ -392,8 +425,9 @@ class WatchlistViewModelTest {
         assertFalse("the venue and Next up half does not wait behind prices", holding.todayLoading)
         assertEquals("AAPLx", holding.nextUpLeader?.display)
         assertTrue("the venue reads a market the catalog alone already answered", holding.market != null)
-        assertTrue("Tracked today's own rows are the one thing still out", holding.trackedLoading)
-        assertTrue("nothing is tracked yet, because prices have not answered", holding.tracked.isEmpty())
+        assertEquals("reports this week needs no price, so it is already on state", 1, holding.reports.size)
+        assertEquals(LocalDate.of(2026, 10, 28), holding.reports.single().date)
+        assertTrue("prices are still out", holding.pricesLoading)
         assertEquals(
             "the leaderboard does not depend on prices and must not wait behind them",
             1,
@@ -405,7 +439,7 @@ class WatchlistViewModelTest {
 
         val settled = vm.state.value
         assertFalse(settled.todayLoading)
-        assertFalse("prices have now answered too", settled.trackedLoading)
+        assertFalse("prices have now answered too", settled.pricesLoading)
         assertEquals("AAPLx", settled.nextUpLeader?.display)
     }
 
@@ -533,9 +567,10 @@ class WatchlistViewModelTest {
     }
 
     /**
-     * One price read: the Seeker drew METAx at +0.15% in Watched and +0.13% in Tracked on one
-     * screen, because each block priced it separately. A watched row now takes its figure from
-     * Today's own read whenever that read covers it, whichever of the two loads lands first.
+     * One price read: the Seeker drew METAx at +0.15% in Watched and +0.13% in the retired Tracked
+     * block on one screen, because each block priced it separately. A watched row now takes its
+     * figure from Today's own read whenever that read covers it, whichever of the two loads lands
+     * first.
      */
     @Test
     fun `a watched row is priced from today's own read, so two blocks never disagree`() = runTest {
@@ -564,7 +599,7 @@ class WatchlistViewModelTest {
         )
         advanceUntilIdle()
         val state = vm.state.value
-        assertFalse(state.trackedLoading)
+        assertFalse(state.pricesLoading)
         val row = state.rows.single()
         assertEquals("the watched row reads today's own price", 1.0, row.premiumPct!!, 1e-9)
         assertEquals(setOf("AAPL"), state.watchedTickers)
