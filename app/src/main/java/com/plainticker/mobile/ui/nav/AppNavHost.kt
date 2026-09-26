@@ -21,18 +21,18 @@ import com.plainticker.mobile.ui.gallery.GalleryScreen
 import com.plainticker.mobile.ui.home.HomeScreen
 import com.plainticker.mobile.ui.home.HomeTab
 import com.plainticker.mobile.ui.onboarding.OnboardingScreen
-import com.plainticker.mobile.ui.spike.SpikeScreen
 import com.plainticker.mobile.ui.you.DigestScreen
-import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 
 /**
  * onboarding (once) -> home (list | portfolio | watchlist) -> detail/{ticker}; plus, in debug
- * builds, the spike screen for manual wallet QA and the component gallery for design QA.
+ * builds, the component gallery for design QA. The gallery draws sample states and signs nothing.
+ * The wallet spike that once sat beside it signed Jupiter bytes without TransactionGuard, and was
+ * removed (judges' review, 2026-09-26): every signature this app asks for now goes through a
+ * guarded flow.
  */
 @Composable
 fun AppNavHost(
     container: AppContainer,
-    sender: ActivityResultSender,
     modifier: Modifier = Modifier,
     openTab: Int? = null,
     onTabOpened: () -> Unit = {},
@@ -90,7 +90,6 @@ fun AppNavHost(
             HomeScreen(
                 factory = factory,
                 onOpenDetail = { ticker -> navController.navigate(Routes.detail(ticker)) },
-                onOpenSpike = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.SPIKE) }) else null,
                 onOpenGallery = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.GALLERY) }) else null,
                 initialTab = entry.arguments?.getInt(Routes.ARG_TAB) ?: HomeTab.LIST.ordinal,
                 onOpenDigest = { navController.navigate(Routes.DIGEST) },
@@ -121,9 +120,6 @@ fun AppNavHost(
             )
         }
         if (BuildConfig.DEBUG) {
-            composable(Routes.SPIKE) {
-                SpikeScreen(sender = sender)
-            }
             composable(Routes.GALLERY) {
                 GalleryScreen(onBack = { navController.popBackStack() })
             }

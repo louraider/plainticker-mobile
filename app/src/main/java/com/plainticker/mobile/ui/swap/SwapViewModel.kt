@@ -445,6 +445,14 @@ class SwapViewModel(
                 return fail(leg, funds, input, SwapFailure.WALLET_CHANGED, quote, requote, timing)
             }
 
+            // ---- What the wallet handed back is what the guard read (judges' review, 2026-09-26).
+            // The guard checked the bytes this app gave the wallet; /execute sends the bytes the
+            // wallet gave back. Only signatures may differ, and this wallet's must be there.
+            if (!TransactionGuard.signedMatches(unsigned, signed, funds.owner)) {
+                debugLog.raw("order ${quote.requestId}: the signed transaction is not the one checked, not sent")
+                return fail(leg, funds, input, SwapFailure.SIGNED_MISMATCH, quote, requote, timing)
+            }
+
             if (!submitSwaps) {
                 // Debug: signed, never submitted, no money moved, and no receipt to write.
                 _state.value = SwapState.Signed(leg, quote, requote, timing)

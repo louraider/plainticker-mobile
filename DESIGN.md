@@ -73,9 +73,15 @@ price"), because a reading off a thin pool is not a price of the company.
 
 ### 1.2 The app's own record, where the chain has said nothing
 
-The wallet session does not survive process death: the MWA auth token lives in the adapter's
-memory, so every cold open finds no wallet and never asks the chain. Where the chain has told the
-screen nothing, the app's own record stands in the holdings slot, under four rules:
+The wallet session survives process death (since 2026-09-26): the MWA auth token the wallet
+issued and the account's public key and label are kept in `files/wallet_session.bin`, sealed with
+an AES-256-GCM key that lives in the Android Keystore, and excluded from cloud backup and device
+transfer. A cold open restores the account for display and chain reads without opening the wallet;
+the first action that needs the wallet reauthorizes with the saved token, and falls back to a
+fresh authorize when the wallet no longer honours it. Disconnect, or a wallet refusing the
+authorization, clears the file. Where the chain has still told the screen nothing (no wallet was
+ever connected, or its read failed), the app's own record stands in the holdings slot, under four
+rules:
 
 - **It is drawn only where nothing was read.** A connected wallet the chain answered for, empty
   or not, draws what the chain said; the chain is the authority on what a wallet holds. What is
@@ -90,10 +96,17 @@ screen nothing, the app's own record stands in the holdings slot, under four rul
   than the quote it was estimated at, and the unreported fill is disclosed once, on the swap row,
   never twice.
 
-Persisting the session was the alternative and was not taken: the auth token is a bearer grant for
-signing authority, and writing it to disk to make a screen look better is a security decision
-taken for a cosmetic reason. The app's own record needs no network, no consent and no wallet, and
-it is the only thing on a cold-open screen the app can vouch for itself.
+Persisting the session was first declined, on the grounds that the auth token is a bearer grant
+and writing it to disk to make a screen look better is a security decision taken for a cosmetic
+reason. The judges' review (Beeman, 2026-09-26) showed the cost was not cosmetic: every launch
+asked to connect again, before anything the reader came for. What decided it is what the token
+can and cannot do. It lets this app ask the same wallet to reauthorize without a fresh consent
+prompt; it signs nothing, and every transaction still opens the wallet for the person to approve.
+So it is kept, and kept the way a grant should be: encrypted with a key that cannot leave the
+phone, out of every backup, and gone on Disconnect. You says so in one line: the phone keeps the
+session token the wallet issued, encrypted, and never a key. The app's own record still needs no
+network, no consent and no wallet, and it is still what a screen shows where the chain has said
+nothing.
 
 ## 2. Colour: Amber's tokens
 
@@ -681,7 +694,8 @@ bottom:
    old wallet block offered it (a connected wallet) and on a failed read.
 3. **Sign-in methods** (`AccountSection.kt`), the one-line pitch as the lede: Google (the email
    with Sign out, or Sign in), the Solana wallet (the short key with Copy and Disconnect, or
-   Connect; "Asked to connect on each launch. No key or session is kept."), and the wallets the
+   Connect; "Stays connected between launches. This phone keeps the session token your wallet
+   issued, encrypted, and never a key. Disconnect forgets it."), and the wallets the
    server returned as linked to the Google account, only if there are any. Sign out is a two-step
    inline confirm: the first tap asks in the row, Sign out or Cancel answers it. Every sign-in
    message is drawn under the Google row, or beside the hero's button when the hero offers Sign in.
