@@ -76,6 +76,26 @@ object TransactionGuard {
     private val RFQ_FILL = hex("a860b7a35c0a28a0")
     private const val AMOUNT_OFFSET = 8
 
+    /**
+     * `route_v2(in_amount: u64, quoted_out_amount: u64, slippage_bps: u16, platform_fee_bps: u16,
+     * positive_slippage_bps: u16, route_plan: Vec<RoutePlanStepV2>)`, Borsh after the 8-byte
+     * discriminator: the codama decoder generated from Jupiter's published IDL
+     * (sevenlabs-hq/carbon, jupiter-swap-decoder `route_v2.rs`), and every real Metis fixture,
+     * where floor(quoted x (10,000 - slippage) / 10,000) equals the JSON's otherAmountThreshold.
+     */
+    private const val ROUTE_V2_QUOTED_OUT = 16
+    private const val ROUTE_V2_SLIPPAGE = 24
+    private const val ROUTE_V2_ARGS_END = 30
+
+    /**
+     * JupiterZ `fill(input_amount: u64, output_amount: u64, expire_at: i64, ...)`, the order engine
+     * IDL in jup-ag/rfq-webhook-toolkit (`idls/order_engine.json`). The real RFQ fixture's
+     * output_amount is its JSON outAmount and its expire_at its JSON expireAt; the deployed program
+     * appends five more bytes this class does not read.
+     */
+    private const val RFQ_FILL_OUTPUT = 16
+    private const val RFQ_FILL_ARGS_END = 32
+
     /** Rent-exempt minimum of a 165-byte token account: what one CreateIdempotent can cost the payer. */
     const val TOKEN_ACCOUNT_RENT_LAMPORTS = 2_039_280L
 
@@ -100,6 +120,9 @@ object TransactionGuard {
     private const val APPROVE_CHECKED_DELEGATE = 2
 
     private const val SYSTEM_TRANSFER = 2
+
+    /** CreateAccount (0), Transfer (2), CreateAccountWithSeed (3): see [checkSwapSystem]. */
+    private val SWAP_SYSTEM_TAGS_WITHOUT_WALLET = setOf(0L, 2L, 3L)
 
     // ---- The three flows -------------------------------------------------------------------
 
@@ -258,6 +281,14 @@ object TransactionGuard {
      * proceeds into someone else's account, which the amount check alone never could. Any other
      * Jupiter instruction is refused, because its account layout is one this class cannot read.
      * A refusal costs a retry; a wrong allow costs the money.
+     *
+     * **The output, read from the bytes too (2026-09-26).** The input amount was bound; the output
+     * was not, so the "at least" on the sheet was the JSON's word alone. [checkSwapOutput] now
+     * reads `route_v2`'s quoted amount and slippage, or `fill`'s output amount, and refuses bytes
+     * that would accept less than the sheet displays.
+     *
+     * **System instructions are allowlisted by tag (2026-09-26).** One that names the wallet in
+     * any slot may only be a 0-lamport Transfer from it; see [checkSwapSystem].
      */
     suspend fun checkSwap(
         bytes: ByteArray,
@@ -306,6 +337,7 @@ object TransactionGuard {
                     }
                     checkSwapAccounts(shape, acc, wallet, inputMint, outputMint, spendFrom, payInto)
                         ?.let { return@guarded it }
+                    checkSwapOutput(shape, data, order)?.let { return@guarded it }
                 }
                 KnownPrograms.TOKEN, KnownPrograms.TOKEN_2022 -> {
                     val tag = data.firstOrNull()?.toInt()?.and(0xff)
@@ -337,14 +369,7 @@ object TransactionGuard {
                     if (kind != 0 && kind != 1) return@guarded refuse("swap carries an associated-token instruction that is not a create")
                     if (acc.getOrNull(2) != wallet) return@guarded refuse("swap creates a token account for another owner")
                 }
-                KnownPrograms.SYSTEM -> {
-                    // A System instruction funded by someone else (a gasless payer) costs the
-                    // wallet nothing; one funded by the wallet may move no lamports.
-                    if (acc.getOrNull(0) == wallet) {
-                        val lamports = systemTransferLamports(acc.map { it.orEmpty() }, data)
-                        if (lamports != 0L) return@guarded refuse("swap moves lamports out of the wallet")
-                    }
-                }
+                KnownPrograms.SYSTEM -> checkSwapSystem(acc, data, wallet)?.let { return@guarded it }
                 KnownPrograms.COMPUTE_BUDGET -> Unit
                 else -> return@guarded refuse("program $program is not allowed in a swap")
             }
@@ -427,11 +452,137 @@ object TransactionGuard {
         return null
     }
 
+    /**
+     * What the swap instruction's own bytes promise to deliver, against what the sheet shows
+     * (judges' review, 2026-09-26). The sheet's "at least" comes from Jupiter's JSON; without this
+     * a server could show a tight floor beside bytes that accept almost nothing back.
+     *
+     * - `route_v2` carries `quoted_out_amount` and `slippage_bps`, and the program reverts when
+     *   the route delivers less than the quoted amount less that slippage. The slippage may not
+     *   exceed the order's own, and that minimum ([SwapFloor.of], the same rounding the sheet
+     *   uses) may not fall below the floor the sheet displays ([SwapFloor.shownRaw]).
+     * - JupiterZ `fill` carries the exact `output_amount` the maker transfers; it may not be less
+     *   than the amount the sheet displays, nor than the floor.
+     */
+    private fun checkSwapOutput(slots: SwapAccountSlots, data: ByteArray, order: SwapOrder): Verdict? {
+        val shownFloor = SwapFloor.shownRaw(order)
+        return when (slots) {
+            RouteV2Accounts -> {
+                if (data.size < ROUTE_V2_ARGS_END) return refuse("route_v2 data is too short to read its output terms")
+                val quotedOut = readU64(data, ROUTE_V2_QUOTED_OUT)
+                val slippage = readU16(data, ROUTE_V2_SLIPPAGE)
+                when {
+                    quotedOut < 0L -> refuse("route_v2 quoted output is not a readable amount")
+                    slippage > 10_000 -> refuse("route_v2 slippage $slippage bps is not a readable slippage")
+                    slippage > order.slippageBps ->
+                        refuse("route_v2 slippage $slippage bps exceeds the order's ${order.slippageBps} bps")
+                    SwapFloor.of(quotedOut, slippage) < shownFloor ->
+                        refuse("route_v2 minimum output ${SwapFloor.of(quotedOut, slippage)} is below the displayed floor $shownFloor")
+                    else -> null
+                }
+            }
+            RfqFillAccounts -> {
+                if (data.size < RFQ_FILL_ARGS_END) return refuse("fill data is too short to read its output amount")
+                val output = readU64(data, RFQ_FILL_OUTPUT)
+                when {
+                    output < 0L -> refuse("fill output is not a readable amount")
+                    output < order.outAmountRaw -> refuse("fill output $output is below the displayed ${order.outAmountRaw}")
+                    output < shownFloor -> refuse("fill output $output is below the displayed floor $shownFloor")
+                    else -> null
+                }
+            }
+            else -> refuse("the swap instruction's output terms are not ones this app can read")
+        }
+    }
+
+    /**
+     * A top-level System instruction in a swap, by tag rather than by slot (judges' review,
+     * 2026-09-26). The old rule looked only at slot 0, so `WithdrawNonceAccount` and
+     * `AuthorizeNonceAccount` with the wallet as the nonce authority, or `TransferWithSeed` with
+     * the wallet as the base, passed untouched while the wallet's signature covered them.
+     *
+     * None of the seven real orders carries a top-level System instruction at all: token
+     * accounts are created by the associated-token program by CPI, and a top-level
+     * `CreateAccount` for an associated token account cannot exist, because that account is a
+     * program address and cannot sign as the new account. So:
+     *
+     * - one that names the wallet in any slot may only be a `Transfer` of 0 lamports from it;
+     *   every other System instruction naming the wallet, `CreateAccount` and
+     *   `CreateAccountWithSeed` included, is refused;
+     * - one that does not name the wallet cannot spend under its signature, and is let through
+     *   only as `CreateAccount`, `Transfer` or `CreateAccountWithSeed`, what a gasless payer might
+     *   plausibly send. `AdvanceNonceAccount` is not among them: it would turn the order into a
+     *   durable one that someone holding the signed bytes could land at any later time.
+     */
+    private fun checkSwapSystem(acc: List<String?>, data: ByteArray, wallet: String): Verdict? {
+        if (data.size < 4) return refuse("swap carries a System instruction without a tag")
+        val tag = readU32(data, 0)
+        if (wallet in acc) {
+            if (tag != SYSTEM_TRANSFER.toLong()) return refuse("swap carries System instruction $tag naming the wallet")
+            val lamports = systemTransferLamports(acc.map { it.orEmpty() }, data)
+                ?: return refuse("swap System transfer naming the wallet is malformed")
+            if (acc[0] != wallet) return refuse("swap System transfer names the wallet, but not as the source")
+            if (lamports != 0L) return refuse("swap moves lamports out of the wallet")
+            return null
+        }
+        if (tag !in SWAP_SYSTEM_TAGS_WITHOUT_WALLET) return refuse("swap carries System instruction $tag")
+        return null
+    }
+
     /** [owner]'s associated token accounts for [mint], under the classic and the Token-2022 program. */
     private suspend fun ownAccounts(owner: String, mint: String): Set<String> =
         setOf(ata(owner, mint, KnownPrograms.TOKEN), ata(owner, mint, KnownPrograms.TOKEN_2022))
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
+
+    // ---- What came back from the wallet ------------------------------------------------------
+
+    /**
+     * True when [signed], the transaction a wallet handed back from `sign_transactions`, carries
+     * byte for byte the message [unsigned] did, the one [checkSwap] read, and a signature from
+     * [wallet] in the wallet's own slot (judges' review, 2026-09-26).
+     *
+     * The guard checked the bytes it gave the wallet; what goes to Jupiter's /execute is what the
+     * wallet gave back. A wallet, or anything between the app and it, returning a different
+     * message would otherwise be sent unread. Only signatures may differ: a fee payer's slot stays
+     * empty for the co-signer to fill.
+     *
+     * Swap only. A pass and a vote use `sign_and_send_transactions`, where the wallet submits the
+     * transaction itself and returns only its signature: no payload comes back to compare, and the
+     * bytes the wallet was handed are the ones [checkPass] and [checkVote] read, since [decode]
+     * requires them to re-serialize exactly.
+     */
+    fun signedMatches(unsigned: ByteArray, signed: ByteArray, wallet: String): Boolean = runCatching {
+        if (decode(unsigned) == null) return@runCatching false
+        val tx = decode(signed) ?: return@runCatching false
+        val (count, header) = signatureSection(signed)
+        val (unsignedCount, unsignedHeader) = signatureSection(unsigned)
+        if (count != unsignedCount) return@runCatching false
+        val message = signed.copyOfRange(header + count * SIGNATURE_BYTES, signed.size)
+        val checked = unsigned.copyOfRange(unsignedHeader + count * SIGNATURE_BYTES, unsigned.size)
+        if (!message.contentEquals(checked)) return@runCatching false
+        val slot = staticKeys(tx.message).take(tx.message.signatureCount.toInt()).indexOf(wallet)
+        if (slot < 0 || slot >= count) return@runCatching false
+        val at = header + slot * SIGNATURE_BYTES
+        (at until at + SIGNATURE_BYTES).any { signed[it].toInt() != 0 }
+    }.getOrDefault(false)
+
+    private const val SIGNATURE_BYTES = 64
+
+    /** The signature count and the length of the compact-u16 that states it. */
+    private fun signatureSection(bytes: ByteArray): Pair<Int, Int> {
+        var value = 0
+        var shift = 0
+        var i = 0
+        while (true) {
+            val b = bytes[i].toInt() and 0xff
+            i++
+            value = value or ((b and 0x7f) shl shift)
+            if (b and 0x80 == 0) return value to i
+            shift += 7
+            require(i < 3)
+        }
+    }
 
     // ---- Decoding ---------------------------------------------------------------------------
 
@@ -591,6 +742,11 @@ object TransactionGuard {
         } catch (e: Exception) {
             refuse("transaction could not be read: ${e::class.simpleName}")
         }
+
+    private fun readU16(b: ByteArray, at: Int): Int {
+        require(at + 2 <= b.size)
+        return (b[at].toInt() and 0xff) or ((b[at + 1].toInt() and 0xff) shl 8)
+    }
 
     private fun readU32(b: ByteArray, at: Int): Long {
         require(at + 4 <= b.size)

@@ -5,10 +5,8 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -16,15 +14,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.components.AmberBottomNav
 import com.plainticker.mobile.ui.components.AmberDestination
-import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.portfolio.PortfolioScreen
@@ -116,7 +111,6 @@ private fun homeTabFrom(ordinal: Int): HomeTab = HomeTab.entries.getOrElse(ordin
 fun HomeScreen(
     factory: ViewModelProvider.Factory,
     onOpenDetail: (String) -> Unit,
-    onOpenSpike: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onOpenGallery: (() -> Unit)? = null,
     initialTab: Int = HomeTab.LIST.ordinal,
@@ -152,7 +146,6 @@ fun HomeScreen(
     val header: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
             TopBar(onTitleLongPress = onOpenGallery, colors = colors)
-            DebugActions(onOpenSpike = onOpenSpike)
         }
     }
 
@@ -168,7 +161,7 @@ fun HomeScreen(
                             // Nothing watched yet is the common first state, and the one place to
                             // fix it is Stocks now, not List.
                             onBrowseStocks = { select(AmberDestination.STOCKS) },
-                            // The same gate the gallery and the wallet spike sit behind.
+                            // The same gate the gallery sits behind.
                             onRunCheck = if (BuildConfig.DEBUG) watchlistViewModel::runCheckNow else null,
                             onOpenVote = { select(AmberDestination.VOTE) },
                             onOpenDigest = onOpenDigest,
@@ -230,18 +223,5 @@ fun HomeScreen(
         // fixed-dark Canvas painted an opaque near-black band across the top of every screen
         // regardless of theme, which read as a black bar under the clock in light.
         TopScrim(Modifier.align(Alignment.TopCenter), groundColor = colors.surfaceGround)
-    }
-}
-
-/**
- * Debug builds only: one text action to the wallet spike. The component gallery has its own way
- * in, a long press on the wordmark (see TopBar), so it costs the header no width: two actions
- * side by side do not fit the 400dp frame and the second one was clipped on the device.
- */
-@Composable
-private fun DebugActions(onOpenSpike: (() -> Unit)?) {
-    if (onOpenSpike == null) return
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-        TextAction(label = stringResource(R.string.debug_open_wallet_spike), onClick = onOpenSpike)
     }
 }

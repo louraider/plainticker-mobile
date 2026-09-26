@@ -3,7 +3,6 @@ package com.plainticker.mobile.auth
 import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,15 +13,6 @@ class SignInNonceTest {
         val enc = Base64.getUrlEncoder().withoutPadding()
         return enc.encodeToString("""{"alg":"RS256"}""".toByteArray()) + "." +
             enc.encodeToString(payload.toByteArray()) + ".sig"
-    }
-
-    @Test
-    fun `a nonce is 256 random bits in base64url, fresh every time`() {
-        val a = SignInNonce.create()
-        val b = SignInNonce.create()
-        assertNotEquals(a, b)
-        assertEquals(32, Base64.getUrlDecoder().decode(a).size)
-        assertTrue("url-safe, no padding", a.matches(Regex("[A-Za-z0-9_-]+")))
     }
 
     @Test

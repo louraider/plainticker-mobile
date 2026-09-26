@@ -25,7 +25,8 @@ class WalletAccount(
  * [call] runs [AdapterOperations] against the connected wallet (authorizing or
  * reauthorizing first, as MWA does), so a ViewModel never sees a TransactionResult, an
  * ActivityResultSender or an auth token. [account] is the last account the wallet
- * authorized, shared by every screen, null until the first successful call.
+ * authorized, shared by every screen: restored from the saved session at launch, otherwise null
+ * until the first successful call.
  */
 interface WalletSession {
     val account: StateFlow<WalletAccount?>
@@ -35,6 +36,6 @@ interface WalletSession {
     /** Authorize only; the payload is the account the wallet chose. */
     suspend fun connect(): WalletOutcome<WalletAccount>
 
-    /** Deauthorize and forget [account]. */
+    /** Deauthorize, and forget [account] and the saved session on this device. */
     suspend fun disconnect(): WalletOutcome<Unit>
 }

@@ -27,7 +27,7 @@ import kotlinx.serialization.json.Json
  * Content-Type: application/json
  * X-PT-Code: <the device's code, in the clear>
  *
- * { "idToken": "<Google ID token>", "nonce": "<the fetched nonce, omitted on a local fallback>" }
+ * { "idToken": "<Google ID token>", "nonce": "<the fetched nonce>" }
  *
  * 200 { "user": { "email", "name" }, "linkedWallets": [...], "pro", "source", "until" }
  * ```
@@ -43,10 +43,9 @@ class GoogleAuthApi(
 ) {
     /**
      * A fresh nonce for the Google request that follows, and when it stops being valid.
-     * `AccountViewModel` calls this before opening Google's sheet, on every sign-in attempt; any
-     * failure — a 404 from a server that predates this route, a network error, or anything else —
-     * is the caller's cue to fall back to a local random nonce and send [signIn] no `nonce` field
-     * at all, so the app keeps working against a server that has not deployed this route yet.
+     * `AccountViewModel` calls this before opening Google's sheet, on every sign-in attempt. The
+     * server requires the nonce, so any failure here ends that attempt before Google is asked;
+     * the app has no local fallback.
      *
      * @throws GoogleAuthError for every non-2xx answer, and for a 200 this app cannot parse
      * @throws java.io.IOException when the network itself fails (no route, a timeout)
@@ -64,8 +63,8 @@ class GoogleAuthApi(
 
     /**
      * [nonce] is the value [fetchNonce] returned, the same one asked of Google, so the server can
-     * check the token's `nonce` claim against what it issued; null on a local fallback, in which
-     * case the request carries no `nonce` field and the server sees exactly what it always has.
+     * check the token's `nonce` claim against what it issued. `AccountViewModel` always passes
+     * one; null sends no `nonce` field, which a server requiring the nonce refuses.
      *
      * @throws GoogleAuthError for every non-2xx answer the contract names, and for a 200 this app
      *   cannot parse

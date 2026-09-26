@@ -13,13 +13,17 @@ import java.security.SecureRandom
  * itself, because the memo is public and the preimage is not: a signed transaction on a public
  * chain mints a bearer credential this way, with no signature verification, nonce store or token
  * lifetime anywhere in this repository. [code] is generated once by this device and kept only
- * here; [codeHash] is the one form of it that ever leaves, into a memo or the `X-PT-Code` header
- * a read carries.
+ * here. [codeHash] is the only form of it that goes on-chain, in the memo and in `pass/build`;
+ * the raw [code] itself rides in the `X-PT-Code` header of every call to PlainTicker's own API
+ * (reads, entitlement, sign-in, account, promo), over TLS. That makes the raw code a bearer
+ * credential: whoever holds it reads as this device's Pro. So it is kept out of cloud backup and device transfer (res/xml/backup_rules.xml,
+ * res/xml/data_extraction_rules.xml exclude this preferences file), and never drawn on a screen
+ * (DeviceCodeNeverDrawnTest).
  *
- * **It survives process death.** The wallet session does not (DESIGN.md section 1.2: the auth
- * token lives in the adapter's memory and forgets everything at process death), so the code
- * cannot live there either. It is written to `SharedPreferences` the moment it is generated, and
- * every later read returns the same string, cold start after cold start, until the app's data is
+ * **It survives process death.** It belongs to this device, not to a wallet session (which is
+ * saved on its own since 2026-09-26, DESIGN.md section 1.2, and cleared on Disconnect), so it
+ * never lives there. It is written to `SharedPreferences` the moment it is generated, and every
+ * later read returns the same string, cold start after cold start, until the app's data is
  * cleared.
  *
  * **Length.** A new code is [SharedPrefsDevicePassStore.CODE_LENGTH] (26) symbols over a

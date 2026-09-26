@@ -277,4 +277,36 @@ class TransactionGuardReverseTest {
             "another output mint",
         )
     }
+
+    // ---- The output, read from the bytes (judges' review, 2026-09-26) ----------------------
+
+    private fun u64At(d: ByteArray, at: Int) =
+        java.nio.ByteBuffer.wrap(d, at, 8).order(java.nio.ByteOrder.LITTLE_ENDIAN).long
+
+    private fun WireMessage.patchJupiter(at: Int, bytes: ByteArray): WireMessage =
+        mapInstruction(jupiterIndex()) { ix -> ix.copy(data = ix.data.copyOf().also { bytes.copyInto(it, at) }) }
+
+    @Test
+    fun `the reverse route_v2 bytes restate the JSON's floor, and the sheet shows that floor`() = runTest {
+        for (path in reverse) {
+            val o = order(path)
+            val d = WireMessage.parseBase64(o.transaction!!).let { it.instructions[it.jupiterIndex()].data }
+            val slippage = (d[24].toInt() and 0xff) or ((d[25].toInt() and 0xff) shl 8)
+            assertEquals(o.slippageBps, slippage)
+            assertEquals(o.otherAmountThreshold!!.toLong(), SwapFloor.of(u64At(d, 16), slippage))
+            assertEquals(o.otherAmountThreshold!!.toLong(), SwapFloor.shownRaw(o))
+        }
+    }
+
+    @Test
+    fun `reverse - inflated slippage or a reduced quoted output in the bytes is refused`() = runTest {
+        for (path in reverse) {
+            val o = order(path)
+            val m = WireMessage.parseBase64(o.transaction!!)
+            val quoted = u64At(m.instructions[m.jupiterIndex()].data, 16)
+            assertRefused(checkOut(o, m.patchJupiter(24, byteArrayOf(0x88.toByte(), 0x13)).transaction()), "slippage")
+            assertRefused(checkOut(o, m.patchJupiter(16, leData(quoted - 1)).transaction()), "below the displayed floor")
+            assertRefused(checkOut(o, m.patchJupiter(16, leData(quoted / 10)).transaction()), "below the displayed floor")
+        }
+    }
 }

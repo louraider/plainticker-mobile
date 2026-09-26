@@ -4,8 +4,8 @@ import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.jupiter.SwapOrder
+import com.plainticker.mobile.wallet.SwapFloor
 import java.math.BigDecimal
-import java.math.BigInteger
 import java.util.Locale
 
 /**
@@ -397,8 +397,9 @@ data class SwapQuote(
             requestId = order.requestId,
             inAmountRaw = order.inAmountRaw,
             outAmountRaw = order.outAmountRaw,
-            worstCaseOutRaw = order.otherAmountThreshold?.toLongOrNull()
-                ?: slippageFloor(order.outAmountRaw, order.slippageBps),
+            // One computation for the sheet and for TransactionGuard, which holds the route's
+            // own bytes to this same floor before the wallet opens.
+            worstCaseOutRaw = SwapFloor.shownRaw(order),
             allInCostPct = order.allInCostPct.takeIf { order.inUsdValue > 0.0 && order.outUsdValue > 0.0 },
             slippageBps = order.slippageBps,
             route = routeName(order.router),
@@ -412,21 +413,6 @@ data class SwapQuote(
             transaction = order.transaction?.takeIf { order.isSignable },
             expireAtEpochSec = order.expireAt?.takeIf { order.hasExpiry },
         )
-
-        /**
-         * The floor when an order names no otherAmountThreshold: the estimate less the slippage
-         * the order itself set, which is how an exact-in threshold is computed upstream.
-         *
-         * Never the estimate. Borrowing it would put "at least {the estimate}" on the screen,
-         * which is a promise about money that this quote made no promise about.
-         */
-        private fun slippageFloor(outAmountRaw: Long, slippageBps: Int): Long {
-            val bps = slippageBps.coerceIn(0, 10_000)
-            return BigInteger.valueOf(outAmountRaw)
-                .multiply(BigInteger.valueOf(10_000L - bps))
-                .divide(BigInteger.valueOf(10_000L))
-                .toLong()
-        }
 
         /** A router id is a name on the wire and a name on the screen: "metis" reads "Metis". */
         private fun routeName(router: String): String =
@@ -557,6 +543,14 @@ enum class SwapFailure(
      * balance and signing. The order was built for the first account, so nothing is signed.
      */
     WALLET_CHANGED(R.string.swap_failed_wallet_changed, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
+
+    /**
+     * The wallet signed, but what it handed back is not the message
+     * [com.plainticker.mobile.wallet.TransactionGuard] read before opening it, or carries no
+     * signature from this wallet. It is never sent to /execute, so nothing moved, and a fresh
+     * quote is a fresh attempt.
+     */
+    SIGNED_MISMATCH(R.string.swap_failed_signed_mismatch, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 
     /**
      * The authorize round-trip failed, so the wallet was never read and nothing was quoted.

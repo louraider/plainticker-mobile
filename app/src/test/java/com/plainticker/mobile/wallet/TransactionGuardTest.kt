@@ -481,4 +481,233 @@ class TransactionGuardTest {
         val onlyBudget = m.copy(instructions = m.instructions.filter { m.keys[it.program] == KnownPrograms.COMPUTE_BUDGET })
         assertRefused(checkSwap(o, onlyBudget.transaction(), c.taker), "no Jupiter")
     }
+
+    // ---- Swap output, read from the bytes (judges' review, 2026-09-26) --------------------
+
+    private val jupiterPrograms = setOf(KnownPrograms.JUPITER_AGGREGATOR_V6, KnownPrograms.JUPITER_RFQ)
+
+    private fun WireMessage.jupiterIndex(): Int = instructions.indexOfFirst { keys[it.program] in jupiterPrograms }
+
+    private fun WireMessage.jupiterData(): ByteArray = instructions[jupiterIndex()].data
+
+    /** The Jupiter instruction's data with [bytes] written over it at [at]. */
+    private fun WireMessage.patchJupiter(at: Int, bytes: ByteArray): WireMessage =
+        mapInstruction(jupiterIndex()) { ix -> ix.copy(data = ix.data.copyOf().also { bytes.copyInto(it, at) }) }
+
+    private fun u16(v: Int) = byteArrayOf((v and 0xff).toByte(), ((v shr 8) and 0xff).toByte())
+
+    private fun u64At(d: ByteArray, at: Int) = java.nio.ByteBuffer.wrap(d, at, 8).order(java.nio.ByteOrder.LITTLE_ENDIAN).long
+
+    private fun u16At(d: ByteArray, at: Int) = (d[at].toInt() and 0xff) or ((d[at + 1].toInt() and 0xff) shl 8)
+
+    private val metisSwaps get() = listOf(swaps[0], swaps[2])
+    private val rfqSwap get() = swaps[1]
+
+    /**
+     * The layouts, pinned against the real bytes: route_v2 is in_amount u64 @8, quoted_out_amount
+     * u64 @16, slippage_bps u16 @24; fill is input_amount u64 @8, output_amount u64 @16, expire_at
+     * i64 @24. Read that way, every real order's own bytes restate its own JSON exactly.
+     */
+    @Test
+    fun `swap - read at the published layouts, the real bytes restate the JSON's output terms`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val d = WireMessage.parseTransaction(bytesOf(o)).jupiterData()
+            assertEquals(o.inAmountRaw, u64At(d, 8))
+            val quoted = u64At(d, 16)
+            val slippage = u16At(d, 24)
+            assertEquals(c.path, o.slippageBps, slippage)
+            assertEquals(c.path, o.otherAmountThreshold!!.toLong(), SwapFloor.of(quoted, slippage))
+            assertEquals("the sheet shows the same floor", SwapFloor.shownRaw(o), o.otherAmountThreshold!!.toLong())
+        }
+        val o = order(rfqSwap.path)
+        val d = WireMessage.parseTransaction(bytesOf(o)).jupiterData()
+        assertEquals(o.inAmountRaw, u64At(d, 8))
+        assertEquals(o.outAmountRaw, u64At(d, 16))
+        assertEquals(o.expireAt, u64At(d, 24))
+    }
+
+    @Test
+    fun `swap - route_v2 bytes with a slippage above the order's are refused`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertRefused(checkSwap(o, m.patchJupiter(24, u16(5_000)).transaction(), c.taker), "slippage")
+            assertRefused(checkSwap(o, m.patchJupiter(24, u16(o.slippageBps + 1)).transaction(), c.taker), "slippage")
+            assertRefused(checkSwap(o, m.patchJupiter(24, u16(65_535)).transaction(), c.taker), "slippage")
+        }
+    }
+
+    @Test
+    fun `swap - route_v2 bytes with a reduced quoted output are refused, by a single base unit`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val quoted = u64At(m.jupiterData(), 16)
+            assertRefused(checkSwap(o, m.patchJupiter(16, leData(quoted - 1)).transaction(), c.taker), "below the displayed floor")
+            assertRefused(checkSwap(o, m.patchJupiter(16, leData(quoted / 2)).transaction(), c.taker), "below the displayed floor")
+            assertRefused(checkSwap(o, m.patchJupiter(16, leData(0L)).transaction(), c.taker), "below the displayed floor")
+        }
+    }
+
+    @Test
+    fun `swap - route_v2 bytes that promise more than the sheet, a tighter slippage or a better quote, are allowed`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val quoted = u64At(m.jupiterData(), 16)
+            assertAllowed(checkSwap(o, m.patchJupiter(24, u16(50)).transaction(), c.taker))
+            assertAllowed(checkSwap(o, m.patchJupiter(16, leData(quoted + 1_000)).transaction(), c.taker))
+        }
+    }
+
+    @Test
+    fun `swap - a displayed floor raised above what the bytes accept is refused`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val raised = o.copy(otherAmountThreshold = (o.otherAmountThreshold!!.toLong() + 1).toString())
+            assertRefused(checkSwap(raised, bytesOf(o), c.taker), "below the displayed floor")
+            // With no threshold in the JSON, the sheet's floor is the estimate less the order's
+            // slippage, and the bytes are held to that instead.
+            val noThreshold = o.copy(otherAmountThreshold = null, outAmount = (o.outAmountRaw * 2).toString())
+            assertRefused(checkSwap(noThreshold, bytesOf(o), c.taker), "below the displayed floor")
+        }
+    }
+
+    @Test
+    fun `swap - an RFQ fill paying out less than the sheet displays is refused`() = runTest {
+        val c = rfqSwap
+        val o = order(c.path)
+        val m = WireMessage.parseTransaction(bytesOf(o))
+        assertRefused(checkSwap(o, m.patchJupiter(16, leData(o.outAmountRaw - 1)).transaction(), c.taker), "fill output")
+        assertRefused(checkSwap(o, m.patchJupiter(16, leData(1L)).transaction(), c.taker), "fill output")
+        assertRefused(checkSwap(o, m.patchJupiter(16, leData(-1L)).transaction(), c.taker), "fill output")
+        // The JSON claiming more than the maker's bytes pay is the same lie told the other way.
+        assertRefused(checkSwap(o.copy(outAmount = (o.outAmountRaw + 1).toString()), bytesOf(o), c.taker), "fill output")
+        // Paying more than displayed costs the reader nothing.
+        assertAllowed(checkSwap(o, m.patchJupiter(16, leData(o.outAmountRaw + 1)).transaction(), c.taker))
+    }
+
+    @Test
+    fun `swap - a Jupiter instruction cut short of its output terms is refused`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val cut = m.mapInstruction(m.jupiterIndex()) { ix -> ix.copy(data = ix.data.copyOf(20)) }
+            assertRefused(checkSwap(o, cut.transaction(), c.taker), "too short")
+        }
+    }
+
+    // ---- System instructions, by tag (judges' review, 2026-09-26) -------------------------
+
+    private val nonceAccount = "9fX7DHqX5nFzV1aNAKZsfFnbHRyBn2VgXNiMGrbKV1CM"
+    private val recentBlockhashes = "SysvarRecentB1ockHashes11111111111111111111"
+    private val rentSysvar = "SysvarRent111111111111111111111111111111111"
+
+    /** The RFQ fixture's market maker: a fee payer that is none of the three takers. */
+    private val maker = "2Cq2RNFFxxPXL7teNQAji1beA2vFbBDYW5BGPBFvoN9m"
+
+    @Test
+    fun `swap - a System instruction naming the wallet as nonce authority or seed base is refused, whatever slot 0 is`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            // WithdrawNonceAccount: [nonce, to, recent blockhashes, rent, authority] + u64.
+            val withdraw = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, attacker, recentBlockhashes, rentSysvar, c.taker), leData(5, 1_000_000L))
+            assertRefused(checkSwap(o, withdraw.transaction(), c.taker), "naming the wallet")
+            // AuthorizeNonceAccount: [nonce, authority] + new authority.
+            val authorize = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, c.taker), leData(7, WireMessage.key(attacker)))
+            assertRefused(checkSwap(o, authorize.transaction(), c.taker), "naming the wallet")
+            // TransferWithSeed: [from, base, to] + u64 lamports + seed + owner.
+            val seedBytes = "x".encodeToByteArray()
+            val withSeed = m.plus(
+                KnownPrograms.SYSTEM,
+                listOf(attacker, c.taker, attacker),
+                leData(11, 1_000_000L, seedBytes.size.toLong(), seedBytes, WireMessage.key(KnownPrograms.SYSTEM)),
+            )
+            assertRefused(checkSwap(o, withSeed.transaction(), c.taker), "naming the wallet")
+        }
+    }
+
+    @Test
+    fun `swap - CreateAccount funded by the wallet is refused, even for its own token account`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val own = TransactionGuard.ata(c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022)
+            val create = m.plus(
+                KnownPrograms.SYSTEM,
+                listOf(c.taker, own),
+                leData(0, TransactionGuard.TOKEN_ACCOUNT_RENT_LAMPORTS, 165L, WireMessage.key(KnownPrograms.TOKEN_2022)),
+            )
+            assertRefused(checkSwap(o, create.transaction(), c.taker), "naming the wallet")
+            val withSeed = m.plus(
+                KnownPrograms.SYSTEM,
+                listOf(c.taker, own, c.taker),
+                leData(3, WireMessage.key(c.taker), 1L, "x".encodeToByteArray(), TransactionGuard.TOKEN_ACCOUNT_RENT_LAMPORTS, 165L, WireMessage.key(KnownPrograms.TOKEN_2022)),
+            )
+            assertRefused(checkSwap(o, withSeed.transaction(), c.taker), "naming the wallet")
+        }
+    }
+
+    @Test
+    fun `swap - a 0-lamport transfer from the wallet is allowed, one that names it only as the recipient is not`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertAllowed(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(c.taker, attacker), leData(2, 0L)).transaction(), c.taker))
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(attacker, c.taker), leData(2, 0L)).transaction(), c.taker), "not as the source")
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(c.taker), leData(2, 0L)).transaction(), c.taker), "malformed")
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(c.taker, attacker), byteArrayOf(2)).transaction(), c.taker))
+        }
+    }
+
+    @Test
+    fun `swap - a System instruction that does not name the wallet passes only as a create or a transfer`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertAllowed(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(maker, attacker), leData(2, 5_000L)).transaction(), c.taker))
+            val payerCreates = m.plus(KnownPrograms.SYSTEM, listOf(maker, attacker), leData(0, 890_880L, 0L, WireMessage.key(KnownPrograms.SYSTEM)))
+            assertAllowed(checkSwap(o, payerCreates.transaction(), c.taker))
+            // AdvanceNonceAccount would make the order durable, landable long after it was shown.
+            val advance = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, recentBlockhashes, maker), leData(4))
+            assertRefused(checkSwap(o, advance.transaction(), c.taker), "System instruction 4")
+            val withdraw = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, attacker, recentBlockhashes, rentSysvar, maker), leData(5, 1L))
+            assertRefused(checkSwap(o, withdraw.transaction(), c.taker), "System instruction 5")
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(maker), byteArrayOf(1, 0)).transaction(), c.taker), "without a tag")
+        }
+    }
+
+    // ---- What the wallet hands back (judges' review, 2026-09-26) ---------------------------
+
+    /** [tx] with a non-zero signature written into signature slot [slot]. */
+    private fun signedIn(tx: ByteArray, slot: Int): ByteArray =
+        tx.copyOf().also { java.util.Arrays.fill(it, 1 + 64 * slot, 1 + 64 * (slot + 1), 0x5A) }
+
+    @Test
+    fun `swap - the wallet's answer matches only when it is the checked message with the wallet's own signature`() {
+        for (c in swaps) {
+            val o = order(c.path)
+            val unsigned = bytesOf(o)
+            val m = WireMessage.parseTransaction(unsigned)
+            val slot = m.keys.take(m.numRequiredSignatures).indexOf(c.taker)
+            assertTrue(c.path, slot >= 0)
+            assertTrue(c.path, TransactionGuard.signedMatches(unsigned, signedIn(unsigned, slot), c.taker))
+            // Handed back unsigned, or signed only in another signer's slot, is not this wallet's signature.
+            assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, unsigned, c.taker))
+            if (m.numRequiredSignatures > 1) {
+                val other = if (slot == 0) 1 else 0
+                assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, signedIn(unsigned, other), c.taker))
+            }
+            // Any change to the message itself, one byte of the blockhash or an extra instruction.
+            val otherBlockhash = m.copy(blockhash = m.blockhash.copyOf().also { it[0] = (it[0] + 1).toByte() }).transaction()
+            assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, signedIn(otherBlockhash, slot), c.taker))
+            val extra = m.plus(KnownPrograms.COMPUTE_BUDGET, emptyList(), leData(3.toByte(), 1L)).transaction()
+            assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, signedIn(extra, slot), c.taker))
+            // Garbage, and the right bytes checked against the wrong wallet.
+            assertEquals(false, TransactionGuard.signedMatches(unsigned, "SIGNED".encodeToByteArray(), c.taker))
+            assertEquals(false, TransactionGuard.signedMatches(unsigned, signedIn(unsigned, slot), attacker))
+        }
+    }
 }

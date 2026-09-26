@@ -54,6 +54,8 @@ import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.repo.SecondSource
 import com.plainticker.mobile.repo.SnapshotRepository
 import com.plainticker.mobile.repo.SummaryRepository
+import com.plainticker.mobile.wallet.AesGcmSessionCipher
+import com.plainticker.mobile.wallet.EncryptedFileWalletSessionStore
 import com.plainticker.mobile.wallet.MwaWalletSession
 import com.plainticker.mobile.watchlist.DigestNotifier
 import com.plainticker.mobile.watchlist.DigestStore
@@ -213,7 +215,17 @@ class DefaultAppContainer(context: Context) : AppContainer {
     }
 
     override val walletAdapter: MobileWalletAdapter by lazy { MwaWalletSession.defaultAdapter() }
-    override val walletSession: WalletSessionHolder by lazy { WalletSessionHolder(walletAdapter) }
+    // files/wallet_session.bin, sealed with a Keystore AES-GCM key and excluded from backup and
+    // device transfer by name (res/xml): the wallet-issued auth token and the account, never a key.
+    override val walletSession: WalletSessionHolder by lazy {
+        WalletSessionHolder(
+            walletAdapter,
+            EncryptedFileWalletSessionStore(
+                java.io.File(app.filesDir, EncryptedFileWalletSessionStore.FILE_NAME),
+                AesGcmSessionCipher { AesGcmSessionCipher.androidKeystoreKey() },
+            ),
+        )
+    }
 
     override val onboardingStore: OnboardingStore by lazy { SharedPrefsOnboardingStore(prefs) }
     override val watchlistStore: WatchlistStore by lazy { SharedPrefsWatchlistStore(prefs) }

@@ -96,7 +96,6 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = colors.surfaceGround) {
                     AppNavHost(
                         container = container,
-                        sender = sender,
                         openTab = tab,
                         onTabOpened = { openTab.value = null },
                     )

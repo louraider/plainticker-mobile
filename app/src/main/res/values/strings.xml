@@ -343,6 +343,7 @@
     <string name="swap_failed_value_unchecked">The price needed to check this quote did not come back, so it never reached the wallet</string>
     <string name="swap_failed_dust">This amount is too small. The quote returns nothing for it.</string>
     <string name="swap_failed_wallet_changed">The wallet disconnected or changed before signing. Nothing was signed.</string>
+    <string name="swap_failed_signed_mismatch">The wallet handed back a transaction other than the one checked, so it was not sent. Nothing moved.</string>
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
     <string name="swap_try_again">Try again</string>
@@ -704,7 +705,7 @@
     <string name="you_method_google">Google</string>
     <string name="you_wallet_method">Solana wallet</string>
     <string name="you_wallet_none">Not connected</string>
-    <string name="you_wallet_note">Asked to connect on each launch. No key or session is kept.</string>
+    <string name="you_wallet_note">Stays connected between launches. This phone keeps the session token your wallet issued, encrypted, and never a key. Disconnect forgets it.</string>
     <string name="you_action_sign_in">Sign in</string>
     <string name="you_action_connect">Connect</string>
     <string name="you_action_copy">Copy</string>
@@ -775,6 +776,7 @@
     <string name="account_msg_wrong_audience">This build of the app is not set up for Google sign-in.</string>
     <string name="account_msg_nonce_invalid">PlainTicker did not accept this sign-in\'s nonce. Try again.</string>
     <string name="account_msg_nonce_expired">This sign-in took too long and its nonce expired. Try again.</string>
+    <string name="account_msg_nonce_unavailable">Couldn\'t reach PlainTicker, try again.</string>
     <string name="account_msg_email_not_verified">Google has not verified this account\'s email, so it cannot sign in.</string>
     <string name="account_msg_rate_limited">Too many sign-in attempts. Wait a minute, then try again.</string>
     <string name="account_msg_internal">PlainTicker could not finish the sign-in. Try again.</string>
@@ -809,6 +811,5 @@
     <string name="nav_you">You</string>
 
     <!-- Debug builds only -->
-    <string name="debug_open_wallet_spike">Open the wallet spike</string>
     <string name="debug_run_watchlist_check">Run the check now</string>
 </resources>

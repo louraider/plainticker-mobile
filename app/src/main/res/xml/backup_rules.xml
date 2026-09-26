@@ -1,13 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Auto Backup on Android 11 and lower (android:fullBackupContent). Android 12 and higher read
+   data_extraction_rules.xml instead; the two lists must stay the same, and BackupRulesTest pins
+   that they do.
+
+   Excluded, because each holds something that works as a credential on its own:
+   - plainticker.xml: the shared preferences file DevicePassStore keeps this device's Pro code in,
+     sent raw in X-PT-Code. A backup restored elsewhere would be a second device holding the same
+     bearer code. The watchlist, the onboarding flag and the last digest share this file, and a
+     rule can only exclude a whole file, so they are not restored either: all three are cheap to
+     rebuild, and moving the code to a file of its own would mean migrating a paid credential
+     whose loss orphans the pass it is bound to.
+   - datastore/account.preferences_pb: the signed-in Google account, which only means anything
+     next to the device code above.
+   - wallet_session.bin (and its .tmp): the saved MWA session. It is sealed with an Android
+     Keystore key that never leaves this phone, so a copy could not be opened anyway; it is
+     excluded so no copy exists.
+
+   Everything else is backed up: the swap, vote and pass receipts are the app's own record of
+   public on-chain transactions, and nothing in them can act for anyone.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="plainticker.xml" />
+    <exclude domain="file" path="datastore/account.preferences_pb" />
+    <exclude domain="file" path="wallet_session.bin" />
+    <exclude domain="file" path="wallet_session.bin.tmp" />
 </full-backup-content>

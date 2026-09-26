@@ -27,6 +27,7 @@ import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WireMessage
+import com.plainticker.mobile.wallet.leData
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.testAccount
 import io.ktor.http.HttpMethod
@@ -82,13 +83,27 @@ class SwapViewModelTest {
      * to be the wallet's own for the two mints, so a transaction whose taker is the seeker but
      * whose accounts are still the original taker's is, correctly, refused.
      */
-    private val unsignedBase64: String = asSeeker(
-        WireMessage.parseBase64(
-            Fixtures.read("jupiter/order-usdc-tslax-5-metis-taker-pays.json")
-                .let { HttpClientFactory.json.decodeFromString(SwapOrder.serializer(), it) }.transaction!!,
+    private val unsignedBase64: String = withGoldenQuote(
+        asSeeker(
+            WireMessage.parseBase64(
+                Fixtures.read("jupiter/order-usdc-tslax-5-metis-taker-pays.json")
+                    .let { HttpClientFactory.json.decodeFromString(SwapOrder.serializer(), it) }.transaction!!,
+            ),
+            REAL_TAKER,
         ),
-        REAL_TAKER,
     ).base64()
+
+    /**
+     * [m] with route_v2's quoted_out_amount set to the golden order's own (judges' review,
+     * 2026-09-26). The guard now reads the output terms from the bytes and holds them to the floor
+     * the sheet shows, so bytes from the 2026-09-23 order (quoted 1,319,475, floor 1,306,280) next
+     * to the 2026-09-12 golden JSON (floor 1,346,933) are, correctly, refused. 1,360,539 at the
+     * golden order's 100 bps floors to exactly its otherAmountThreshold, as every real order does.
+     */
+    private fun withGoldenQuote(m: WireMessage): WireMessage {
+        val j = m.instructions.indexOfFirst { m.keys[it.program] == KnownPrograms.JUPITER_AGGREGATOR_V6 }
+        return m.mapInstruction(j) { ix -> ix.copy(data = ix.data.copyOf().also { leData(GOLDEN_QUOTED_OUT).copyInto(it, 16) }) }
+    }
 
     /** [m] with [realTaker] and its USDC and TSLAx token accounts replaced by [seeker]'s own. */
     private fun asSeeker(m: WireMessage, realTaker: String): WireMessage = kotlinx.coroutines.runBlocking {
@@ -120,7 +135,14 @@ class SwapViewModelTest {
     private var executeIndex = 0
 
     private val unsignedBytes: ByteArray = Base64.getDecoder().decode(unsignedBase64)
-    private val signedBytes: ByteArray = "SIGNED-BY-THE-WALLET".encodeToByteArray()
+    /**
+     * What a wallet hands back: the same message, with the seeker's signature in its slot (slot 0,
+     * the taker pays). The swap machine now compares the two before /execute (judges' review,
+     * 2026-09-26), so an arbitrary byte string no longer stands in for a signed transaction.
+     */
+    private val signedBytes: ByteArray = signAsSeeker(unsignedBytes)
+
+    private fun signAsSeeker(tx: ByteArray): ByteArray = tx.copyOf().also { java.util.Arrays.fill(it, 1, 65, 0x5A) }
 
     private val receipts = FakeReceiptStore()
 
@@ -166,7 +188,7 @@ class SwapViewModelTest {
 
     private fun wallet(signs: Boolean = true): FakeWalletSession = FakeWalletSession().apply {
         connectedAs(seeker)
-        if (signs) operations = FakeAdapterOperations(signedPayloads = listOf(signedBytes))
+        if (signs) operations = FakeAdapterOperations(sign = ::signAsSeeker)
     }
 
     private fun viewModel(
@@ -694,6 +716,33 @@ class SwapViewModelTest {
             assertEquals(SwapFailure.NO_TRANSACTION, failed.reason)
             assertEquals(0, wallet.callCount)
             cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a signed transaction that is not the one checked is never sent`() = runTest {
+        val tampered = WireMessage.parseTransaction(unsignedBytes)
+            .plus(KnownPrograms.TOKEN, listOf(REAL_TAKER, REAL_TAKER, seeker.address), byteArrayOf(4, -1, -1, -1, -1, -1, -1, -1, 127))
+            .transaction().let(::signAsSeeker)
+        val unsignedEcho = unsignedBytes.copyOf()
+        for (returned in listOf(tampered, unsignedEcho, "SIGNED-BY-THE-WALLET".encodeToByteArray())) {
+            resetPerCase()
+            val mock = jupiter()
+            val wallet = FakeWalletSession().apply {
+                connectedAs(seeker)
+                operations = FakeAdapterOperations(signedPayloads = listOf(returned))
+            }
+            val vm = viewModel(mock, wallet)
+            vm.state.test {
+                awaitItem()
+                submitFive(vm, this)
+                val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+                assertEquals(SwapFailure.SIGNED_MISMATCH, failed.reason)
+                assertEquals("the wallet was asked once", 1, wallet.callCount)
+                assertTrue("nothing reaches /execute", mock.executes().isEmpty())
+                assertTrue("and no receipt is written", receipts.writes.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
     }
 
@@ -1604,6 +1653,9 @@ class SwapViewModelTest {
 
         /** The 2026-09-12 fixture's own field, so a test can take it away by name. */
         const val THRESHOLD_FIELD = """"otherAmountThreshold": "1346933","""
+
+        /** The quote behind that threshold: floor(1,360,539 x 0.99) is 1,346,933. */
+        const val GOLDEN_QUOTED_OUT = 1_360_539L
 
         /** The same line under a key the parser ignores, which is how a field is taken away. */
         const val THRESHOLD_FIELD_IGNORED = """"_noOtherAmountThreshold": "1346933","""
