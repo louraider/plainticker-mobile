@@ -8,6 +8,7 @@ import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.Trading
 import com.plainticker.mobile.data.xstocks.TradingPeriod
 import com.plainticker.mobile.ui.ShippedCopy
+import com.plainticker.mobile.ui.components.LongestSectorName
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
 import java.math.BigInteger
@@ -249,6 +250,12 @@ class TodayModelTest {
     private val monday = LocalDate.of(2026, 9, 28) // a Monday
     private val comingSunday = LocalDate.of(2026, 10, 4) // the coming Sunday
 
+    // The real device's own weekend (task brief: "On the real device on Saturday 26 Sep 2026").
+    // Its next Monday and next Sunday are exactly [monday] and [comingSunday] above.
+    private val friday = LocalDate.of(2026, 9, 25)
+    private val saturday = LocalDate.of(2026, 9, 26)
+    private val sunday = LocalDate.of(2026, 9, 27)
+
     @Test
     fun `weekEnd is the coming Sunday, inclusive of today when today already is one`() {
         assertEquals(comingSunday, weekEnd(monday))
@@ -277,6 +284,94 @@ class TodayModelTest {
             reportRow("PEP", LocalDate.of(2026, 10, 1)),
         )
         assertEquals(listOf("CCL", "NKE", "PEP"), reportsThisWeek(rows, monday).map { it.ticker })
+    }
+
+    // ---- The weekend window (this PR: Saturday 26 Sep 2026 read empty every weekend) -----------
+
+    @Test
+    fun `reportsIsNextWeek is true only on the reader's own Saturday and Sunday`() {
+        assertTrue(reportsIsNextWeek(saturday))
+        assertTrue(reportsIsNextWeek(sunday))
+        assertFalse("Friday is still this week", reportsIsNextWeek(friday))
+        assertFalse("Monday is still this week", reportsIsNextWeek(monday))
+        assertFalse("a midweek day is still this week", reportsIsNextWeek(LocalDate.of(2026, 10, 1)))
+    }
+
+    @Test
+    fun `Saturday and Sunday both move the window to next Monday through next Sunday`() {
+        val rows = listOf(
+            reportRow("SAT", saturday), // this weekend itself: dropped, not the window any more
+            reportRow("SUN", sunday),
+            reportRow("NEXTMON", monday), // next week's Monday: kept
+            reportRow("NEXTMID", LocalDate.of(2026, 9, 30)),
+            reportRow("NEXTSUN", comingSunday), // next week's Sunday: kept
+            reportRow("PASTNEXT", comingSunday.plusDays(1)), // the week after that: dropped
+        )
+        assertEquals(
+            "Saturday reads next Monday through next Sunday, not the two weekend days themselves",
+            listOf("NEXTMON", "NEXTMID", "NEXTSUN"),
+            reportsThisWeek(rows, saturday).map { it.ticker },
+        )
+        assertEquals(
+            "Sunday reads the exact same window Saturday does",
+            listOf("NEXTMON", "NEXTMID", "NEXTSUN"),
+            reportsThisWeek(rows, sunday).map { it.ticker },
+        )
+    }
+
+    @Test
+    fun `Friday still reads this week, today through the coming Sunday`() {
+        val rows = listOf(
+            reportRow("FRI", friday),
+            reportRow("SAT", saturday),
+            reportRow("SUN", sunday),
+            reportRow("NEXTMON", monday),
+        )
+        assertEquals(
+            "no late-Friday roll-forward: Friday's own weekend is still this week, not next",
+            listOf("FRI", "SAT", "SUN"),
+            reportsThisWeek(rows, friday).map { it.ticker },
+        )
+    }
+
+    @Test
+    fun `an empty next week still names the next known report, off the weekend's own window end`() {
+        val rows = listOf(reportRow("LATE", comingSunday.plusDays(3)))
+        assertTrue("next week itself is quiet in this fixture", reportsThisWeek(rows, saturday).isEmpty())
+        val next = nextReportAfterThisWeek(rows, saturday)
+        assertEquals("LATE", next?.ticker)
+        assertEquals(
+            "No covered company reports next week. The next one is LATE Inc., on ${next!!.dateLabel}.",
+            ShippedCopy.render(reportsEmptyCopy(next, isNextWeek = true)),
+        )
+    }
+
+    @Test
+    fun `next week's empty state with nothing known at all still names next week, not this week`() {
+        assertEquals(
+            "No covered company reports next week.",
+            ShippedCopy.render(reportsEmptyCopy(null, isNextWeek = true)),
+        )
+        assertEquals(
+            "isNextWeek defaults to false, so every weekday caller reads exactly as it always has",
+            "No covered company reports this week.",
+            ShippedCopy.render(reportsEmptyCopy(null)),
+        )
+    }
+
+    @Test
+    fun `the weekend window turns on right at the reader's own local midnight, Friday into Saturday`() {
+        // Kyiv is UTC+3 in September (EEST): 23:59:59 Friday and 00:00:00 Saturday.
+        val beforeMidnight = Instant.ofEpochMilli(utc("2026-09-25T20:59:59Z")).atZone(kyiv).toLocalDate()
+        val afterMidnight = Instant.ofEpochMilli(utc("2026-09-25T21:00:00Z")).atZone(kyiv).toLocalDate()
+        assertEquals(friday, beforeMidnight)
+        assertEquals(saturday, afterMidnight)
+        assertFalse("one second before local midnight, Friday still reads this week", reportsIsNextWeek(beforeMidnight))
+        assertTrue("at local midnight, Saturday already reads next week", reportsIsNextWeek(afterMidnight))
+
+        val rows = listOf(reportRow("SAT", saturday), reportRow("NEXTMON", monday))
+        assertEquals(listOf("SAT"), reportsThisWeek(rows, beforeMidnight).map { it.ticker })
+        assertEquals(listOf("NEXTMON"), reportsThisWeek(rows, afterMidnight).map { it.ticker })
     }
 
     @Test
@@ -409,6 +504,33 @@ class TodayModelTest {
             dateEstimatedDp * 1.3 <= budget13x,
         )
         assertTrue(dateEstimatedDp * 1.3 <= budget13x * 2)
+    }
+
+    /**
+     * The new "Reports next week" heading (this PR, the weekend fix), measured the same way as
+     * the watched-marker tests above: fontTools 4.63.0 against `res/font/bricolage_grotesque.ttf`
+     * at `AmberSectionHead`'s own `sectionHead` instance (`wght` 700, `wdth` 100, `opsz` 22, 22sp),
+     * 2026-09-26. "Reports this week" and "Reports next week" are both 17 characters ("this" and
+     * "next" are the same length), 191.994dp and 199.232dp.
+     *
+     * `AmberSectionHead`'s title has nowhere to clip in the first place (DESIGN.md 4.2: it owns a
+     * `weight(1f)` column and wraps to two lines rather than squeezing), so this is the same
+     * confirmation-not-assumption every other new slot in this file already gets, not a new
+     * budget: the new heading sits far under the widest real content this exact slot already draws
+     * safely, the tied-longest GICS sector name ([LongestSectorName], "Communication Services,"
+     * 266.090dp, proven safe by `AmberSectionHeadTest`), at 1.0x and at 1.3x alike.
+     */
+    @Test
+    fun `the next-week heading clears the widest real content this section head slot already draws safely, at 1_0x and 1_3x`() {
+        val reportsThisWeekWidthDp = 191.994
+        val reportsNextWeekWidthDp = 199.232
+        val provenSafeWidthDp = 266.090 // LongestSectorName, "Communication Services".
+        assertEquals(17, "Reports this week".length)
+        assertEquals(17, "Reports next week".length)
+        assertEquals(22, LongestSectorName.length)
+        assertTrue("this week's own heading already sits under the proven-safe width", reportsThisWeekWidthDp <= provenSafeWidthDp)
+        assertTrue("next week's heading does too, at 1.0x", reportsNextWeekWidthDp <= provenSafeWidthDp)
+        assertTrue("...and at 1.3x", reportsNextWeekWidthDp * 1.3 <= provenSafeWidthDp * 1.3)
     }
 
     // ---- Next up ------------------------------------------------------------------------------------------

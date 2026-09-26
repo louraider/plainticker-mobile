@@ -92,7 +92,10 @@ import kotlinx.coroutines.delay
  *    than left out, then a plain pointer to Stocks (which cannot sort or filter by report date, so
  *    the link says so by not promising a filtered count). Undrawn entirely before the server has
  *    sent a report date for anyone at all, never a broken list ([WatchlistUiState.reportsKnown]'s
- *    own doc has the reasoning).
+ *    own doc has the reasoning). On the reader's own Saturday or Sunday the window and the heading
+ *    both move to next week ([reportsIsNextWeek], caught on the real device on Saturday 26 Sep
+ *    2026: "today through the coming Sunday" is only Saturday and Sunday themselves on a Saturday,
+ *    empty every single weekend).
  * 4. **Next up** ([TodayNextUpBlock]): one row, opening Vote.
  *
  * First open (nothing watched) swaps block 2 for [TodayStartBlock], one primary action, "Find a
@@ -367,6 +370,13 @@ private fun TodayDigestLine(state: WatchlistUiState, zone: ZoneId, onOpenDigest:
  * closes when one exists ([reportsEmptyCopy]), matching the designer's own page ("No covered
  * company reports this week. The next one is Micron, on Wednesday 7 Oct.") exactly.
  *
+ * **Saturday and Sunday move the whole block to next week**, heading and empty state alike
+ * ([reportsIsNextWeek], [reportsThisWeek]'s own doc comment has the reasoning off the real device
+ * that caught this: a "this week" window that is only ever Saturday and Sunday themselves read
+ * empty every weekend, exactly when a reader has time to look). The row list itself keeps every
+ * other rule unchanged: the same cap, sort, estimated marker, watched marker and Watch action, just
+ * over next week's seven days instead of this week's.
+ *
  * On a first open each row carries Watch instead of the watched marker (the two are never true at
  * once: a first open's watched set is always empty): the row's meta line holds the context and the
  * action, the pairing [AmberTickerRow]'s own budget proves for Vote's leader row, and
@@ -382,16 +392,17 @@ private fun TodayReportsBlock(
     colors: AmberColors,
 ) {
     if (!state.todayLoading && !state.reportsKnown) return
+    val nextWeek = reportsIsNextWeek(today)
     val thisWeek = reportsThisWeek(state.reports, today)
     val empty = !state.todayLoading && thisWeek.isEmpty()
     val lede = if (empty) {
-        reportsEmptyCopy(nextReportAfterThisWeek(state.reports, today)).text()
+        reportsEmptyCopy(nextReportAfterThisWeek(state.reports, today), nextWeek).text()
     } else {
         stringResource(R.string.today_reports_lede)
     }
     Column(modifier = Modifier.fillMaxWidth().padding(top = SectionGap).amberBlockEntrance(step = ReportsEntranceStep)) {
         AmberSectionHead(
-            title = stringResource(R.string.today_heading_reports),
+            title = stringResource(if (nextWeek) R.string.today_heading_reports_next else R.string.today_heading_reports),
             meta = if (state.todayLoading) null else Fmt.count(thisWeek.size),
             lede = lede,
             colors = colors,
