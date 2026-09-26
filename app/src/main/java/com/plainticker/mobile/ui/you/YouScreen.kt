@@ -141,7 +141,9 @@ fun YouScreen(
     val credentials = remember(context) { CredentialManagerGoogleSource(context, BuildConfig.GOOGLE_SERVER_CLIENT_ID) }
 
     // A sign-in that finished linked this device to the account server side, so the device may be
-    // Pro now: re-read it through the one refresh every screen shares.
+    // Pro now: re-read it through the one refresh every screen shares. A later account refresh or
+    // a landed unlink fires the same event, for the same reason: either can change which wallet's
+    // stake or pass counts.
     LaunchedEffect(accountViewModel, passViewModel) {
         accountViewModel.signedIn.collect { passViewModel.refreshEntitlement() }
     }
@@ -151,6 +153,15 @@ fun YouScreen(
     // keeps for its own notifications line).
     LifecycleResumeEffect(viewModel) {
         viewModel.notificationsChanged()
+        onPauseOrDispose { }
+    }
+
+    // GET /api/v1/account whenever a Google account is signed in: shown here (LifecycleResumeEffect
+    // runs its own effect immediately when the lifecycle is already resumed, which covers "You is
+    // shown"), and again on every later resume, so a wallet linked or unlinked on the web shows up
+    // here too. AccountViewModel.refresh throttles this to at most once every thirty seconds.
+    LifecycleResumeEffect(accountViewModel) {
+        accountViewModel.refresh()
         onPauseOrDispose { }
     }
 
@@ -174,6 +185,7 @@ fun YouScreen(
             account = account,
             onSignIn = { accountViewModel.signIn(credentials) },
             onSignOut = accountViewModel::signOut,
+            onUnlink = accountViewModel::unlink,
             onEnableNotifications = {
                 context.startActivity(
                     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -213,6 +225,7 @@ internal fun YouContent(
     account: AccountUiState = AccountUiState.Restoring,
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
+    onUnlink: (String) -> Unit = {},
     header: @Composable () -> Unit = {},
     nowMillis: Long = System.currentTimeMillis(),
 ) {
@@ -266,6 +279,7 @@ internal fun YouContent(
                 onSignOut = onSignOut,
                 onConnect = onConnect,
                 onDisconnect = onDisconnect,
+                onUnlink = onUnlink,
                 colors = colors,
                 showMessage = heroMessage == null,
             )

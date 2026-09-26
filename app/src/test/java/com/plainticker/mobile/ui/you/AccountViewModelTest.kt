@@ -5,7 +5,9 @@ import com.plainticker.mobile.MainDispatcherRule
 import com.plainticker.mobile.auth.AccountDebugLog
 import com.plainticker.mobile.auth.GoogleCredentialResult
 import com.plainticker.mobile.auth.GoogleCredentialSource
+import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.MockApi
+import com.plainticker.mobile.data.auth.AccountApi
 import com.plainticker.mobile.data.auth.GoogleAuthApi
 import com.plainticker.mobile.data.bodyText
 import com.plainticker.mobile.data.respondJson
@@ -32,6 +34,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -102,6 +105,11 @@ class AccountViewModelTest {
         }
     }
 
+    /** A [Clock] this test moves by hand, so [AccountViewModel.refresh]'s throttle is deterministic. */
+    private class FakeClock(var millis: Long = 0L) : Clock {
+        override fun nowMillis(): Long = millis
+    }
+
     private fun mockApi(handler: MockRequestHandler) = MockApi(mainDispatcherRule.dispatcher, handler)
 
     private fun source(result: GoogleCredentialResult): GoogleCredentialSource = GoogleCredentialSource { result }
@@ -110,12 +118,16 @@ class AccountViewModelTest {
         api: MockApi = mockApi { respondJson(okBody) },
         store: InMemoryAccountStore = InMemoryAccountStore(),
         log: AccountDebugLog = RecordingLog(),
+        clock: Clock = FakeClock(),
+        accountApi: AccountApi = AccountApi(api.client),
     ) = AccountViewModel(
         api = GoogleAuthApi(api.client),
+        accountApi = accountApi,
         store = store,
         devicePassStore = InMemoryDevicePassStore(deviceCode),
         nonces = { nonce },
         debugLog = log,
+        clock = clock,
     ).also { machines += it }
 
     // ---- Restoring ---------------------------------------------------------------------------
@@ -443,6 +455,274 @@ class AccountViewModelTest {
         assertEquals(AccountUiState.SignedOut(), vm.state.value)
         assertEquals(1, store.clears)
         assertTrue(api.requests.isEmpty())
+    }
+
+    // ---- Refreshing the account (GET /api/v1/account) -----------------------------------------
+
+    private val refreshedBody = """
+        {"user":{"email":"ann@example.com","name":"Ann"},
+         "linkedWallets":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T","9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"],
+         "pro":true,"source":"pass","until":"2026-10-20T00:00:00.000Z"}
+    """.trimIndent()
+
+    @Test
+    fun `refresh does nothing before a Google account is signed in`() = runTest {
+        val api = mockApi { error("refresh must not call the server with nobody signed in") }
+        val vm = machine(api = api)
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedOut)
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertTrue(api.requests.isEmpty())
+    }
+
+    @Test
+    fun `refresh re-reads the account, updates the store, and fires the shared refresh event`() = runTest {
+        val stored = SignedInAccount("ann@example.com", "Ann", listOf("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"))
+        val store = InMemoryAccountStore(stored)
+        val api = mockApi { respondJson(refreshedBody) }
+        val vm = machine(api = api, store = store)
+        val events = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.signedIn.toList(events) }
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        val expected = SignedInAccount(
+            "ann@example.com", "Ann",
+            listOf("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T", "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"),
+        )
+        assertEquals(AccountUiState.SignedIn(expected), vm.state.value)
+        assertEquals(expected, store.saved.last())
+        assertEquals(1, events.size)
+        assertTrue("the account route was read", api.lastRequest.url.encodedPath.endsWith("/api/v1/account"))
+    }
+
+    @Test
+    fun `refresh throttles to at most once every thirty seconds`() = runTest {
+        val stored = SignedInAccount("ann@example.com", "Ann", emptyList())
+        val clock = FakeClock(0L)
+        val api = mockApi { respondJson(refreshedBody) }
+        val vm = machine(api = api, store = InMemoryAccountStore(stored), clock = clock)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(1, api.requests.size)
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals("inside the window, a second call does nothing", 1, api.requests.size)
+
+        clock.millis = AccountViewModel.REFRESH_THROTTLE_MILLIS - 1
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals("one millisecond short of the window still does nothing", 1, api.requests.size)
+
+        clock.millis = AccountViewModel.REFRESH_THROTTLE_MILLIS
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals("at the window's edge, refresh runs again", 2, api.requests.size)
+    }
+
+    @Test
+    fun `a 401 not_signed_in on refresh clears the account and shows signed out honestly`() = runTest {
+        val stored = SignedInAccount("ann@example.com", "Ann", listOf("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"))
+        val store = InMemoryAccountStore(stored)
+        val vm = machine(api = mockApi { respondJson("""{"error":"not_signed_in"}""", HttpStatusCode.Unauthorized) }, store = store)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+        assertEquals(1, store.clears)
+    }
+
+    @Test
+    fun `a 404 on refresh keeps the cached account quietly`() = runTest {
+        val stored = SignedInAccount("ann@example.com", "Ann", listOf("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"))
+        val store = InMemoryAccountStore(stored)
+        val vm = machine(api = mockApi { respondJson("""{"error":"not_found"}""", HttpStatusCode.NotFound) }, store = store)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedIn(stored), vm.state.value)
+        assertTrue("the 404 is not written back as a save", store.saved.isEmpty())
+    }
+
+    @Test
+    fun `offline or a 5xx on refresh also keeps the cached account quietly`() = runTest {
+        val stored = SignedInAccount("ann@example.com", "Ann", emptyList())
+        listOf<MockRequestHandler>(
+            { throw IOException("Unable to resolve host") },
+            { respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError) },
+        ).forEach { answer ->
+            val store = InMemoryAccountStore(stored)
+            val vm = machine(api = mockApi(answer), store = store)
+            advanceUntilIdle()
+            vm.refresh()
+            advanceUntilIdle()
+            assertEquals(AccountUiState.SignedIn(stored), vm.state.value)
+            assertTrue(store.saved.isEmpty())
+        }
+    }
+
+    // ---- Unlinking a wallet (POST /api/v1/account/wallets/unlink) -----------------------------
+
+    private val walletA = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"
+    private val walletB = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
+
+    private fun signedInWithTwoWallets(): Pair<InMemoryAccountStore, SignedInAccount> {
+        val account = SignedInAccount("ann@example.com", "Ann", listOf(walletA, walletB))
+        return InMemoryAccountStore(account) to account
+    }
+
+    @Test
+    fun `unlink drops the wallet, updates the store, and fires the shared refresh event`() = runTest {
+        val (store, _) = signedInWithTwoWallets()
+        val afterUnlink = """{"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":["$walletB"],"pro":false}"""
+        val api = mockApi { respondJson(afterUnlink) }
+        val vm = machine(api = api, store = store)
+        val events = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.signedIn.toList(events) }
+        advanceUntilIdle()
+
+        vm.unlink(walletA)
+        advanceUntilIdle()
+
+        val expected = SignedInAccount("ann@example.com", "Ann", listOf(walletB))
+        assertEquals(AccountUiState.SignedIn(expected), vm.state.value)
+        assertEquals(expected, store.saved.last())
+        assertEquals(1, events.size)
+
+        val request = api.lastRequest
+        assertTrue(request.url.encodedPath.endsWith("/api/v1/account/wallets/unlink"))
+        val body = Json.parseToJsonElement(request.bodyText()).jsonObject
+        assertEquals(walletA, body.getValue("wallet").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `the device code rides in the X-PT-Code header of the unlink call`() = runTest {
+        val (store, _) = signedInWithTwoWallets()
+        val api = mockApi { respondJson("""{"user":{},"linkedWallets":["$walletB"],"pro":false}""") }
+        val vm = machine(api = api, store = store)
+        advanceUntilIdle()
+
+        vm.unlink(walletA)
+        advanceUntilIdle()
+        assertEquals(deviceCode, api.lastRequest.headers[GoogleAuthApi.HEADER_CODE])
+    }
+
+    @Test
+    fun `a second unlink call while one is in flight does nothing, for any wallet`() = runTest {
+        val (store, _) = signedInWithTwoWallets()
+        var calls = 0
+        val api = mockApi { calls++; respondJson("""{"user":{},"linkedWallets":["$walletB"],"pro":false}""") }
+        val vm = machine(api = api, store = store)
+        advanceUntilIdle()
+
+        vm.unlink(walletA)
+        vm.unlink(walletB)
+        val busy = vm.state.value as AccountUiState.SignedIn
+        assertEquals(walletA, busy.unlinkingWallet)
+        advanceUntilIdle()
+        assertEquals("only the first call reached the server", 1, calls)
+    }
+
+    /** Every row of the contract's own unlink errors table, and the two answers outside it. */
+    private val unlinkCases = listOf(
+        Triple(400, "bad_request", UnlinkFailure.BAD_REQUEST),
+        Triple(400, "not_linked", UnlinkFailure.NOT_LINKED),
+        Triple(409, "last_method", UnlinkFailure.LAST_METHOD),
+        Triple(429, "rate_limited", UnlinkFailure.RATE_LIMITED),
+        Triple(404, "not_found", UnlinkFailure.NOT_OPEN),
+        Triple(502, "gateway", UnlinkFailure.UNAVAILABLE),
+    )
+
+    @Test
+    fun `every unlink refusal is kept against just that wallet, with its own plain line`() = runTest {
+        unlinkCases.forEach { (status, code, failure) ->
+            val (store, _) = signedInWithTwoWallets()
+            val vm = machine(api = mockApi { respondJson("""{"error":"$code"}""", HttpStatusCode.fromValue(status)) }, store = store)
+            advanceUntilIdle()
+
+            vm.unlink(walletA)
+            advanceUntilIdle()
+
+            val signedIn = vm.state.value as AccountUiState.SignedIn
+            assertEquals(code, listOf(walletA, walletB), signedIn.account.linkedWallets)
+            assertNull(code, signedIn.unlinkingWallet)
+            assertEquals(code, walletA to failure, signedIn.unlinkFailure)
+            assertTrue(code, store.saved.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a 401 not_signed_in on unlink clears the account, not just this one wallet`() = runTest {
+        val (store, _) = signedInWithTwoWallets()
+        val vm = machine(api = mockApi { respondJson("""{"error":"not_signed_in"}""", HttpStatusCode.Unauthorized) }, store = store)
+        advanceUntilIdle()
+
+        vm.unlink(walletA)
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+        assertEquals(1, store.clears)
+    }
+
+    @Test
+    fun `a network failure unlinking is kept against the wallet as unavailable`() = runTest {
+        val (store, _) = signedInWithTwoWallets()
+        val vm = machine(api = mockApi { throw IOException("Unable to resolve host") }, store = store)
+        advanceUntilIdle()
+
+        vm.unlink(walletA)
+        advanceUntilIdle()
+        val signedIn = vm.state.value as AccountUiState.SignedIn
+        assertEquals(walletA to UnlinkFailure.UNAVAILABLE, signedIn.unlinkFailure)
+    }
+
+    @Test
+    fun `unlink does nothing before a Google account is signed in`() = runTest {
+        val api = mockApi { error("unlink must not call the server with nobody signed in") }
+        val vm = machine(api = api)
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedOut)
+
+        vm.unlink(walletA)
+        advanceUntilIdle()
+        assertTrue(api.requests.isEmpty())
+    }
+
+    @Test
+    fun `the device code from refresh and unlink never reaches a log line`() = runTest {
+        val log = RecordingLog()
+        val (refreshStore, _) = signedInWithTwoWallets()
+        val refreshVm = machine(
+            api = mockApi { respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError) },
+            store = refreshStore,
+            log = log,
+        )
+        advanceUntilIdle()
+        refreshVm.refresh()
+        advanceUntilIdle()
+
+        unlinkCases.forEach { (status, code, _) ->
+            val (store, _) = signedInWithTwoWallets()
+            val vm = machine(
+                api = mockApi { respondJson("""{"error":"$code"}""", HttpStatusCode.fromValue(status)) },
+                store = store,
+                log = log,
+            )
+            advanceUntilIdle()
+            vm.unlink(walletA)
+            advanceUntilIdle()
+        }
+
+        assertTrue("the recorder saw the failure paths", log.lines.isNotEmpty())
+        log.lines.forEach { line -> assertFalse("log line leaks the device code: $line", deviceCode in line) }
     }
 
     // ---- The ID token never reaches a log ----------------------------------------------------

@@ -727,8 +727,9 @@ class PassViewModelTest {
 
     @Test
     fun `a stake below the entitlement threshold is still a plain figure`() = runTest {
-        // Below 10,000 SKR (docs/plan-monetisation-2026-09-19.md section 1.2): this class states
-        // it and stops, the way ProModelTest pins the sentence never carries a verdict about it.
+        // Below 7,500 SKR (docs/plan-monetisation-2026-09-19.md section 1.2, lowered from 10,000
+        // SKR): this class states it and stops, the way ProModelTest pins the sentence never
+        // carries a verdict about it.
         val vm = machine(wallet = wallet(), rpc = staking(3_200_000_000L))
         vm.pro.test {
             val loaded = awaitUntil { it.stakeRaw != null }

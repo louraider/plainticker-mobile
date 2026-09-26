@@ -113,8 +113,9 @@ class ProModelTest {
 
     @Test
     fun `a stake below the entitlement threshold is stated as a figure, with no verdict word near it`() {
-        // 3,200 SKR: below the 10,000 SKR threshold (docs/plan-monetisation-2026-09-19.md section
-        // 1.2). The sentence states it and stops; no word here says whether that is enough.
+        // 3,200 SKR: below the 7,500 SKR threshold (docs/plan-monetisation-2026-09-19.md section
+        // 1.2, lowered from 10,000 SKR). The sentence states it and stops; no word here says
+        // whether that is enough.
         val state = ProUiState(walletConnected = true, stakeRaw = 3_200_000_000L)
         val line = stakeLine(state) as Copy.Words
         assertEquals(R.string.pro_stake_read, line.id)

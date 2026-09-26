@@ -41,8 +41,13 @@ import kotlinx.coroutines.launch
  *   one offering Sign in ([showMessage] false), in which case the hero draws it beside its button.
  * - **Solana wallet**: the short key with Copy and Disconnect, or "Not connected" with Connect,
  *   and the honest note that no key or session is kept.
- * - **Linked wallets**: only when the server returned one or more; an account with none draws no
- *   row, rather than an empty one.
+ * - **Linked wallets**: one row per wallet the server returned, each its own short key with Copy
+ *   and Unlink; an account with none draws no row at all, rather than an empty one. Unlink is the
+ *   same two-step inline confirm as Sign out ("Unlink this wallet?" with Unlink and Keep). A
+ *   landed unlink drops the wallet from the next state the server hands back, so the row is simply
+ *   gone; a refusal keeps the row with one plain line under it ([unlinkFailureRes]), never a
+ *   screen-wide message, and [AccountUiState.SignedIn.unlinkingWallet] hides a row's own actions
+ *   while its own call is in flight, so a second tap on any row cannot start a second one.
  *
  * **The clipping rule.** Every row is [CabinetRow]: the text column is weighted and wraps; the one
  * inline action is unweighted and one line. `CabinetFitTest` measures every action label here with
@@ -59,6 +64,7 @@ internal fun AccountSection(
     onSignOut: () -> Unit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    onUnlink: (String) -> Unit,
     colors: AmberColors,
     showMessage: Boolean = true,
 ) {
@@ -71,16 +77,8 @@ internal fun AccountSection(
         AmberTickerRowGroup(colors = colors) {
             GoogleRow(state = state, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors, showMessage = showMessage)
             WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)
-            (state as? AccountUiState.SignedIn)?.account?.let { account ->
-                val keys = linkedWalletKeys(account)
-                if (keys.isNotEmpty()) {
-                    CabinetRow(
-                        colors = colors,
-                        label = stringResource(R.string.account_wallets_label),
-                        value = keys.joinToString("\n"),
-                        valueKind = RowValueKind.KEY,
-                    )
-                }
+            (state as? AccountUiState.SignedIn)?.let { signedIn ->
+                LinkedWalletsGroup(state = signedIn, onUnlink = onUnlink, colors = colors)
             }
         }
     }
@@ -174,6 +172,71 @@ private fun WalletRow(wallet: WalletAccount?, onConnect: () -> Unit, onDisconnec
 
 private const val CopiedMillis = 2_000L
 
+/** One row per wallet the server returned as linked; none draws no row at all. */
+@Composable
+private fun LinkedWalletsGroup(state: AccountUiState.SignedIn, onUnlink: (String) -> Unit, colors: AmberColors) {
+    if (state.account.linkedWallets.isEmpty()) return
+    state.account.linkedWallets.forEach { wallet ->
+        LinkedWalletRow(
+            wallet = wallet,
+            busy = state.unlinkingWallet == wallet,
+            failure = state.unlinkFailure?.takeIf { it.first == wallet }?.second,
+            onUnlink = { onUnlink(wallet) },
+            colors = colors,
+        )
+    }
+}
+
+/**
+ * The short key with Copy, and Unlink behind the same two-step inline confirm Sign out uses:
+ * "Unlink this wallet?" with Unlink and Keep. [busy] hides both actions while this exact wallet's
+ * own call is in flight, so a race between two taps on the same row cannot start two calls;
+ * [failure] draws the one plain line the last attempt refused with, if any, and both actions stay
+ * offered so the row can be tried again.
+ */
+@Composable
+private fun LinkedWalletRow(wallet: String, busy: Boolean, failure: UnlinkFailure?, onUnlink: () -> Unit, colors: AmberColors) {
+    var confirming by rememberSaveable(wallet) { mutableStateOf(false) }
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val clipLabel = stringResource(R.string.you_copy_clip_label)
+    var copied by remember(wallet) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(CopiedMillis)
+            copied = false
+        }
+    }
+    val unlink = stringResource(R.string.account_action_unlink)
+    val actions = when {
+        busy -> emptyList()
+        confirming -> listOf(
+            RowAction(unlink, { confirming = false; onUnlink() }),
+            RowAction(stringResource(R.string.you_action_keep), { confirming = false }),
+        )
+        else -> listOf(
+            RowAction(stringResource(if (copied) R.string.you_action_copied else R.string.you_action_copy), {
+                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(clipLabel, wallet))) }
+                copied = true
+            }),
+            RowAction(unlink, { confirming = true }),
+        )
+    }
+    CabinetRow(
+        colors = colors,
+        label = stringResource(R.string.account_wallets_label),
+        value = Fmt.shortKey(wallet),
+        valueKind = RowValueKind.KEY,
+        sub = when {
+            confirming && !busy -> stringResource(R.string.account_unlink_confirm)
+            failure != null -> stringResource(unlinkFailureRes(failure))
+            else -> null
+        },
+        subCaution = failure != null,
+        actions = actions,
+    )
+}
+
 // ---- Previews ------------------------------------------------------------------------------
 
 @InstrumentPreviews
@@ -187,6 +250,7 @@ private fun AccountSignedOutPreview() {
             onSignOut = {},
             onConnect = {},
             onDisconnect = {},
+            onUnlink = {},
             colors = AmberDarkColors,
         )
     }
@@ -209,6 +273,7 @@ private fun AccountSignedInPreview() {
             onSignOut = {},
             onConnect = {},
             onDisconnect = {},
+            onUnlink = {},
             colors = AmberDarkColors,
         )
     }

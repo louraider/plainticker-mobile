@@ -79,12 +79,33 @@ class AccountSectionTest {
 
     @Test
     fun `linked wallets draw only when the server returned some`() {
-        assertTrue("if (keys.isNotEmpty())" in sectionScan.code)
+        assertTrue("if (state.account.linkedWallets.isEmpty()) return" in sectionScan.code)
+    }
+
+    @Test
+    fun `each linked wallet is its own row, not one row joined by newlines`() {
+        val code = sectionScan.code
+        assertTrue("one row per wallet", "state.account.linkedWallets.forEach { wallet ->" in code)
+        assertFalse("no more joining wallets into one value", "joinToString(\"\\n\")" in code)
     }
 
     @Test
     fun `the wallet copies its full address, never the short key`() {
         assertTrue("ClipData.newPlainText(clipLabel, wallet.address)" in sectionScan.code)
+        assertTrue("a linked wallet copies its own full address the same way", "ClipData.newPlainText(clipLabel, wallet))" in sectionScan.code)
+    }
+
+    @Test
+    fun `unlink is a two-step inline confirm, the same pattern as sign out`() {
+        val raw = source("AccountSection.kt")
+        val row = raw.substring(raw.indexOf("private fun LinkedWalletRow("), raw.indexOf("// ---- Previews"))
+        assertTrue("the first tap only asks", "RowAction(unlink, { confirming = true })" in row)
+        assertTrue("the second tap unlinks", "RowAction(unlink, { confirming = false; onUnlink() })" in row)
+        assertTrue("Keep folds the question away", "R.string.you_action_keep), { confirming = false })" in row)
+        assertTrue("the question says what happens", "R.string.account_unlink_confirm" in row)
+        assertTrue("a busy row hides its own actions", "busy -> emptyList()" in row)
+        assertTrue("a refused unlink shows one plain line", "unlinkFailureRes(failure)" in row)
+        assertEquals("onUnlink is called in exactly one place", 1, sectionScan.code.split("onUnlink()").size - 1)
     }
 
     @Test
