@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.vote
 
+import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.PreviousRound
 import com.plainticker.mobile.data.plainticker.PreviousRoundStatus
@@ -8,6 +9,7 @@ import com.plainticker.mobile.data.receipts.VoteReceipt
 import com.plainticker.mobile.data.xstocks.Deployment
 import com.plainticker.mobile.data.xstocks.Underlying
 import com.plainticker.mobile.data.xstocks.XStockAsset
+import com.plainticker.mobile.ui.Copy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -86,10 +88,44 @@ class VoteTabModelTest {
     // ---- The previous round --------------------------------------------------------------------
 
     @Test
-    fun `null previous, no winner, or an unrecognized status all draw nothing`() {
+    fun `null previous or no winner draws nothing`() {
         assertNull(previousDisplay(null, emptyMap()))
         assertNull(previousDisplay(PreviousRound(id = 0, winner = null, status = "published"), emptyMap()))
-        assertNull(previousDisplay(PreviousRound(id = 0, winner = "JEF", status = "in_progress"), emptyMap()))
+        assertNull(previousDisplay(PreviousRound(id = 0, winner = "  ", status = "closed"), emptyMap()))
+    }
+
+    /**
+     * Changed 2026-09-26 (audit, item 2): an unrecognized status used to draw nothing, which is
+     * how the live server's `closed` hid "Last round" for everyone. It now draws the neutral line.
+     */
+    @Test
+    fun `an unrecognized status still draws the neutral closed line, not nothing`() {
+        val display = requireNotNull(previousDisplay(PreviousRound(id = 3, winner = "JEF", status = "in_progress"), emptyMap()))
+        assertEquals(PreviousRoundStatus.UNRECOGNIZED, display.status)
+        assertEquals(Copy.Words(R.string.vote_tab_last_round_closed, listOf("3", "JEF")), display.sentence)
+    }
+
+    @Test
+    fun `the live closed round names its number and winner, and claims nothing about coverage`() {
+        val catalog = mapOf("JEF" to asset("JEFx", "JEF", "Jefferies Financial Group"))
+        // The live previous block, read 2026-09-26.
+        val previous = PreviousRound(
+            id = 1, winner = "JEF", weight = "878980647", voters = 1,
+            closedAt = "2026-09-21T00:00:03.697Z", status = "closed",
+        )
+        val display = requireNotNull(previousDisplay(previous, catalog))
+        assertEquals(PreviousRoundStatus.CLOSED, display.status)
+        assertEquals(1, display.roundId)
+        assertEquals(Copy.Words(R.string.vote_tab_last_round_closed, listOf("1", "JEFx")), display.sentence)
+        assertEquals("21 Sep 2026 00:00 UTC", display.closedAtText)
+    }
+
+    @Test
+    fun `the three tally words keep their own sentences`() {
+        fun sentence(status: String) = requireNotNull(previousDisplay(PreviousRound(id = 1, winner = "JEF", status = status), emptyMap())).sentence
+        assertEquals(Copy.Words(R.string.vote_tab_last_round_pending, listOf("JEF")), sentence("pending"))
+        assertEquals(Copy.Words(R.string.vote_tab_last_round_published, listOf("JEF")), sentence("published"))
+        assertEquals(Copy.Words(R.string.vote_tab_last_round_uncoverable, listOf("JEF")), sentence("uncoverable"))
     }
 
     @Test

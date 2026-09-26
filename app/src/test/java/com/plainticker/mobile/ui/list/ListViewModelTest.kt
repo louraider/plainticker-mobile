@@ -206,6 +206,21 @@ class ListViewModelTest {
     }
 
     @Test
+    fun `a price-only row outside the US offers no vote, and a US one does`() = runTest {
+        val london = xStockTrading("ABFx", "ABF", "ABF-mint", Trading(currentPeriod = TradingPeriod.MARKET, openNow = true), "Associated British Foods xStock")
+            .let { it.copy(underlying = it.underlying?.copy(listingCountry = "GB")) }
+        val vm = viewModel(catalog = FakeCatalogRepository(Result.success(catalog() + london)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.withoutAnalysis.size == 2 }
+            assertTrue("TSLA is US-listed, so it keeps its vote", state.withoutAnalysis.single { it.ticker == "TSLA" }.votable)
+            assertFalse("ABF is London-listed; the server refuses that vote", state.withoutAnalysis.single { it.ticker == "ABF" }.votable)
+            assertTrue("an analyzed row stays votable by default and offers no vote anyway", state.analyzed.all { it.votable })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a classified company with no xStock is in neither section`() = runTest {
         val vm = viewModel()
 

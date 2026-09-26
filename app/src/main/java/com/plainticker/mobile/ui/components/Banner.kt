@@ -16,14 +16,14 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberType
 
 /**
  * The one state slot under the TopBar: [AmberColors.surfaceRaised] (Instrument's fixed
  * [com.plainticker.mobile.ui.theme.Elevated] before this fix; the same class of fault this pass
  * looks for in every one of its six components,
- * this one just had no `colors` parameter at all rather than one that defaulted dark), Outfit
- * 13/500 in [AmberColors.textSecondary], one optional text action (Retry) in
+ * this one just had no `colors` parameter at all rather than one that defaulted dark), Bricolage
+ * 13/500 ([AmberType.label]) in [AmberColors.textSecondary], one optional text action (Retry) in
  * [AmberColors.actionText]. Priority is the caller's: offline, then stale, then hours, then device.
  * [colors] defaults to the system-following [defaultAmberColors] like every other shared component.
  */
@@ -46,7 +46,7 @@ fun Banner(
     ) {
         Text(
             text = text,
-            style = PlainTickerType.label,
+            style = AmberType.label,
             color = colors.textSecondary,
             modifier = Modifier.weight(1f).padding(vertical = 12.dp),
         )

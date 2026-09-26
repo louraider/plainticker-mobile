@@ -22,14 +22,15 @@ import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.Accent
 import com.plainticker.mobile.ui.theme.Elevated
 import com.plainticker.mobile.ui.theme.Muted
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberType
 
 /** 14dp vertical padding makes a 48dp target; 16dp start keeps the label flush with the right edge. */
 val TextActionPadding: PaddingValues = PaddingValues(start = 16.dp, top = 14.dp, end = 0.dp, bottom = 14.dp)
 
 /**
- * The only kind of secondary action: Outfit 14/600 in Accent, role Button, a 48dp minimum target,
- * Elevated while pressed plus the theme's Accent ripple, a 2dp Accent outline while focused.
+ * The only kind of secondary action: Bricolage 14/600 ([AmberType.textAction], off Outfit since
+ * 2026-09-26) in the caller's colour, role Button, a 48dp minimum target, Elevated while pressed
+ * plus the theme's ripple, a 2dp outline while focused.
  */
 @Composable
 fun TextAction(
@@ -59,7 +60,7 @@ fun TextAction(
     ) {
         Text(
             text = label,
-            style = PlainTickerType.textAction,
+            style = AmberType.textAction,
             color = if (enabled) color else Muted,
             maxLines = 1,
         )

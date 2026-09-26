@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberType
 
 /**
  * [AmberColors.surfaceRaised] with a 1dp [AmberColors.border] border and 16dp padding: the digest,
@@ -56,10 +56,10 @@ private fun PanelPreview() {
     AmberPreviewCanvas {
         val colors = defaultAmberColors()
         Panel(colors = colors) {
-            Text(text = "Today 08:00", style = PlainTickerType.meta, color = colors.textTertiary(AmberSurface.RAISED))
+            Text(text = "Today 08:00", style = AmberType.meta, color = colors.textTertiary(AmberSurface.RAISED))
             Text(
                 text = "3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.",
-                style = PlainTickerType.panelBody,
+                style = AmberType.body,
                 color = colors.textPrimary,
             )
         }

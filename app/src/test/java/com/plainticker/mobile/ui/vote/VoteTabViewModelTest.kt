@@ -92,6 +92,42 @@ class VoteTabViewModelTest {
         assertEquals(setOf("ASML", "TSM"), state.ballot.map { it.ticker }.toSet())
     }
 
+    /**
+     * Audit 2026-09-26, item 3: the server accepts a vote for a US-listed underlying only, so a
+     * London or Hong Kong row on the ballot dead-ended after the wallet connected. The ballot
+     * holds US listings only; the catalog map still names a non-US winner if one ever appears.
+     */
+    @Test
+    fun `the ballot holds US-listed underlyings only`() = runTest {
+        val catalog = FakeCatalogRepository(
+            assets = Result.success(
+                listOf(
+                    xStock("TSMx", "TSM", mint = "TSM-mint", name = "Taiwan Semiconductor"),
+                    xStock("MDTx", "MDT", mint = "MDT-mint", name = "Medtronic").let {
+                        it.copy(underlying = it.underlying?.copy(isin = "IE00BTN1Y115"))
+                    },
+                    xStock("AAFx", "AAFL", mint = "AAFL-mint", name = "Airtel Africa xStock").let {
+                        it.copy(underlying = it.underlying?.copy(listingCountry = "GB"))
+                    },
+                    xStock("ABFx", "ABF", mint = "ABF-mint", name = "Associated British Foods xStock").let {
+                        it.copy(underlying = it.underlying?.copy(listingCountry = "GB"))
+                    },
+                    xStock("0700x", "0700", mint = "0700-mint", name = "Tencent xStock").let {
+                        it.copy(underlying = it.underlying?.copy(listingCountry = "HK"))
+                    },
+                ),
+            ),
+        )
+        val model = viewModel(catalog = catalog)
+        model.state.test {
+            awaitUntil { it.ballotLoaded }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf("MDT", "TSM"), model.state.value.ballot.map { it.ticker })
+        model.search("Airtel")
+        assertTrue("a search cannot reach a non-US row either", model.state.value.ballot.isEmpty())
+    }
+
     @Test
     fun `not open replaces the round furniture, whichever HTTP shape it came from`() = runTest {
         val model = viewModel(nextUp = FakeNextUpRepository(answer = Result.success(NextUpAnswer.NotOpen)))

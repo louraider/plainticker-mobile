@@ -138,7 +138,9 @@ class ListAgainstProductionTest {
                 assertFalse("$drawn is not an integer", drawn.contains('.'))
                 assertTrue("composite off scale: $drawn", drawn.toInt() in 0..100)
             }
-            row.ageForMeta?.let { assertTrue(Fmt.daysOld(it).endsWith(" d old")) }
+            // The age is counted copy now (list_row_age_days); what the row counts is still a
+            // whole, positive number of days.
+            row.ageForMeta?.let { assertTrue("age $it is not a positive day count", it > 0) }
             // An analysis from today prints no age, the way Detail does not print one under 24 h.
             if (row.ageDays == 0) assertNull(row.ageForMeta)
         }

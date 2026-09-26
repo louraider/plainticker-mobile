@@ -108,7 +108,7 @@ object PlainTickerType {
      * [com.plainticker.mobile.ui.components.TopBarTest] proves this still clears the one-line
      * clipping rule against the widest real action label beside it, at 1.0x and 1.3x.
      */
-    val wordmark: TextStyle = bricolage(15.sp, FontWeight.Bold, 20.sp)
+    val wordmark: TextStyle get() = AmberType.wordmark
     val tab: TextStyle = ui(14.sp, FontWeight.Medium, 20.sp)
     val tabSelected: TextStyle = ui(14.sp, FontWeight.SemiBold, 20.sp)
     /** Sub lines, state words, captions, banners: 13 Outfit 400. */
@@ -216,6 +216,29 @@ object AmberType {
     val button: TextStyle = bricolage(16.sp, FontWeight.SemiBold, 20.sp)
     /** Smallest supporting text: state words, timestamps written as words. */
     val meta: TextStyle = bricolage(12.sp, FontWeight.Normal, 16.sp)
+
+    // The last word styles Instrument's components still borrowed from Outfit (2026-09-26, the
+    // pre-freeze audit's item 5). Same sizes and weights as the Outfit styles they replace, so no
+    // layout moves by more than the face's own width difference, which every one-line slot below
+    // was re-measured against with fontTools (DESIGN.md section 3).
+    /**
+     * [com.plainticker.mobile.ui.components.TextAction]'s label: 14/600, opsz 14. Line height 20sp
+     * against a natural 16.8sp (typo ascent 930, descent 270, `USE_TYPO_METRICS` set), and the "g"
+     * reaches 2.525sp below the baseline, so the descender clears the line box by 2.855sp (Outfit
+     * cleared it by 1.824sp).
+     */
+    val textAction: TextStyle = bricolage(14.sp, FontWeight.SemiBold, 20.sp)
+    /** A field's label above its value, and a banner's sentence: 13/500, opsz 13. */
+    val label: TextStyle = bricolage(13.sp, FontWeight.Medium, 18.sp)
+    /** A field's value when it is words (Stocks' search): 16/400, opsz 16. */
+    val fieldText: TextStyle = bricolage(16.sp, FontWeight.Normal, 24.sp)
+    /** The onboarding headline: 26/700, opsz 26. It wraps; it is never a one-line slot. */
+    val screenTitle: TextStyle = bricolage(26.sp, FontWeight.Bold, 32.sp)
+    /**
+     * The wordmark, "PlainTicker": Bricolage 700 at 15sp, opsz 15, moved here from
+     * [PlainTickerType.wordmark] (which now points at this one) when the last Outfit callers left.
+     */
+    val wordmark: TextStyle = bricolage(15.sp, FontWeight.Bold, 20.sp)
 
     // Numbers: tnum on. Colour (amber action.text/state.live) is applied at the call site, per
     // the foundation rule in section 4: direction is never a second colour.

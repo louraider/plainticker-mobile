@@ -67,13 +67,13 @@ class CountCopyTest {
 
     /** Every counted sentence, at one and at many, as a reader reads it. */
     private val expected: Map<String, List<Case>> = mapOf(
-        "list_today_watched" to listOf(
-            Case(1, listOf("1"), "Today: 1 stock watched"),
-            Case(12, listOf("12"), "Today: 12 stocks watched"),
-        ),
-        "list_today" to listOf(
-            Case(1, listOf("1", "TSLAx", "Oct 22"), "Today: 1 stock watched, next report TSLAx on Oct 22"),
-            Case(12, listOf("12", "TSLAx", "Oct 22"), "Today: 12 stocks watched, next report TSLAx on Oct 22"),
+        // "12 days old", not "12 d old" (audit 2026-09-26): the analysis age on a Stocks row and
+        // in the stale banner. list_today_watched left with the Stocks Today strip it drew, and
+        // list_today with the onboarding backdrop's copy of that strip (2026-09-26).
+        "list_row_age_days" to listOf(
+            Case(1, listOf("1"), "1 day old"),
+            Case(12, listOf("12"), "12 days old"),
+            Case(1_204, listOf("1,204"), "1,204 days old"),
         ),
         "next_up_voters" to listOf(
             Case(1, listOf("1"), "1 voter"),
@@ -249,12 +249,11 @@ class CountCopyTest {
                 "pluralStringResource(R.plurals.detail_fscore_of, fscore.outOf, Fmt.count(fscore.outOf))",
                 "pluralStringResource(R.plurals.detail_fscore_a11y, fscore.outOf, it, Fmt.count(fscore.outOf))",
             ),
+            // The Stocks Today strip and its two counters left on 2026-09-26 (it repeated Today's own
+            // screen); what ListScreen counts now is the analysis age, row and banner alike.
             "src/main/java/com/plainticker/mobile/ui/list/ListScreen.kt" to listOf(
-                "pluralStringResource(R.plurals.list_today_watched, state.watched, Fmt.count(state.watched))",
-                "R.plurals.list_today,\n        state.watched,\n        Fmt.count(state.watched),",
-            ),
-            "src/main/java/com/plainticker/mobile/ui/onboarding/OnboardingScreen.kt" to listOf(
-                "R.plurals.list_today,\n                BackdropWatched,\n                Fmt.count(BackdropWatched),",
+                "pluralStringResource(R.plurals.list_row_age_days, it, Fmt.count(it))",
+                "pluralStringResource(R.plurals.list_row_age_days, banner.newestDays, Fmt.count(banner.newestDays))",
             ),
         ).forEach { (path, fragments) ->
             val source = File(module, path).readText().replace("\r\n", "\n")
