@@ -793,6 +793,5 @@
     <string name="nav_you">You</string>
 
     <!-- Debug builds only -->
-    <string name="debug_open_wallet_spike">Open the wallet spike</string>
     <string name="debug_run_watchlist_check">Run the check now</string>
 </resources>

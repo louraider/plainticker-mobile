@@ -204,7 +204,7 @@ internal fun WatchlistContent(
                 onEnableNotifications = onEnableNotifications,
             )
         }
-        // Debug builds only, behind the same gate as the component gallery and the wallet spike.
+        // Debug builds only, behind the same gate as the component gallery.
         onRunCheck?.let { run -> item(key = "debug-run") { DebugRunCheck(run) } }
         item(key = "after-yours") { afterContent() }
     }
