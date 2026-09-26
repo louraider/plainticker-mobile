@@ -338,6 +338,7 @@
     <string name="swap_failed_value_unchecked">The price needed to check this quote did not come back, so it never reached the wallet</string>
     <string name="swap_failed_dust">This amount is too small. The quote returns nothing for it.</string>
     <string name="swap_failed_wallet_changed">The wallet disconnected or changed before signing. Nothing was signed.</string>
+    <string name="swap_failed_signed_mismatch">The wallet handed back a transaction other than the one checked, so it was not sent. Nothing moved.</string>
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
     <string name="swap_try_again">Try again</string>

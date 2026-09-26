@@ -535,6 +535,55 @@ object TransactionGuard {
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
+    // ---- What came back from the wallet ------------------------------------------------------
+
+    /**
+     * True when [signed], the transaction a wallet handed back from `sign_transactions`, carries
+     * byte for byte the message [unsigned] did, the one [checkSwap] read, and a signature from
+     * [wallet] in the wallet's own slot (judges' review, 2026-09-26).
+     *
+     * The guard checked the bytes it gave the wallet; what goes to Jupiter's /execute is what the
+     * wallet gave back. A wallet, or anything between the app and it, returning a different
+     * message would otherwise be sent unread. Only signatures may differ: a fee payer's slot stays
+     * empty for the co-signer to fill.
+     *
+     * Swap only. A pass and a vote use `sign_and_send_transactions`, where the wallet submits the
+     * transaction itself and returns only its signature: no payload comes back to compare, and the
+     * bytes the wallet was handed are the ones [checkPass] and [checkVote] read, since [decode]
+     * requires them to re-serialize exactly.
+     */
+    fun signedMatches(unsigned: ByteArray, signed: ByteArray, wallet: String): Boolean = runCatching {
+        if (decode(unsigned) == null) return@runCatching false
+        val tx = decode(signed) ?: return@runCatching false
+        val (count, header) = signatureSection(signed)
+        val (unsignedCount, unsignedHeader) = signatureSection(unsigned)
+        if (count != unsignedCount) return@runCatching false
+        val message = signed.copyOfRange(header + count * SIGNATURE_BYTES, signed.size)
+        val checked = unsigned.copyOfRange(unsignedHeader + count * SIGNATURE_BYTES, unsigned.size)
+        if (!message.contentEquals(checked)) return@runCatching false
+        val slot = staticKeys(tx.message).take(tx.message.signatureCount.toInt()).indexOf(wallet)
+        if (slot < 0 || slot >= count) return@runCatching false
+        val at = header + slot * SIGNATURE_BYTES
+        (at until at + SIGNATURE_BYTES).any { signed[it].toInt() != 0 }
+    }.getOrDefault(false)
+
+    private const val SIGNATURE_BYTES = 64
+
+    /** The signature count and the length of the compact-u16 that states it. */
+    private fun signatureSection(bytes: ByteArray): Pair<Int, Int> {
+        var value = 0
+        var shift = 0
+        var i = 0
+        while (true) {
+            val b = bytes[i].toInt() and 0xff
+            i++
+            value = value or ((b and 0x7f) shl shift)
+            if (b and 0x80 == 0) return value to i
+            shift += 7
+            require(i < 3)
+        }
+    }
+
     // ---- Decoding ---------------------------------------------------------------------------
 
     /**

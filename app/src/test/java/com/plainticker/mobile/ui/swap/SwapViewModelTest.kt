@@ -135,7 +135,14 @@ class SwapViewModelTest {
     private var executeIndex = 0
 
     private val unsignedBytes: ByteArray = Base64.getDecoder().decode(unsignedBase64)
-    private val signedBytes: ByteArray = "SIGNED-BY-THE-WALLET".encodeToByteArray()
+    /**
+     * What a wallet hands back: the same message, with the seeker's signature in its slot (slot 0,
+     * the taker pays). The swap machine now compares the two before /execute (judges' review,
+     * 2026-09-26), so an arbitrary byte string no longer stands in for a signed transaction.
+     */
+    private val signedBytes: ByteArray = signAsSeeker(unsignedBytes)
+
+    private fun signAsSeeker(tx: ByteArray): ByteArray = tx.copyOf().also { java.util.Arrays.fill(it, 1, 65, 0x5A) }
 
     private val receipts = FakeReceiptStore()
 
@@ -181,7 +188,7 @@ class SwapViewModelTest {
 
     private fun wallet(signs: Boolean = true): FakeWalletSession = FakeWalletSession().apply {
         connectedAs(seeker)
-        if (signs) operations = FakeAdapterOperations(signedPayloads = listOf(signedBytes))
+        if (signs) operations = FakeAdapterOperations(sign = ::signAsSeeker)
     }
 
     private fun viewModel(
@@ -709,6 +716,33 @@ class SwapViewModelTest {
             assertEquals(SwapFailure.NO_TRANSACTION, failed.reason)
             assertEquals(0, wallet.callCount)
             cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a signed transaction that is not the one checked is never sent`() = runTest {
+        val tampered = WireMessage.parseTransaction(unsignedBytes)
+            .plus(KnownPrograms.TOKEN, listOf(REAL_TAKER, REAL_TAKER, seeker.address), byteArrayOf(4, -1, -1, -1, -1, -1, -1, -1, 127))
+            .transaction().let(::signAsSeeker)
+        val unsignedEcho = unsignedBytes.copyOf()
+        for (returned in listOf(tampered, unsignedEcho, "SIGNED-BY-THE-WALLET".encodeToByteArray())) {
+            resetPerCase()
+            val mock = jupiter()
+            val wallet = FakeWalletSession().apply {
+                connectedAs(seeker)
+                operations = FakeAdapterOperations(signedPayloads = listOf(returned))
+            }
+            val vm = viewModel(mock, wallet)
+            vm.state.test {
+                awaitItem()
+                submitFive(vm, this)
+                val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+                assertEquals(SwapFailure.SIGNED_MISMATCH, failed.reason)
+                assertEquals("the wallet was asked once", 1, wallet.callCount)
+                assertTrue("nothing reaches /execute", mock.executes().isEmpty())
+                assertTrue("and no receipt is written", receipts.writes.isEmpty())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
     }
 

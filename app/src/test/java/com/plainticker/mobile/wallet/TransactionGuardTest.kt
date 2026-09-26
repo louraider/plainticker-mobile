@@ -678,4 +678,36 @@ class TransactionGuardTest {
             assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(maker), byteArrayOf(1, 0)).transaction(), c.taker), "without a tag")
         }
     }
+
+    // ---- What the wallet hands back (judges' review, 2026-09-26) ---------------------------
+
+    /** [tx] with a non-zero signature written into signature slot [slot]. */
+    private fun signedIn(tx: ByteArray, slot: Int): ByteArray =
+        tx.copyOf().also { java.util.Arrays.fill(it, 1 + 64 * slot, 1 + 64 * (slot + 1), 0x5A) }
+
+    @Test
+    fun `swap - the wallet's answer matches only when it is the checked message with the wallet's own signature`() {
+        for (c in swaps) {
+            val o = order(c.path)
+            val unsigned = bytesOf(o)
+            val m = WireMessage.parseTransaction(unsigned)
+            val slot = m.keys.take(m.numRequiredSignatures).indexOf(c.taker)
+            assertTrue(c.path, slot >= 0)
+            assertTrue(c.path, TransactionGuard.signedMatches(unsigned, signedIn(unsigned, slot), c.taker))
+            // Handed back unsigned, or signed only in another signer's slot, is not this wallet's signature.
+            assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, unsigned, c.taker))
+            if (m.numRequiredSignatures > 1) {
+                val other = if (slot == 0) 1 else 0
+                assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, signedIn(unsigned, other), c.taker))
+            }
+            // Any change to the message itself, one byte of the blockhash or an extra instruction.
+            val otherBlockhash = m.copy(blockhash = m.blockhash.copyOf().also { it[0] = (it[0] + 1).toByte() }).transaction()
+            assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, signedIn(otherBlockhash, slot), c.taker))
+            val extra = m.plus(KnownPrograms.COMPUTE_BUDGET, emptyList(), leData(3.toByte(), 1L)).transaction()
+            assertEquals(c.path, false, TransactionGuard.signedMatches(unsigned, signedIn(extra, slot), c.taker))
+            // Garbage, and the right bytes checked against the wrong wallet.
+            assertEquals(false, TransactionGuard.signedMatches(unsigned, "SIGNED".encodeToByteArray(), c.taker))
+            assertEquals(false, TransactionGuard.signedMatches(unsigned, signedIn(unsigned, slot), attacker))
+        }
+    }
 }

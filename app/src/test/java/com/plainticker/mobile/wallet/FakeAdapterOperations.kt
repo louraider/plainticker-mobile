@@ -23,6 +23,11 @@ class FakeAdapterOperations(
      * than as a vote that landed.
      */
     var signatures: List<ByteArray> = emptyList(),
+    /**
+     * When set, [signTransactions] answers each transaction with this function of it instead of
+     * [signedPayloads]: a wallet that signs whatever it is handed, whichever order that was.
+     */
+    var sign: ((ByteArray) -> ByteArray)? = null,
 ) : AdapterOperations {
 
     /** Every batch of unsigned transactions the ViewModel asked to sign. */
@@ -33,7 +38,8 @@ class FakeAdapterOperations(
 
     override suspend fun signTransactions(transactions: Array<ByteArray>): MobileWalletAdapterClient.SignPayloadsResult {
         signRequests += transactions.toList()
-        return MobileWalletAdapterClient.SignPayloadsResult(signedPayloads.toTypedArray())
+        val answer = sign?.let { f -> transactions.map(f) } ?: signedPayloads
+        return MobileWalletAdapterClient.SignPayloadsResult(answer.toTypedArray())
     }
 
     override suspend fun authorize(

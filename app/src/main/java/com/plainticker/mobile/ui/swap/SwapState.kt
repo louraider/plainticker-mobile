@@ -545,6 +545,14 @@ enum class SwapFailure(
     WALLET_CHANGED(R.string.swap_failed_wallet_changed, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
 
     /**
+     * The wallet signed, but what it handed back is not the message
+     * [com.plainticker.mobile.wallet.TransactionGuard] read before opening it, or carries no
+     * signature from this wallet. It is never sent to /execute, so nothing moved, and a fresh
+     * quote is a fresh attempt.
+     */
+    SIGNED_MISMATCH(R.string.swap_failed_signed_mismatch, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /**
      * The authorize round-trip failed, so the wallet was never read and nothing was quoted.
      *
      * This is the connect step only. An approval that comes back without a signature is not a
