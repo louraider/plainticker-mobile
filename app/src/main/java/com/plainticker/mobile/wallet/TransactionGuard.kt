@@ -76,6 +76,26 @@ object TransactionGuard {
     private val RFQ_FILL = hex("a860b7a35c0a28a0")
     private const val AMOUNT_OFFSET = 8
 
+    /**
+     * `route_v2(in_amount: u64, quoted_out_amount: u64, slippage_bps: u16, platform_fee_bps: u16,
+     * positive_slippage_bps: u16, route_plan: Vec<RoutePlanStepV2>)`, Borsh after the 8-byte
+     * discriminator: the codama decoder generated from Jupiter's published IDL
+     * (sevenlabs-hq/carbon, jupiter-swap-decoder `route_v2.rs`), and every real Metis fixture,
+     * where floor(quoted x (10,000 - slippage) / 10,000) equals the JSON's otherAmountThreshold.
+     */
+    private const val ROUTE_V2_QUOTED_OUT = 16
+    private const val ROUTE_V2_SLIPPAGE = 24
+    private const val ROUTE_V2_ARGS_END = 30
+
+    /**
+     * JupiterZ `fill(input_amount: u64, output_amount: u64, expire_at: i64, ...)`, the order engine
+     * IDL in jup-ag/rfq-webhook-toolkit (`idls/order_engine.json`). The real RFQ fixture's
+     * output_amount is its JSON outAmount and its expire_at its JSON expireAt; the deployed program
+     * appends five more bytes this class does not read.
+     */
+    private const val RFQ_FILL_OUTPUT = 16
+    private const val RFQ_FILL_ARGS_END = 32
+
     /** Rent-exempt minimum of a 165-byte token account: what one CreateIdempotent can cost the payer. */
     const val TOKEN_ACCOUNT_RENT_LAMPORTS = 2_039_280L
 
@@ -258,6 +278,11 @@ object TransactionGuard {
      * proceeds into someone else's account, which the amount check alone never could. Any other
      * Jupiter instruction is refused, because its account layout is one this class cannot read.
      * A refusal costs a retry; a wrong allow costs the money.
+     *
+     * **The output, read from the bytes too (2026-09-26).** The input amount was bound; the output
+     * was not, so the "at least" on the sheet was the JSON's word alone. [checkSwapOutput] now
+     * reads `route_v2`'s quoted amount and slippage, or `fill`'s output amount, and refuses bytes
+     * that would accept less than the sheet displays.
      */
     suspend fun checkSwap(
         bytes: ByteArray,
@@ -306,6 +331,7 @@ object TransactionGuard {
                     }
                     checkSwapAccounts(shape, acc, wallet, inputMint, outputMint, spendFrom, payInto)
                         ?.let { return@guarded it }
+                    checkSwapOutput(shape, data, order)?.let { return@guarded it }
                 }
                 KnownPrograms.TOKEN, KnownPrograms.TOKEN_2022 -> {
                     val tag = data.firstOrNull()?.toInt()?.and(0xff)
@@ -425,6 +451,49 @@ object TransactionGuard {
             }
         }
         return null
+    }
+
+    /**
+     * What the swap instruction's own bytes promise to deliver, against what the sheet shows
+     * (judges' review, 2026-09-26). The sheet's "at least" comes from Jupiter's JSON; without this
+     * a server could show a tight floor beside bytes that accept almost nothing back.
+     *
+     * - `route_v2` carries `quoted_out_amount` and `slippage_bps`, and the program reverts when
+     *   the route delivers less than the quoted amount less that slippage. The slippage may not
+     *   exceed the order's own, and that minimum ([SwapFloor.of], the same rounding the sheet
+     *   uses) may not fall below the floor the sheet displays ([SwapFloor.shownRaw]).
+     * - JupiterZ `fill` carries the exact `output_amount` the maker transfers; it may not be less
+     *   than the amount the sheet displays, nor than the floor.
+     */
+    private fun checkSwapOutput(slots: SwapAccountSlots, data: ByteArray, order: SwapOrder): Verdict? {
+        val shownFloor = SwapFloor.shownRaw(order)
+        return when (slots) {
+            RouteV2Accounts -> {
+                if (data.size < ROUTE_V2_ARGS_END) return refuse("route_v2 data is too short to read its output terms")
+                val quotedOut = readU64(data, ROUTE_V2_QUOTED_OUT)
+                val slippage = readU16(data, ROUTE_V2_SLIPPAGE)
+                when {
+                    quotedOut < 0L -> refuse("route_v2 quoted output is not a readable amount")
+                    slippage > 10_000 -> refuse("route_v2 slippage $slippage bps is not a readable slippage")
+                    slippage > order.slippageBps ->
+                        refuse("route_v2 slippage $slippage bps exceeds the order's ${order.slippageBps} bps")
+                    SwapFloor.of(quotedOut, slippage) < shownFloor ->
+                        refuse("route_v2 minimum output ${SwapFloor.of(quotedOut, slippage)} is below the displayed floor $shownFloor")
+                    else -> null
+                }
+            }
+            RfqFillAccounts -> {
+                if (data.size < RFQ_FILL_ARGS_END) return refuse("fill data is too short to read its output amount")
+                val output = readU64(data, RFQ_FILL_OUTPUT)
+                when {
+                    output < 0L -> refuse("fill output is not a readable amount")
+                    output < order.outAmountRaw -> refuse("fill output $output is below the displayed ${order.outAmountRaw}")
+                    output < shownFloor -> refuse("fill output $output is below the displayed floor $shownFloor")
+                    else -> null
+                }
+            }
+            else -> refuse("the swap instruction's output terms are not ones this app can read")
+        }
     }
 
     /** [owner]'s associated token accounts for [mint], under the classic and the Token-2022 program. */
@@ -591,6 +660,11 @@ object TransactionGuard {
         } catch (e: Exception) {
             refuse("transaction could not be read: ${e::class.simpleName}")
         }
+
+    private fun readU16(b: ByteArray, at: Int): Int {
+        require(at + 2 <= b.size)
+        return (b[at].toInt() and 0xff) or ((b[at + 1].toInt() and 0xff) shl 8)
+    }
 
     private fun readU32(b: ByteArray, at: Int): Long {
         require(at + 4 <= b.size)

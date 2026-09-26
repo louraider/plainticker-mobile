@@ -481,4 +481,120 @@ class TransactionGuardTest {
         val onlyBudget = m.copy(instructions = m.instructions.filter { m.keys[it.program] == KnownPrograms.COMPUTE_BUDGET })
         assertRefused(checkSwap(o, onlyBudget.transaction(), c.taker), "no Jupiter")
     }
+
+    // ---- Swap output, read from the bytes (judges' review, 2026-09-26) --------------------
+
+    private val jupiterPrograms = setOf(KnownPrograms.JUPITER_AGGREGATOR_V6, KnownPrograms.JUPITER_RFQ)
+
+    private fun WireMessage.jupiterIndex(): Int = instructions.indexOfFirst { keys[it.program] in jupiterPrograms }
+
+    private fun WireMessage.jupiterData(): ByteArray = instructions[jupiterIndex()].data
+
+    /** The Jupiter instruction's data with [bytes] written over it at [at]. */
+    private fun WireMessage.patchJupiter(at: Int, bytes: ByteArray): WireMessage =
+        mapInstruction(jupiterIndex()) { ix -> ix.copy(data = ix.data.copyOf().also { bytes.copyInto(it, at) }) }
+
+    private fun u16(v: Int) = byteArrayOf((v and 0xff).toByte(), ((v shr 8) and 0xff).toByte())
+
+    private fun u64At(d: ByteArray, at: Int) = java.nio.ByteBuffer.wrap(d, at, 8).order(java.nio.ByteOrder.LITTLE_ENDIAN).long
+
+    private fun u16At(d: ByteArray, at: Int) = (d[at].toInt() and 0xff) or ((d[at + 1].toInt() and 0xff) shl 8)
+
+    private val metisSwaps get() = listOf(swaps[0], swaps[2])
+    private val rfqSwap get() = swaps[1]
+
+    /**
+     * The layouts, pinned against the real bytes: route_v2 is in_amount u64 @8, quoted_out_amount
+     * u64 @16, slippage_bps u16 @24; fill is input_amount u64 @8, output_amount u64 @16, expire_at
+     * i64 @24. Read that way, every real order's own bytes restate its own JSON exactly.
+     */
+    @Test
+    fun `swap - read at the published layouts, the real bytes restate the JSON's output terms`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val d = WireMessage.parseTransaction(bytesOf(o)).jupiterData()
+            assertEquals(o.inAmountRaw, u64At(d, 8))
+            val quoted = u64At(d, 16)
+            val slippage = u16At(d, 24)
+            assertEquals(c.path, o.slippageBps, slippage)
+            assertEquals(c.path, o.otherAmountThreshold!!.toLong(), SwapFloor.of(quoted, slippage))
+            assertEquals("the sheet shows the same floor", SwapFloor.shownRaw(o), o.otherAmountThreshold!!.toLong())
+        }
+        val o = order(rfqSwap.path)
+        val d = WireMessage.parseTransaction(bytesOf(o)).jupiterData()
+        assertEquals(o.inAmountRaw, u64At(d, 8))
+        assertEquals(o.outAmountRaw, u64At(d, 16))
+        assertEquals(o.expireAt, u64At(d, 24))
+    }
+
+    @Test
+    fun `swap - route_v2 bytes with a slippage above the order's are refused`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertRefused(checkSwap(o, m.patchJupiter(24, u16(5_000)).transaction(), c.taker), "slippage")
+            assertRefused(checkSwap(o, m.patchJupiter(24, u16(o.slippageBps + 1)).transaction(), c.taker), "slippage")
+            assertRefused(checkSwap(o, m.patchJupiter(24, u16(65_535)).transaction(), c.taker), "slippage")
+        }
+    }
+
+    @Test
+    fun `swap - route_v2 bytes with a reduced quoted output are refused, by a single base unit`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val quoted = u64At(m.jupiterData(), 16)
+            assertRefused(checkSwap(o, m.patchJupiter(16, leData(quoted - 1)).transaction(), c.taker), "below the displayed floor")
+            assertRefused(checkSwap(o, m.patchJupiter(16, leData(quoted / 2)).transaction(), c.taker), "below the displayed floor")
+            assertRefused(checkSwap(o, m.patchJupiter(16, leData(0L)).transaction(), c.taker), "below the displayed floor")
+        }
+    }
+
+    @Test
+    fun `swap - route_v2 bytes that promise more than the sheet, a tighter slippage or a better quote, are allowed`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val quoted = u64At(m.jupiterData(), 16)
+            assertAllowed(checkSwap(o, m.patchJupiter(24, u16(50)).transaction(), c.taker))
+            assertAllowed(checkSwap(o, m.patchJupiter(16, leData(quoted + 1_000)).transaction(), c.taker))
+        }
+    }
+
+    @Test
+    fun `swap - a displayed floor raised above what the bytes accept is refused`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val raised = o.copy(otherAmountThreshold = (o.otherAmountThreshold!!.toLong() + 1).toString())
+            assertRefused(checkSwap(raised, bytesOf(o), c.taker), "below the displayed floor")
+            // With no threshold in the JSON, the sheet's floor is the estimate less the order's
+            // slippage, and the bytes are held to that instead.
+            val noThreshold = o.copy(otherAmountThreshold = null, outAmount = (o.outAmountRaw * 2).toString())
+            assertRefused(checkSwap(noThreshold, bytesOf(o), c.taker), "below the displayed floor")
+        }
+    }
+
+    @Test
+    fun `swap - an RFQ fill paying out less than the sheet displays is refused`() = runTest {
+        val c = rfqSwap
+        val o = order(c.path)
+        val m = WireMessage.parseTransaction(bytesOf(o))
+        assertRefused(checkSwap(o, m.patchJupiter(16, leData(o.outAmountRaw - 1)).transaction(), c.taker), "fill output")
+        assertRefused(checkSwap(o, m.patchJupiter(16, leData(1L)).transaction(), c.taker), "fill output")
+        assertRefused(checkSwap(o, m.patchJupiter(16, leData(-1L)).transaction(), c.taker), "fill output")
+        // The JSON claiming more than the maker's bytes pay is the same lie told the other way.
+        assertRefused(checkSwap(o.copy(outAmount = (o.outAmountRaw + 1).toString()), bytesOf(o), c.taker), "fill output")
+        // Paying more than displayed costs the reader nothing.
+        assertAllowed(checkSwap(o, m.patchJupiter(16, leData(o.outAmountRaw + 1)).transaction(), c.taker))
+    }
+
+    @Test
+    fun `swap - a Jupiter instruction cut short of its output terms is refused`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val cut = m.mapInstruction(m.jupiterIndex()) { ix -> ix.copy(data = ix.data.copyOf(20)) }
+            assertRefused(checkSwap(o, cut.transaction(), c.taker), "too short")
+        }
+    }
 }
