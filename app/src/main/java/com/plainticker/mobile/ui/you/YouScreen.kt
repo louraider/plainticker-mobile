@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,12 +41,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -68,6 +74,8 @@ import com.plainticker.mobile.ui.pass.PassActions
 import com.plainticker.mobile.ui.pass.PassSheet
 import com.plainticker.mobile.ui.pass.PassViewModel
 import com.plainticker.mobile.ui.pass.ProUiState
+import com.plainticker.mobile.ui.pass.PromoRefusal
+import com.plainticker.mobile.ui.pass.PromoState
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberDarkColors
@@ -125,6 +133,7 @@ fun YouScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pro by passViewModel.pro.collectAsStateWithLifecycle()
+    val promo by passViewModel.promo.collectAsStateWithLifecycle()
     val pass by passViewModel.state.collectAsStateWithLifecycle()
     val account by accountViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -151,10 +160,15 @@ fun YouScreen(
         YouContent(
             state = state,
             pro = pro,
+            promo = promo,
             onConnect = viewModel::connect,
             onDisconnect = viewModel::disconnect,
             onRefreshEntitlement = passViewModel::refreshEntitlement,
             onPay = passViewModel::pay,
+            onOpenPromo = passViewModel::openPromo,
+            onPromoInputChanged = passViewModel::promoInputChanged,
+            onApplyPromo = passViewModel::applyPromo,
+            onDismissPromo = passViewModel::dismissPromo,
             onOpenTab = onOpenTab,
             onOpenDigest = onOpenDigest,
             account = account,
@@ -189,6 +203,11 @@ internal fun YouContent(
     onPay: () -> Unit,
     onOpenTab: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    promo: PromoState = PromoState.Idle,
+    onOpenPromo: () -> Unit = {},
+    onPromoInputChanged: (String) -> Unit = {},
+    onApplyPromo: () -> Unit = {},
+    onDismissPromo: () -> Unit = {},
     onEnableNotifications: (() -> Unit)? = null,
     onOpenDigest: (() -> Unit)? = null,
     account: AccountUiState = AccountUiState.Restoring,
@@ -226,7 +245,18 @@ internal fun YouContent(
             }
         }
         item(key = "plan") {
-            PlanGroup(rows = plan, onPay = onPay, onRefresh = onRefreshEntitlement, colors = colors)
+            PlanGroup(
+                rows = plan,
+                onPay = onPay,
+                onRefresh = onRefreshEntitlement,
+                promo = promo,
+                onOpenPromo = onOpenPromo,
+                onPromoInputChanged = onPromoInputChanged,
+                onApplyPromo = onApplyPromo,
+                onDismissPromo = onDismissPromo,
+                pro = pro.pro,
+                colors = colors,
+            )
         }
         item(key = "methods") {
             AccountSection(
@@ -353,7 +383,18 @@ private fun HeroButton(action: HeroAction, onSignIn: () -> Unit, onPay: () -> Un
 // ---- Plan ----------------------------------------------------------------------------------
 
 @Composable
-private fun PlanGroup(rows: List<PlanRow>, onPay: () -> Unit, onRefresh: () -> Unit, colors: AmberColors) {
+private fun PlanGroup(
+    rows: List<PlanRow>,
+    onPay: () -> Unit,
+    onRefresh: () -> Unit,
+    promo: PromoState,
+    onOpenPromo: () -> Unit,
+    onPromoInputChanged: (String) -> Unit,
+    onApplyPromo: () -> Unit,
+    onDismissPromo: () -> Unit,
+    pro: Boolean,
+    colors: AmberColors,
+) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(title = stringResource(R.string.you_heading_plan), colors = colors)
         AmberTickerRowGroup(colors = colors) {
@@ -366,6 +407,15 @@ private fun PlanGroup(rows: List<PlanRow>, onPay: () -> Unit, onRefresh: () -> U
                     actions = listOfNotNull(row.action?.let { planRowAction(it, onPay, onRefresh) }),
                 )
             }
+            PromoRow(
+                promo = promo,
+                pro = pro,
+                onOpen = onOpenPromo,
+                onInputChanged = onPromoInputChanged,
+                onApply = onApplyPromo,
+                onDismiss = onDismissPromo,
+                colors = colors,
+            )
         }
     }
 }
@@ -375,6 +425,119 @@ private fun planRowAction(action: PlanAction, onPay: () -> Unit, onRefresh: () -
     PlanAction.GET_PRO -> RowAction(stringResource(R.string.you_action_get_pro), onPay)
     PlanAction.EXTEND -> RowAction(stringResource(R.string.you_action_extend), onPay)
     PlanAction.REFRESH -> RowAction(stringResource(R.string.action_refresh), onRefresh)
+}
+
+// ---- Promo code redemption -------------------------------------------------------------------
+
+/**
+ * "Have a code?" (task: promo-redeem): a plain text action that opens an inline field, uppercase
+ * and normalized as it is typed ([com.plainticker.mobile.data.plainticker.PromoApi.normalize],
+ * mirrored by [com.plainticker.mobile.ui.pass.PassViewModel.promoInputChanged]), with Apply and
+ * Cancel beside it. Shown even when this device is already Pro, so a judge's second code can
+ * extend or stack it, but in a lower emphasis than when the device is Free: the action reads in
+ * [AmberColors.textSecondary] rather than [AmberColors.actionText] while [pro] is true.
+ *
+ * Errors are one plain line under the field ([PromoRefusal.text]), never the server's own
+ * sentence; a success collapses the field and shows the same "Pro until" sentence the hero draws,
+ * through [promoSuccessLine], so the two can never disagree about the same fact.
+ */
+@Composable
+private fun PromoRow(
+    promo: PromoState,
+    pro: Boolean,
+    onOpen: () -> Unit,
+    onInputChanged: (String) -> Unit,
+    onApply: () -> Unit,
+    onDismiss: () -> Unit,
+    colors: AmberColors,
+) {
+    when (promo) {
+        PromoState.Idle -> CabinetRow(
+            colors = colors,
+            value = stringResource(R.string.promo_prompt),
+            valueKind = RowValueKind.QUIET,
+            actions = listOf(
+                RowAction(
+                    stringResource(R.string.promo_action_have_code),
+                    onOpen,
+                    // Lower emphasis once this device is already Pro: still reachable (a judge's
+                    // second code can extend or stack it), just not drawn as the amber action a
+                    // reader with nothing yet needs to notice first.
+                    color = if (pro) colors.textSecondary else null,
+                ),
+            ),
+        )
+        is PromoState.Editing -> PromoEditingRow(promo.input, error = null, onInputChanged, onApply, onDismiss, colors)
+        is PromoState.Failed -> PromoEditingRow(promo.input, error = promo.reason, onInputChanged, onApply, onDismiss, colors)
+        is PromoState.Applying -> CabinetRow(
+            colors = colors,
+            value = stringResource(R.string.promo_field_label),
+            sub = stringResource(R.string.promo_field_checking),
+        )
+        is PromoState.Success -> CabinetRow(
+            colors = colors,
+            value = promoSuccessLine(promo.untilMillis).text(),
+        )
+    }
+}
+
+@Composable
+private fun PromoEditingRow(
+    input: String,
+    error: PromoRefusal?,
+    onInputChanged: (String) -> Unit,
+    onApply: () -> Unit,
+    onDismiss: () -> Unit,
+    colors: AmberColors,
+) {
+    CabinetRow(
+        colors = colors,
+        value = stringResource(R.string.promo_field_label),
+        sub = error?.let { stringResource(it.text) },
+        subCaution = error != null,
+        actions = listOf(
+            RowAction(stringResource(R.string.promo_action_apply), onApply),
+            RowAction(stringResource(R.string.you_action_cancel), onDismiss),
+        ),
+    ) {
+        PromoField(value = input, onValueChange = onInputChanged, colors = colors)
+    }
+}
+
+/**
+ * The one input on You: single line, Bricolage `figureInline` (tnum on) rather than a monospace
+ * face, because DESIGN.md section 3's foundation rule keeps JetBrains Mono for on-chain
+ * identifiers only, and a promo code is not one. Paste works the way every [BasicTextField] on
+ * Android already supports it, through the system's own context menu; nothing here disables it.
+ */
+@Composable
+private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: AmberColors) {
+    val style = AmberType.figureInline.copy(color = colors.textPrimary)
+    val placeholder = stringResource(R.string.promo_field_placeholder)
+    val label = stringResource(R.string.promo_field_label)
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        textStyle = style,
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Characters,
+            autoCorrectEnabled = false,
+        ),
+        cursorBrush = SolidColor(colors.actionText),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .semantics { contentDescription = label },
+        decorationBox = { innerField ->
+            Box {
+                if (value.isEmpty()) {
+                    Text(text = placeholder, style = style, color = colors.textTertiary(AmberSurface.RAISED))
+                }
+                innerField()
+            }
+        },
+    )
 }
 
 // ---- On this device ------------------------------------------------------------------------
@@ -516,8 +679,12 @@ private fun LicenseRow(license: BundledFontLicense, colors: AmberColors) {
 /** How a row's value is set: words, an on-chain key in mono, a quieter sentence, or a link. */
 internal enum class RowValueKind { WORDS, KEY, QUIET, LINK }
 
-/** A row's text action: a label and what it does. */
-internal class RowAction(val label: String, val onClick: () -> Unit)
+/**
+ * A row's text action: a label and what it does. [color] overrides the group's own
+ * [AmberColors.actionText] for one action only; null (the ordinary case) draws it at the group's
+ * own emphasis, the same amber every other row's action reads at.
+ */
+internal class RowAction(val label: String, val onClick: () -> Unit, val color: Color? = null)
 
 /**
  * One row of a cabinet group, the web cabinet's calm row: an optional small label, the value, an
@@ -622,11 +789,11 @@ internal fun CabinetRow(
                     modifier = Modifier.padding(start = FigureGap),
                 )
             }
-            inline?.let { TextAction(label = it.label, onClick = it.onClick, color = colors.actionText) }
+            inline?.let { TextAction(label = it.label, onClick = it.onClick, color = it.color ?: colors.actionText) }
         }
         if (actions.size > 1) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                actions.forEach { TextAction(label = it.label, onClick = it.onClick, color = colors.actionText) }
+                actions.forEach { TextAction(label = it.label, onClick = it.onClick, color = it.color ?: colors.actionText) }
             }
         }
         extra()

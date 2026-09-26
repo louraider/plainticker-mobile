@@ -486,6 +486,8 @@
     <string name="pro_entitlement_stake">This device is Pro through its staked SKR.</string>
     <string name="pro_entitlement_subscription">This device is Pro through a subscription.</string>
     <string name="pro_entitlement_subscription_until">This device is Pro through a subscription, until %1$s.</string>
+    <string name="pro_entitlement_promo">This device is Pro through a promo code.</string>
+    <string name="pro_entitlement_promo_until">This device is Pro through a promo code, until %1$s.</string>
     <string name="pro_entitlement_active">This device is Pro.</string>
     <string name="pro_entitlement_none">This device is not Pro.</string>
     <!-- A figure, never a verdict: this screen states what a wallet has staked and stops there,
@@ -647,6 +649,7 @@
     <string name="you_plan_source_pass">A thirty day pass, paid from a wallet</string>
     <string name="you_plan_source_stake">Staked SKR on the connected wallet</string>
     <string name="you_plan_source_subscription">A subscription on plainticker.com</string>
+    <string name="you_plan_source_promo">A promo code</string>
     <string name="you_plan_source_unnamed">Pro on this device. The server did not name the source.</string>
     <string name="you_plan_until_label">Valid until</string>
     <string name="you_plan_until_stake">No end date, while the stake stays in place</string>
@@ -654,12 +657,31 @@
     <string name="you_plan_extend_pass">A pass does not renew. When it ends, pay for another one here.</string>
     <string name="you_plan_extend_stake">Nothing to do while the stake stays in place.</string>
     <string name="you_plan_extend_subscription">It does not renew by itself. Extend it on plainticker.com.</string>
+    <string name="you_plan_extend_promo">It does not renew. Enter another code to add more time.</string>
     <string name="you_plan_free_label">Free, your plan</string>
     <string name="you_plan_free_value">The full read for %1$s, open to everyone. No end date.</string>
     <string name="you_pro_label">Pro</string>
     <string name="you_plan_pro_value">Every covered ticker, with the classification and every figure.</string>
     <string name="you_stake_label">Staked SKR</string>
     <string name="you_plan_payment_label">Payment</string>
+
+    <!-- Promo code redemption (hackathon judge codes, each worth 30 days of Pro): the "Have a
+         code?" text action in You's Plan group, POST /api/v1/promo/redeem. Kept in one block so a
+         parallel branch editing this file elsewhere merges around it cleanly. -->
+    <string name="promo_prompt">A promo code adds Pro time.</string>
+    <string name="promo_action_have_code">Have a code?</string>
+    <string name="promo_field_label">Promo code</string>
+    <string name="promo_field_placeholder">PT-0000-0000-0000</string>
+    <string name="promo_field_checking">Checking the code.</string>
+    <string name="promo_action_apply">Apply</string>
+    <string name="promo_error_bad_request">Enter a code first.</string>
+    <string name="promo_error_invalid_code">That code was not recognized.</string>
+    <string name="promo_error_expired_code">That code has expired.</string>
+    <string name="promo_error_already_redeemed">That code has already been used.</string>
+    <string name="promo_error_already_applied">This device already redeemed a promo code.</string>
+    <string name="promo_error_rate_limited">Too many attempts. Wait a minute, then try again.</string>
+    <string name="promo_error_not_open">Code redemption is not open on PlainTicker yet.</string>
+    <string name="promo_error_unavailable">PlainTicker could not read the answer. Try again.</string>
 
     <string name="you_heading_methods">Sign-in methods</string>
     <string name="you_method_google">Google</string>

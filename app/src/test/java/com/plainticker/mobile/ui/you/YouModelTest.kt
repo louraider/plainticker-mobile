@@ -40,6 +40,7 @@ class YouModelTest {
     private val pass = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.PASS, untilMillis = now + 26 * day, walletConnected = true)
     private val stake = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.STAKE, walletConnected = true, stakeRaw = 31_209_870_777L)
     private val subscription = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.SUBSCRIPTION, untilMillis = now + 3 * day)
+    private val promo = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.PROMO, untilMillis = now + 30 * day, walletConnected = true)
 
     // ---- Identity ------------------------------------------------------------------------------
 
@@ -84,6 +85,14 @@ class YouModelTest {
         val hero = youHero(signedIn, null, subscription, now)
         assertEquals(R.string.you_hero_pro_until, words(hero.headline))
         assertEquals("3 days left.", ShippedCopy.render(hero.lines.single()))
+    }
+
+    @Test
+    fun `a promo code reads as pro until its day too, and offers no pay action`() {
+        val hero = youHero(signedIn, wallet, promo, now)
+        assertEquals(R.string.you_hero_pro_until, words(hero.headline))
+        assertEquals("30 days left.", ShippedCopy.render(hero.lines.single()))
+        assertNull("a promo is not paid for, so it offers no pay action of its own", hero.action)
     }
 
     @Test
@@ -197,6 +206,26 @@ class YouModelTest {
         val passNoIdentity = pass.copy(walletConnected = false)
         val passHero = youHero(signedOut, null, passNoIdentity, now)
         assertTrue(planRows(passNoIdentity, passHero.action, now).any { it.action == PlanAction.EXTEND })
+    }
+
+    @Test
+    fun `a promo plan names its source, valid until, and the plain way to extend`() {
+        val rows = planRows(promo, null, now)
+        assertEquals(
+            listOf(R.string.you_plan_source_label, R.string.you_plan_until_label, R.string.you_plan_extend_label, R.string.you_stake_label),
+            labels(rows),
+        )
+        assertEquals(R.string.you_plan_source_promo, words(rows[0].value))
+        assertEquals("30 days left.", ShippedCopy.render(rows[1].sub!!))
+        assertEquals(R.string.you_plan_extend_promo, words(rows[2].value))
+        assertNull("a promo does not renew by paying here; the plain way is another code", rows[2].action)
+    }
+
+    @Test
+    fun `the promo success line matches the hero's own Pro until sentence`() {
+        assertEquals(R.string.you_hero_pro_until, words(promoSuccessLine(now + 30 * day)))
+        assertEquals("Pro until 21 Oct 2026", ShippedCopy.render(promoSuccessLine(now + 30 * day)))
+        assertEquals(R.string.you_hero_pro, words(promoSuccessLine(null)))
     }
 
     @Test

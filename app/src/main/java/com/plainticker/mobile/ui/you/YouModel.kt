@@ -134,7 +134,7 @@ private fun heroHeadline(pro: ProUiState): Copy = when {
     pro.entitlementFailed -> words(R.string.you_hero_unread)
     pro.pro -> when (pro.source) {
         EntitlementSource.STAKE -> words(R.string.you_hero_stake)
-        EntitlementSource.PASS, EntitlementSource.SUBSCRIPTION ->
+        EntitlementSource.PASS, EntitlementSource.SUBSCRIPTION, EntitlementSource.PROMO ->
             pro.untilMillis?.let { words(R.string.you_hero_pro_until, utcDay(it)) } ?: words(R.string.you_hero_pro)
         null -> words(R.string.you_hero_pro)
     }
@@ -149,7 +149,7 @@ private fun heroLines(pro: ProUiState, nowMillis: Long): List<Copy> {
         pro.entitlementFailed -> lines += words(R.string.pro_entitlement_failed)
         pro.pro -> when (pro.source) {
             EntitlementSource.STAKE -> lines += words(R.string.you_hero_stake_line)
-            EntitlementSource.PASS, EntitlementSource.SUBSCRIPTION ->
+            EntitlementSource.PASS, EntitlementSource.SUBSCRIPTION, EntitlementSource.PROMO ->
                 pro.untilMillis?.let { lines += daysLeft(it, nowMillis) }
             null -> Unit
         }
@@ -175,6 +175,14 @@ fun daysLeft(untilMillis: Long, nowMillis: Long): Copy {
 
 /** A calendar day in UTC, "20 Oct 2026", the headline's date. */
 private fun utcDay(epochMillis: Long): String = Fmt.day(Instant.ofEpochMilli(epochMillis).atOffset(ZoneOffset.UTC).toLocalDate())
+
+/**
+ * The confirmation line a successful promo redeem shows, before the field collapses: the hero's
+ * own "Pro until" sentence, so the one-off confirmation and the Plan group's own headline never
+ * disagree on the wording for the same fact.
+ */
+fun promoSuccessLine(untilMillis: Long?): Copy =
+    untilMillis?.let { words(R.string.you_hero_pro_until, utcDay(it)) } ?: words(R.string.you_hero_pro)
 
 // ---- The Plan group ------------------------------------------------------------------------
 
@@ -225,6 +233,7 @@ private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?, now
         EntitlementSource.PASS -> R.string.you_plan_source_pass
         EntitlementSource.STAKE -> R.string.you_plan_source_stake
         EntitlementSource.SUBSCRIPTION -> R.string.you_plan_source_subscription
+        EntitlementSource.PROMO -> R.string.you_plan_source_promo
         null -> R.string.you_plan_source_unnamed
     }
     val rows = mutableListOf(PlanRow(words(R.string.you_plan_source_label), words(source), action = refresh))
@@ -233,11 +242,19 @@ private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?, now
             rows += PlanRow(words(R.string.you_plan_until_label), words(R.string.you_plan_until_stake))
             rows += PlanRow(words(R.string.you_plan_extend_label), words(R.string.you_plan_extend_stake))
         }
-        EntitlementSource.PASS, EntitlementSource.SUBSCRIPTION -> {
+        EntitlementSource.PASS, EntitlementSource.SUBSCRIPTION, EntitlementSource.PROMO -> {
             pro.untilMillis?.let {
                 rows += PlanRow(words(R.string.you_plan_until_label), raw(Fmt.utc(it)), sub = daysLeft(it, nowMillis))
             }
-            val extend = if (pro.source == EntitlementSource.PASS) R.string.you_plan_extend_pass else R.string.you_plan_extend_subscription
+            // A promo does not renew, and it is not paid for ([planAction] offers no pay action
+            // for it, so [pay] is already null here): its "How to extend" row is a plain sentence
+            // rather than the pay action a pass or a subscription draws; the "Have a code?" action
+            // just below (PlanGroup) is the plain way to.
+            val extend = when (pro.source) {
+                EntitlementSource.PASS -> R.string.you_plan_extend_pass
+                EntitlementSource.PROMO -> R.string.you_plan_extend_promo
+                else -> R.string.you_plan_extend_subscription
+            }
             rows += PlanRow(words(R.string.you_plan_extend_label), words(extend), action = pay)
         }
         null -> Unit

@@ -41,6 +41,8 @@ private fun proLine(state: ProUiState): Copy {
             } else {
                 words(R.string.pro_entitlement_subscription)
             }
+        EntitlementSource.PROMO ->
+            if (until != null) words(R.string.pro_entitlement_promo_until, until) else words(R.string.pro_entitlement_promo)
         null -> words(R.string.pro_entitlement_active)
     }
 }

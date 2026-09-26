@@ -30,6 +30,31 @@ class EntitlementApiTest {
     }
 
     @Test
+    fun `a promo source parses the same way a pass does`() = runTest {
+        val mock = MockApi { respondJson("""{"pro":true,"source":"promo","until":"2026-10-26T00:00:00.000Z"}""") }
+        val answer = EntitlementApi(mock.client).get("ABCDE12345")
+
+        assertEquals(true, answer.pro)
+        assertEquals(EntitlementSource.PROMO, answer.sourceKind)
+        assertEquals(1_792_972_800_000L, answer.untilEpochMillis())
+    }
+
+    /**
+     * The app uses `ignoreUnknownKeys`, but the source enum is read through
+     * [EntitlementSource.of]'s own `when`, not `valueOf`: an answer this app has never heard of
+     * (a future source the server ships before this app updates) must read as no named source
+     * rather than crash the parse.
+     */
+    @Test
+    fun `an unrecognized source parses safely as no named source, never a crash`() = runTest {
+        val mock = MockApi { respondJson("""{"pro":true,"source":"a_future_source_this_app_has_never_heard_of","until":null}""") }
+        val answer = EntitlementApi(mock.client).get("ABCDE12345")
+
+        assertEquals(true, answer.pro)
+        assertNull(answer.sourceKind)
+    }
+
+    @Test
     fun `no code and no entitlement is a plain 200, never an error`() = runTest {
         val mock = MockApi { respondJson("""{"pro":false,"source":null,"until":null}""") }
         val answer = EntitlementApi(mock.client).get(code = null)

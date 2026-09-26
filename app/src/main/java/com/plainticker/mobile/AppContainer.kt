@@ -13,6 +13,7 @@ import com.plainticker.mobile.data.plainticker.EntitlementApi
 import com.plainticker.mobile.data.plainticker.NextUpApi
 import com.plainticker.mobile.data.plainticker.PassApi
 import com.plainticker.mobile.data.plainticker.PlainTickerApi
+import com.plainticker.mobile.data.plainticker.PromoApi
 import com.plainticker.mobile.data.plainticker.ReadApi
 import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.receipts.FilePassReceiptStore
@@ -92,6 +93,9 @@ interface AppContainer {
     /** Paying for Pro from the app: the server builds the transfer, this app signs it (task A6). */
     val passApi: PassApi
 
+    /** Redeeming a hackathon promo code for 30 days of Pro. */
+    val promoApi: PromoApi
+
     /** Sign in with Google: trades a Google ID token for the shared account (docs/google-sign-in.md). */
     val googleAuthApi: GoogleAuthApi
     val xStocksApi: XStocksApi
@@ -168,6 +172,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val entitlementApi: EntitlementApi by lazy { EntitlementApi(httpClient) }
     override val readApi: ReadApi by lazy { ReadApi(httpClient) }
     override val passApi: PassApi by lazy { PassApi(httpClient) }
+    override val promoApi: PromoApi by lazy { PromoApi(httpClient) }
     override val googleAuthApi: GoogleAuthApi by lazy { GoogleAuthApi(httpClient) }
     override val xStocksApi: XStocksApi by lazy { XStocksApi(httpClient) }
     override val jupiterPriceApi: JupiterPriceApi by lazy { JupiterPriceApi(httpClient) }

@@ -13,6 +13,8 @@ import com.plainticker.mobile.data.plainticker.EntitlementResponse
 import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.data.plainticker.PassApi
 import com.plainticker.mobile.data.plainticker.PassError
+import com.plainticker.mobile.data.plainticker.PromoApi
+import com.plainticker.mobile.data.plainticker.PromoError
 import com.plainticker.mobile.data.receipts.PassReceipt
 import com.plainticker.mobile.data.receipts.PassReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
@@ -108,6 +110,7 @@ data class ProUiState(
 class PassViewModel(
     private val passApi: PassApi,
     private val entitlementApi: EntitlementApi,
+    private val promoApi: PromoApi,
     private val wallet: WalletSession,
     private val rpc: RpcRepository,
     private val devicePassStore: DevicePassStore,
@@ -124,8 +127,12 @@ class PassViewModel(
     private val _state = MutableStateFlow<PassState>(PassState.Closed)
     val state: StateFlow<PassState> = _state.asStateFlow()
 
+    private val _promo = MutableStateFlow<PromoState>(PromoState.Idle)
+    val promo: StateFlow<PromoState> = _promo.asStateFlow()
+
     private var payJob: Job? = null
     private var entitlementJob: Job? = null
+    private var promoJob: Job? = null
 
     init {
         // A payment this device saw land but never saw confirmed, from before this instance
@@ -194,6 +201,84 @@ class PassViewModel(
                 untilMillis = response.untilEpochMillis(),
             )
         }
+    }
+
+    // ---- Promo code -----------------------------------------------------------------------
+
+    /** "Have a code?": opens the inline field, empty, from [PromoState.Idle]. */
+    fun openPromo() {
+        if (_promo.value !is PromoState.Idle) return
+        _promo.value = PromoState.Editing("")
+    }
+
+    /**
+     * The field's text changed. Normalized here, the same way the server normalizes before it
+     * checks a code ([PromoApi.normalize]), so what the field shows is exactly what [applyPromo]
+     * will send. Also the way a [PromoState.Failed] resumes editing: the reader touching the
+     * field again drops the error and keeps whatever they had typed, now normalized.
+     */
+    fun promoInputChanged(raw: String) {
+        val current = when (val s = _promo.value) {
+            is PromoState.Editing -> s.input
+            is PromoState.Failed -> s.input
+            else -> return
+        }
+        val normalized = PromoApi.normalize(raw)
+        if (normalized == current && _promo.value is PromoState.Editing) return
+        _promo.value = PromoState.Editing(normalized)
+    }
+
+    /** Collapses the field from any state; a redeem in flight is left to finish on its own. */
+    fun dismissPromo() {
+        if (_promo.value is PromoState.Applying) return
+        _promo.value = PromoState.Idle
+    }
+
+    /**
+     * Sends whatever [PromoState.Editing] or [PromoState.Failed] currently holds. A blank code
+     * (the Apply action should not even be offered for one, but this is the belt to that brace)
+     * reads as the server's own `invalid_code`, never a network call.
+     */
+    fun applyPromo() {
+        val input = when (val s = _promo.value) {
+            is PromoState.Editing -> s.input
+            is PromoState.Failed -> s.input
+            else -> return
+        }
+        if (input.isBlank()) {
+            _promo.value = PromoState.Failed(input, PromoRefusal.INVALID_CODE)
+            return
+        }
+        promoJob?.cancel()
+        promoJob = viewModelScope.launch {
+            _promo.value = PromoState.Applying(input)
+            try {
+                val response = promoApi.redeem(input, devicePassStore.code())
+                _promo.value = PromoState.Success(response.untilEpochMillis())
+                // The hero and the Pro locks read ProUiState, not PromoState, so the fresh read
+                // this device just earned reaches them the one way anything else here does.
+                refreshEntitlement()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PromoError) {
+                debugLog.raw("promo/redeem refused: status=${e.status} code=${e.code} ${e.detail ?: e.message}")
+                _promo.value = PromoState.Failed(input, promoRefusalOf(e))
+            } catch (e: Exception) {
+                debugLog.raw("promo/redeem threw ${e::class.simpleName}: ${e.message}")
+                _promo.value = PromoState.Failed(input, PromoRefusal.UNAVAILABLE)
+            }
+        }
+    }
+
+    private fun promoRefusalOf(e: PromoError): PromoRefusal = when (e) {
+        is PromoError.BadRequest -> PromoRefusal.BAD_REQUEST
+        is PromoError.InvalidCode -> PromoRefusal.INVALID_CODE
+        is PromoError.ExpiredCode -> PromoRefusal.EXPIRED_CODE
+        is PromoError.AlreadyRedeemed -> PromoRefusal.ALREADY_REDEEMED
+        is PromoError.AlreadyApplied -> PromoRefusal.ALREADY_APPLIED
+        is PromoError.RateLimited -> PromoRefusal.RATE_LIMITED
+        is PromoError.NotOpen -> PromoRefusal.NOT_OPEN
+        is PromoError.Unavailable -> PromoRefusal.UNAVAILABLE
     }
 
     private suspend fun loadStake(address: String) {
