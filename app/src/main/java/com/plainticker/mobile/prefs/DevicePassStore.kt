@@ -16,10 +16,10 @@ import java.security.SecureRandom
  * here; [codeHash] is the one form of it that ever leaves, into a memo or the `X-PT-Code` header
  * a read carries.
  *
- * **It survives process death.** The wallet session does not (DESIGN.md section 1.2: the auth
- * token lives in the adapter's memory and forgets everything at process death), so the code
- * cannot live there either. It is written to `SharedPreferences` the moment it is generated, and
- * every later read returns the same string, cold start after cold start, until the app's data is
+ * **It survives process death.** It belongs to this device, not to a wallet session (which is
+ * saved on its own since 2026-09-26, DESIGN.md section 1.2, and cleared on Disconnect), so it
+ * never lives there. It is written to `SharedPreferences` the moment it is generated, and every
+ * later read returns the same string, cold start after cold start, until the app's data is
  * cleared.
  *
  * **Length.** A new code is [SharedPrefsDevicePassStore.CODE_LENGTH] (26) symbols over a

@@ -688,7 +688,7 @@
     <string name="you_method_google">Google</string>
     <string name="you_wallet_method">Solana wallet</string>
     <string name="you_wallet_none">Not connected</string>
-    <string name="you_wallet_note">Asked to connect on each launch. No key or session is kept.</string>
+    <string name="you_wallet_note">Stays connected between launches. This phone keeps the session token your wallet issued, encrypted, and never a key. Disconnect forgets it.</string>
     <string name="you_action_sign_in">Sign in</string>
     <string name="you_action_connect">Connect</string>
     <string name="you_action_copy">Copy</string>
