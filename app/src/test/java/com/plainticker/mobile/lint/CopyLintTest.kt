@@ -344,7 +344,9 @@ class CopyLintTest {
         }
         assertEquals("PlainTicker", byName["app_name"])
         assertEquals("Tokenized stocks, read before you swap.", byName["onboarding_headline"])
-        assertEquals("Read the list", byName["onboarding_continue"])
+        // "Read the list" until 2026-09-26: there is no List to read any more, and the gate now
+        // opens on Today (audit, item 1).
+        assertEquals("Open Today", byName["onboarding_continue"])
         assertEquals("Live from the mint", byName["detail_live_label"])
         assertEquals("Backing and controls", byName["detail_heading_backing"])
         assertEquals("Against the sector", byName["detail_heading_sector"])

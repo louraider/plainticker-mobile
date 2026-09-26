@@ -52,20 +52,21 @@
 
     <!-- Onboarding -->
     <string name="onboarding_headline">Tokenized stocks, read before you swap.</string>
-    <string name="onboarding_body_chain">Every xStock page starts with what the token itself says: reserves, issuer controls and the split multiplier, read live from the Solana mint.</string>
-    <string name="onboarding_body_fundamentals">Then the page turns to the company against its sector: quality, valuation, momentum and F-Score, from SEC filings.</string>
-    <!-- The map (task U3): the backdrop shows the four tabs and You as a picture; this sentence
-         says what each is for in words, before the disclaimer. -->
-    <string name="onboarding_body_map">Start on the List. Vote picks what is analyzed next, Portfolio reads your wallet, Watchlist sends one digest a day. Your wallet, your pass and this device\'s record are under You, top right.</string>
+    <!-- The onboarding panel, rewritten for the shipped app (2026-09-26): one sentence on what a
+         stock page reads, then the map, one sentence per bottom-bar destination, each opening with
+         that destination's own nav_ label so the panel can set it in weight 600. The old copy
+         described a List to start on, a Watchlist that sent the digest and You "top right". -->
+    <string name="onboarding_body_reads">Each stock page reads the token live from Solana first, then the company against its sector, from SEC filings.</string>
+    <string name="onboarding_map_today">Today shows market hours, the stocks you watch and who reports this week.</string>
+    <string name="onboarding_map_stocks">Stocks lists every tokenized stock by sector. Search, or open one to read it.</string>
+    <string name="onboarding_map_vote">Vote lets your staked SKR choose the next stock to be analyzed.</string>
+    <string name="onboarding_map_portfolio">Portfolio reads your wallet. Swap USDC into a stock token there or on its page, and back to USDC.</string>
+    <string name="onboarding_map_you">You has your sign-in, your wallet and Pro, which opens every figure on every covered stock.</string>
     <string name="onboarding_body_disclaimer">This is not a price forecast or investment advice.</string>
     <string name="onboarding_certify">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</string>
-    <string name="onboarding_continue">Read the list</string>
+    <string name="onboarding_continue">Open Today</string>
 
     <!-- List -->
-    <plurals name="list_today">
-        <item quantity="one">Today: %1$s stock watched, next report %2$s on %3$s</item>
-        <item quantity="other">Today: %1$s stocks watched, next report %2$s on %3$s</item>
-    </plurals>
     <string name="list_today_stale">Checked %1$s, tap to refresh</string>
     <string name="list_search_label">Search</string>
     <string name="list_search_placeholder">Ticker or company</string>

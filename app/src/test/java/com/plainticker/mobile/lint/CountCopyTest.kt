@@ -68,15 +68,12 @@ class CountCopyTest {
     /** Every counted sentence, at one and at many, as a reader reads it. */
     private val expected: Map<String, List<Case>> = mapOf(
         // "12 days old", not "12 d old" (audit 2026-09-26): the analysis age on a Stocks row and
-        // in the stale banner. list_today_watched left with the Stocks Today strip it drew.
+        // in the stale banner. list_today_watched left with the Stocks Today strip it drew, and
+        // list_today with the onboarding backdrop's copy of that strip (2026-09-26).
         "list_row_age_days" to listOf(
             Case(1, listOf("1"), "1 day old"),
             Case(12, listOf("12"), "12 days old"),
             Case(1_204, listOf("1,204"), "1,204 days old"),
-        ),
-        "list_today" to listOf(
-            Case(1, listOf("1", "TSLAx", "Oct 22"), "Today: 1 stock watched, next report TSLAx on Oct 22"),
-            Case(12, listOf("12", "TSLAx", "Oct 22"), "Today: 12 stocks watched, next report TSLAx on Oct 22"),
         ),
         "next_up_voters" to listOf(
             Case(1, listOf("1"), "1 voter"),
@@ -257,9 +254,6 @@ class CountCopyTest {
             "src/main/java/com/plainticker/mobile/ui/list/ListScreen.kt" to listOf(
                 "pluralStringResource(R.plurals.list_row_age_days, it, Fmt.count(it))",
                 "pluralStringResource(R.plurals.list_row_age_days, banner.newestDays, Fmt.count(banner.newestDays))",
-            ),
-            "src/main/java/com/plainticker/mobile/ui/onboarding/OnboardingScreen.kt" to listOf(
-                "R.plurals.list_today,\n                BackdropWatched,\n                Fmt.count(BackdropWatched),",
             ),
         ).forEach { (path, fragments) ->
             val source = File(module, path).readText().replace("\r\n", "\n")

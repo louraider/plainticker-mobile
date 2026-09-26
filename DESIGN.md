@@ -260,7 +260,7 @@ this arithmetic.
 
 `AmberTickerRowGroup` is the 16dp tonal container a run of rows sits inside (`surfaceGround` behind
 a 1dp seam, each row's own `surfaceRaised`). It is a non-lazy `Column`, so it fits a small, fixed
-run (Today's "Next up," the onboarding backdrop's six sample rows) and not a list that must stay a
+run (Today's "Next up," the onboarding backdrop's four sample rows) and not a list that must stay a
 `LazyColumn` for recycling. Stocks (~830 rows under sticky sector chapters) and Portfolio (three
 separate `itemsIndexed` lists) rebuild the same visual container per row instead:
 `ListScreen.kt`'s `groupedRowModifier`/`groupEdge` (left/right edges on every row, top only on the
@@ -457,12 +457,11 @@ widest real trailing action ("Watching") fit the 360dp row: 200.94dp to spare at
 Outfit on 2026-09-26: "Watching" is 64.372dp, leaving 198.338dp at 1.0x and 151.639dp at 1.3x),
 keeps JetBrains Mono only for a wallet's short key, and resolves `defaultAmberColors()` for its
 three colours. The wordmark itself moved on 2026-09-24 (section 9, "Two corners, refit"):
-Bricolage 700 replacing Outfit SemiBold 15sp, the one deliberate exception to "Instrument's word
-style is unchanged by the redesign" every other `TopBar` slot still is, closing the one place the
-app and the web drew "PlainTicker" in two different faces (`TopBarTest` proves the wider glyphs
-still clear the bar's own one-line budget). One slot on the right: a real action (`TextAction`), a
-picture of an action with no handler (the onboarding backdrop's "You"), or a short meta fragment (a
-wallet's short key). Never sticky; scrolls away with the content, covered when needed by
+Bricolage 700 replacing Outfit SemiBold 15sp, closing the one place the app and the web drew
+"PlainTicker" in two different faces (`TopBarTest` proves the wider glyphs still clear the bar's own
+one-line budget). One slot on the right: a real action (`TextAction`), a picture of an action with
+no handler (no current caller; the onboarding backdrop's "You" left with the old shell), or a short
+meta fragment (a wallet's short key). Never sticky; scrolls away with the content, covered when needed by
 `TopScrim` (`Insets.kt`), which paints nothing and holds no semantics of its own.
 
 **`Banner`** (`Banner.kt`) is the one state slot under the header: `surfaceRaised`, a wrapping
@@ -493,7 +492,7 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `SecondaryButton` (shared, and a private `YouScreen.kt` copy) | Retired | Both replaced by one shared `AmberSecondaryAction`. |
 | `Sheet`, `SheetSurface` | Retired | Replaced by `AmberSheet`/`AmberSheetSurface` (28dp top radius, `surfaceHigh`, amber handle, versus Instrument's square, neutral one). |
 | `ListRow` | **Kept, one caller** | `GalleryScreen.kt` only (debug builds), to stay field-for-field comparable with `design/canvas/instrument.py`'s own artboards. Every product screen moved to `AmberTickerRow`. Do not add a second caller. |
-| `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak on Stocks at the time. Since 2026-09-26 no product screen draws `TodayStrip` at all: Stocks dropped it (it repeated Today's own screen) and so did the onboarding backdrop (see below), so it survives for the gallery only. `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
+| `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak on Stocks at the time. Since 2026-09-26 no product screen draws `TodayStrip` at all: Stocks dropped it (it repeated Today's own screen) and so did the onboarding backdrop (see below), so it survives for the gallery only. `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. The stale picture this row used to flag is gone: since 2026-09-26 the onboarding backdrop is a picture of Today drawn with `TopBar`, `AmberSectionHead`, `AmberTickerRow` in its group and the real `AmberBottomNav`, so neither `TopTabs` nor `TodayStrip` has a product caller left. |
 | `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. Since Today direction A (2026-09-24) Today no longer draws `WatchlistContent`: the digest lives on its own screen under You (`ui/you/DigestScreen.kt`), whose `Panel` resolves the same colours. |
 | `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept anatomy, Amber type and colour (2026-09-26)** | Each resolves `defaultAmberColors()`, and since the pre-freeze pass each draws Bricolage (`AmberType.label`, `textAction`, `fieldText`, `figureLarge`, `wordmark`) instead of Outfit; the pass sheet's title and sentences moved the same day (`sectionHead`, `body`). JetBrains Mono stays only where an on-chain identifier is drawn: a wallet's short key in `TopBar`, a signature or address in a `FactCell`/`AmberFact` with `valueMono`. |
 
@@ -708,6 +707,19 @@ button content; 336dp of row content):
 | Wallet short key | JetBrains Mono Regular 15sp | nine characters, 81.0 / 105.3dp | column beside the widest action | 103.84dp |
 | Device figure | Bricolage 600 opsz 18 tnum, 18sp | "999,999", 69.44 / 90.28dp | 336dp less 12dp gap and the widest label word (83.58dp) | 150.14dp |
 | Hero headline (wraps, not clipped) | Bricolage 700 opsz 34 at 28sp | "Pro until 30 May 2030", 292.99 / 380.89dp | 328dp | one line at 1.0x (35.01dp), two at 1.3x |
+
+**Onboarding** (`OnboardingScreen.kt`, rewritten 2026-09-26, when the audit found it still
+describing a List to start on, four text tabs, a Watchlist that sent the digest and You "top
+right"): a picture of Today at 25 percent (the top bar, the venue line, "Reports this week" with
+four sample rows, one marked Watched, and `AmberBottomNav` with Today selected), cleared from the
+semantics tree and blind to touch (every pointer event is consumed on the initial pass, because a
+real `AmberBottomNav` cannot be built without a select handler). Over it, the panel, all Bricolage:
+the wordmark, the headline (`AmberType.screenTitle`, wraps), one sentence on what a stock page
+reads, the map (one sentence per destination, each opening with its own bottom-bar label in weight
+600, one wrapping `Text` so no label column can starve a sentence column), the disclaimer, the
+self-certification and "Open Today" (`AmberPrimaryAction`, 91.74dp at 1.0x and 119.27dp at 1.3x of
+a 320dp button). The map teaches what the brief named: Today's contents, what a stock page reads,
+Swap in both directions, the SKR vote and Pro.
 
 **Detail** keeps its pre-Amber section order (hero, verdict, price, gauge, fundamentals, method,
 what to check next); only the components under each section moved. The hero sits directly on
