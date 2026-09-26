@@ -54,6 +54,13 @@ enum class AccountMessage {
 
     /** The nonce this device fetched had already expired by the time the server saw it. */
     NONCE_EXPIRED,
+
+    /**
+     * No nonce could be fetched before the sheet opened, so nothing was asked of Google. The
+     * server requires one (GOOGLE_SIGNIN_NONCE_REQUIRED in production), and this device never
+     * signs in without it.
+     */
+    NONCE_UNAVAILABLE,
     EMAIL_NOT_VERIFIED,
     RATE_LIMITED,
     INTERNAL,
@@ -124,13 +131,14 @@ enum class UnlinkFailure {
 /**
  * Sign in with Google (docs/google-sign-in.md). One pass through [signIn]:
  *
- * 1. [fetchServerNonce] asks the server for a nonce before the sheet opens; any failure falls
- *    back to a fresh local [SignInNonce] instead, sent to Google exactly as before that endpoint
- *    existed;
- * 2. that nonce (server-issued or local) goes into the Google request;
+ * 1. [fetchServerNonce] asks the server for a nonce before the sheet opens. The server requires
+ *    it (GOOGLE_SIGNIN_NONCE_REQUIRED in production), so a fetch that fails for any reason ends
+ *    the attempt on [AccountMessage.NONCE_UNAVAILABLE] before Google is asked anything; there is
+ *    no local fallback (judges' review, 2026-09-26);
+ * 2. that nonce goes into the Google request;
  * 3. the token that comes back must carry that same nonce, or it is refused here;
  * 4. the token goes to `POST /api/v1/auth/google` with this device's code in `X-PT-Code`, and the
- *    server nonce alongside it when there was one (never the local fallback);
+ *    server nonce alongside it;
  * 5. what the server returns for display (email, name, linked wallets) is stored, the token is
  *    dropped, and [signedIn] fires so the screen re-reads the entitlement through the refresh
  *    every other screen uses, which is what makes a Pro bought on the web count here at once.
@@ -159,7 +167,6 @@ class AccountViewModel(
     private val accountApi: AccountApi,
     private val store: AccountStore,
     private val devicePassStore: DevicePassStore,
-    private val nonces: () -> String = { SignInNonce.create() },
     private val debugLog: AccountDebugLog = AccountDebugLog.ANDROID,
     private val clock: Clock = WallClock,
 ) : ViewModel() {
@@ -224,8 +231,7 @@ class AccountViewModel(
     }
 
     private suspend fun runSignIn(credentials: GoogleCredentialSource): Outcome {
-        val serverNonce = fetchServerNonce()
-        val nonce = serverNonce ?: nonces()
+        val nonce = fetchServerNonce() ?: return Outcome.Failed(AccountMessage.NONCE_UNAVAILABLE)
         val idToken = when (val result = credentials.requestIdToken(nonce)) {
             is GoogleCredentialResult.Token -> result.idToken
             GoogleCredentialResult.Cancelled -> return Outcome.Failed(AccountMessage.CANCELLED)
@@ -240,7 +246,7 @@ class AccountViewModel(
             return Outcome.Failed(AccountMessage.NONCE_MISMATCH)
         }
         val response = try {
-            api.signIn(idToken = idToken, deviceCode = devicePassStore.code(), nonce = serverNonce)
+            api.signIn(idToken = idToken, deviceCode = devicePassStore.code(), nonce = nonce)
         } catch (e: CancellationException) {
             throw e
         } catch (e: GoogleAuthError) {
@@ -264,19 +270,16 @@ class AccountViewModel(
 
     /**
      * The server nonce for the Google request that follows, fetched fresh before every attempt
-     * (docs/google-sign-in.md, "The nonce"). Any failure to fetch one — a 404 from a server that
-     * predates the route, a network error, or anything else, blank or unparsable answers included
-     * — falls back to null: [runSignIn] then asks Google for [nonces]'s local random nonce instead
-     * and tells the server nothing about it, so this device keeps working against a server that
-     * has not deployed the route yet, or is briefly unavailable, exactly as before this endpoint
-     * existed. The local check in `SignInNonce.matches` runs either way.
+     * (docs/google-sign-in.md, "The nonce"), or null when none could be had: a network error, a
+     * non-2xx, a blank or unparsable answer. Null ends the attempt in [runSignIn]; a sign-in
+     * without the server's nonce is one the server refuses, so none is ever started.
      */
     private suspend fun fetchServerNonce(): String? = try {
         api.fetchNonce().nonce.takeIf { it.isNotBlank() }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        debugLog.raw("nonce: fetch failed, falling back to a local nonce (${e::class.simpleName})")
+        debugLog.raw("nonce: fetch failed, sign-in not started (${e::class.simpleName})")
         null
     }
 

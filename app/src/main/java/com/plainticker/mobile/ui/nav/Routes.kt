@@ -1,13 +1,12 @@
 package com.plainticker.mobile.ui.nav
 
-/** Navigation-Compose routes. `spike` and `gallery` are registered in debug builds only. */
+/** Navigation-Compose routes. `gallery` is registered in debug builds only. */
 object Routes {
     const val ONBOARDING = "onboarding"
     const val HOME = "home"
     const val ARG_TICKER = "ticker"
     const val ARG_TAB = "tab"
     const val DETAIL = "detail/{$ARG_TICKER}"
-    const val SPIKE = "spike"
     const val GALLERY = "gallery"
 
     /** The daily digest under You: the last digest, when it landed, and the notifications setting. */

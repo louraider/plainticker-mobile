@@ -40,7 +40,8 @@ import kotlinx.coroutines.launch
  *   Every [AccountMessage] a sign-in can end in is drawn under this row, unless the hero is the
  *   one offering Sign in ([showMessage] false), in which case the hero draws it beside its button.
  * - **Solana wallet**: the short key with Copy and Disconnect, or "Not connected" with Connect,
- *   and the honest note that no key or session is kept.
+ *   and the honest note of what is kept: the session token the wallet issued, encrypted on this
+ *   phone so the wallet stays connected between launches, and never a key.
  * - **Linked wallets**: one row per wallet the server returned, each its own short key with Copy
  *   and Unlink; an account with none draws no row at all, rather than an empty one. Unlink is the
  *   same two-step inline confirm as Sign out ("Unlink this wallet?" with Unlink and Keep). A

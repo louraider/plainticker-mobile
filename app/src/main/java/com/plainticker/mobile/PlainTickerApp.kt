@@ -24,6 +24,10 @@ class PlainTickerApp : Application() {
         // path that can empty or fill the list is covered: the Watch action, the Unwatch on the
         // row, and a process that starts with tickers already stored.
         scope.launch { WatchlistSchedule(container.watchlistStore, container.watchlistScheduler).keepInStep() }
+
+        // The wallet connected before this process started, put back for display and reads. No
+        // wallet opens here; the first request that needs one reauthorizes with the saved token.
+        scope.launch { container.walletSession.restore() }
     }
 }
 

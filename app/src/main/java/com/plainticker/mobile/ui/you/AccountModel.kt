@@ -32,6 +32,7 @@ fun accountMessageRes(message: AccountMessage): Int = when (message) {
     AccountMessage.WRONG_AUDIENCE -> R.string.account_msg_wrong_audience
     AccountMessage.NONCE_INVALID -> R.string.account_msg_nonce_invalid
     AccountMessage.NONCE_EXPIRED -> R.string.account_msg_nonce_expired
+    AccountMessage.NONCE_UNAVAILABLE -> R.string.account_msg_nonce_unavailable
     AccountMessage.EMAIL_NOT_VERIFIED -> R.string.account_msg_email_not_verified
     AccountMessage.RATE_LIMITED -> R.string.account_msg_rate_limited
     AccountMessage.INTERNAL -> R.string.account_msg_internal

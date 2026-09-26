@@ -227,7 +227,7 @@ internal fun TodayContent(
         if (!firstOpen) {
             item(key = "next-up") { TodayNextUpBlock(state = state, zone = zone, onOpenVote = onOpenVote) }
         }
-        // Debug builds only, behind the same gate as the component gallery and the wallet spike.
+        // Debug builds only, behind the same gate as the component gallery.
         onRunCheck?.let { run ->
             item(key = "debug-run") {
                 Row(Modifier.fillMaxWidth().padding(horizontal = Side), horizontalArrangement = Arrangement.End) {
