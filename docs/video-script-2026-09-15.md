@@ -1,4 +1,8 @@
-# Demo video — script of record
+# Demo video: superseded draft (15 September)
+
+> **Superseded on 2026-09-27 by `docs/video-script-2026-09-27.md`.** This draft predates the Amber
+> redesign, the live vote, Pro and sign-in, and several of its screens and lines no longer exist.
+> Kept for history only; do not film from it.
 
 Three minutes, the cap the Brief sets. Recorded 2 October on the release build, on the Seeker,
 screen capture with voice-over. Completion is judged from this file's result, so it is the one

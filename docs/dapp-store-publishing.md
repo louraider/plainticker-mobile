@@ -161,14 +161,15 @@ This is what makes Mobile Wallet Adapter able to tell a person that the app aski
 
 The old `config.yaml` (https://github.com/solana-mobile/dapp-publishing/blob/main/example/config.yaml) had `publisher` (name, website, email), `app` (name, android_package, license_url, copyright_url, privacy_policy_url, icon), `release` (media: icon, banner, featureGraphic, screenshot, video; files: apk; localized catalog: name, short_description, long_description, new_in_version, saga_features) and `solana_mobile_dapp_publisher_portal` (google_store_package, testing_instructions, alpha_testers with wallet addresses). Legacy commands `dapp-store init`, `create publisher`, `create app`, `create release`, `publish submit`, `publish update` with `-k`, `-u`, `-b`, `--requestor-is-authorized`, `--complies-with-solana-dapp-store-policies` are removed from the active CLI. Alpha testers and testing instructions in the portal: not published.
 
-## Listing copy (written 2026-09-18)
+## Listing copy (refreshed 2026-09-27)
 
-The copy the portal form will ask for, written before the form is open so it is not written in a
-hurry beside a deadline. Step 8 above records the field limits this is written to; where the store
-publishes no limit, the length used here is named as an assumption with the benchmark it borrows.
-Nothing below names a feature that is not in the build being submitted, which is both the honest
-position and the Publisher Policy's, whose prohibition is content that "misleads users as to the
-true intent, nature, or purpose of any dApp".
+The copy the portal form asks for, rewritten on 2026-09-27 against build 1.3.13. The 18 September
+version predated the live vote, Pro, sign-in, Today and the light theme, and held the vote
+paragraph back because the vote was not live; it is live now, so the paragraph is in. Nothing below
+names a feature that is not in the build being submitted, which is both the honest position and the
+Publisher Policy's, whose prohibition is content that "misleads users as to the true intent,
+nature, or purpose of any dApp". The figures match the one number set in
+`docs/submission-answers.md`.
 
 ### The limits this copy was written to
 
@@ -176,11 +177,11 @@ true intent, nature, or purpose of any dApp".
 | --- | --- | --- |
 | App name | **Not published** (checked listing-page-guidelines, submit-new-app, legacy `config.yaml`) | Written to 30 characters, the one text length the guidelines do publish. Assumption. |
 | Short description | **30 characters**, published: "Short description cannot exceed 30 characters." | listing-page-guidelines |
-| Long description | **No published limit**; "a well-written, concise overview" | Written to 2,968 characters, under Google Play's 4,000-character long description, the conservative neighbour. Assumption. |
-| What's new | **Not published.** The field is required and no length is given | Written to 471 characters, under Google Play's 500-character release notes. Assumption. |
+| Long description | **No published limit**; "a well-written, concise overview" | Written to 2,774 characters, under Google Play's 4,000-character long description, the conservative neighbour. Assumption. |
+| What's new | **Not published.** The field is required and no length is given | Written to 417 characters, under Google Play's 500-character release notes. Assumption. |
 | Category | **Not published**; "Expect a dropdown in the portal form" | listing-page-guidelines, submit-new-app and the legacy `config.yaml`, all checked |
 | Tags | **Not recorded by this document at all.** No tag field is published anywhere checked | If the form has one, the candidates are below; if it has none, nothing is lost |
-| Age rating | **Not published** | Answer the questionnaire from the build: no user-generated content, no advertising, no in-app purchase (`MONETIZATION_ENABLED` is off in this build) |
+| Age rating | **Not published** | Answer the questionnaire from the build (below) |
 
 ### App name
 
@@ -190,8 +191,7 @@ PlainTicker
 
 11 characters. It is the name `assetlinks.json`, the package `com.plainticker.mobile` and the Seed
 Vault Connect sheet already agree on, and the one a person reads before approving a swap. No
-tagline is appended to it: a name with a sentence after it reads as an advertisement in a list of
-names, and the short description is the field for that sentence.
+tagline is appended to it.
 
 ### Short description
 
@@ -199,87 +199,46 @@ names, and the short description is the field for that sentence.
 Read the xStock, then swap
 ```
 
-26 characters, inside the published 30. It names the order this product insists on, which is the
-whole argument, and it uses the only trading verb the app has.
-
-Alternate at 28 characters, if the first reads too much like an instruction:
-`The filings behind an xStock`.
+26 characters, inside the published 30. It names the order the product insists on, and it is the
+line the store banner already carries (`design/brand/render_icons.py`, `BANNER_LINE`), so the two
+cannot disagree.
 
 ### Long description
 
 ```
-The wallet on this phone already lists tokenized stocks and swaps into them. What it tells you
-about one is a ticker and a price. PlainTicker reads what stands behind that price, on the same
-phone, before the token is in your wallet.
+The wallet on this phone can swap into tokenized US stocks. What it tells you about one is a ticker and a price. PlainTicker reads what stands behind that price, on the same phone, before the token is in your wallet.
 
-What the mint says. Every stock page opens on the chain rather than on a chart. Proof of reserves,
-the permanent delegate, pausable transfers, the transfer hook and the split multiplier are read
-live from the Token-2022 mint each time the page opens, with the slot they came from and its age
-beside them. An extension the mint does not carry is drawn as absent. A mint that could not be read
-is drawn as unknown, never as no risk. An issuer that can move a token out of a wallet without its
-owner's signature is a fact about that token, and it is on the screen rather than in a footnote.
+What the mint says. Each time a stock page opens, it reads the Token-2022 mint live: proof of reserves, the permanent delegate, pausable transfers, the split multiplier and the transfer hook, with the slot they came from and its age. An issuer that can move a token out of a wallet without its owner's signature is a fact about that token, and the page says it in plain words. A mint that could not be read is shown as unknown, never as no risk.
 
-What the filings say. The analysis is PlainTicker's, the engine behind www.plainticker.com: SEC
-EDGAR XBRL filings classified against the company's own sector, rendered as quality, valuation and
-momentum, with the F-Score and its nine signals, and the age of the analysis on every row.
+What the filings say. PlainTicker, the engine behind www.plainticker.com, classifies each company's SEC EDGAR filings against its own sector by a fixed rule: quality, valuation and momentum, and the F-Score with its nine signals. The age of the analysis is on every row. It is a classification, not a forecast and not investment advice.
 
-What it withholds. The tracking gauge, the token price against the NYSE close, is drawn only where
-the pool behind the quote can carry one: $4,000 of depth, measured per token, every time. Below
-that the quote stops describing anything, so the app states the pool instead, "Pool holds $34, too
-thin to track", and leaves the gauge out. On 2026-09-13, 22 of the analyzed xStocks cleared that
-floor. Nothing is filtered away: the shallow rows stay on the screen carrying the fact about them.
+What the price is worth. The token price is set against the NYSE close only where at least $4,000 of depth stands behind it. Below that, the app states the depth instead and draws no premium.
 
-What it never says. No verdict word reaches any surface here, and a build test reads every string
-and every screen from disk to keep it that way. What you get is a classification, not a forecast.
-The method was backtested, no detectable edge was found, and the dataset is published.
+Your day. Today opens on the NYSE state in your own time, the stocks you watch and the companies reporting soon. One digest a day arrives as a notification, and no other.
 
-The swap, when you want one. Jupiter routes it, Mobile Wallet Adapter and the Seed Vault sign it,
-and the app never holds a key or asks for a seed. The receipt keeps the amount that reached the
-route, the cost actually paid rather than the quote, and the signature, which copies with a tap and
-pastes into any explorer.
+The swap, when you want one. Jupiter routes it; Mobile Wallet Adapter and the Seed Vault sign it. Every transaction is decoded on the phone before the wallet opens, and refused if it does anything the screen does not show. The wallet names the app as www.plainticker.com. The receipt keeps the cost actually paid and the signature. Portfolio reads your xStocks with the split multiplier applied and offers Swap to USDC.
 
-Also here: Portfolio, reading your own token accounts through a bounded forwarder, with the split
-multiplier applied and the premium per position; and a watchlist with one digest a day, next report
-dates, and no other notification.
+Staked SKR decides what is analysed next. Most tokenized stocks have no analysis yet. Each week you can vote for one with a transaction weighted by the SKR you have staked, and the winner is analysed. A vote weighted by stake is decided by the largest stake, and the app says so where you cast it.
 
-xStocks are tokenized tracker instruments issued by a third party, Backed Finance, and are not
-available to US persons. The app asks for that self-certification on its first screen. PlainTicker
-is not a broker, offers no securities and takes custody of nothing: it reads public filings and
-public chain state, and routes swaps through Jupiter. Not investment advice.
+Pro opens every figure on every covered stock: 12 USDC for 30 days, paid from your wallet, or 7,500 SKR staked. AAPL is open to everyone in full. Sign in with Google or a Solana wallet; the account and Pro are shared with plainticker.com.
 
-Analysis by PlainTicker. Token catalog and proof of reserves by xStocks. Prices and routing by
-Jupiter. Filings from SEC EDGAR. Not affiliated with any of them.
+xStocks are tokenized tracker instruments issued by a third party, Backed Finance, and are not available to US persons. The app asks for that self-certification on its first screen. PlainTicker is not a broker, offers no securities and takes custody of nothing. Not investment advice.
+
+Analysis by PlainTicker. Token catalog and proof of reserves by xStocks. Prices and routing by Jupiter. Filings from SEC EDGAR. Not affiliated with any of them.
 ```
 
-2,968 characters. The headings inside it are sentences rather than styled headers, because the
+2,774 characters. The headings inside it are sentences rather than styled headers, because the
 portal's rendering of this field is not published and a listing that depends on markdown surviving
-is a listing that can break on somebody else's release.
-
-**Held back until it is live, and not before.** One paragraph is written and deliberately not in
-the copy above, because the SKR vote is three founder gates away from working
-(`docs/video-script-2026-09-15.md`, "The three gates"). Add it after "What the filings say" on the
-first release that carries a merged and canaried vote, and on no release before that one:
-
-```
-Coverage is finite: an analysis costs money to produce, and most tokenized stocks have none. Staked
-SKR decides which one is read next. You vote with a transaction carrying a memo, so the wallet that
-signs it is the voter, the weight is read from the chain rather than sent by the app, and anyone
-can count the votes the same way the app does. A vote weighted by stake is decided by the largest
-stake, and the app says so where you cast it.
-```
+can break on somebody else's release.
 
 ### What's new, first release
 
 ```
-First release. Six screens: onboarding with its self-certification, the list with the age of every
-analysis, the stock page that opens on the Token-2022 mint with proof of reserves, permanent
-delegate and pausable transfers read at a named slot, the swap sheet through Jupiter and the Seed
-Vault, Portfolio, and a watchlist with one digest a day. The tracking gauge is drawn only over a
-pool of $4,000 or more; under it the app states the pool instead. Portrait and dark.
+First release on the dApp Store. Five tabs: Today, with the NYSE state, your watched stocks and upcoming reports; Stocks, where each page reads reserves and issuer controls live from the Token-2022 mint beside the SEC-filings classification; Vote, where staked SKR chooses the next stock to be analysed; Portfolio, with Swap to USDC; and You, with Pro, promo codes and Google or wallet sign-in. Dark and light themes.
 ```
 
-471 characters. It describes the build rather than thanking anybody, and it carries the one
-withholding rule a first-time reader would otherwise read as a missing feature.
+417 characters. It describes the build rather than thanking anybody. On later releases this
+field names only what changed.
 
 ### Category, tags, age rating
 
@@ -290,38 +249,34 @@ withholding rule a first-time reader would otherwise read as a missing feature.
   9). The category is part of how that reads.
 - **Tags: this document records no tag field**, published or otherwise. If the form offers one,
   these are descriptive and none of them is a claim: `solana`, `seeker`, `xstocks`, `token-2022`,
-  `sec-filings`, `jupiter`, `portfolio`. Nothing comparative, and nothing that reads as a promise:
+  `sec-filings`, `jupiter`, `skr`. Nothing comparative, and nothing that reads as a promise:
   `trading` and `invest` are not tags this app carries.
-- **Age rating: answered from the build.** No user-generated content, no advertising, no in-app
-  purchase, no gambling. The one flag that is honest to raise is that the app references financial
-  instruments.
+- **Age rating: answered from the build.** No user-generated content, no advertising, no gambling.
+  One paid feature: the Pro pass, paid in USDC as an on-chain transfer from the user's own wallet,
+  not through a store billing system; Pro also comes from staked SKR or a promo code. The one other
+  flag that is honest to raise is that the app references financial instruments.
 
-### The images: two are rendered, the rest are still to be captured
+### The images
 
-The two images that are drawings of the brand rather than pictures of the app are in the repo,
-rendered on 2026-09-19 and listed below with the function that wrote them. Every screenshot still
-has to be captured from the **release** build on the Seeker, because a screenshot that does not
-match the shipped app is the rejection reason the review criteria name in as many words,
-"Screenshots accurately represent the app".
+The icon and the banner are drawings of the brand and are in the repo. The screenshots are
+pictures of the app and must come from the **release** build on the Seeker, because a screenshot
+that does not match the shipped app is the rejection reason the review criteria name in as many
+words, "Screenshots accurately represent the app".
 
 | Asset | Spec | State | What it shows |
 | --- | --- | --- | --- |
-| Icon PNG | 512 x 512 | **Written.** `design/brand/store/icon-512.png`, rendered by `design/brand/render_icons.py` (`flat_tile`, then `write_store`) | The shipped launcher icon flattened: the Ink tile with the Canvas two-corner mark (`DESIGN.md` section 9). The app carries it as an adaptive vector, so the PNG is rasterized from the shipped `res/drawable/ic_launcher_foreground.xml` over the ground `res/values/ic_launcher_background.xml` resolves to (`@color/ink`, `#E8ECF1`), rather than exported from the APK or traced. Square, opaque, no radius: the store applies its own mask. |
-| Screenshot 1 | Portrait, 1200 x 2670 off the Seeker, at least 1080 px each side | To capture on the Seeker | The List with a tracked row and a sub-floor row in one frame: one gauge drawn, one row reading `$34 behind this price, too thin`. The product's argument in a single image. |
-| Screenshot 2 | Same device, same orientation, same aspect ratio | To capture on the Seeker | Backing and controls on a stock page with the live bar running: proof of reserves, permanent delegate Yes, transfers pausable Yes, the slot and its age. |
-| Screenshot 3 | Same | To capture on the Seeker | The analysis: the composite, the three tracks, the F-Score with its nine signals, and the age of the analysis. |
-| Screenshot 4 | Same | To capture on the Seeker | The swap sheet at the confirm step, with the all-in cost visible. |
-| Screenshot 5 | Same | To capture on the Seeker | A real receipt: the amount that reached the route and the signature in mono. Optional by the guidelines, and the one image a reviewer can check against the chain. |
-| Banner | 1024 x 500 PNG | **Written.** `design/brand/store/banner-1024x500.png`, rendered by `design/brand/render_icons.py` (`store_banner`) | The icon's own field, widened: the same Ink ground, the same Canvas mark out of the same drawable, the wordmark in Outfit 600 and one line under it, "Read the xStock, then swap", which is the short description this document already writes rather than a sentence invented for an image. No reading is drawn on it: at the size a listing card gives a banner a gauge and its premium are texture, and the one thing that has to survive being small is that this is the object whose icon sits beside it. No phone mockup, no stock photography, no gradient. |
-| Video | `.mp4`, at least 720 px, 1080p recommended | Optional, not cut | The hackathon demo video can be reused only if the build being submitted carries everything the video shows. If the SKR segment survives into the video and the vote is not in that build, the video is re-cut before it goes on the listing. |
+| Icon PNG | 512 x 512 | **Written, Amber.** `design/brand/store/icon-512.png`, re-rendered 2026-09-24 by `design/brand/render_icons.py` from the shipped `ic_launcher_foreground.xml` (commit `66c21af`) | The shipped launcher icon flattened: the two-corner mark on the amber tile. Square, opaque, no radius: the store applies its own mask. |
+| Banner | 1024 x 500 PNG | **Written, Amber.** `design/brand/store/banner-1024x500.png`, same commit and generator | The mark, the wordmark in Bricolage Grotesque and the short description under it. No phone mockup, no stock photography, no gradient. |
+| Screenshot 1 | Portrait, 1200 x 2670 off the Seeker | Candidate: `docs/img/01-today.png` (1.3.12). Recapture on the submission build | Today: the NYSE status line, Watched, Reports next week. |
+| Screenshot 2 | Same device, orientation and aspect ratio | Candidate: `docs/img/03-stock-page-aapl.png` (1.3.8). Recapture | A stock page: the classification, the token price against the NYSE close, *Live from the mint* with its slot, and *Backing and controls*. |
+| Screenshot 3 | Same | Candidate: `docs/img/02-stocks.png` (1.3.12). Recapture | Stocks: search, the Deep pool and sector filters, the covered list. |
+| Screenshot 4 | Same | To capture | The swap result, *Swap landed*, with the receipt and its signature. |
+| Screenshot 5 | Same | To capture | The Vote tab: the explainer, the round, *Last round*, the ballot. |
+| Video | `.mp4`, at least 720 px, 1080p recommended | Optional | The hackathon demo (`docs/video-script-2026-09-27.md`) can be reused if the submitted build carries everything it shows. |
 
-Both PNGs carry the generator in a PNG text chunk, the same "generated by, do not edit by hand"
-line the drawables carry, and `python design/brand/render_icons.py` rewrites them from the shipped
-drawable: change the mark and re-run it, never repaint the PNG.
-
-Four screenshots is the working target step 8 settles on and five are listed here, all in one
-orientation and one aspect ratio, which the guidelines require and which a mixed set of captures
-quietly breaks.
+Capture every screenshot on a demo account. The You screen prints the signed-in email, so it is
+never captured on the founder's own Google account or with the founder's private wallet connected.
+All five in one orientation and one aspect ratio, which the guidelines require.
 
 Two text dependencies are not images and block just as hard: the privacy policy and the
 account-deletion statement step 9 requires, and the `license_url`, `copyright_url`,
