@@ -5,12 +5,16 @@ import com.plainticker.mobile.data.net.ApiException
 import com.plainticker.mobile.data.plainticker.AnalysisPayload
 import com.plainticker.mobile.data.plainticker.Forward
 import com.plainticker.mobile.data.plainticker.ForwardRaw
+import com.plainticker.mobile.data.plainticker.PreviousRound
 import com.plainticker.mobile.data.plainticker.SummaryResponse
 import com.plainticker.mobile.data.plainticker.SummaryRow
+import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.prefs.InMemoryWatchlistStore
 import com.plainticker.mobile.repo.FakeCatalogRepository
+import com.plainticker.mobile.repo.FakeNextUpRepository
 import com.plainticker.mobile.repo.FakePriceRepository
 import com.plainticker.mobile.repo.FakeSummaryRepository
+import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.price
 import com.plainticker.mobile.repo.xStock
 import java.time.Instant
@@ -89,7 +93,9 @@ class WatchlistCheckTest {
         assertEquals(text, digests.record.value.text)
         assertEquals(day, digests.record.value.producedAtMillis)
         assertEquals(day, digests.record.value.lastCheckedAtMillis)
-        assertEquals("the notification carries what the screen draws", listOf(text), notifier.posted)
+        // The headline keeps the count plus the one clause here (there is only one), so it reads
+        // identically to the fuller text the screen draws; DigestTest covers where they diverge.
+        assertEquals(listOf(text), notifier.posted)
         assertEquals(WatchedReport("AAPL", "AAPLx", LocalDate.of(2026, 10, 28)), digests.record.value.nextReport)
     }
 
@@ -192,5 +198,75 @@ class WatchlistCheckTest {
             check.run(),
         )
         assertEquals(2, notifier.posted.size)
+    }
+
+    // ---- Covered companies reporting this week, watched or not -----------------------------
+
+    @Test
+    fun `a company reporting this week that nobody watches still reaches the digest`() = runTest {
+        summaries.summaryResult = Result.success(
+            SummaryResponse(
+                schema = "v1.1",
+                generatedAt = "2026-09-13T08:00:00.000Z",
+                rows = listOf(
+                    SummaryRow(ticker = "AAPL", company = "AAPL Inc."),
+                    // Not watched, and carries its own report date: the fact this test is for.
+                    SummaryRow(ticker = "JEF", company = "Jefferies Financial Group Inc.", nextReportDate = "2026-09-15"),
+                ),
+            ),
+        )
+        catalog.assets = Result.success(listOf(xStock("AAPLx", "AAPL", "mint-AAPL")))
+
+        assertEquals(
+            CheckOutcome.Produced("1 stock watched. 1 covered company reports this week."),
+            check.run(),
+        )
+    }
+
+    // ---- The vote ----------------------------------------------------------------------------
+
+    @Test
+    fun `the round closing and a live-analysed previous winner reach the digest and the shade`() = runTest {
+        serves("AAPL")
+        val nextUp = FakeNextUpRepository(
+            answer = Result.success(
+                NextUpAnswer.Open(
+                    rows = emptyList(),
+                    round = VoteRound(id = 2, opensAt = "2026-09-07T00:00:00.000Z", closesAt = "2026-09-14T00:00:00.000Z"),
+                    previous = PreviousRound(id = 1, winner = "JEF", status = "closed"),
+                ),
+            ),
+        )
+        summaries.analyses = summaries.analyses + ("JEF" to Result.success(AnalysisPayload(ticker = "JEF")))
+        val votingCheck = WatchlistCheck(
+            watchlist = watchlist,
+            facts = WatchlistFacts(summaries, catalog, prices),
+            digests = digests,
+            strings = RealStrings.strings,
+            notifier = notifier,
+            clock = clock,
+            vote = VoteDigestFacts(nextUp, summaries),
+        )
+
+        val outcome = votingCheck.run()
+
+        val full = "1 stock watched. Round 2 closes Monday. JEF, last round's winner, is now analysed."
+        assertEquals(CheckOutcome.Produced(full), outcome)
+        assertEquals(full, digests.record.value.text)
+        assertEquals(
+            "the shade gets the count and the highest-priority clause, here the vote line itself",
+            listOf("1 stock watched. Round 2 closes Monday."),
+            notifier.posted,
+        )
+    }
+
+    @Test
+    fun `a check with no vote collaborator at all carries no vote line, exactly as before this task`() = runTest {
+        serves("AAPL")
+        reports("AAPL", "2026-10-28")
+        assertEquals(
+            CheckOutcome.Produced("1 stock watched. AAPLx reports in 45 days."),
+            check.run(),
+        )
     }
 }

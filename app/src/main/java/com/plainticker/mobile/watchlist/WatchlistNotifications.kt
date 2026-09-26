@@ -26,8 +26,10 @@ import com.plainticker.mobile.ui.home.HomeTab
  * a refused permission, a blocked channel or a system that declines the post all mean the digest
  * stays on the screen, which it does anyway, and the worker finishes normally.
  *
- * The text is the whole digest, in a big-text style, because the sentence the screen shows and the
- * sentence the shade shows have to be the same one. The title is the heading the screen draws
+ * The text this class ever receives is [com.plainticker.mobile.watchlist.Digest.headline]'s own
+ * shorter reading, one to two short sentences (task digest-stickiness), in a big-text style so a
+ * two-line reading still shows whole in the shade; the screen under You draws the fuller paragraph
+ * instead, every clause the notification kept to one. The title is the heading the screen draws
  * above the Panel, so a person who taps through recognizes where they have landed.
  */
 class WatchlistNotifications(context: Context) : DigestNotifier {

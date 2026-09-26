@@ -73,6 +73,9 @@ class WatchlistFacts(
             // not a set of tokens it has no price for (a mint it answered about without a price
             // is an answer, and the row simply draws no premium).
             pricesUnavailable = fetch != null && fetch.isPartial && fetch.priced.isEmpty(),
+            // Every covered company's next report, not only the watched ones: [rows] here is the
+            // whole `/summary` answer keyed by ticker, before it is narrowed to [watched] below.
+            coveredReportDates = rows.values.mapNotNull { it.nextReportLocalDate() },
         )
     }
 

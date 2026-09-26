@@ -115,6 +115,10 @@ class CountCopyTest {
             Case(1, listOf("TSLAx", "1"), "TSLAx reports in 1 day."),
             Case(4, listOf("TSLAx", "4"), "TSLAx reports in 4 days."),
         ),
+        "digest_week_reports" to listOf(
+            Case(1, listOf("1"), "1 covered company reports this week."),
+            Case(3, listOf("3"), "3 covered companies report this week."),
+        ),
         // Stocks' filter row disclosure chip (ui/list/ListScreen.kt, ui/stocks/StocksFilter.kt):
         // "+n sectors" past the eight shown by default, "sector" singular at one.
         "stocks_filter_more_sectors" to listOf(

@@ -1,8 +1,10 @@
 package com.plainticker.mobile.watchlist
 
+import com.plainticker.mobile.data.plainticker.VoteRound
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -168,5 +170,108 @@ class DigestTest {
         assertEquals("three sentences, one space between them", 3, line.split(". ").size)
         assertFalse("no middle dots in a digest", line.contains('\u00B7'))
         assertTrue("one line, never a paragraph break", '\n' !in line)
+    }
+
+    // ---- Reports this week among covered companies, watched or not ------------------------
+
+    @Test
+    fun `covered companies reporting within the week are said, watched or not`() {
+        val rows = listOf(watched("AAPL"))
+        val dates = listOf(today.plusDays(1), today.plusDays(6), today.plusDays(9))
+        val result = digest(DigestInput(today, rows, coveredReportDates = dates))
+        assertEquals(
+            "1 stock watched. 2 covered companies report this week.",
+            result.text(RealStrings.strings),
+        )
+    }
+
+    @Test
+    fun `a single covered company this week reads as one, not as many`() {
+        val rows = listOf(watched("AAPL"))
+        val result = digest(DigestInput(today, rows, coveredReportDates = listOf(today)))
+        assertEquals("1 stock watched. 1 covered company reports this week.", result.text(RealStrings.strings))
+    }
+
+    @Test
+    fun `a report exactly a week and a day out is not this week`() {
+        val rows = listOf(watched("AAPL"))
+        val result = digest(DigestInput(today, rows, coveredReportDates = listOf(today.plusDays(7))))
+        assertFalse(result.hasNews)
+    }
+
+    @Test
+    fun `a report the day before today is not this week either`() {
+        val rows = listOf(watched("AAPL"))
+        val result = digest(DigestInput(today, rows, coveredReportDates = listOf(today.minusDays(1))))
+        assertFalse(result.hasNews)
+    }
+
+    // ---- The vote ---------------------------------------------------------------------------
+
+    @Test
+    fun `a round in progress is said by its number and when it closes`() {
+        val rows = listOf(watched("AAPL"))
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
+        val result = digest(DigestInput(today, rows, voteRound = round))
+        assertEquals("1 stock watched. Round 3 closes Monday.", result.text(RealStrings.strings))
+    }
+
+    @Test
+    fun `the previous winner is named once this run has confirmed it is analysed`() {
+        val rows = listOf(watched("AAPL"))
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
+        val result = digest(DigestInput(today, rows, voteRound = round, analysedWinner = "JEF"))
+        assertEquals(
+            "1 stock watched. Round 3 closes Monday. JEF, last round's winner, is now analysed.",
+            result.text(RealStrings.strings),
+        )
+    }
+
+    @Test
+    fun `a winner named with no round in progress still gets its own sentence`() {
+        val rows = listOf(watched("AAPL"))
+        val result = digest(DigestInput(today, rows, analysedWinner = "JEF"))
+        assertEquals("1 stock watched. JEF, last round's winner, is now analysed.", result.text(RealStrings.strings))
+    }
+
+    @Test
+    fun `an unparsable close date says nothing rather than a guess`() {
+        val rows = listOf(watched("AAPL"))
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "not-a-date")
+        val result = digest(DigestInput(today, rows, voteRound = round))
+        assertFalse(result.hasNews)
+    }
+
+    // ---- The notification's shorter reading -------------------------------------------------
+
+    @Test
+    fun `a quiet day but for the vote still gets a notification worth sending`() {
+        val rows = listOf(watched("AAPL"))
+        val result = digest(DigestInput(today, rows, analysedWinner = "JEF"))
+        assertTrue(result.hasNews)
+        assertEquals(result.text(RealStrings.strings), result.headline(RealStrings.strings))
+    }
+
+    @Test
+    fun `the headline keeps the count and the single highest-priority clause, never every one`() {
+        val rows = listOf(watchedAt("NVDA", premiumPct = -0.61, nextReport = today.plusDays(3)))
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
+        val result = digest(
+            DigestInput(
+                today, rows, mapOf("NVDA" to -0.04),
+                coveredReportDates = listOf(today),
+                voteRound = round,
+                analysedWinner = "JEF",
+            ),
+        )
+        val full = result.text(RealStrings.strings)
+        val headline = result.headline(RealStrings.strings)
+        assertEquals("the fuller reading carries all six clauses", 6, full.split(". ").size)
+        assertEquals(
+            "the count, then the day's biggest move, and nothing past it",
+            "1 stock watched. NVDAx moved from -0.04% to -0.61% against the NYSE close.",
+            headline,
+        )
+        assertNotEquals("the two readings really do diverge here", full, headline)
     }
 }
