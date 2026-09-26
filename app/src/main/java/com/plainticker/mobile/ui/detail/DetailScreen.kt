@@ -849,6 +849,8 @@ private fun SwapBlock(
 @Composable
 private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?) {
     if (!state.analysisNotServed || onVote == null) return
+    // A listing outside the US is outside the universe the server accepts a vote for.
+    if (state.asset?.isUsUnderlying == false) return
     val colors = defaultAmberColors()
     Row(modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = VoteGap)) {
         TextAction(

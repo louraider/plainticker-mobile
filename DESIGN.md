@@ -604,8 +604,12 @@ reads the server's `previous.status`: the live word is `closed`, drawn as the ne
 closed. JEF had the most stake."; `pending`, `published` and `uncoverable` keep their coverage
 sentences; any other word degrades to the same neutral line rather than hiding the section (it
 vanished for every reader until 2026-09-26 because `closed` was unknown). This was measured, not
-assumed: the shipped catalog runs to 928 symbols and the ballot can hold up to 771 rows at 64dp
-each, tens of thousands of display points below where the screen starts. What that costs is
+assumed: the live catalog ran to 1,124 Solana symbols on 2026-09-26 and the ballot to 898 rows
+at 64dp each, tens of thousands of display points below where the screen starts. The ballot holds
+US-listed underlyings only (`XStockAsset.isUsUnderlying`, read from `underlying.listingCountry`,
+then the underlying ISIN, then the venue's MIC), because the server refuses a vote for any other
+listing after the wallet has connected; the filter took 174 London, Hong Kong, Madrid and
+Frankfurt rows out of 1,072. Stocks' search and Detail drop the Vote action for the same rows. What that costs is
 specific, not a vague "it's long": the header carries nothing a voter needs mid-ballot (switching
 destinations is `AmberBottomNav`'s job, not this screen's, since the bar is a sibling of the
 scrolling content, not a child of it) and every ballot row draws its own inline "Vote," so a voter

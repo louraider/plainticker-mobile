@@ -56,8 +56,13 @@ class VoteScreenTest {
         val priceOnly = body(listScreen, "private fun PriceOnlyRow(")
         assertTrue(
             "a price-only row hands its own vote callback through to the shared row",
-            "onVote = if (onVote == null) null else" in priceOnly,
+            "onVote = if (onVote == null || !row.votable) null else" in priceOnly,
         )
+        // 2026-09-26 (audit, item 3): the callback now also stops at a row whose underlying is not
+        // US-listed, because the server refuses that vote after the wallet connects.
+        assertTrue("a non-US price-only row offers no vote", "!row.votable" in priceOnly)
+        val detailVote = body(detailScreen, "private fun VoteBlock(")
+        assertTrue("Detail offers no vote for a non-US listing", "state.asset?.isUsUnderlying == false" in detailVote)
 
         // The analyzed rows are already covered, so there is nothing there to vote for.
         val analyzed = body(listScreen, "private fun AnalyzedRow(")

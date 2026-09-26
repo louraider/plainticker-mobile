@@ -76,6 +76,12 @@ data class ListRow(
      * [carryingPriceFrom] keeps whatever this field already was, the same way it keeps [analyzed].
      */
     val locked: Boolean = false,
+    /**
+     * False for a price-only row whose underlying is not US-listed ([XStockAsset.isUsUnderlying]):
+     * the server refuses a vote for it, so the row offers no Vote action. True on every analyzed
+     * row, which offers no vote anyway.
+     */
+    val votable: Boolean = true,
 ) {
     /** What the row shows left: the token symbol once the catalog is known, else the ticker. */
     val display: String get() = symbol ?: ticker
@@ -802,6 +808,7 @@ class ListViewModel(
         poolUsd = null,
         analyzed = false,
         sector = null,
+        votable = isUsUnderlying,
     )
 
     companion object {

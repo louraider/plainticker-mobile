@@ -781,7 +781,7 @@ private fun PriceOnlyRow(
         modifier = modifier,
         onClick = { onOpenDetail(row.ticker) },
         onClickLabel = stringResource(R.string.action_open_ticker, row.display),
-        onVote = if (onVote == null) null else ({ onVote(row.ticker, row.display) }),
+        onVote = if (onVote == null || !row.votable) null else ({ onVote(row.ticker, row.display) }),
     )
 }
 
