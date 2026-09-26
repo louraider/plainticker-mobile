@@ -55,4 +55,12 @@ data class WatchedFacts(
     val catalogUnavailable: Boolean = false,
     /** Jupiter refused, so no row carries a premium. */
     val pricesUnavailable: Boolean = false,
+    /**
+     * `next_report_date` off every row `/summary` sent, watched or not: the daily check's own
+     * "covered companies report this week" fact (task digest-stickiness), piggybacked on the same
+     * `/summary` fetch [rows] is built from rather than a second read, since the check is this
+     * field's only reader. Empty when `/summary` did not answer, the same emptiness
+     * [analysisUnavailable] already reports.
+     */
+    val coveredReportDates: List<LocalDate> = emptyList(),
 )

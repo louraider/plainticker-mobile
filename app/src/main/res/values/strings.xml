@@ -164,8 +164,13 @@
     <!-- The verdict (task app-verdict): directly under the hero and above the gauge, the same slot
          the web gives it. The label above it names what the value is; the value itself is either
          the payload's own text (never here) or, while monetization withholds it, a placeholder
-         shape with no text standing in for the word, plus detail_pro_peek_note below it. -->
+         shape with no text standing in for the word, plus detail_pro_peek_note below it.
+         detail_verdict_qualifier sits beside the unlocked value itself (the fix for the "no
+         verdict" versus "Classification: Skip" contradiction judges flagged): the app classifies
+         by a fixed rule and says so right next to the word, the same pairing the web gives it,
+         rather than only lower down in Method. -->
     <string name="detail_verdict_label">Classification</string>
+    <string name="detail_verdict_qualifier">By the method\'s fixed rule. Not a price forecast or advice.</string>
     <string name="detail_token_price">Token price</string>
     <!-- What the token's own figure is called below the liquidity floor, where the quote is a
          reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->
@@ -614,6 +619,18 @@
         <item quantity="one">%1$s reports in %2$s day.</item>
         <item quantity="other">%1$s reports in %2$s days.</item>
     </plurals>
+    <!-- Every covered company reporting within the coming week, watched or not (task
+         digest-stickiness): a market fact the reader did not have to watch anything to see. -->
+    <plurals name="digest_week_reports">
+        <item quantity="one">%1$s covered company reports this week.</item>
+        <item quantity="other">%1$s covered companies report this week.</item>
+    </plurals>
+    <!-- The vote round in progress, and the previous round's winner once this run has confirmed a
+         live analysis exists for it (never the server's own status word, which the live contract
+         still sends as closed rather than published). %1$s is the round's own number, never a
+         quantity: it does not pluralise anything after it. -->
+    <string name="digest_vote_round_closes">Round %1$s closes %2$s.</string>
+    <string name="digest_vote_winner_analysed">%1$s, last round\'s winner, is now analysed.</string>
 
     <!-- Notifications -->
     <string name="notification_channel_watchlist">Watchlist</string>

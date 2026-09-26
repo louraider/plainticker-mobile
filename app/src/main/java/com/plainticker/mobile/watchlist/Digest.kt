@@ -3,11 +3,13 @@ package com.plainticker.mobile.watchlist
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.words
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
@@ -59,6 +61,36 @@ sealed interface DigestLine {
                 else -> counted(R.plurals.digest_reports_in_days, inDays.toInt(), symbol, Fmt.count(inDays))
             }
     }
+
+    /**
+     * How many covered companies, watched or not, report within the coming week: a market fact
+     * that needs nothing watched to be true, unlike [Reports]'s own nearest watched date. Drawn
+     * only above zero; a quiet week says nothing here rather than "0 covered companies".
+     */
+    data class WeekReports(val count: Int) : DigestLine {
+        override val copy: Copy get() = counted(R.plurals.digest_week_reports, count, Fmt.count(count))
+    }
+
+    /**
+     * The vote round in progress: when it closes. Independent of [WinnerAnalysed], because a
+     * round can be open with no previous winner yet (before the first round has closed) and a
+     * previous winner can still be worth naming after its own round has closed.
+     */
+    data class RoundCloses(val roundId: Int, val closesOn: LocalDate) : DigestLine {
+        override val copy: Copy
+            // The round's own number, never a quantity: it does not pluralise anything after it.
+            get() = words(R.string.digest_vote_round_closes, Fmt.count(roundId), Fmt.weekday(closesOn)) // lint-allow count: a round's number, not a quantity
+    }
+
+    /**
+     * The previous round's winner, once this run has confirmed a live analysis exists for it
+     * (`WatchlistCheck`'s own read of `/api/v1/{ticker}`, never the server's own `status` word,
+     * which the live contract still sends as `closed` rather than `published`). The loop from a
+     * vote to a covered stock, closing in one sentence.
+     */
+    data class WinnerAnalysed(val ticker: String) : DigestLine {
+        override val copy: Copy get() = words(R.string.digest_vote_winner_analysed, ticker)
+    }
 }
 
 /**
@@ -92,6 +124,20 @@ data class DigestInput(
     val tickers: List<WatchedTicker>,
     /** What the previous check saw, by ticker. The baseline a move is measured against. */
     val previousPremiums: Map<String, Double> = emptyMap(),
+    /**
+     * `next_report_date` off every company `/summary` covers, watched or not
+     * ([WatchedFacts.coveredReportDates]): [DigestLine.WeekReports]'s own candidates, narrowed to
+     * the coming week by [digest] itself so this stays as pure an input as [tickers] already is.
+     */
+    val coveredReportDates: List<LocalDate> = emptyList(),
+    /** The vote round in progress, when the server has stamped one (`vote/next-up.round`). */
+    val voteRound: VoteRound? = null,
+    /**
+     * The previous round's winner, already confirmed live-analysed by the caller (`WatchlistCheck`
+     * reading `/api/v1/{ticker}`, never a network call [digest] itself could make and stay pure).
+     * Null when there is no previous winner, or none this run could confirm is analysed yet.
+     */
+    val analysedWinner: String? = null,
 )
 
 data class Digest(
@@ -107,14 +153,28 @@ data class Digest(
      */
     val hasNews: Boolean get() = lines.any { it !is DigestLine.Watched }
 
-    /** The digest as one paragraph, which is what the Panel draws and the notification carries. */
-    fun text(strings: DigestStrings): String =
-        lines.joinToString(" ") { line ->
-            when (val copy = line.copy) {
-                is Copy.Words -> strings.get(copy.id, copy.args)
-                is Copy.Counted -> strings.quantity(copy.id, copy.quantity, copy.args)
-                is Copy.Raw -> copy.text
-            }
+    /** The digest as one paragraph, every applicable clause: what the Panel draws under You. */
+    fun text(strings: DigestStrings): String = lines.joinToString(" ") { render(it, strings) }
+
+    /**
+     * The notification's own shorter reading (task digest-stickiness): a shade has room for one
+     * to two short sentences, not every clause [text] carries once moves, reports, the week's
+     * other reports and the vote can all apply at once. This keeps the count, then whichever
+     * single fact [lines] ranks highest after it, in the same fixed order [digest] already builds
+     * them in. The fuller reading, every applicable clause, is [text], which the digest screen
+     * under You draws instead.
+     */
+    fun headline(strings: DigestStrings): String {
+        val watched = lines.firstOrNull { it is DigestLine.Watched }
+        val highlight = lines.firstOrNull { it !is DigestLine.Watched }
+        return listOfNotNull(watched, highlight).joinToString(" ") { render(it, strings) }
+    }
+
+    private fun render(line: DigestLine, strings: DigestStrings): String =
+        when (val copy = line.copy) {
+            is Copy.Words -> strings.get(copy.id, copy.args)
+            is Copy.Counted -> strings.quantity(copy.id, copy.quantity, copy.args)
+            is Copy.Raw -> copy.text
         }
 
     companion object {
@@ -126,9 +186,10 @@ data class Digest(
 /**
  * What today's check has to say. Pure, total, and sorted at every step.
  *
- * The order of the sentences is fixed: how many are watched, then what moved, then what reports
- * next. It is the canvas order, and it is also the order of decreasing volatility, so the part of
- * the digest that changes daily sits where a reader's eye lands after the count.
+ * The order of the sentences is fixed: how many are watched, what moved, what reports next among
+ * the watched, how many covered companies report this week regardless of what is watched, then
+ * the vote. It is the canvas order, and it is also the order of decreasing volatility, so the part
+ * of the digest that changes daily sits where a reader's eye lands after the count.
  */
 fun digest(input: DigestInput): Digest {
     if (input.tickers.isEmpty()) return Digest.NOTHING
@@ -141,7 +202,27 @@ fun digest(input: DigestInput): Digest {
     lines += DigestLine.Watched(tickers.size)
     lines += moves(tickers, input.previousPremiums)
     report?.let { lines += DigestLine.Reports(it.symbol, ChronoUnit.DAYS.between(input.today, it.on)) }
+    weekReportCount(input.coveredReportDates, input.today)
+        .takeIf { it > 0 }
+        ?.let { lines += DigestLine.WeekReports(it) }
+    input.voteRound?.closesAtInstant()?.let { closes ->
+        lines += DigestLine.RoundCloses(input.voteRound.id, LocalDate.ofInstant(closes, ZoneOffset.UTC))
+    }
+    input.analysedWinner?.let { lines += DigestLine.WinnerAnalysed(it) }
     return Digest(lines = lines, premiums = premiums, nextReport = report)
+}
+
+/**
+ * How many covered companies report from [today] through six days after: a rolling week in the
+ * check's own UTC calendar day, not the reader-zone, Monday-to-Sunday week
+ * [com.plainticker.mobile.ui.today.reportsThisWeek] draws on Today. That screen's own week needs a
+ * weekend exception so it never narrows to two days on a Saturday; a notification sentence has no
+ * such display to protect and reads just as honestly either way, so this stays the small, rolling
+ * rule the digest already uses for its own dates elsewhere in this file.
+ */
+private fun weekReportCount(dates: List<LocalDate>, today: LocalDate): Int {
+    val end = today.plusDays(6)
+    return dates.count { it in today..end }
 }
 
 /**

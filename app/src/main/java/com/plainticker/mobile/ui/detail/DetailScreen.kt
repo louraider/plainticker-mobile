@@ -294,11 +294,20 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
         when (block) {
             VerdictBlock.Loading -> SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
 
-            is VerdictBlock.Unlocked ->
+            is VerdictBlock.Unlocked -> {
                 // A word, never a colour: DESIGN.md section 7 keeps colour for direction and
                 // risk, never for a classification, so this carries no more emphasis than
                 // colors.textPrimary gives every other primary word on the screen.
                 Text(text = block.label.text(), style = AmberType.sectionHead, color = colors.textPrimary)
+                // The word's own qualifier, right beside it rather than only in Method further
+                // down: a reader who sees "Skip" here and nowhere else is owed, in the same
+                // glance, that it is a fixed rule against the sector and not a forecast or advice.
+                Text(
+                    text = stringResource(R.string.detail_verdict_qualifier),
+                    style = AmberType.context,
+                    color = colors.textSecondary,
+                )
+            }
 
             VerdictBlock.Locked -> {
                 // The placeholder shape carries no text at all, amber or otherwise: the real

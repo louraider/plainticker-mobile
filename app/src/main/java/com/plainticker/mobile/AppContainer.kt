@@ -61,6 +61,7 @@ import com.plainticker.mobile.watchlist.DigestNotifier
 import com.plainticker.mobile.watchlist.DigestStore
 import com.plainticker.mobile.watchlist.DigestStrings
 import com.plainticker.mobile.watchlist.SharedPrefsDigestStore
+import com.plainticker.mobile.watchlist.VoteDigestFacts
 import com.plainticker.mobile.watchlist.WatchlistCheck
 import com.plainticker.mobile.watchlist.WatchlistFacts
 import com.plainticker.mobile.watchlist.WatchlistNotifications
@@ -290,6 +291,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
             },
             notifier = digestNotifier,
             clock = clock,
+            vote = VoteDigestFacts(nextUpRepository, summaryRepository),
         )
     }
 

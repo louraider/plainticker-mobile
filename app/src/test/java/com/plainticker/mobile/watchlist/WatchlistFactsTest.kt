@@ -139,6 +139,37 @@ class WatchlistFactsTest {
     }
 
     @Test
+    fun `covered report dates carry every summary row, not only the watched ones`() = runTest {
+        summaries.summaryResult = Result.success(
+            SummaryResponse(
+                schema = "v1.1",
+                generatedAt = "2026-09-13T08:00:00.000Z",
+                rows = listOf(
+                    SummaryRow(ticker = "AAPL", company = "AAPL Inc.", nextReportDate = "2026-10-28"),
+                    // Not watched below, and its own date must still reach WatchedFacts.
+                    SummaryRow(ticker = "JEF", company = "Jefferies Financial Group Inc.", nextReportDate = "2026-09-15"),
+                    // No date at all: contributes nothing, not a null entry in the list.
+                    SummaryRow(ticker = "NVDA", company = "NVDA Inc."),
+                ),
+            ),
+        )
+
+        val loaded = facts.load(setOf("AAPL"))
+
+        assertEquals(
+            listOf(LocalDate.of(2026, 9, 15), LocalDate.of(2026, 10, 28)),
+            loaded.coveredReportDates.sorted(),
+        )
+    }
+
+    @Test
+    fun `a summary that did not answer carries no covered report dates either`() = runTest {
+        summaries.summaryResult = Result.failure(ApiException(503, "summary", "unavailable", null))
+
+        assertTrue(facts.load(setOf("AAPL")).coveredReportDates.isEmpty())
+    }
+
+    @Test
     fun `rows come back in ticker order whatever order they were asked in`() = runTest {
         serving("AAPL", "NVDA", "TSLA")
         catalog.assets = Result.success(
