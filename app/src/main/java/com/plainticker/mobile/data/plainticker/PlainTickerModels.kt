@@ -37,7 +37,31 @@ data class SummaryRow(
     /** True when the server's cache for this ticker has expired. The row is still served. */
     val stale: Boolean = false,
     @SerialName("age_days") val ageDays: Int? = null,
-)
+    /**
+     * The next scheduled report as a US Eastern calendar day, e.g. "2026-09-29", or null: absent
+     * until the server deploys this field (Today's "Reports this week" block, added alongside it),
+     * and possibly still null afterward for a company with no known date. `ignoreUnknownKeys`
+     * already covers a server that predates the key entirely; this default covers the same server
+     * sending the row without it for one ticker.
+     */
+    @SerialName("next_report_date") val nextReportDate: String? = null,
+    /**
+     * Whether [nextReportDate] is confirmed by the company (true), an estimate (false), or unknown
+     * (null, read the same as an estimate would be read anywhere the sentence must pick one, but
+     * never labelled "estimated" itself: only an explicit false earns that word).
+     */
+    @SerialName("next_report_confirmed") val nextReportConfirmed: Boolean? = null,
+) {
+    /**
+     * [nextReportDate] parsed, or null when it is absent or is not a calendar day. A bare
+     * [LocalDate], never an [Instant]: the server states this as a US Eastern calendar day, and
+     * turning it into a moment in time would invite converting it into the reader's own zone next,
+     * which is exactly the shift [com.plainticker.mobile.ui.today.reportsThisWeek]'s own doc
+     * comment says this app must not do.
+     */
+    fun nextReportLocalDate(): LocalDate? =
+        nextReportDate?.trim()?.takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+}
 
 // ---- GET /api/v1/{TICKER}  (schema v1.1) -----------------------------------------------
 

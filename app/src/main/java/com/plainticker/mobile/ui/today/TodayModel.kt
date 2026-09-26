@@ -18,13 +18,15 @@ import com.plainticker.mobile.watchlist.WatchedTicker
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 /**
  * What Today says, in direction A, "One line, then yours" (the founder's pick, 2026-09-24): the
  * venue as one line in the reader's own time, the watched stocks first with one figure each and
- * that figure's meaning stated once, the digest as a single link, three Tracked rows that never
- * repeat a watched ticker, and Next up as one row. No footer count: Stocks' own segments carry it.
+ * that figure's meaning stated once, the digest as a single link, "Reports this week" (the
+ * founder's pick of option B, 2026-09-26, replacing "Tracked today") marking a watched ticker
+ * rather than hiding it, and Next up as one row. No footer count: Stocks' own segments carry it.
  *
  * The same split every other screen's model keeps: [com.plainticker.mobile.ui.watchlist.WatchlistViewModel]
  * decides the numbers, this file decides the sentence. Every function here is pure and total; the
@@ -32,19 +34,29 @@ import java.time.ZoneId
  * that is not yet known returns null rather than a guess.
  */
 
-/** One row of "Tracked today": an analyzed xStock whose pool clears the liquidity floor. */
-data class TrackedRow(
+/**
+ * One row of "Reports this week" (the founder's pick of option B off the designer's page, dated
+ * 2026-09-26, replacing "Tracked today": a beginner reading NVDAx at +0.21% had no way to tell
+ * what "tracked" meant or why the list was there, and a report date is a plain fact instead of a
+ * number that reads like a tip). A covered company whose next report [date] the server sent on
+ * `/summary`, joined against the catalog the same way the retired Tracked row was.
+ */
+data class ReportRow(
     val ticker: String,
     val symbol: String?,
     val company: String?,
-    /** Null only when Jupiter never sent a reference price; the pool still clears the floor. */
-    val premiumPct: Double?,
-    val poolUsd: Double,
+    /** A US Eastern calendar day, never re-zoned; see [reportsThisWeek]'s own doc comment. */
+    val date: LocalDate,
+    /** true confirmed, false estimated, null unknown. Only an explicit false reads as "estimated". */
+    val confirmed: Boolean?,
 ) {
     val display: String get() = symbol ?: ticker
 
-    /** The formatted premium, or the placeholder [Fmt] draws for any other missing figure. */
-    val figure: String get() = premiumPct?.let { Fmt.percent(it) } ?: "-"
+    /** Only an explicit false earns the word: an unknown confirmation is not stated as a guess. */
+    val estimated: Boolean get() = confirmed == false
+
+    /** "Tuesday 29 Sep": the weekday and the bare calendar day, both read off [date] itself. */
+    val dateLabel: String get() = "${Fmt.weekday(date)} ${Fmt.dayMonth(date)}"
 }
 
 /** The single "Next up" row: the heaviest-staked ticker staked SKR has chosen to cover next. */
@@ -69,10 +81,11 @@ private fun skrAmount(raw: BigInteger): String =
     Fmt.tokenAmount(BigDecimal(raw).movePointLeft(SkrStakeBound.SKR_DECIMALS), maxDecimals = 1)
 
 /**
- * Rows Today draws inline before "All N in Stocks" hands the rest over: three, down from six, so the
- * first viewport holds the reader's own stocks and a taste of the thesis rather than a second list.
+ * Rows "Reports this week" draws inline before the link to Stocks hands the rest over: about
+ * five, so the first viewport holds the reader's own stocks and a taste of the week rather than a
+ * second long list.
  */
-const val TrackedPreviewCount: Int = 3
+const val ReportsPreviewCount: Int = 5
 
 // ---- The status line --------------------------------------------------------------------------
 
@@ -215,21 +228,89 @@ fun digestLink(record: DigestRecord, nowMillis: Long, zone: ZoneId): Copy {
 /** Whether the digest line carries its "Read it" link: only once there is a digest to read. */
 fun digestReadable(record: DigestRecord): Boolean = record.text != null && record.producedAtMillis != null
 
-// ---- Tracked today ----------------------------------------------------------------------------
+// ---- Reports this week -------------------------------------------------------------------------
 
 /**
- * The Tracked rows Today draws: deepest pool first, never a ticker the reader already watches (that
- * one has its figure in Watched, and one ticker is priced once per screen), at most
- * [TrackedPreviewCount] of them.
+ * The coming Sunday, inclusive of [today] itself when [today] already is one: the last day
+ * "this week" reaches ([reportsThisWeek]'s own doc comment has the rule this closes over).
  */
-fun trackedPreview(tracked: List<TrackedRow>, watched: Set<String>): List<TrackedRow> {
-    val keys = watched.mapTo(HashSet()) { it.trim().uppercase() } // lint-allow uppercase: map key
-    return tracked.filter { it.ticker.trim().uppercase() !in keys }.take(TrackedPreviewCount) // lint-allow uppercase: map key
+fun weekEnd(today: LocalDate): LocalDate = today.plusDays(((7 - today.dayOfWeek.value) % 7).toLong())
+
+/**
+ * "Reports this week": [rows] (already joined against the catalog, one per covered company that
+ * carries a next-report date) narrowed to today through the coming Sunday, in the reader's own
+ * local week, sorted by date then ticker.
+ *
+ * **Two deliberate choices, both stated once because getting either wrong reads as a bug on a
+ * calendar screen.**
+ *
+ * **The report date is never re-zoned.** `next_report_date` is a US Eastern calendar day the
+ * server sends as a bare string ("2026-09-29"), not a moment in time, and [SummaryRow.nextReportLocalDate]
+ * parses it as a [LocalDate] for exactly that reason. Converting it into an [Instant] and back out
+ * in the reader's own zone would be the one operation guaranteed to move a date that already is
+ * what it is: a Friday report reread near midnight in a zone hours off New York could print as
+ * Thursday or Saturday depending on which side of that gap the reader stands, and this app has no
+ * way to tell a genuine change of day from an artifact of the conversion. So this function compares
+ * one bare [LocalDate] against another and nothing here ever touches a clock.
+ *
+ * **"This week" is the reader's own local week, not New York's.** [today] is the reader's own
+ * calendar day (their zone, not US Eastern), because a reader plans a week by their own calendar,
+ * the same reason [Fmt.weekday] and every other reader-zone function in this file take the zone as
+ * a parameter rather than assuming one. The gap this leaves is real and is left open on purpose,
+ * not closed: a report New York dates the coming Monday can still read as "next week" here for a
+ * reader whose own Sunday has not yet turned, and the reverse near the boundary for a reader far
+ * ahead of New York. Closing it would require deciding whose midnight a bare calendar day belongs
+ * to, which is exactly the re-zoning the rule above refuses to do; the honest position is a plain
+ * date compared against a plain date, stated as what it is instead of quietly guessed at.
+ *
+ * **No late-Friday roll-forward.** The window never reaches into next week early, even late on a
+ * Friday: a weekend with nothing scheduled already reads honestly through [reportsEmptyCopy]'s own
+ * next-date sentence, and "late" has no single answer once a reader's zone and New York's trading
+ * day are two different clocks. Rolling forward would trade that honest empty state for a guess.
+ */
+fun reportsThisWeek(rows: List<ReportRow>, today: LocalDate): List<ReportRow> {
+    val end = weekEnd(today)
+    return rows.filter { it.date in today..end }.sortedWith(compareBy({ it.date }, { it.ticker }))
 }
 
-/** "All 20 in Stocks", the link under Tracked that hands the rest to Stocks. */
-fun trackedAllCopy(trackedCount: Int): Copy =
-    words(R.string.today_tracked_all, Fmt.count(trackedCount)) // lint-allow count: a total, no noun agreement
+/**
+ * The soonest known report after this week closes, read off every candidate [rows] carries
+ * (not only the ones [reportsThisWeek] kept), for the empty state's own second sentence: a quiet
+ * week still says when the next one is, if this app knows.
+ */
+fun nextReportAfterThisWeek(rows: List<ReportRow>, today: LocalDate): ReportRow? {
+    val end = weekEnd(today)
+    return rows.filter { it.date > end }.minWithOrNull(compareBy({ it.date }, { it.ticker }))
+}
+
+/**
+ * The empty state: a quiet week says so plainly, with the next known report after it when this
+ * app has one. [next] is null either because nothing further is known yet, or because the caller
+ * has already decided the block should not draw at all (every date null, the server field not yet
+ * deployed): this function does not tell those two apart, which is why that decision is made
+ * before this one is ever reached ([WatchlistUiState.reportsKnown]).
+ */
+fun reportsEmptyCopy(next: ReportRow?): Copy =
+    if (next == null) words(R.string.today_reports_empty)
+    else words(R.string.today_reports_empty_next, next.company ?: next.display, next.dateLabel)
+
+/**
+ * Whether [ticker] is one the reader already watches, the same case- and whitespace-tolerant key
+ * every set membership check in this file reads by. A watched ticker's report row is marked, never
+ * dropped: unlike the retired Tracked block (which left a watched ticker out because its figure
+ * already sat in Watched), a report date is worth seeing beside the ticker whether or not the
+ * reader is already watching it, so [reportsThisWeek] keeps every row and this is the one thing
+ * that changes about how it draws.
+ */
+fun reportRowWatched(ticker: String, watched: Set<String>): Boolean {
+    val keys = watched.mapTo(HashSet()) { it.trim().uppercase() } // lint-allow uppercase: map key
+    return ticker.trim().uppercase() in keys // lint-allow uppercase: map key
+}
+
+/** "See every covered company in Stocks": the link under the week's rows, honest that Stocks does
+ * not sort or filter by report date, so it is a plain pointer rather than a promise of the same
+ * filtered set (task brief: "if it can't, link to Stocks and say so"). */
+fun reportsAllCopy(): Copy = words(R.string.today_reports_all)
 
 // ---- Next up ----------------------------------------------------------------------------------
 

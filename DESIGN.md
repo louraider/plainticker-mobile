@@ -211,8 +211,8 @@ exact `wght`/`wdth`/`opsz` the style in question draws, against real strings the
 ### 4.1 Rows
 
 **`AmberTickerRow`** (`AmberTickerRow.kt`) is the one row every screen with a list of tickers now
-draws: Stocks, Today (Yours, Tracked, Next up), Portfolio, Vote, and the onboarding backdrop. 64dp
-minimum, grown by content. Two lines, each given the row's *full* content width rather than
+draws: Stocks, Today (Yours, Reports this week, Next up), Portfolio, Vote, and the onboarding
+backdrop. 64dp minimum, grown by content. Two lines, each given the row's *full* content width rather than
 splitting it with the other: a name line (`ticker`, unweighted and non-wrapping, beside `company`,
 `weight(1f, fill = false)`, one line, ellipsis) and a meta line (`context`, `weight(1f, fill =
 false)`, up to two lines, beside `figure`, unweighted and non-wrapping). An optional
@@ -563,17 +563,30 @@ banner). One `LazyColumn` on `surfaceGround`, 16dp side inset, 8dp above each se
    here; it is on the stock's own page. Under the rows, the digest as one line in the reader's
    time with "Read it", which opens the digest screen under You (its own route, `digest`); the
    weighted sentence and the short fixed action never share a budget they could lose (5.4).
-3. **Tracked today**: three rows, deepest pool first, never a watched ticker, then "All N in
-   Stocks". Skeleton only while prices are out.
+3. **Reports this week** (the founder's pick of option B off the designer's page, 2026-09-26,
+   replacing "Tracked today": a beginner reading NVDAx at +0.21% had no way to tell what "tracked"
+   meant or why the list was there, and a report date is a plain fact rather than a number that
+   reads like a tip): up to five covered companies whose next report falls from today through the
+   coming Sunday in the reader's own local week, soonest first, a watched ticker marked in the
+   figure slot rather than left out, then a plain pointer into Stocks (which cannot sort or filter
+   by report date, so the link never claims a filtered count). The report date is a US Eastern
+   calendar day and is never re-zoned into the reader's own time; only the reader's own "today" and
+   week end are read in their zone. Skeleton only while the fast half of Today's join is still out
+   (`next_report_date`/`next_report_confirmed` ride `/summary`, not a price, so this needs nothing
+   the retired block did). Undrawn entirely, header included, before the server has sent a report
+   date for anyone at all: a block that cannot tell a quiet week from an undeployed field says
+   nothing rather than risk a false one. A quiet week's own sentence replaces the section's lede in
+   place of the usual explainer, naming the next known report after this week when there is one.
 4. **Next up for analysis**: one row, the round's close in the reader's time, opening Vote.
 
 No footer count: Stocks' own segments carry it. **First open** (nothing watched) swaps Watched and
 the digest for a start block, a sentence of what watching gives and one `AmberPrimaryAction`,
-"Find a stock", and gives each Tracked row a Watch trailing action (the figure-plus-action pairing
-`AmberTickerRow`'s budget proves; `TodayModelTest` re-proves it with fontTools numbers). No digest
-line, no notifications line and no Next up on a first open. The notification permission is asked
-once, right after the first watch, from Today or Detail alike; the setting lives in You and on the
-digest screen, beside the digest it delivers.
+"Find a stock", and gives each report row a Watch trailing action (the figure-plus-action pairing
+`AmberTickerRow`'s budget proves; `TodayModelTest` re-proves it with fontTools numbers) rather than
+the watched marker, since a first open's watched set is always empty. No digest line, no
+notifications line and no Next up on a first open. The notification permission is asked once,
+right after the first watch, from Today or Detail alike; the setting lives in You and on the digest
+screen, beside the digest it delivers.
 
 **Stocks** (`ListScreen.kt`, mounted by `StocksScreen`) replaced an infinite scroll with search at
 the top, sticky sector chapters (`stickyHeader` items painted opaque so pinned content never shows
@@ -678,7 +691,7 @@ this is the whole list, not a sample of it:
 | Where | Spec | Gate | Snaps to |
 |---|---|---|---|
 | `AmberChip`'s corner radius, selecting/deselecting | `spring(dampingRatio = NoBouncy, stiffness = MediumLow)` on the radius `Dp`, 8dp to full | `rememberMotionEnabled()` | The selected or unselected end shape |
-| `TodayScreen`'s block entrance (the status line, Tracked today, Next up; the reader's own rows and the start block stay still) | The same no-bounce, medium-low spring, on alpha and an 8dp rise, staggered 40ms per block, once, the first time a block has something to draw | `rememberMotionEnabled()` | Alpha 1, no translation |
+| `TodayScreen`'s block entrance (the status line, Reports this week, Next up; the reader's own rows and the start block stay still) | The same no-bounce, medium-low spring, on alpha and an 8dp rise, staggered 40ms per block, once, the first time a block has something to draw | `rememberMotionEnabled()` | Alpha 1, no translation |
 | Portfolio's Total card; You's hero card | `tween(150ms, LinearOutSlowInEasing)`, the research's "quick" token, once on first composition | `rememberMotionEnabled()` | Alpha 1 |
 | `SkeletonSwitch` (Detail's `Hero` company name; every other skeleton-to-content switch in the app) | `tween(200ms, EaseOut)` alpha fade, never a spinner | `rememberMotionEnabled()` | Alpha 1 |
 | `Track`'s position marker | `tween(400ms, CubicBezierEasing(.2, .8, .2, 1))`, unchanged since before this restyle | `rememberMotionEnabled()` | The target position |

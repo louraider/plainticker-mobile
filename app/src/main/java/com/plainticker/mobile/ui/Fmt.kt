@@ -194,6 +194,16 @@ object Fmt {
     fun weekday(epochMillis: Long, zone: ZoneId): String =
         WEEKDAYS[Instant.ofEpochMilli(epochMillis).atZone(zone).dayOfWeek.value - 1]
 
+    /**
+     * The weekday for a calendar day that is already the right calendar day, no zone conversion:
+     * for a date a payload sent as a bare day (Today's "Reports this week"), never an instant, so
+     * there is nothing here to re-zone in the first place.
+     */
+    fun weekday(date: LocalDate): String = WEEKDAYS[date.dayOfWeek.value - 1]
+
+    /** The same calendar day [monthDay] prints, day before month, no year: "29 Sep". */
+    fun dayMonth(date: LocalDate): String = "${date.dayOfMonth} ${MONTHS[date.monthValue - 1]}"
+
     /** How many calendar days, in the reader's own zone, lie between [nowMillis] and [thenMillis]. */
     fun daysAhead(thenMillis: Long, nowMillis: Long, zone: ZoneId): Long {
         val then = Instant.ofEpochMilli(thenMillis).atZone(zone).toLocalDate()
