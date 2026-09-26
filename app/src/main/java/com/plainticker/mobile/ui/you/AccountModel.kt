@@ -48,3 +48,14 @@ fun accountIdentity(account: SignedInAccount): Copy =
 
 /** Each linked wallet as a short key (first four, last four), the form You already draws a wallet in. */
 fun linkedWalletKeys(account: SignedInAccount): List<String> = account.linkedWallets.map { Fmt.shortKey(it) }
+
+/** The one line each way an unlink can refuse is named in. Exhaustive: a new case will not compile unnamed. */
+@StringRes
+fun unlinkFailureRes(failure: UnlinkFailure): Int = when (failure) {
+    UnlinkFailure.BAD_REQUEST -> R.string.account_unlink_error_bad_request
+    UnlinkFailure.NOT_LINKED -> R.string.account_unlink_error_not_linked
+    UnlinkFailure.LAST_METHOD -> R.string.account_unlink_error_last_method
+    UnlinkFailure.RATE_LIMITED -> R.string.account_unlink_error_rate_limited
+    UnlinkFailure.NOT_OPEN -> R.string.account_unlink_error_not_open
+    UnlinkFailure.UNAVAILABLE -> R.string.account_unlink_error_unavailable
+}

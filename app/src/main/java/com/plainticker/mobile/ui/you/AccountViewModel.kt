@@ -6,9 +6,14 @@ import com.plainticker.mobile.auth.AccountDebugLog
 import com.plainticker.mobile.auth.GoogleCredentialResult
 import com.plainticker.mobile.auth.GoogleCredentialSource
 import com.plainticker.mobile.auth.SignInNonce
+import com.plainticker.mobile.core.Clock
+import com.plainticker.mobile.core.WallClock
+import com.plainticker.mobile.data.auth.AccountApi
+import com.plainticker.mobile.data.auth.AccountApiError
 import com.plainticker.mobile.data.auth.GoogleAuthApi
 import com.plainticker.mobile.data.auth.GoogleAuthError
 import com.plainticker.mobile.data.auth.GoogleAuthFailure
+import com.plainticker.mobile.data.auth.GoogleAuthResponse
 import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.SignedInAccount
@@ -91,7 +96,29 @@ sealed interface AccountUiState {
     /** Google's sheet is up, or the server call is in flight. */
     data object SigningIn : AccountUiState
 
-    data class SignedIn(val account: SignedInAccount) : AccountUiState
+    data class SignedIn(
+        val account: SignedInAccount,
+        /** The wallet address a `wallets/unlink` call is in flight for, or null. */
+        val unlinkingWallet: String? = null,
+        /** The wallet whose last unlink attempt failed, and why; cleared the instant a new one starts. */
+        val unlinkFailure: Pair<String, UnlinkFailure>? = null,
+    ) : AccountUiState
+}
+
+/**
+ * Why `POST /api/v1/account/wallets/unlink` refused, one plain line each
+ * ([unlinkFailureRes], AccountModel.kt). [AccountApiError.NotSignedIn] carries no case here: it is
+ * not one wallet's own refusal, it means this device is no longer bound at all, so
+ * [AccountViewModel.unlink] treats it exactly like [AccountViewModel.refresh]'s own and signs the
+ * device out rather than blaming the row.
+ */
+enum class UnlinkFailure {
+    BAD_REQUEST,
+    NOT_LINKED,
+    LAST_METHOD,
+    RATE_LIMITED,
+    NOT_OPEN,
+    UNAVAILABLE,
 }
 
 /**
@@ -112,13 +139,29 @@ sealed interface AccountUiState {
  *
  * The device code is read here, never in a composable (DeviceCodeNeverDrawnTest), and only to
  * put it in the header.
+ *
+ * **Refreshing the account.** [refresh] re-reads `GET /api/v1/account` (email, name, linked
+ * wallets) whenever a Google account is signed in, throttled to at most once every
+ * [REFRESH_THROTTLE_MILLIS]: called on init in [store]'s absence, and again whenever the screen
+ * that shows You is shown or resumed, so a wallet unlinked on the web (or linked there) shows up
+ * here too, which the cache alone never would. Offline, a 404 (not deployed yet) or a 5xx keep the
+ * cached account exactly as it was; only a 401 `not_signed_in` clears it, the same as [signOut]'s
+ * own local clear, because the device is no longer bound.
+ *
+ * **Unlinking a wallet.** [unlink] drops one linked wallet through
+ * `POST /api/v1/account/wallets/unlink`. Success fires [signedIn] again, the same event a
+ * finished sign-in fires, so the hero's Pro state is re-read too, in case that wallet's own stake
+ * or pass was the source. Every other refusal is kept against just that one wallet
+ * ([AccountUiState.SignedIn.unlinkFailure]), never surfaced as a screen-wide message.
  */
 class AccountViewModel(
     private val api: GoogleAuthApi,
+    private val accountApi: AccountApi,
     private val store: AccountStore,
     private val devicePassStore: DevicePassStore,
     private val nonces: () -> String = { SignInNonce.create() },
     private val debugLog: AccountDebugLog = AccountDebugLog.ANDROID,
+    private val clock: Clock = WallClock,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<AccountUiState>(AccountUiState.Restoring)
@@ -126,10 +169,15 @@ class AccountViewModel(
 
     private val signedInEvents = Channel<Unit>(Channel.BUFFERED)
 
-    /** One event per sign-in that finished: the screen refreshes the entitlement on each. */
+    /** One event per sign-in, refresh or unlink that finished: the screen refreshes the entitlement on each. */
     val signedIn: Flow<Unit> = signedInEvents.receiveAsFlow()
 
     private var signInJob: Job? = null
+    private var refreshJob: Job? = null
+    private var unlinkJob: Job? = null
+
+    /** Null before the first [refresh]: unset, rather than a sentinel far enough back to overflow. */
+    private var lastRefreshMillis: Long? = null
 
     init {
         viewModelScope.launch {
@@ -202,14 +250,17 @@ class AccountViewModel(
             debugLog.raw("sign-in: network ${e::class.simpleName}")
             return Outcome.Failed(AccountMessage.NETWORK)
         }
-        val account = SignedInAccount(
-            email = response.user.email?.takeIf { it.isNotBlank() },
-            name = response.user.name?.takeIf { it.isNotBlank() },
-            linkedWallets = response.linkedWallets,
-        )
+        val account = accountOf(response)
         store.save(account)
         return Outcome.Done(account)
     }
+
+    /** What the server returned for display, the same shape every one of these three calls answers. */
+    private fun accountOf(response: GoogleAuthResponse): SignedInAccount = SignedInAccount(
+        email = response.user.email?.takeIf { it.isNotBlank() },
+        name = response.user.name?.takeIf { it.isNotBlank() },
+        linkedWallets = response.linkedWallets,
+    )
 
     /**
      * The server nonce for the Google request that follows, fetched fresh before every attempt
@@ -237,9 +288,110 @@ class AccountViewModel(
     /** Forgets the account on this device. The contract defines no server call for it. */
     fun signOut() {
         signInJob?.cancel()
+        refreshJob?.cancel()
+        unlinkJob?.cancel()
         viewModelScope.launch {
             store.clear()
             _state.value = AccountUiState.SignedOut()
         }
+    }
+
+    // ---- Refreshing the account, and unlinking a wallet --------------------------------------
+
+    /**
+     * Re-reads the signed-in account from the server (email, name, linked wallets) and, on success,
+     * fires [signedIn] so the entitlement is re-read too. A no-op with no Google account signed in,
+     * while a refresh is already running, or inside [REFRESH_THROTTLE_MILLIS] of the last one that
+     * started. Offline, a 404 (not deployed yet) or a 5xx are logged and the cached account is kept
+     * exactly as it was; only [AccountApiError.NotSignedIn] clears it, because the device itself is
+     * no longer bound, the same fact [unlink] treats identically.
+     */
+    fun refresh() {
+        if (_state.value !is AccountUiState.SignedIn) return
+        val now = clock.nowMillis()
+        val last = lastRefreshMillis
+        if (last != null && now - last < REFRESH_THROTTLE_MILLIS) return
+        if (refreshJob?.isActive == true) return
+        lastRefreshMillis = now
+        refreshJob = viewModelScope.launch {
+            try {
+                applyAccount(accountApi.get(devicePassStore.code()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AccountApiError.NotSignedIn) {
+                store.clear()
+                _state.value = AccountUiState.SignedOut()
+            } catch (e: AccountApiError.NotOpen) {
+                debugLog.raw("account refresh: not open yet")
+            } catch (e: AccountApiError) {
+                debugLog.raw("account refresh: ${e::class.simpleName}: ${e.message}")
+            } catch (e: IOException) {
+                debugLog.raw("account refresh: network ${e::class.simpleName}")
+            } catch (e: Exception) {
+                debugLog.raw("account refresh: unexpected ${e::class.simpleName}")
+            }
+        }
+    }
+
+    private suspend fun applyAccount(response: GoogleAuthResponse) {
+        val account = accountOf(response)
+        store.save(account)
+        _state.value = AccountUiState.SignedIn(account)
+        signedInEvents.trySend(Unit)
+    }
+
+    /**
+     * Drops [wallet] from the signed-in account. A no-op while another unlink is already in
+     * flight, for any wallet: [AccountUiState.SignedIn.unlinkingWallet] is what the row reads to
+     * hide its own actions meanwhile. On success the wallet is gone from the fresh list the server
+     * returned and [signedIn] fires, exactly as [refresh] does; every other refusal is kept
+     * against just this wallet ([AccountUiState.SignedIn.unlinkFailure]), so its row can show one
+     * plain line and be tried again, and a [AccountApiError.NotSignedIn] is treated like
+     * [refresh]'s own: the device is no longer bound at all, not a fact about one wallet.
+     */
+    fun unlink(wallet: String) {
+        val current = _state.value as? AccountUiState.SignedIn ?: return
+        if (current.unlinkingWallet != null) return
+        _state.value = current.copy(unlinkingWallet = wallet, unlinkFailure = null)
+        unlinkJob = viewModelScope.launch {
+            try {
+                applyAccount(accountApi.unlinkWallet(wallet, devicePassStore.code()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AccountApiError.NotSignedIn) {
+                store.clear()
+                _state.value = AccountUiState.SignedOut()
+            } catch (e: AccountApiError) {
+                debugLog.raw("unlink: ${e::class.simpleName}: ${e.message}")
+                failUnlink(wallet, unlinkFailureOf(e))
+            } catch (e: IOException) {
+                debugLog.raw("unlink: network ${e::class.simpleName}")
+                failUnlink(wallet, UnlinkFailure.UNAVAILABLE)
+            } catch (e: Exception) {
+                debugLog.raw("unlink: unexpected ${e::class.simpleName}")
+                failUnlink(wallet, UnlinkFailure.UNAVAILABLE)
+            }
+        }
+    }
+
+    private fun failUnlink(wallet: String, reason: UnlinkFailure) {
+        _state.update { current ->
+            (current as? AccountUiState.SignedIn)?.copy(unlinkingWallet = null, unlinkFailure = wallet to reason) ?: current
+        }
+    }
+
+    private fun unlinkFailureOf(e: AccountApiError): UnlinkFailure = when (e) {
+        is AccountApiError.BadRequest -> UnlinkFailure.BAD_REQUEST
+        is AccountApiError.NotLinked -> UnlinkFailure.NOT_LINKED
+        is AccountApiError.LastMethod -> UnlinkFailure.LAST_METHOD
+        is AccountApiError.RateLimited -> UnlinkFailure.RATE_LIMITED
+        is AccountApiError.NotOpen -> UnlinkFailure.NOT_OPEN
+        is AccountApiError.Unavailable -> UnlinkFailure.UNAVAILABLE
+        is AccountApiError.NotSignedIn -> UnlinkFailure.UNAVAILABLE // unreachable: caught before this branch
+    }
+
+    companion object {
+        /** How often [refresh] may ask the server, at most: task's own "at most once every 30 s". */
+        const val REFRESH_THROTTLE_MILLIS = 30_000L
     }
 }

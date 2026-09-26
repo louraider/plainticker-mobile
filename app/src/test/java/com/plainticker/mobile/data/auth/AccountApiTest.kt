@@ -1,0 +1,191 @@
+package com.plainticker.mobile.data.auth
+
+import com.plainticker.mobile.data.MockApi
+import com.plainticker.mobile.data.bodyText
+import com.plainticker.mobile.data.expectThrows
+import com.plainticker.mobile.data.respondHtml
+import com.plainticker.mobile.data.respondJson
+import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
+import java.io.IOException
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * `GET /api/v1/account` and `POST /api/v1/account/wallets/unlink` against the contract a web
+ * agent is building in parallel: the request shapes (the wallet in unlink's JSON body, the device
+ * code in `X-PT-Code` only), the shared 200 shape, and every `error` code either route can answer.
+ */
+class AccountApiTest {
+
+    private val wallet = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"
+
+    private val ok = """
+        {"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":["$wallet"],
+         "pro":true,"source":"pass","until":"2026-10-20T00:00:00.000Z"}
+    """.trimIndent()
+
+    // ---- GET /account ---------------------------------------------------------------------
+
+    @Test
+    fun `a 200 parses the user and the linked wallets`() = runTest {
+        val mock = MockApi { respondJson(ok) }
+        val answer = AccountApi(mock.client).get("ABCDE12345")
+
+        assertEquals("ann@example.com", answer.user.email)
+        assertEquals("Ann", answer.user.name)
+        assertEquals(listOf(wallet), answer.linkedWallets)
+    }
+
+    @Test
+    fun `it gets the account route, and the device code rides only in the header`() = runTest {
+        val mock = MockApi { respondJson(ok) }
+        AccountApi(mock.client).get("K7M9QRSTXYK7M9QRSTXYK7M9QR")
+
+        val request = mock.lastRequest
+        assertEquals(HttpMethod.Get, request.method)
+        assertEquals("https://www.plainticker.com/api/v1/account", request.url.toString())
+        assertEquals("K7M9QRSTXYK7M9QRSTXYK7M9QR", request.headers[AccountApi.HEADER_CODE])
+        assertEquals("X-PT-Code", AccountApi.HEADER_CODE)
+        assertFalse("the device code never enters the URL", "K7M9QRSTXY" in request.url.toString())
+    }
+
+    @Test
+    fun `get sends no header at all with no device code`() = runTest {
+        val mock = MockApi { respondJson(ok) }
+        AccountApi(mock.client).get(null)
+        AccountApi(mock.client).get("  ")
+
+        mock.requests.forEach { assertNull(it.headers[AccountApi.HEADER_CODE]) }
+    }
+
+    @Test
+    fun `every error code get can answer maps to its own state`() = runTest {
+        val table = listOf(
+            Triple(401, "not_signed_in", AccountApiError.NotSignedIn::class),
+            Triple(400, "bad_request", AccountApiError.BadRequest::class),
+            Triple(429, "rate_limited", AccountApiError.RateLimited::class),
+        )
+        table.forEach { (status, code, expected) ->
+            val mock = MockApi { respondJson("""{"error":"$code"}""", HttpStatusCode.fromValue(status)) }
+            val error = expectThrows<AccountApiError> { AccountApi(mock.client).get("ABCDE12345") }
+            assertEquals(code, expected, error::class)
+        }
+    }
+
+    @Test
+    fun `a 404 keeps the cache by being not open, and a 5xx is unavailable`() = runTest {
+        val notDeployed = MockApi { respondJson("""{"error":"not_found"}""", HttpStatusCode.NotFound) }
+        expectThrows<AccountApiError.NotOpen> { AccountApi(notDeployed.client).get(null) }
+
+        val down = MockApi { respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError) }
+        expectThrows<AccountApiError.Unavailable> { AccountApi(down.client).get(null) }
+
+        val gateway = MockApi { respondHtml("<html>bad gateway</html>", HttpStatusCode.BadGateway) }
+        expectThrows<AccountApiError.Unavailable> { AccountApi(gateway.client).get(null) }
+    }
+
+    @Test
+    fun `a 200 that is not the contract is unavailable, not a crash`() = runTest {
+        val mock = MockApi { respondJson("not json") }
+        expectThrows<AccountApiError.Unavailable> { AccountApi(mock.client).get(null) }
+    }
+
+    @Test
+    fun `a network failure getting the account surfaces as an IOException`() = runTest {
+        val mock = MockApi { throw IOException("no route to host") }
+        expectThrows<IOException> { AccountApi(mock.client).get(null) }
+    }
+
+    // ---- POST /account/wallets/unlink ------------------------------------------------------
+
+    @Test
+    fun `a 200 answers the new linked wallets after the drop`() = runTest {
+        val mock = MockApi { respondJson("""{"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":[],"pro":false}""") }
+        val answer = AccountApi(mock.client).unlinkWallet(wallet, "ABCDE12345")
+        assertTrue(answer.linkedWallets.isEmpty())
+    }
+
+    @Test
+    fun `it posts JSON to wallets unlink, the wallet in the body and nowhere in the URL`() = runTest {
+        val mock = MockApi { respondJson(ok) }
+        AccountApi(mock.client).unlinkWallet(wallet, "ABCDE12345")
+
+        val request = mock.lastRequest
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("https://www.plainticker.com/api/v1/account/wallets/unlink", request.url.toString())
+        assertTrue(request.body.contentType?.match(ContentType.Application.Json) == true)
+        val body = Json.parseToJsonElement(request.bodyText()).jsonObject
+        assertEquals("the body carries wallet and nothing else", setOf("wallet"), body.keys)
+        assertEquals(wallet, body.getValue("wallet").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `the device code rides in the X-PT-Code header of the unlink call, and never in the body or URL`() = runTest {
+        val mock = MockApi { respondJson(ok) }
+        AccountApi(mock.client).unlinkWallet(wallet, "K7M9QRSTXYK7M9QRSTXYK7M9QR")
+
+        val request = mock.lastRequest
+        assertEquals("K7M9QRSTXYK7M9QRSTXYK7M9QR", request.headers[AccountApi.HEADER_CODE])
+        assertFalse("the device code never enters the body", "K7M9QRSTXY" in request.bodyText())
+        assertFalse("the device code never enters the URL", "K7M9QRSTXY" in request.url.toString())
+    }
+
+    @Test
+    fun `unlink sends no header at all with no device code`() = runTest {
+        val mock = MockApi { respondJson(ok) }
+        AccountApi(mock.client).unlinkWallet(wallet, null)
+        AccountApi(mock.client).unlinkWallet(wallet, "  ")
+
+        mock.requests.forEach { assertNull(it.headers[AccountApi.HEADER_CODE]) }
+    }
+
+    @Test
+    fun `every error code unlink can answer maps to its own state`() = runTest {
+        val table = listOf(
+            Triple(401, "not_signed_in", AccountApiError.NotSignedIn::class),
+            Triple(400, "bad_request", AccountApiError.BadRequest::class),
+            Triple(400, "not_linked", AccountApiError.NotLinked::class),
+            Triple(409, "last_method", AccountApiError.LastMethod::class),
+            Triple(429, "rate_limited", AccountApiError.RateLimited::class),
+        )
+        table.forEach { (status, code, expected) ->
+            val mock = MockApi { respondJson("""{"error":"$code"}""", HttpStatusCode.fromValue(status)) }
+            val error = expectThrows<AccountApiError> { AccountApi(mock.client).unlinkWallet(wallet, "ABCDE12345") }
+            assertEquals(code, expected, error::class)
+        }
+    }
+
+    @Test
+    fun `a 404 on unlink is not open yet, and a 5xx is unavailable`() = runTest {
+        val notDeployed = MockApi { respondJson("""{"error":"not_found"}""", HttpStatusCode.NotFound) }
+        expectThrows<AccountApiError.NotOpen> { AccountApi(notDeployed.client).unlinkWallet(wallet, null) }
+
+        val down = MockApi { respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError) }
+        expectThrows<AccountApiError.Unavailable> { AccountApi(down.client).unlinkWallet(wallet, null) }
+    }
+
+    @Test
+    fun `a network failure unlinking surfaces as an IOException`() = runTest {
+        val mock = MockApi { throw IOException("no route to host") }
+        expectThrows<IOException> { AccountApi(mock.client).unlinkWallet(wallet, null) }
+    }
+
+    @Test
+    fun `an error's message never carries the device code`() = runTest {
+        val mock = MockApi { respondJson("""{"error":"last_method"}""", HttpStatusCode.Conflict) }
+        val error = expectThrows<AccountApiError.LastMethod> {
+            AccountApi(mock.client).unlinkWallet(wallet, "K7M9QRSTXYK7M9QRSTXYK7M9QR")
+        }
+        assertFalse("K7M9QRSTXY" in error.message.orEmpty())
+        assertFalse("K7M9QRSTXY" in error.toString())
+    }
+}

@@ -138,6 +138,6 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         )
     }
     initializer {
-        AccountViewModel(container.googleAuthApi, container.accountStore, container.devicePassStore)
+        AccountViewModel(container.googleAuthApi, container.accountApi, container.accountStore, container.devicePassStore)
     }
 }

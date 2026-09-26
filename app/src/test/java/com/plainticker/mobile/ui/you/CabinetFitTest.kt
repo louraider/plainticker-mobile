@@ -68,6 +68,12 @@ class CabinetFitTest {
         // Promo redeem (task promo-redeem, 2026-09-26), in Bricolage like every row above.
         "Have a code?" to (87.738 to 114.059),
         "Apply" to (39.242 to 51.015),
+        // Wallet unlink (task app-wallet-unlink, 2026-09-26), fontTools 4.63 against the same
+        // bundled file and instance as every row above, re-derived the same way "Copy" above was
+        // (which this measurement reproduces exactly, to the same three decimals, confirming the
+        // method): "Unlink" 43.008 at 1.0x, "Keep" 34.398 at 1.0x.
+        "Unlink" to (43.008 to 55.910),
+        "Keep" to (34.398 to 44.717),
     )
 
     /** The wallet's short key, nine monospace characters, JetBrains Mono Regular 15sp. */
@@ -104,6 +110,7 @@ class CabinetFitTest {
         "action_refresh", "action_enable", "you_action_get_pro", "you_action_extend",
         "you_action_show", "you_action_hide", "action_read_license", "action_hide_license",
         "promo_action_have_code", "promo_action_apply",
+        "account_action_unlink", "you_action_keep",
     )
 
     @Test
@@ -122,10 +129,11 @@ class CabinetFitTest {
 
     @Test
     fun `two actions on their own line fit the row, at 1_3x`() {
-        // Copy (or Copied) with Disconnect; Sign out with Cancel.
+        // Copy (or Copied) with Disconnect; Sign out with Cancel; Copy (or Copied) with Unlink;
+        // Unlink with Keep (task app-wallet-unlink).
         listOf(
             listOf("Copied", "Disconnect"), listOf("Copy", "Disconnect"), listOf("Sign out", "Cancel"),
-            listOf("Apply", "Cancel"),
+            listOf("Apply", "Cancel"), listOf("Copy", "Unlink"), listOf("Copied", "Unlink"), listOf("Unlink", "Keep"),
         ).forEach { pair ->
             val total = pair.sumOf { width(textActionWidths, it, it).second + textActionInsetDp }
             assertTrue("$pair need $total dp at 1.3x, past the row's $rowContentDp dp", total <= rowContentDp)

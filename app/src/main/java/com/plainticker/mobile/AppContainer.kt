@@ -6,6 +6,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.jupiter.JupiterPriceApi
+import com.plainticker.mobile.data.auth.AccountApi
 import com.plainticker.mobile.data.auth.GoogleAuthApi
 import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.net.HttpClientFactory
@@ -98,6 +99,9 @@ interface AppContainer {
 
     /** Sign in with Google: trades a Google ID token for the shared account (docs/google-sign-in.md). */
     val googleAuthApi: GoogleAuthApi
+
+    /** Re-reading the signed-in account, and unlinking one of its wallets: GET/POST /api/v1/account*. */
+    val accountApi: AccountApi
     val xStocksApi: XStocksApi
     val jupiterPriceApi: JupiterPriceApi
     val jupiterSwapApi: JupiterSwapApi
@@ -174,6 +178,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val passApi: PassApi by lazy { PassApi(httpClient) }
     override val promoApi: PromoApi by lazy { PromoApi(httpClient) }
     override val googleAuthApi: GoogleAuthApi by lazy { GoogleAuthApi(httpClient) }
+    override val accountApi: AccountApi by lazy { AccountApi(httpClient) }
     override val xStocksApi: XStocksApi by lazy { XStocksApi(httpClient) }
     override val jupiterPriceApi: JupiterPriceApi by lazy { JupiterPriceApi(httpClient) }
     override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }

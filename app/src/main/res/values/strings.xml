@@ -695,6 +695,7 @@
     <string name="you_copy_clip_label">Wallet address</string>
     <string name="you_sign_out_confirm">Sign out on this phone? It stays linked to the account and keeps that account\'s Pro.</string>
     <string name="you_action_cancel">Cancel</string>
+    <string name="you_action_keep">Keep</string>
 
     <string name="you_heading_device">On this device</string>
     <string name="you_fact_swaps">Swaps recorded</string>
@@ -765,6 +766,18 @@
     <string name="account_msg_jwks_unavailable">PlainTicker could not reach Google to check the sign-in. Try again later.</string>
     <string name="account_msg_not_open">Sign-in is not open on PlainTicker yet.</string>
     <string name="account_msg_unknown">The sign-in did not finish. Try again.</string>
+
+    <!-- Unlinking a wallet (GET /api/v1/account, POST /api/v1/account/wallets/unlink), built
+         against the web agent's contract in parallel: each linked wallet row's own two-step
+         confirm, and one plain line per way the unlink call can refuse. -->
+    <string name="account_action_unlink">Unlink</string>
+    <string name="account_unlink_confirm">Unlink this wallet?</string>
+    <string name="account_unlink_error_bad_request">PlainTicker did not accept the request. Try again.</string>
+    <string name="account_unlink_error_not_linked">That wallet was already unlinked, or never was one, so nothing changed.</string>
+    <string name="account_unlink_error_last_method">This is the only way to sign in to the account, so it stays linked.</string>
+    <string name="account_unlink_error_rate_limited">Too many attempts. Wait a minute, then try again.</string>
+    <string name="account_unlink_error_not_open">Unlinking a wallet is not open on PlainTicker yet.</string>
+    <string name="account_unlink_error_unavailable">PlainTicker could not read the answer. Try again.</string>
 
     <!-- Amber's bottom navigation bar (docs/design-research-2026-09-21.md section 3): the
          redesign's own five destinations, Today, Stocks, Vote, Portfolio, You, not the current
