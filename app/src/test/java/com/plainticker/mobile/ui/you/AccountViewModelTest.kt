@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -110,7 +111,24 @@ class AccountViewModelTest {
         override fun nowMillis(): Long = millis
     }
 
-    private fun mockApi(handler: MockRequestHandler) = MockApi(mainDispatcherRule.dispatcher, handler)
+    /**
+     * The server this suite talks to, with `POST /api/v1/auth/google/nonce` answered by [nonce]
+     * ahead of [handler]: the server requires its nonce (judges' review, 2026-09-26), so every
+     * sign-in fetches one first, and [token] is built on it. A test about the nonce route itself
+     * scripts it with [rawMockApi].
+     */
+    private fun mockApi(handler: MockRequestHandler) = rawMockApi { request ->
+        if (request.url.encodedPath.endsWith("/nonce")) {
+            respondJson("""{"nonce":"$nonce","expiresAt":"2026-09-25T00:05:00.000Z"}""")
+        } else {
+            handler(request)
+        }
+    }
+
+    private fun rawMockApi(handler: MockRequestHandler) = MockApi(mainDispatcherRule.dispatcher, handler)
+
+    /** The requests that carried a Google token to the server, as opposed to asking for a nonce. */
+    private fun MockApi.signInRequests() = requests.filter { it.url.encodedPath.endsWith("/api/v1/auth/google") }
 
     private fun source(result: GoogleCredentialResult): GoogleCredentialSource = GoogleCredentialSource { result }
 
@@ -125,7 +143,6 @@ class AccountViewModelTest {
         accountApi = accountApi,
         store = store,
         devicePassStore = InMemoryDevicePassStore(deviceCode),
-        nonces = { nonce },
         debugLog = log,
         clock = clock,
     ).also { machines += it }
@@ -200,7 +217,7 @@ class AccountViewModelTest {
         val serverNonce = "server-issued-nonce-9f3a"
         val serverToken = jwt(serverNonce)
         var asked: String? = null
-        val api = mockApi { request ->
+        val api = rawMockApi { request ->
             if (request.url.encodedPath.endsWith("/nonce")) {
                 respondJson("""{"nonce":"$serverNonce","expiresAt":"2026-09-25T00:05:00.000Z"}""")
             } else {
@@ -222,68 +239,70 @@ class AccountViewModelTest {
         assertTrue(vm.state.value is AccountUiState.SignedIn)
     }
 
-    @Test
-    fun `a 404 from the nonce endpoint falls back to a local nonce, and the sign-in body carries no nonce field`() = runTest {
-        val api = mockApi { request ->
-            if (request.url.encodedPath.endsWith("/nonce")) {
-                respondJson("""{"error":"not_found"}""", HttpStatusCode.NotFound)
-            } else {
-                respondJson(okBody)
-            }
+    /**
+     * The server requires its nonce (GOOGLE_SIGNIN_NONCE_REQUIRED in production), so a nonce that
+     * cannot be had ends the attempt: Google is never asked, no token is ever sent, and the line is
+     * the plain "Couldn't reach PlainTicker". There is no local fallback any more.
+     */
+    private fun TestScope.assertNoSignInWithout(nonceAnswer: MockRequestHandler) {
+        val api = rawMockApi { request ->
+            if (request.url.encodedPath.endsWith("/nonce")) nonceAnswer(request) else error("no sign-in without the server's nonce")
         }
-        var asked: String? = null
-        val vm = machine(api = api)
+        var asked = false
+        val store = InMemoryAccountStore()
+        val vm = machine(api = api, store = store)
         advanceUntilIdle()
-        vm.signIn { n -> asked = n; GoogleCredentialResult.Token(token) }
+        vm.signIn { asked = true; GoogleCredentialResult.Token(token) }
         advanceUntilIdle()
 
-        assertEquals("falls back to the local nonce", nonce, asked)
-        val signInRequest = api.requests.last()
-        val body = Json.parseToJsonElement(signInRequest.bodyText()).jsonObject
-        assertEquals("no nonce field on a fallback", setOf("idToken"), body.keys)
-        assertTrue(vm.state.value is AccountUiState.SignedIn)
+        assertEquals(AccountUiState.SignedOut(AccountMessage.NONCE_UNAVAILABLE), vm.state.value)
+        assertFalse("Google is never asked without the server's nonce", asked)
+        assertTrue("no token reaches the server", api.signInRequests().isEmpty())
+        assertTrue(store.saved.isEmpty())
     }
 
     @Test
-    fun `a network error fetching the nonce falls back the same way, and sign-in still succeeds`() = runTest {
-        var nonceCalled = false
-        val api = mockApi { request ->
-            if (request.url.encodedPath.endsWith("/nonce")) {
-                nonceCalled = true
-                throw IOException("Unable to resolve host")
-            } else {
-                respondJson(okBody)
-            }
-        }
-        var asked: String? = null
-        val vm = machine(api = api)
-        advanceUntilIdle()
-        vm.signIn { n -> asked = n; GoogleCredentialResult.Token(token) }
-        advanceUntilIdle()
-
-        assertTrue("the nonce endpoint was tried", nonceCalled)
-        assertEquals(nonce, asked)
-        val signInRequest = api.requests.single { it.url.encodedPath.endsWith("/api/v1/auth/google") }
-        val body = Json.parseToJsonElement(signInRequest.bodyText()).jsonObject
-        assertEquals(setOf("idToken"), body.keys)
-        assertTrue(vm.state.value is AccountUiState.SignedIn)
+    fun `a 404 from the nonce endpoint ends the sign-in before Google is asked`() = runTest {
+        assertNoSignInWithout { respondJson("""{"error":"not_found"}""", HttpStatusCode.NotFound) }
     }
 
     @Test
-    fun `a blank nonce from the server is treated as a fetch failure and falls back`() = runTest {
-        val api = mockApi { request ->
+    fun `a network error fetching the nonce ends the sign-in the same way`() = runTest {
+        assertNoSignInWithout { throw IOException("Unable to resolve host") }
+    }
+
+    @Test
+    fun `a blank, missing or unreadable nonce ends the sign-in the same way`() = runTest {
+        assertNoSignInWithout { respondJson("""{"nonce":"","expiresAt":"2026-09-25T00:05:00.000Z"}""") }
+        assertNoSignInWithout { respondJson(okBody) }
+        assertNoSignInWithout { respondJson("not json") }
+        assertNoSignInWithout { respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError) }
+    }
+
+    @Test
+    fun `after a nonce failure, the next attempt fetches a fresh one and can succeed`() = runTest {
+        var nonceCalls = 0
+        val api = rawMockApi { request ->
             if (request.url.encodedPath.endsWith("/nonce")) {
-                respondJson("""{"nonce":"","expiresAt":"2026-09-25T00:05:00.000Z"}""")
+                nonceCalls++
+                if (nonceCalls == 1) throw IOException("Unable to resolve host")
+                respondJson("""{"nonce":"$nonce","expiresAt":"2026-09-25T00:05:00.000Z"}""")
             } else {
                 respondJson(okBody)
             }
         }
-        var asked: String? = null
         val vm = machine(api = api)
         advanceUntilIdle()
-        vm.signIn { n -> asked = n; GoogleCredentialResult.Token(token) }
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
         advanceUntilIdle()
-        assertEquals(nonce, asked)
+        assertEquals(AccountUiState.SignedOut(AccountMessage.NONCE_UNAVAILABLE), vm.state.value)
+
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedIn)
+        assertEquals(2, nonceCalls)
+        val body = Json.parseToJsonElement(api.signInRequests().single().bodyText()).jsonObject
+        assertEquals(nonce, body.getValue("nonce").jsonPrimitive.content)
     }
 
     @Test
@@ -330,7 +349,9 @@ class AccountViewModelTest {
             vm.signIn(source(result))
             advanceUntilIdle()
             assertEquals(result.toString(), AccountUiState.SignedOut(message), vm.state.value)
-            assertTrue(api.requests.isEmpty())
+            // The nonce is fetched before the sheet opens; nothing else reaches the server.
+            assertTrue(api.signInRequests().isEmpty())
+            assertEquals(1, api.requests.size)
         }
     }
 
@@ -352,7 +373,7 @@ class AccountViewModelTest {
             vm.signIn(source(GoogleCredentialResult.Token(wrong)))
             advanceUntilIdle()
             assertEquals(AccountUiState.SignedOut(AccountMessage.NONCE_MISMATCH), vm.state.value)
-            assertTrue(api.requests.isEmpty())
+            assertTrue(api.signInRequests().isEmpty())
         }
     }
 
@@ -404,18 +425,12 @@ class AccountViewModelTest {
 
     @Test
     fun `a retry after a failure clears the old message and can succeed`() = runTest {
-        // The nonce fetch runs before every attempt (see the nonce tests below); route it
-        // separately so this test's own counter tracks only the /auth/google calls it cares
-        // about. The nonce response here carries no "nonce" key, so it decodes blank and the
-        // ViewModel falls back to the fixed local nonce `token` was built with.
+        // The nonce fetch runs before every attempt and mockApi answers it with the fixed nonce
+        // `token` was built on, so this test's own counter tracks only the /auth/google calls.
         var calls = 0
-        val api = mockApi { request ->
-            if (request.url.encodedPath.endsWith("/nonce")) {
-                respondJson(okBody)
-            } else {
-                calls++
-                if (calls == 1) respondJson("""{"error":"expired_token","code":401}""", HttpStatusCode.Unauthorized) else respondJson(okBody)
-            }
+        val api = mockApi {
+            calls++
+            if (calls == 1) respondJson("""{"error":"expired_token","code":401}""", HttpStatusCode.Unauthorized) else respondJson(okBody)
         }
         val vm = machine(api = api)
         advanceUntilIdle()

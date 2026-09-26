@@ -1,6 +1,5 @@
 package com.plainticker.mobile.auth
 
-import java.security.SecureRandom
 import java.util.Base64
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -51,22 +50,15 @@ sealed interface GoogleCredentialResult {
 /**
  * The nonce this app puts in every Google sign-in request (`setNonce`), and the check that the
  * token that came back carries it. `AccountViewModel.fetchServerNonce` asks the server for this
- * value before the sheet opens (docs/google-sign-in.md, "The nonce"); [create] is only the local
- * fallback for when that fetch failed. Either way, this object's own [matches] check runs: it
+ * value before the sheet opens (docs/google-sign-in.md, "The nonce"), and without it no sign-in
+ * starts: the local fallback [create] once provided is gone, because the server now requires its
+ * own nonce (judges' review, 2026-09-26). This object's own [matches] check still runs: it
  * refuses a token whose `nonce` claim is not the one just asked for, which keeps a token minted
  * for some other request out of this flow regardless of what the server does with its copy. The
  * claim is read without verifying the signature: that is the server's job, and this check only
  * compares a value the app itself chose or received.
  */
 object SignInNonce {
-    private const val BYTES = 32
-
-    /** 256 random bits, base64url without padding: safe in a JWT claim and in a URL alike. */
-    fun create(random: SecureRandom = SecureRandom()): String {
-        val bytes = ByteArray(BYTES).also(random::nextBytes)
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-    }
-
     /** The `nonce` claim of [idToken]'s payload, or null when the token is not a readable JWT. */
     fun claimOf(idToken: String): String? {
         val parts = idToken.split('.')
