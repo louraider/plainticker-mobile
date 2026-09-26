@@ -651,23 +651,19 @@ class SwapViewModel(
      * is a refusal and not a pass: this is the one path where a wrong number is somebody's money.
      */
     private suspend fun confirmOut(leg: SwapLeg, funds: SwapFunds, minContextSlot: Long? = null): Confirmation {
-        // The same patience as [readFunds]: right after a landing the public node may be a slot or
-        // two behind, so the fresh read is asked for twice before the plain one stands. A plain
-        // read that trails only makes the cap smaller, never larger.
-        val slots = if (minContextSlot == null) listOf(null) else listOf(minContextSlot, minContextSlot, null)
-        var second: SecondRead? = null
-        for ((attemptIndex, slot) in slots.withIndex()) {
-            if (attemptIndex > 0) delay(FRESH_READ_RETRY_MS)
-            try {
-                second = secondSource.read(funds.owner, leg.token.mint, slot)
-                break
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                debugLog.raw("second source: ${e::class.simpleName}: ${e.message}")
-            }
+        // One call: the source owns its own patience now (audit 2026-09-26, item 6). It retries
+        // once after a short backoff with the slot relaxed by about a minute, then asks a second
+        // public node, so a rate limit or a node a few slots behind no longer pauses the swap. A
+        // read that trails only makes the cap smaller, never larger. Retrying here as well would
+        // multiply that ladder three times over for a node that is simply down.
+        val second: SecondRead = try {
+            secondSource.read(funds.owner, leg.token.mint, minContextSlot)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            debugLog.raw("second source: ${e::class.simpleName}: ${e.message}")
+            return Confirmation.Refused(SwapFailure.SECOND_SOURCE_UNREACHABLE)
         }
-        if (second == null) return Confirmation.Refused(SwapFailure.SECOND_SOURCE_UNREACHABLE)
         return when (val verdict = SwapTrust.confirmScale(leg.token, funds.tokenRaw, second)) {
             is SwapTrust.ScaleVerdict.Mismatch -> {
                 debugLog.raw("second source disagrees: ${verdict.reason}")
