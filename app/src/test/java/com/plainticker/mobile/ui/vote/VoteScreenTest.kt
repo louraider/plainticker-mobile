@@ -158,6 +158,9 @@ class VoteScreenTest {
         val sources = listOf(
             source("ui/vote/VoteSheetModel.kt"),
             source("ui/vote/VoteState.kt"),
+            // The Last round sentence is chosen by the model since 2026-09-26 (PreviousRoundDisplay.sentence),
+            // so the model is where its four strings are read now, not VoteScreen.kt.
+            source("ui/vote/VoteTabModel.kt"),
             sheet,
             listScreen,
             detailScreen,

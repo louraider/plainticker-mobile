@@ -598,8 +598,12 @@ grows the row instead of hiding a chip past an edge). One filter active at a tim
 index already reaches a sector without narrowing anything, so a sector chip's own job is holding
 one still rather than stacking with Tracked/Watched.
 
-**Vote** lays out a header, an explainer, the round header, Leaders, Your votes, a search field,
-then the ballot, all in one `LazyColumn` with no sticky header at all. This was measured, not
+**Vote** lays out a header, an explainer, the round header, Leaders, Your votes, Last round, a
+search field, then the ballot, all in one `LazyColumn` with no sticky header at all. Last round
+reads the server's `previous.status`: the live word is `closed`, drawn as the neutral "Round 1
+closed. JEF had the most stake."; `pending`, `published` and `uncoverable` keep their coverage
+sentences; any other word degrades to the same neutral line rather than hiding the section (it
+vanished for every reader until 2026-09-26 because `closed` was unknown). This was measured, not
 assumed: the shipped catalog runs to 928 symbols and the ballot can hold up to 771 rows at 64dp
 each, tens of thousands of display points below where the screen starts. What that costs is
 specific, not a vague "it's long": the header carries nothing a voter needs mid-ballot (switching

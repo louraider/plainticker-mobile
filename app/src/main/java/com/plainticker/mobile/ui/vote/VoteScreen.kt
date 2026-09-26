@@ -379,7 +379,7 @@ private fun MyVoteRow(receipt: VoteReceipt, last: Boolean, onOpenDetail: (String
 @Composable
 private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) -> Unit) {
     val colors = defaultAmberColors()
-    val statusText = stringResource(statusStringRes(previous.status), previous.display)
+    val statusText = previous.sentence.text()
     val weightVoters = previous.weightRaw?.let {
         pluralStringResource(R.plurals.next_up_detail_weight, previous.voters, skrWeight(it), Fmt.count(previous.voters))
     }
@@ -408,12 +408,6 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
             )
         }
     }
-}
-
-private fun statusStringRes(status: PreviousRoundStatus): Int = when (status) {
-    PreviousRoundStatus.PENDING -> R.string.vote_tab_last_round_pending
-    PreviousRoundStatus.PUBLISHED -> R.string.vote_tab_last_round_published
-    PreviousRoundStatus.UNCOVERABLE -> R.string.vote_tab_last_round_uncoverable
 }
 
 /**
@@ -551,6 +545,7 @@ private val PreviewState = VoteTabUiState(
     leaders = PreviewLeaders,
     myVotes = PreviewVotes,
     previous = PreviousRoundDisplay(
+        roundId = 1,
         ticker = "JEF",
         display = "JEFx",
         company = "Jefferies Financial Group",

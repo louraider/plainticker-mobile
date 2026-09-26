@@ -457,6 +457,10 @@
     <string name="vote_tab_last_round_pending">%1$s is being covered</string>
     <string name="vote_tab_last_round_published">%1$s is covered</string>
     <string name="vote_tab_last_round_uncoverable">%1$s could not be covered</string>
+    <!-- The live server's own status for a finished round ("closed"), and the neutral line any
+         status this build does not recognize degrades to: true of every previous round, claims
+         nothing about coverage. %1$s is the round number, %2$s the winner's symbol. -->
+    <string name="vote_tab_last_round_closed">Round %1$s closed. %2$s had the most stake.</string>
 
     <!-- Pro entitlement (task A6, docs/plan-monetisation-2026-09-19.md section 1.2): You's own
          block (docs/plan-app-uiux-2026-09-21.md U1). The sentence names which of pass, stake or
