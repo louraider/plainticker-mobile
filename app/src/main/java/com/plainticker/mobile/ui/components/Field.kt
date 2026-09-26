@@ -33,11 +33,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberType
 
 /**
- * The only text field: label above (tertiary), the value in mono 36 (numbers) or Outfit 16
- * (words), a 1dp underline that turns to the action colour while focused, a matching caret, one
+ * The only text field: label above (tertiary), the value in Bricolage: [AmberType.figureLarge]
+ * (34/700, tabular) for a number, [AmberType.fieldText] (16/400) for words, a 1dp underline that turns to the action colour while focused, a matching caret, one
  * text action right (Max, Clear). The label never doubles as the placeholder; [placeholder] is a
  * tertiary hint in the value slot and disappears on the first character. A tap anywhere on the
  * block (label, value, underline) focuses the input, so the 16sp words variant is a 48dp target
@@ -65,7 +65,12 @@ fun Field(
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val focusRequester = remember { FocusRequester() }
-    val textStyle = (if (mono) PlainTickerType.fieldValue else PlainTickerType.fieldText)
+    // `mono` keeps its name for the callers, but the number face is Bricolage with tabular
+    // figures now (2026-09-26): an amount is a number, not an on-chain identifier, and JetBrains
+    // Mono is kept for identifiers only. The value is a single-line input that scrolls rather
+    // than clips, so it has no one-line budget; "1,234.567891" is 222.12dp at 34sp (JetBrains Mono
+    // at 36sp was 259.2dp), narrower than before.
+    val textStyle = (if (mono) AmberType.figureLarge else AmberType.fieldText)
         .copy(color = colors.textPrimary)
     Column(
         modifier = modifier
@@ -78,7 +83,7 @@ fun Field(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         val muted = colors.textTertiary(AmberSurface.GROUND)
-        Text(text = label, style = PlainTickerType.label, color = muted)
+        Text(text = label, style = AmberType.label, color = muted)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -121,7 +126,7 @@ fun Field(
                 if (unit != null) {
                     Text(
                         text = unit,
-                        style = PlainTickerType.monoUnit,
+                        style = AmberType.context,
                         color = muted,
                         maxLines = 1,
                         modifier = Modifier.alignByBaseline(),

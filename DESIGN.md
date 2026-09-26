@@ -177,9 +177,19 @@ split for every style `AmberType` exposes.
 | `figureLarge` | 34/700 | **yes** | A card's headline figure |
 | `figureRow` | 18/600 | **yes** | A ticker row's right-hand figure |
 | `figureInline` | 14/400 | **yes** | A numeral inside a sentence |
+| `textAction` | 14/600 | no | `TextAction`'s label (off Outfit since 2026-09-26) |
+| `label` | 13/500 | no | A field's label, a banner's sentence |
+| `fieldText` | 16/400 | no | A field's value when it is words |
+| `screenTitle` | 26/700 | no | The onboarding headline |
+| `wordmark` | 15/700 | no | "PlainTicker" in the top bar and on the onboarding panel |
 
 `body`, `button` and `meta` are not individually sized by the research; they hold the sizes every
-direction in section 5.5 converges on. Every other size and weight is transcribed from section 5.5
+direction in section 5.5 converges on. The last five rows are the word styles Instrument's
+components used to borrow from Outfit, at the same sizes and weights (2026-09-26); with them, every
+word the product draws is Bricolage. Outfit is still bundled, for three things only: the debug
+gallery's Instrument comparison components (`ListRow`, `TopTabs`, `TodayStrip`, `GalleryScreen`),
+and `Typography.kt`, the Material typography fallback a `Text` with no explicit style would reach
+(no product composable relies on it). Every other size and weight is transcribed from section 5.5
 directly (the ticker row, a number with its context, the section head).
 
 ## 4. Components
@@ -310,12 +320,17 @@ translator-controlled string rather than variable-length data. The rule this fam
 unchanged since before Amber: no state's only forward action is a text link. `AmberDisabledAction`
 is what keeps a disabled state a real button rather than letting it collapse toward that shape.
 
-**`TextAction`** (`TextAction.kt`) is the only secondary-action primitive in the app, and it was
-not restyled: it still draws in `PlainTickerType.textAction` (Outfit SemiBold), with a
-caller-supplied `color`. Every Amber row's trailing action (`AmberTickerRow`'s Vote/Unwatch,
-`Banner`'s Retry, `Field`'s Max/Clear) reaches for it with `colors.actionText` passed in
-explicitly, so the type face stays Instrument's by design (`AmberType` has no equivalent word style
-at this size and weight) while the colour is always Amber's. Carried forward, not an oversight.
+**`TextAction`** (`TextAction.kt`) is the only secondary-action primitive in the app. Since
+2026-09-26 it draws in `AmberType.textAction` (Bricolage 600, opsz 14, 14sp), with a
+caller-supplied `color`; every Amber caller passes `colors.actionText`. Bricolage runs 1 to 9
+percent wider than the Outfit SemiBold it replaced, so every one-line slot a text action shares was
+re-measured with fontTools at that instance, at 1.0x and 1.3x (the notable margins: the Watchlist
+row with "Unwatch", 60.648dp, keeps 259.352dp of context at 1.0x; the Vote leader row keeps
+124.101dp of context at 1.3x beside "31,209.9 SKR"; the top bar keeps 151.639dp at 1.3x beside
+"Watching"; You's "Read license" beside a wallet key keeps 103.844dp at 1.3x). Vertically, its 20sp
+line box clears the "g" by 2.855sp (typo ascent 930, descent 270, "g" 180 units below the
+baseline), more than Outfit's 1.824sp, which closes the "Sian out" clipping class at the component
+level.
 
 **`AmberChip`** (`AmberChip.kt`) is Amber's filter chip: 32dp, `surfaceRaised`/`textPrimary`
 unselected, `surfaceHigh` with a 1dp border ring selected, `minimumInteractiveComponentSize()`
@@ -438,8 +453,10 @@ box, the web TopNav's lesson), sized to the wordmark's cap height (Bricolage 700
 `sCapHeight` 660/1000, so 9.9sp, in sp so it scales with the wordmark), tinted `actionText`,
 `contentDescription` null, 6dp before the word. `TopBarTest` proves mark, gap, wordmark and the
 widest real trailing action ("Watching") fit the 360dp row: 200.94dp to spare at 1.0x, 155.02dp at
-1.3x. The bar draws `PlainTickerType.wordmark` and resolves `defaultAmberColors()` for
-its three colours. The wordmark itself moved on 2026-09-24 (section 9, "Two corners, refit"):
+1.3x. The bar draws `AmberType.wordmark` and `AmberType.textAction` (the action moved off
+Outfit on 2026-09-26: "Watching" is 64.372dp, leaving 198.338dp at 1.0x and 151.639dp at 1.3x),
+keeps JetBrains Mono only for a wallet's short key, and resolves `defaultAmberColors()` for its
+three colours. The wordmark itself moved on 2026-09-24 (section 9, "Two corners, refit"):
 Bricolage 700 replacing Outfit SemiBold 15sp, the one deliberate exception to "Instrument's word
 style is unchanged by the redesign" every other `TopBar` slot still is, closing the one place the
 app and the web drew "PlainTicker" in two different faces (`TopBarTest` proves the wider glyphs
@@ -449,12 +466,17 @@ wallet's short key). Never sticky; scrolls away with the content, covered when n
 `TopScrim` (`Insets.kt`), which paints nothing and holds no semantics of its own.
 
 **`Banner`** (`Banner.kt`) is the one state slot under the header: `surfaceRaised`, a wrapping
-`text` (no `maxLines`, so no clip risk) and an optional `TextAction`. Restyled to resolve
-`defaultAmberColors()`; type stayed `PlainTickerType.label`.
+`text` (no `maxLines`, so no clip risk) in `AmberType.label` (Bricolage 13/500, off Outfit since
+2026-09-26) and an optional `TextAction`. Resolves `defaultAmberColors()`.
 
-**`Field`** (`Field.kt`) is the only text field (the swap amount, Stocks' search): resolved to
-`defaultAmberColors()`, but its anatomy and type (`PlainTickerType.fieldValue`/`fieldText`) are
-untouched, because neither needed a change to read correctly once its three colours did.
+**`Field`** (`Field.kt`) is the only text field (the swap amount, Stocks' search), resolved to
+`defaultAmberColors()`. Since 2026-09-26 its type is Bricolage throughout: the label in
+`AmberType.label`, a number value in `AmberType.figureLarge` (34/700, tabular; an amount is a number,
+not an identifier, so JetBrains Mono 36 left), a words value in `AmberType.fieldText`, the unit in
+`AmberType.context`. The value is a single-line input that scrolls rather than clips, so it carries
+no one-line budget, and "1,234.567891" is narrower now (222.12dp) than it was in mono (259.2dp);
+the unit beside it ("AUTO.GBx", 65.46dp, 85.10dp at 1.3x) and the Max action (28.71dp) are the
+slots measured.
 
 **`Skeleton`** (`Skeleton.kt`, `SkeletonBar`/`SkeletonRows`/`SkeletonSwitch`) is the only loading
 treatment anywhere in the app; there is no spinner. Resolved to `defaultAmberColors()`; carries the
@@ -473,7 +495,7 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `ListRow` | **Kept, one caller** | `GalleryScreen.kt` only (debug builds), to stay field-for-field comparable with `design/canvas/instrument.py`'s own artboards. Every product screen moved to `AmberTickerRow`. Do not add a second caller. |
 | `TopTabs`, `TodayStrip` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | Both now resolve `defaultAmberColors()` (`colors: AmberColors` parameter, same shape as `Field`/`Skeleton`/`Banner` below), closing a real, live leak on Stocks at the time. Since 2026-09-26 no product screen draws `TodayStrip` at all: Stocks dropped it (it repeated Today's own screen) and so did the onboarding backdrop (see below), so it survives for the gallery only. `GalleryScreen.kt` (debug builds) passes the fixed `AmberDarkColors` explicitly to both, matching `TopBar`/`Banner` in that same file, so it stays a static comparison against `design/canvas/instrument.py` rather than following the live system setting. `OnboardingScreen.kt`'s `ListBackdrop` now colour-resolves too (its default), which does not touch the separate, still-open problem this row used to note: the backdrop draws four text tabs ("List, Vote, Portfolio, Watchlist") through `TopTabs`, a shape the shell replaced with the five-destination `AmberBottomNav` before this restyle began, and **that picture is still stale**; a reader who trusts it learns the wrong navigation. |
 | `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. Since Today direction A (2026-09-24) Today no longer draws `WatchlistContent`: the digest lives on its own screen under You (`ui/you/DigestScreen.kt`), whose `Panel` resolves the same colours. |
-| `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept, Instrument type (mostly), Amber colour** | Anatomy and `PlainTickerType` styles unchanged; each now resolves `defaultAmberColors()` instead of a fixed dark token. Not an oversight: none of these needed a shape change to read correctly, only a colour source that follows the system theme. One exception since 2026-09-24: `TopBar`'s own `PlainTickerType.wordmark` moved onto Bricolage 700 (section 9), so this row's "type unchanged" claim now holds for `Field`, `Skeleton`, `Banner` and `TextAction` only. |
+| `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept anatomy, Amber type and colour (2026-09-26)** | Each resolves `defaultAmberColors()`, and since the pre-freeze pass each draws Bricolage (`AmberType.label`, `textAction`, `fieldText`, `figureLarge`, `wordmark`) instead of Outfit; the pass sheet's title and sentences moved the same day (`sectionHead`, `body`). JetBrains Mono stays only where an on-chain identifier is drawn: a wallet's short key in `TopBar`, a signature or address in a `FactCell`/`AmberFact` with `valueMono`. |
 
 ## 5. Layout
 
@@ -681,9 +703,9 @@ button content; 336dp of row content):
 | Slot | Font and instance | Worst real content, 1.0x / 1.3x | Budget | Margin at 1.3x |
 |---|---|---|---|---|
 | Hero button label | Bricolage 600 opsz 16, 16sp | "Sign in with Google", 146.96 / 191.05dp | 288dp | 96.95dp |
-| Row text action (beside the key) | Outfit SemiBold 14sp | "Read license", 78.78 / 102.41dp, plus 16dp inset | 336dp less the key | 112.29dp |
-| Two actions on their own line | Outfit SemiBold 14sp | "Copied" + "Disconnect", 182.44dp with insets at 1.3x | 336dp | 153.56dp |
-| Wallet short key | JetBrains Mono Regular 15sp | nine characters, 81.0 / 105.3dp | column beside the widest action | 112.29dp |
+| Row text action (beside the key) | Bricolage 600 opsz 14, 14sp | "Read license", 85.27 / 110.86dp, plus 16dp inset | 336dp less the key | 103.84dp |
+| Two actions on their own line | Bricolage 600 opsz 14, 14sp | "Copied" + "Disconnect", 192.41dp with insets at 1.3x | 336dp | 143.59dp |
+| Wallet short key | JetBrains Mono Regular 15sp | nine characters, 81.0 / 105.3dp | column beside the widest action | 103.84dp |
 | Device figure | Bricolage 600 opsz 18 tnum, 18sp | "999,999", 69.44 / 90.28dp | 336dp less 12dp gap and the widest label word (83.58dp) | 150.14dp |
 | Hero headline (wraps, not clipped) | Bricolage 700 opsz 34 at 28sp | "Pro until 30 May 2030", 292.99 / 380.89dp | 328dp | one line at 1.0x (35.01dp), two at 1.3x |
 

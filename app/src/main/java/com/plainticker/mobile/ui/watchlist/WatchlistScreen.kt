@@ -337,7 +337,7 @@ private fun Footer(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = footer.delivery.text(),
-                style = PlainTickerType.small,
+                style = AmberType.context,
                 color = colors.textSecondary,
                 modifier = Modifier.weight(1f),
             )
@@ -350,7 +350,7 @@ private fun Footer(
             }
         }
         footer.checked?.let {
-            Text(text = it.text(), style = PlainTickerType.small, color = colors.textTertiary(AmberSurface.GROUND))
+            Text(text = it.text(), style = AmberType.context, color = colors.textTertiary(AmberSurface.GROUND))
         }
     }
 }
@@ -368,7 +368,7 @@ private fun EmptyLine(text: String) {
     val colors = defaultAmberColors()
     Text(
         text = text,
-        style = PlainTickerType.body,
+        style = AmberType.body,
         color = colors.textSecondary,
         modifier = Modifier.fillMaxWidth().padding(bottom = EmptyLineGap).padding(horizontal = Side),
     )

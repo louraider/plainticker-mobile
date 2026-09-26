@@ -21,8 +21,9 @@ import org.junit.Test
  * setting, only the glyphs do, so 1.3x is the harder case and each table states both.
  * - Buttons: `res/font/bricolage_grotesque.ttf` instantiated at `AmberType.button`'s coordinates,
  *   `wght` 600, `wdth` 100, `opsz` 16, at 16sp.
- * - Text actions: `res/font/outfit_semibold.ttf` at 14sp, the face `TextAction` actually draws in
- *   (`PlainTickerType.textAction`, Outfit 14/600; DESIGN.md 4.3 keeps it on purpose), not Bricolage.
+ * - Text actions: `res/font/bricolage_grotesque.ttf` at `AmberType.textAction`'s coordinates,
+ *   `wght` 600, `opsz` 14, 14sp: the face `TextAction` draws in since 2026-09-26, when it left
+ *   Outfit SemiBold (the widths below were re-measured then; every one grew by 1 to 9 percent).
  * - The device figure: Bricolage at `AmberType.figureRow`'s `wght` 600, `opsz` 18, 18sp, with the
  *   font's own `tnum` substitutions applied.
  * - The wallet key: `res/font/jetbrains_mono_regular.ttf` at 15sp.
@@ -46,24 +47,24 @@ class CabinetFitTest {
         "Signing in" to (75.520 to 98.176),
     )
 
-    /** Text action labels, Outfit SemiBold at 14sp: (1.0x, 1.3x) in dp. */
+    /** Text action labels, Bricolage 600 opsz 14 at 14sp: (1.0x, 1.3x) in dp. */
     private val textActionWidths = mapOf(
-        "Connect wallet" to (94.878 to 123.341),
-        "Sign in" to (41.482 to 53.927),
-        "Sign out" to (50.946 to 66.230),
-        "Cancel" to (43.624 to 56.711),
-        "Disconnect" to (70.644 to 91.837),
-        "Connect" to (53.214 to 69.178),
-        "Copy" to (33.166 to 43.116),
-        "Copied" to (45.080 to 58.604),
-        "Refresh" to (50.134 to 65.174),
-        "Enable" to (43.792 to 56.930),
-        "Get Pro" to (49.308 to 64.100),
-        "Extend Pro" to (70.266 to 91.346),
-        "Show" to (34.566 to 44.936),
-        "Hide" to (29.372 to 38.184),
-        "Read license" to (78.778 to 102.411),
-        "Hide license" to (75.152 to 97.698),
+        "Connect wallet" to (100.814 to 131.058),
+        "Sign in" to (45.556 to 59.223),
+        "Sign out" to (55.636 to 72.327),
+        "Cancel" to (45.808 to 59.550),
+        "Disconnect" to (76.048 to 98.862),
+        "Connect" to (56.630 to 73.619),
+        "Copy" to (35.098 to 45.627),
+        "Copied" to (47.348 to 61.552),
+        "Refresh" to (53.060 to 68.978),
+        "Enable" to (45.850 to 59.605),
+        "Get Pro" to (50.162 to 65.211),
+        "Extend Pro" to (73.892 to 96.060),
+        "Show" to (38.052 to 49.468),
+        "Hide" to (30.632 to 39.822),
+        "Read license" to (85.274 to 110.856),
+        "Hide license" to (81.620 to 106.106),
     )
 
     /** The wallet's short key, nine monospace characters, JetBrains Mono Regular 15sp. */
@@ -198,35 +199,37 @@ class CabinetFitTest {
      * budget is not also part of the problem, and that a future edit cannot quietly shrink it back
      * to something that would be.
      *
-     * fontTools 4.63 against `res/font/outfit_semibold.ttf`, 2026-09-26, `hhea`/`OS2` (typo metrics
-     * govern here: `fsSelection`'s `USE_TYPO_METRICS` bit is set, and typo and hhea agree) at 14sp,
-     * the exact instance [PlainTickerType.textAction] draws: ascent 14.0dp, descent 3.64dp, so a
-     * natural (ascent + descent) line height of 17.64dp. The "g" glyph's own bounding box reaches
-     * 2.996dp below the baseline, less than the font's own 3.64dp descent metric.
+     * fontTools 4.63 against `res/font/bricolage_grotesque.ttf` instantiated at `wght` 600,
+     * `opsz` 14, 2026-09-26 (re-measured when [com.plainticker.mobile.ui.theme.AmberType.textAction]
+     * replaced Outfit SemiBold, which measured ascent 14.0, descent 3.64, "g" 2.996 below, margin
+     * 1.824), `hhea`/`OS2` (typo metrics govern: `fsSelection`'s `USE_TYPO_METRICS` bit is set, and
+     * typo and hhea agree, 930 and -270 of 1000) at 14sp: ascent 13.02dp, descent 3.78dp, so a
+     * natural (ascent + descent) line height of 16.8dp. The "g" glyph's own bounding box reaches
+     * 2.525dp below the baseline, less than the font's own 3.78dp descent metric.
      */
-    private val outfitSemiBoldAscent14Sp = 14.0
-    private val outfitSemiBoldDescent14Sp = 3.64
-    private val outfitSemiBoldNaturalLineHeight14Sp = outfitSemiBoldAscent14Sp + outfitSemiBoldDescent14Sp
-    private val gGlyphBelowBaseline14Sp = 2.996
+    private val textActionAscent14Sp = 13.02
+    private val textActionDescent14Sp = 3.78
+    private val textActionNaturalLineHeight14Sp = textActionAscent14Sp + textActionDescent14Sp
+    private val gGlyphBelowBaseline14Sp = 2.525
 
     @Test
     fun `the text action's own declared line height already clears the real descender, before any row padding`() {
-        // PlainTickerType.textAction: 14sp, 20sp line height, LineHeightStyle(Center, Trim.None), so
-        // the (20 - 17.64) = 2.36dp of extra space this style adds over the font's own natural line
+        // AmberType.textAction: 14sp, 20sp line height, LineHeightStyle(Center, Trim.None), so
+        // the (20 - 16.8) = 3.2dp of extra space this style adds over the font's own natural line
         // height splits evenly above and below the natural ascent/descent box.
         val declaredLineHeight = 20.0
         assertTrue(
             "the declared line height must exceed the font's own natural one, or centring it adds " +
                 "no margin at all",
-            declaredLineHeight > outfitSemiBoldNaturalLineHeight14Sp,
+            declaredLineHeight > textActionNaturalLineHeight14Sp,
         )
-        val halfLeading = (declaredLineHeight - outfitSemiBoldNaturalLineHeight14Sp) / 2
+        val halfLeading = (declaredLineHeight - textActionNaturalLineHeight14Sp) / 2
         // Margin from the real "g" ink to the bottom of the declared 20sp line box: the half-leading
         // below the natural descent line, plus the slack the font's own descent metric already
         // carries past this particular glyph's real ink.
-        val margin = halfLeading + (outfitSemiBoldDescent14Sp - gGlyphBelowBaseline14Sp)
+        val margin = halfLeading + (textActionDescent14Sp - gGlyphBelowBaseline14Sp)
         assertTrue("\"g\" must not reach the line box's own bottom edge", margin > 0.0)
-        assertEquals(1.824, margin, 0.01)
+        assertEquals(2.855, margin, 0.01)
     }
 
     @Test

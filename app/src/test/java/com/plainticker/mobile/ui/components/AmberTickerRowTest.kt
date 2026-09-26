@@ -372,9 +372,9 @@ class AmberTickerRowTest {
      * unblocked") has the prose; this is the same numbers as executable arithmetic, at both the
      * scale the row ships at and the 1.3x scale the task this test exists for asks for by name.
      *
-     * fontTools against `res/font/outfit_semibold.ttf` for the action's own label (`TextAction`
-     * draws through `PlainTickerType.textAction`, Outfit, never Bricolage) and against
-     * `res/font/bricolage_grotesque.ttf` for [figure] and [context], both read 2026-09-22.
+     * fontTools against `res/font/bricolage_grotesque.ttf` for all three: the action's own label at
+     * `AmberType.textAction` (600, opsz 14, 14sp), re-measured 2026-09-26 when `TextAction` left
+     * Outfit, so "Vote" grew from 30.856dp to 31.318dp; [figure] and [context] as read 2026-09-22.
      */
     @Test
     fun `the leader row's trailing-action budget derived from the real fonts clears the app's own widest figure and voter count`() {
@@ -384,16 +384,16 @@ class AmberTickerRowTest {
         // content and the action; nothing here adds a second one.
         val actionStartPaddingDp = 16.0
 
-        // "Vote" (vote_action_row) at PlainTickerType.textAction's Outfit SemiBold 14sp: 30.856dp.
-        val voteLabelWidthDp = 30.856
+        // "Vote" (vote_action_row) at AmberType.textAction, Bricolage 600 opsz 14 at 14sp: 31.318dp.
+        val voteLabelWidthDp = 31.318
         val metaContentBudgetDp = contentWidthDp - (actionStartPaddingDp + voteLabelWidthDp)
-        assertEquals(289.144, metaContentBudgetDp, 0.01)
+        assertEquals(288.682, metaContentBudgetDp, 0.01)
 
         // next_up_weight's own widest figure, "31,209.9 SKR", at figureRow's 18sp/600 tnum:
         // 113.220dp, the same number the context budget test above already pins.
         val figureWidthDp = 113.220
         val contextBudgetDp = metaContentBudgetDp - figureWidthDp - gapDp
-        assertEquals(167.924, contextBudgetDp, 0.01)
+        assertEquals(167.462, contextBudgetDp, 0.01)
 
         // next_up_voters' own realistic ceiling for one token's leaderboard, "9,999 voters", at
         // context's 14sp/400: 83.160dp.
@@ -410,11 +410,11 @@ class AmberTickerRowTest {
         // dp padding does not.
         val voteLabelWidthAt13xDp = voteLabelWidthDp * 1.3
         val metaContentBudgetAt13xDp = contentWidthDp - (actionStartPaddingDp + voteLabelWidthAt13xDp)
-        assertEquals(279.887, metaContentBudgetAt13xDp, 0.01)
+        assertEquals(279.287, metaContentBudgetAt13xDp, 0.01)
 
         val figureWidthAt13xDp = figureWidthDp * 1.3
         val contextBudgetAt13xDp = metaContentBudgetAt13xDp - figureWidthAt13xDp - gapDp
-        assertEquals(124.701, contextBudgetAt13xDp, 0.01)
+        assertEquals(124.101, contextBudgetAt13xDp, 0.01)
 
         val votersWidthAt13xDp = votersWidthDp * 1.3
         assertTrue(
@@ -441,11 +441,11 @@ class AmberTickerRowTest {
         val contentWidthDp = 336.0
         val actionStartPaddingDp = 16.0
 
-        // "Unwatch" (action_unwatch) at PlainTickerType.textAction's Outfit SemiBold 14sp: 56.812dp,
-        // the widest trailingAction label this row draws.
-        val unwatchLabelWidthDp = 56.812
+        // "Unwatch" (action_unwatch) at AmberType.textAction, Bricolage 600 opsz 14 at 14sp:
+        // 60.648dp (56.812dp in Outfit before 2026-09-26), the widest trailingAction label this row draws.
+        val unwatchLabelWidthDp = 60.648
         val metaContentBudgetDp = contentWidthDp - (actionStartPaddingDp + unwatchLabelWidthDp)
-        assertEquals(263.188, metaContentBudgetDp, 0.01)
+        assertEquals(259.352, metaContentBudgetDp, 0.01)
         // No figure ever, on this caller: the whole budget above is context's own, with no gap
         // and nothing to share it with.
 
@@ -462,7 +462,7 @@ class AmberTickerRowTest {
         // row's does above; the realistic join grows with it and no longer clears one line.
         val unwatchLabelWidthAt13xDp = unwatchLabelWidthDp * 1.3
         val metaContentBudgetAt13xDp = contentWidthDp - (actionStartPaddingDp + unwatchLabelWidthAt13xDp)
-        assertEquals(246.144, metaContentBudgetAt13xDp, 0.01)
+        assertEquals(241.158, metaContentBudgetAt13xDp, 0.01)
         val realisticJoinWidthAt13xDp = realisticJoinWidthDp * 1.3
         assertFalse(
             "the realistic join grown to 1.3x ($realisticJoinWidthAt13xDp dp) is expected to miss " +

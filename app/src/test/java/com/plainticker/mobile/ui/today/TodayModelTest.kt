@@ -439,7 +439,8 @@ class TodayModelTest {
      * fonts, the same way [com.plainticker.mobile.ui.components.AmberTickerRowTest] measures
      * [com.plainticker.mobile.ui.components.AmberTickerRow]'s own budgets: `context` at 14sp/400
      * (opsz 14), `figureRow` at 18sp/600 tnum (opsz 18, though tnum never touches a word), and
-     * `TextAction`'s label at Outfit SemiBold 14sp. Content width is 336dp (a 400dp frame less
+     * `TextAction`'s label at Bricolage 600 opsz 14 (`AmberType.textAction`, re-measured 2026-09-26
+     * when it left Outfit SemiBold). Content width is 336dp (a 400dp frame less
      * `AmberTickerRowGroup`'s 16dp and the row's own 16dp on each side, [AmberTickerRow]'s own doc
      * comment). The widest realistic date sentence is any weekday paired with any day and any
      * three-letter month abbreviation, brute-forced against the real font rather than assumed:
@@ -489,11 +490,11 @@ class TodayModelTest {
     fun `a first-open row's date, plain or estimated, clears the context budget beside Watch at 1_0x, and wraps rather than clips at 1_3x`() {
         val contentWidthDp = 336.0
         val actionStartPaddingDp = 16.0
-        val watchLabelWidthDp = 42.322 // "Watch" (action_watch) at Outfit SemiBold 14sp.
+        val watchLabelWidthDp = 43.624 // "Watch" (action_watch) at Bricolage 600 opsz 14, 14sp.
         val budget10x = contentWidthDp - (actionStartPaddingDp + watchLabelWidthDp)
-        assertEquals(277.678, budget10x, 0.01)
+        assertEquals(276.376, budget10x, 0.01)
         val budget13x = contentWidthDp - (actionStartPaddingDp + watchLabelWidthDp * 1.3)
-        assertEquals(264.981, budget13x, 0.01)
+        assertEquals(263.289, budget13x, 0.01)
 
         val datePlainDp = 130.676
         val dateEstimatedDp = 206.164

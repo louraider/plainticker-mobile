@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.theme.PlainTickerType
 
 /**
@@ -39,10 +40,10 @@ import com.plainticker.mobile.ui.theme.PlainTickerType
  * own instance, the onboarding backdrop's picture of the old List), so [colors] defaults to the
  * system-following [defaultAmberColors] rather than Instrument's fixed-dark [Ink]/[Accent]/[Muted]:
  * a bar that stayed dark on top of a light Stocks or Detail screen is exactly the "assumes dark"
- * fault this pass exists to find. [PlainTickerType.wordmark] itself moved on 2026-09-24 (DESIGN.md
- * section 9, "Two corners, refit"): Bricolage 700 replacing Outfit SemiBold, the one deliberate
- * exception to "Instrument's word style is unchanged by the redesign" the rest of this bar still
- * is, so the app finally draws "PlainTicker" in the same face the web's TopNav lockup does.
+ * fault this pass exists to find. The wordmark moved to Bricolage 700 on 2026-09-24 (DESIGN.md
+ * section 9, "Two corners, refit"), so the app draws "PlainTicker" in the same face the web's
+ * TopNav lockup does, and the action followed on 2026-09-26 ([AmberType.textAction], off Outfit):
+ * every word on this bar is Bricolage now, and only a wallet's short key stays in JetBrains Mono.
  * [TopBarTest] proves the wider glyphs still clear this row's own one-line clipping budget.
  *
  * @param insets the inset the bar absorbs; pass `WindowInsets(0)` when a parent already pads it.
@@ -102,7 +103,7 @@ fun TopBar(
             Spacer(Modifier.width(MarkGap))
             Text(
                 text = title,
-                style = PlainTickerType.wordmark,
+                style = AmberType.wordmark,
                 color = colors.textPrimary,
                 maxLines = 1,
             )
@@ -112,8 +113,9 @@ fun TopBar(
                 TextAction(label = action, onClick = onAction, color = colors.actionText)
             // A picture of the action, not the action itself: same action-text colour, no click target.
             action != null ->
-                Text(text = action, style = PlainTickerType.textAction, color = colors.actionText, maxLines = 1)
+                Text(text = action, style = AmberType.textAction, color = colors.actionText, maxLines = 1)
             meta != null ->
+                // A wallet's short key: an on-chain identifier, the one thing JetBrains Mono is kept for.
                 Text(
                     text = meta,
                     style = PlainTickerType.meta,
@@ -125,7 +127,7 @@ fun TopBar(
 }
 
 /**
- * The wordmark's cap height: [PlainTickerType.wordmark] is Bricolage 700 at 15sp, and the bundled
+ * The wordmark's cap height: [AmberType.wordmark] is Bricolage 700 at 15sp, and the bundled
  * variable font's OS/2 `sCapHeight` is 660 of 1000 units at that instance (fontTools, 2026-09-24),
  * so 9.9sp. The mark is drawn exactly that tall, so it stands level with the "P".
  */
