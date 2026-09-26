@@ -404,9 +404,9 @@ private fun Holding(
 /**
  * "Swap to USDC", on a line of its own under the holding it acts on, never on the row's meta line.
  * Measured against the real fonts (2026-09-24, SwapResultFitTest): on the meta line, beside
- * a value like "$12,345.67", the action would leave the quantity 124.44dp at 1.0x and 68.17dp at
+ * a value like "$12,345.67", the action would leave the quantity 119.55dp at 1.0x and 61.82dp at
  * 1.3x, and "1.37 TSLAx, +0.09%" already needs 124.73dp and 162.14dp, so the quantity itself would
- * ellipsize at 1.3x. On its own line the label (91.84dp, 119.39dp at 1.3x, Outfit SemiBold 14) has
+ * ellipsize at 1.3x. On its own line the label (96.73dp, 125.74dp at 1.3x, Bricolage 600 opsz 14) has
  * the row's whole 336dp, and the row above keeps every budget AmberTickerRow already proves.
  */
 @Composable

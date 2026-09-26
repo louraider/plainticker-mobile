@@ -73,8 +73,33 @@ data class XStockAsset(
      */
     fun solanaOnly(): XStockAsset = copy(deployments = listOfNotNull(solanaDeployment))
 
+    /**
+     * True when the underlying share is listed in the US, the only universe PlainTicker analyzes
+     * and the only one `POST /api/v1/vote/build` accepts (anything else is 422 `unknown_ticker`,
+     * after the wallet has already connected). Read against the live catalog on 2026-09-26: 1,124
+     * Solana assets, every one carrying `underlying.listingCountry` (950 US, 93 GB, 79 HK, one ES,
+     * one DE).
+     *
+     * `listingCountry` is the signal, not the ISIN prefix: 12 US-listed names carry a foreign ISIN
+     * (an Irish, Dutch, Cayman, Italian, Australian or Canadian incorporation, such as Medtronic,
+     * Accenture and Linde), and the xStock's own [isin] is Swiss for every asset. The underlying ISIN is only the fallback for a record
+     * without a country, then the venue's MIC. A record that carries none of the three stays in:
+     * the server still refuses it, and hiding a row on missing data would be a guess too.
+     */
+    val isUsUnderlying: Boolean
+        get() {
+            underlying?.listingCountry?.trim()?.takeIf { it.isNotEmpty() }?.let { return it.equals("US", ignoreCase = true) }
+            (underlying?.isin?.takeIf { it.isNotBlank() } ?: underlyingIsin?.takeIf { it.isNotBlank() })
+                ?.let { return it.trim().startsWith("US", ignoreCase = true) }
+            trading?.exchange?.mic?.trim()?.takeIf { it.isNotEmpty() }?.let { return it.uppercase() in US_MICS } // lint-allow uppercase: code compare
+            return true
+        }
+
     companion object {
         const val NETWORK_SOLANA = "Solana"
+
+        /** The US venues the live catalog lists underlyings on (NYSE, Nasdaq, NYSE Arca, Cboe BZX, NYSE American). */
+        private val US_MICS = setOf("XNYS", "XNAS", "ARCX", "BATS", "XASE")
     }
 }
 

@@ -13,8 +13,10 @@ import org.junit.Test
  *
  * 1. every sentence comes from strings.xml, never from a Kotlin literal;
  * 2. the self-certification is one Checkbox target of at least 48dp;
- * 3. the List behind the panel is decoration, dimmed and cleared from the semantics tree, so the
- *    button is the only thing on the screen a finger or a switch can reach.
+ * 3. the picture of Today behind the panel is decoration, dimmed, cleared from the semantics tree
+ *    and blind to touch, so the button is the only thing on the screen a finger or a switch can reach;
+ * 4. (2026-09-26) the screen describes the app that ships: the five bottom-bar destinations, drawn
+ *    with the real Amber components, never the retired List, four text tabs or Watchlist.
  *
  * The copy itself is CopyLintTest's job; this file only pins where it lives and what it does.
  */
@@ -39,23 +41,28 @@ class OnboardingScreenTest {
             .findAll(stringsXml).map { it.groupValues[1] }.toSet()
     }
 
+    /**
+     * Changed 2026-09-26 (audit, item 1): the resource list used to pin the four retired tab labels,
+     * the You action and the List's counted Today strip, because the backdrop drew the old shell.
+     * It now pins what the rewritten screen reads: the five bottom-bar labels, the map sentence for
+     * each, Today's own venue line, section head and Watched marker for the backdrop.
+     */
     @Test
     fun `every sentence on the screen comes from strings xml`() {
         listOf(
-            "app_name", "onboarding_headline", "onboarding_body_chain", "onboarding_body_fundamentals",
-            "onboarding_body_map", "onboarding_body_disclaimer", "onboarding_certify", "onboarding_continue",
-            // The backdrop's own truth (task U3): the four real tabs and the You action, both
-            // drawn as pictures of themselves, never the three tabs and the pre-chapter heading
-            // the skeleton alone still uses.
-            "tab_list", "tab_vote", "tab_portfolio", "tab_watchlist", "you_action",
-            "list_row_meta_premium", "list_row_meta_join",
+            "app_name", "onboarding_headline", "onboarding_body_reads",
+            "onboarding_map_today", "onboarding_map_stocks", "onboarding_map_vote",
+            "onboarding_map_portfolio", "onboarding_map_you",
+            "onboarding_body_disclaimer", "onboarding_certify", "onboarding_continue",
+            "nav_today", "nav_stocks", "nav_vote", "nav_portfolio", "nav_you",
+            "today_status_closed_tomorrow", "today_heading_reports", "today_reports_watched",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
             assertTrue("OnboardingScreen.kt does not read R.string.$name", "R.string.$name" in scan.code)
         }
-        // The backdrop's Today strip counts what is watched, so it reads the List's counted copy.
-        assertTrue("list_today is not declared as a plurals", """<plurals name="list_today">""" in stringsXml)
-        assertTrue("OnboardingScreen.kt does not read R.plurals.list_today", "R.plurals.list_today" in scan.code)
+        listOf("onboarding_body_chain", "onboarding_body_fundamentals", "onboarding_body_map").forEach { name ->
+            assertTrue("$name described the retired app and should be gone", """name="$name"""" !in stringsXml)
+        }
         // What is left in Kotlin is sample data, not copy: tickers, company names and the state
         // word the server assigns. Nothing that a translator would ever be handed.
         scan.literals.forEach { literal ->
@@ -70,13 +77,43 @@ class OnboardingScreenTest {
         }
     }
 
+    /**
+     * Replaces "the map sentence names all four tabs and You" (2026-09-26, audit item 1): that test
+     * pinned List and Watchlist, two destinations the app no longer has. The map is now one
+     * sentence per bottom-bar destination, and each must open with that destination's own label,
+     * which is what the panel sets in weight 600 and what the reader then sees under the icon.
+     */
     @Test
-    fun `the map sentence names all four tabs and You`() {
-        val text = Regex("""<string name="onboarding_body_map">(.*?)</string>""")
-            .find(stringsXml)?.groupValues?.get(1)
-        assertTrue("onboarding_body_map is not declared", text != null)
-        listOf("List", "Vote", "Portfolio", "Watchlist", "You").forEach { word ->
-            assertTrue("the map sentence never names $word", Regex("""\b$word\b""").containsMatchIn(text!!))
+    fun `the map names the five bottom-bar destinations, each sentence opening with its own label`() {
+        fun string(name: String) = Regex("""<string name="$name">(.*?)</string>""").find(stringsXml)?.groupValues?.get(1)
+        listOf("today", "stocks", "vote", "portfolio", "you").forEach { key ->
+            val label = requireNotNull(string("nav_$key")) { "nav_$key is not declared" }
+            val sentence = requireNotNull(string("onboarding_map_$key")) { "onboarding_map_$key is not declared" }
+            assertTrue("onboarding_map_$key does not open with \"$label\"", sentence.startsWith("$label "))
+        }
+        val all = listOf("onboarding_body_reads", "onboarding_map_today", "onboarding_map_stocks", "onboarding_map_vote",
+            "onboarding_map_portfolio", "onboarding_map_you").joinToString(" ") { string(it).orEmpty() }
+        // What the brief asked the first screen to teach: reads per stock, Swap both ways, the SKR vote, Pro.
+        listOf("reads", "Swap", "back to USDC", "SKR", "Pro").forEach { word ->
+            assertTrue("the panel never says \"$word\"", word in all)
+        }
+        listOf("List", "Watchlist", "top right").forEach { gone ->
+            assertTrue("the panel still names the retired \"$gone\"", !Regex("""\b$gone\b""").containsMatchIn(all))
+        }
+        assertEquals("Open Today", string("onboarding_continue"))
+    }
+
+    @Test
+    fun `the backdrop is drawn with Amber components in Bricolage, never Instrument's`() {
+        listOf("AmberBottomNav(", "AmberDestination.TODAY", "AmberTickerRow(", "AmberTickerRowGroup", "TopBar(").forEach {
+            assertTrue("the backdrop does not draw $it", it in scan.code)
+        }
+        listOf("TopTabs", "TodayStrip", "PlainTickerType", "Outfit").forEach {
+            assertTrue("OnboardingScreen.kt still reaches for $it", it !in scan.code)
+        }
+        // Whole words: ConsentPanel( is this screen's own gate, not Instrument's Panel.
+        listOf("ListRow", "Panel").forEach {
+            assertTrue("OnboardingScreen.kt still draws $it", !Regex("""\b$it\(""").containsMatchIn(scan.code))
         }
     }
 
@@ -94,7 +131,12 @@ class OnboardingScreenTest {
         assertTrue("the backdrop is not dimmed", "alpha(BackdropAlpha)" in scan.code)
         assertTrue("the backdrop is not the canvas' 25 percent", "BackdropAlpha = 0.25f" in scan.code)
         assertTrue("the backdrop is not cleared from the semantics tree", "clearAndSetSemantics {}" in scan.code)
-        assertTrue("the tab row behind the panel is still selectable", "onSelect = null" in scan.code)
+        // The backdrop's bottom bar is a real AmberBottomNav, which needs a select handler; the
+        // picture swallows every pointer event on the initial pass so the bar can never be reached
+        // (replaces the old "onSelect = null" pin on the retired TopTabs, 2026-09-26).
+        assertTrue("the bottom bar behind the panel does nothing when selected", "onSelect = {}" in scan.code)
+        assertTrue("the backdrop does not swallow touches", ".swallowTouches()" in scan.code)
+        assertTrue("touches are not consumed before the children see them", "PointerEventPass.Initial" in scan.code)
         val handlers = Regex("""\bonClick\s*=\s*(\w+)""").findAll(scan.code).map { it.groupValues[1] }.toList()
         assertEquals("the button is the only click handler on the screen", listOf("onContinue"), handlers)
     }

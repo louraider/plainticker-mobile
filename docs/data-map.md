@@ -746,7 +746,15 @@ xStocks `/multiplier` endpoint reported the same effective multipliers on 2026-0
 1.0863570205637327, BACx 1.0179352667683526, NFLXx 10), but it knows nothing about a wallet's
 balance, so it could not back the cap. The check runs when the sheet opens, so Max already uses the
 confirmed balance, and again at the tap, which covers the flip from the other direction. After a
-landing it asks for the landing's slot, with the same two tries as the forwarder read.
+landing it asks for the landing's slot.
+
+**Tolerance (2026-09-26).** A rate limit or a node a few slots behind used to pause the swap on the
+first answer. `PublicRpcSecondSource` now retries once after 600 ms with the slot relaxed by 150
+slots (about a minute), which is safe because the balance only ever caps the amount (the smaller of
+both reads wins), then asks a second keyless operator, `https://solana-rpc.publicnode.com`. That
+node refuses the indexed `getTokenAccountsByOwner` without a key, so it is asked for the mint and the
+owner's Token-2022 associated token account in one `getMultipleAccounts`; the associated account is
+the one a swap spends from, so leaving any other account out can only narrow the cap.
 
 **If the public node does not answer, Swap to USDC is refused** with
 `swap_failed_second_source_unreachable`: "A second check of this token did not answer, so Swap to

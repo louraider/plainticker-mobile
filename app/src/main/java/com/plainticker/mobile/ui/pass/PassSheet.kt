@@ -49,7 +49,7 @@ import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.PlainTickerType
+import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.text
 import kotlinx.coroutines.launch
 
@@ -104,7 +104,9 @@ internal fun ColumnScope.PassSheetBody(
 
     Text(
         text = content.title.text(),
-        style = PlainTickerType.sheetTitle,
+        // "Pay for Pro", AmberType.sectionHead (22/700, opsz 22): 118.25dp at 1.0x, 153.73dp at
+        // 1.3x, inside the sheet's 360dp content width either way (fontTools, 2026-09-26).
+        style = AmberType.sectionHead,
         color = colors.textPrimary,
         maxLines = 1,
         softWrap = false,
@@ -146,7 +148,7 @@ private fun PassActions.of(kind: PassActionKind): () -> Unit = when (kind) {
 private fun Sentence(text: String, color: Color, top: Dp) {
     Text(
         text = text,
-        style = PlainTickerType.body,
+        style = AmberType.body,
         color = color,
         modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = top),
     )

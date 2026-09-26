@@ -56,8 +56,13 @@ class VoteScreenTest {
         val priceOnly = body(listScreen, "private fun PriceOnlyRow(")
         assertTrue(
             "a price-only row hands its own vote callback through to the shared row",
-            "onVote = if (onVote == null) null else" in priceOnly,
+            "onVote = if (onVote == null || !row.votable) null else" in priceOnly,
         )
+        // 2026-09-26 (audit, item 3): the callback now also stops at a row whose underlying is not
+        // US-listed, because the server refuses that vote after the wallet connects.
+        assertTrue("a non-US price-only row offers no vote", "!row.votable" in priceOnly)
+        val detailVote = body(detailScreen, "private fun VoteBlock(")
+        assertTrue("Detail offers no vote for a non-US listing", "state.asset?.isUsUnderlying == false" in detailVote)
 
         // The analyzed rows are already covered, so there is nothing there to vote for.
         val analyzed = body(listScreen, "private fun AnalyzedRow(")
@@ -158,6 +163,9 @@ class VoteScreenTest {
         val sources = listOf(
             source("ui/vote/VoteSheetModel.kt"),
             source("ui/vote/VoteState.kt"),
+            // The Last round sentence is chosen by the model since 2026-09-26 (PreviousRoundDisplay.sentence),
+            // so the model is where its four strings are read now, not VoteScreen.kt.
+            source("ui/vote/VoteTabModel.kt"),
             sheet,
             listScreen,
             detailScreen,
@@ -371,13 +379,13 @@ class VoteScreenTest {
     /**
      * The margin itself, as arithmetic rather than an assumption: `padding(end = 16.dp)` is a
      * `Dp` value, and `Dp` never scales with `fontScale`, only `sp` text does, so the gap after
-     * "Vote" does not shrink as the label grows. fontTools against `res/font/outfit_semibold.ttf`
-     * -- the exact font, weight and size [TextAction] draws through (`PlainTickerType.textAction`,
-     * Outfit SemiBold 14sp) -- gives "Vote" itself as 30.856dp at 1.0x, the same number
+     * "Vote" does not shrink as the label grows. fontTools against `res/font/bricolage_grotesque.ttf`
+     * at the exact instance [TextAction] draws through (`AmberType.textAction`, 600, opsz 14, 14sp;
+     * Outfit SemiBold until 2026-09-26) gives "Vote" itself as 31.318dp at 1.0x, the same number
      * [com.plainticker.mobile.ui.components.AmberTickerRowTest]'s own leader-row test already
      * pins for the identical label, font, weight and size; grown by the raw 1.3x factor (the same
      * conservative, worse-than-real assumption every other margin proof in this codebase uses) it
-     * is 40.113dp. Both stay far short of a real device's own width (>= 320dp, the narrowest
+     * is 40.713dp. Both stay far short of a real device's own width (>= 320dp, the narrowest
      * shipped Android width bucket), so this fix's 16dp margin is never squeezed by overflow at
      * either scale: the action's touch target and its visible glyphs move together, 16dp clear of
      * the physical edge, at 1.0x and at 1.3x alike.
@@ -386,10 +394,10 @@ class VoteScreenTest {
     fun `the ballot row's trailing-action margin is 16dp at 1_0x font scale and 16dp at 1_3x, unlike the label it sits beside`() {
         val endMarginDp = 16.0 // Modifier.padding(end = 16.dp) on BallotRow's overlaid TextAction.
 
-        // "Vote" (vote_action_row) at PlainTickerType.textAction's Outfit SemiBold 14sp: the same
-        // 30.856dp AmberTickerRowTest's own leader-row test measures and pins for this exact
+        // "Vote" (vote_action_row) at AmberType.textAction, Bricolage 600 opsz 14: the same
+        // 31.318dp AmberTickerRowTest's own leader-row test measures and pins for this exact
         // label, font, weight and size.
-        val voteLabelWidthDp = 30.856
+        val voteLabelWidthDp = 31.318
         val actionStartPaddingDp = 16.0 // TextAction's own default contentPadding start.
         val touchTargetFloorDp = 48.0 // TextAction's own defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).
         val renderedWidthAt10xDp = maxOf(actionStartPaddingDp + voteLabelWidthDp, touchTargetFloorDp)

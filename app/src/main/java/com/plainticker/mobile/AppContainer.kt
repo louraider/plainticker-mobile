@@ -194,7 +194,11 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val rpcRepository: RpcRepository by lazy { ForwarderRpcRepository(rpcApi) }
     override val mintRepository: MintRepository by lazy { ForwarderMintRepository(rpcRepository, clock) }
     override val secondSource: SecondSource by lazy {
-        PublicRpcSecondSource(SolanaRpcApi(httpClient, PublicRpcSecondSource.PUBLIC_RPC_URL), clock)
+        PublicRpcSecondSource(
+            api = SolanaRpcApi(httpClient, PublicRpcSecondSource.PUBLIC_RPC_URL),
+            clock = clock,
+            fallback = SolanaRpcApi(httpClient, PublicRpcSecondSource.FALLBACK_RPC_URL),
+        )
     }
 
     // The bundled outage snapshot lives in assets; a missing one simply means no fallback.

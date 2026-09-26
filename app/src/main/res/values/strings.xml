@@ -52,20 +52,21 @@
 
     <!-- Onboarding -->
     <string name="onboarding_headline">Tokenized stocks, read before you swap.</string>
-    <string name="onboarding_body_chain">Every xStock page starts with what the token itself says: reserves, issuer controls and the split multiplier, read live from the Solana mint.</string>
-    <string name="onboarding_body_fundamentals">Then the page turns to the company against its sector: quality, valuation, momentum and F-Score, from SEC filings.</string>
-    <!-- The map (task U3): the backdrop shows the four tabs and You as a picture; this sentence
-         says what each is for in words, before the disclaimer. -->
-    <string name="onboarding_body_map">Start on the List. Vote picks what is analyzed next, Portfolio reads your wallet, Watchlist sends one digest a day. Your wallet, your pass and this device\'s record are under You, top right.</string>
+    <!-- The onboarding panel, rewritten for the shipped app (2026-09-26): one sentence on what a
+         stock page reads, then the map, one sentence per bottom-bar destination, each opening with
+         that destination's own nav_ label so the panel can set it in weight 600. The old copy
+         described a List to start on, a Watchlist that sent the digest and You "top right". -->
+    <string name="onboarding_body_reads">Each stock page reads the token live from Solana first, then the company against its sector, from SEC filings.</string>
+    <string name="onboarding_map_today">Today shows market hours, the stocks you watch and who reports this week.</string>
+    <string name="onboarding_map_stocks">Stocks lists every tokenized stock by sector. Search, or open one to read it.</string>
+    <string name="onboarding_map_vote">Vote lets your staked SKR choose the next stock to be analyzed.</string>
+    <string name="onboarding_map_portfolio">Portfolio reads your wallet. Swap USDC into a stock token there or on its page, and back to USDC.</string>
+    <string name="onboarding_map_you">You has your sign-in, your wallet and Pro, which opens every figure on every covered stock.</string>
     <string name="onboarding_body_disclaimer">This is not a price forecast or investment advice.</string>
     <string name="onboarding_certify">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</string>
-    <string name="onboarding_continue">Read the list</string>
+    <string name="onboarding_continue">Open Today</string>
 
     <!-- List -->
-    <plurals name="list_today">
-        <item quantity="one">Today: %1$s stock watched, next report %2$s on %3$s</item>
-        <item quantity="other">Today: %1$s stocks watched, next report %2$s on %3$s</item>
-    </plurals>
     <string name="list_today_stale">Checked %1$s, tap to refresh</string>
     <string name="list_search_label">Search</string>
     <string name="list_search_placeholder">Ticker or company</string>
@@ -91,21 +92,30 @@
     <string name="list_snapshot_banner_undated">List from a bundled snapshot</string>
     <string name="list_snapshot_refreshing">List from a bundled snapshot of %1$s, refreshing now</string>
     <string name="list_snapshot_refreshing_undated">List from a bundled snapshot, refreshing now</string>
-    <plurals name="list_today_watched">
-        <item quantity="one">Today: %1$s stock watched</item>
-        <item quantity="other">Today: %1$s stocks watched</item>
-    </plurals>
     <string name="list_row_meta_age">Analysis %1$s</string>
+    <!-- The age of an analysis, counted: "1 day old", "12 days old". Replaced "12 d old"
+         (audit 2026-09-26): a bare "d" is a unit a beginner has to decode. -->
+    <plurals name="list_row_age_days">
+        <item quantity="one">%1$s day old</item>
+        <item quantity="other">%1$s days old</item>
+    </plurals>
+    <!-- The composite on a Stocks row, labelled so a bare "66" is not a mystery number. Lowercase
+         because it sits in the figure slot beside the name, not at the start of a sentence. -->
+    <string name="list_row_score">score %1$s</string>
     <string name="list_state_strong">strong</string>
     <string name="list_state_fair">fair</string>
     <string name="list_state_weak">weak</string>
 
     <!-- Stocks: the wrapping filter row (docs/design-research-2026-09-21.md section 3, "a
-         wrapping filter row (Tracked, Watched, sector)"). Tracked and Watched are a label plus a
-         count, not a sentence with a noun the count has to agree with, so the count stays a plain
+         wrapping filter row (Deep pool, Watched, sector)"). Deep pool and Watched are a label plus
+         a count, not a sentence with a noun the count has to agree with, so the count stays a plain
          string (the Kotlin call site carries the lint opt out). The sector name itself is the
-         chip label and is read data, never a literal here. -->
-    <string name="stocks_filter_tracked">Tracked %1$s</string>
+         chip label and is read data, never a literal here. "Deep pool" replaced "Tracked"
+         (audit 2026-09-26): tracked said nothing a first-time reader could act on. -->
+    <string name="stocks_filter_tracked">Deep pool %1$s</string>
+    <!-- Said once, under the chips, while Deep pool is selected. %1$s is the liquidity floor,
+         formatted from TrackingQuality.MIN_POOL_USD ("$4k"), never typed here. -->
+    <string name="stocks_filter_tracked_note">Deep pool means at least %1$s sits in the token\'s trading pool, so its price follows the share closely.</string>
     <string name="stocks_filter_watched">Watched %1$s</string>
     <!-- The disclosure chip past the eight shown by default; "sector" is a counted noun here, so
          it is a plurals like next_up_voters above. -->
@@ -263,8 +273,8 @@
     <string name="detail_no_xstock">This ticker has no xStock on Solana</string>
     <string name="detail_analysis_age">Analysis from %1$s</string>
     <string name="banner_market_closed">The NYSE is closed, the reference is the last close</string>
-    <string name="banner_market_closed_local">The NYSE is closed by the local schedule, the venue did not answer</string>
-    <string name="banner_market_open_local">The NYSE is open by the local schedule, the venue did not answer</string>
+    <string name="banner_market_closed_local">The NYSE looks closed by its usual hours. Its live hours did not load.</string>
+    <string name="banner_market_open_local">The NYSE looks open by its usual hours. Its live hours did not load.</string>
     <string name="banner_market_halted">Trading in this asset is halted by the issuer</string>
 
     <!-- Swap sheet: the anatomy (DT7) -->
@@ -389,7 +399,7 @@
     <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
     <string name="portfolio_recorded_lede">What this app recorded when its own swaps landed. The wallet itself has not been read.</string>
     <string name="portfolio_recorded_meta">Swapped %1$s</string>
-    <string name="portfolio_recorded_meta_unscaled">Swapped %1$s · quantity not rescaled</string>
+    <string name="portfolio_recorded_meta_unscaled">Swapped %1$s · count at swap time</string>
     <string name="portfolio_swap_to_usdc">Swap to USDC</string>
     <string name="portfolio_swap_to_usdc_a11y">Swap %1$s to USDC</string>
     <string name="portfolio_connecting">Waiting for the wallet to answer</string>
@@ -457,6 +467,10 @@
     <string name="vote_tab_last_round_pending">%1$s is being covered</string>
     <string name="vote_tab_last_round_published">%1$s is covered</string>
     <string name="vote_tab_last_round_uncoverable">%1$s could not be covered</string>
+    <!-- The live server's own status for a finished round ("closed"), and the neutral line any
+         status this build does not recognize degrades to: true of every previous round, claims
+         nothing about coverage. %1$s is the round number, %2$s the winner's symbol. -->
+    <string name="vote_tab_last_round_closed">Round %1$s closed. %2$s had the most stake.</string>
 
     <!-- Pro entitlement (task A6, docs/plan-monetisation-2026-09-19.md section 1.2): You's own
          block (docs/plan-app-uiux-2026-09-21.md U1). The sentence names which of pass, stake or

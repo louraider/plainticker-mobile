@@ -155,12 +155,37 @@ class NextUpApiTest {
         assertTrue("round and previous are additive, not required", NextUpApi(MockApi { respondJson(golden) }.client).getNextUp().let { it.round == null && it.previous == null })
     }
 
+    /**
+     * Changed 2026-09-26 (audit, item 2): this test used to pin an unrecognized status to null,
+     * and null hid "Last round" outright. The live server sends `closed`, a word this build did
+     * not know, so the section silently vanished for every reader. `closed` is now its own state,
+     * and every other unknown word degrades to [PreviousRoundStatus.UNRECOGNIZED], drawn as the
+     * same neutral line, never to nothing. The three tally words still read exactly as before.
+     */
     @Test
-    fun `an unrecognized status reads as none, so no sentence is built on a guess`() {
-        assertNull(PreviousRoundStatus.of("in_progress"))
-        assertNull(PreviousRoundStatus.of(null))
+    fun `an unrecognized status degrades to a neutral state, never to none`() {
+        assertEquals(PreviousRoundStatus.UNRECOGNIZED, PreviousRoundStatus.of("in_progress"))
+        assertEquals(PreviousRoundStatus.UNRECOGNIZED, PreviousRoundStatus.of(null))
+        assertEquals(PreviousRoundStatus.UNRECOGNIZED, PreviousRoundStatus.of("  "))
         assertEquals(PreviousRoundStatus.PENDING, PreviousRoundStatus.of("pending"))
         assertEquals(PreviousRoundStatus.UNCOVERABLE, PreviousRoundStatus.of("UNCOVERABLE"))
+        assertEquals(PreviousRoundStatus.PUBLISHED, PreviousRoundStatus.of("published"))
+    }
+
+    @Test
+    fun `the live payload's closed status parses to CLOSED`() = runTest {
+        // Verbatim shape of GET https://www.plainticker.com/api/v1/vote/next-up, read 2026-09-26.
+        val live = """{"schema":"v1.1","generated_at":"2026-09-26T16:30:55.793Z","rows":[],""" +
+            """"round":{"id":2,"opens_at":"2026-09-21T00:00:00.000Z","closes_at":"2026-09-28T00:00:00.000Z"},""" +
+            """"previous":{"id":1,"winner":"JEF","weight":"878980647","voters":1,""" +
+            """"closed_at":"2026-09-21T00:00:03.697Z","status":"closed"}}"""
+        val answer = NextUpApi(MockApi { respondJson(live) }.client).getNextUp()
+        val previous = requireNotNull(answer.previous)
+        assertEquals(1, previous.id)
+        assertEquals("JEF", previous.winner)
+        assertEquals(BigInteger("878980647"), previous.weightRaw())
+        assertEquals(PreviousRoundStatus.CLOSED, PreviousRoundStatus.of(previous.status))
+        assertEquals(PreviousRoundStatus.CLOSED, PreviousRoundStatus.of(" Closed "))
     }
 
     // ---- Voting not being open yet (task A2's not-open state) --------------------------------

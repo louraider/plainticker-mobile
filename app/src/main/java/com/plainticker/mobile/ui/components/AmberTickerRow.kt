@@ -127,33 +127,33 @@ import com.plainticker.mobile.ui.theme.AmberType
  *
  * **Proof, the same method, for the two real callers.** Content width with [trailingAction] present
  * is 336dp less [TextAction]'s own rendered width (16dp start padding plus its label at
- * `PlainTickerType.textAction`, Outfit SemiBold 14sp — an Outfit style, not Bricolage, because
- * [TextAction] is the one existing control every trailing action in this app already draws through).
+ * `AmberType.textAction`, Bricolage 600 opsz 14 at 14sp since 2026-09-26, when [TextAction] left
+ * Outfit SemiBold; every number below was re-measured then).
  * - **Vote's leader row** (`figure` = the app's own widest figure, `next_up_weight` "31,209.9 SKR",
  *   113.220dp; `context` = `next_up_voters`, "9,999 voters" at four digits' realistic ceiling for
- *   one token's own leaderboard, 83.160dp; action = "Vote", 30.856dp at 1.0x). Content width with
- *   the action present: 336 − (16 + 30.856) = 289.144dp. Context and figure split that exactly as
+ *   one token's own leaderboard, 83.160dp; action = "Vote", 31.318dp at 1.0x). Content width with
+ *   the action present: 336 − (16 + 31.318) = 288.682dp. Context and figure split that exactly as
  *   the budget above already proves for the two-item case: figure's 113.220dp plus the 8dp gap
- *   leaves context 167.924dp, and "9,999 voters" clears it by 84.764dp. At 1.3x (the same flat,
+ *   leaves context 167.462dp, and "9,999 voters" clears it by 84.302dp. At 1.3x (the same flat,
  *   worse-than-real scaling [ListRow.valueSubWidth] and the arithmetic above already use: dp
- *   padding is unscaled, sp text scales by the raw factor) the action's label grows to 40.113dp
- *   (rendered width 56.113dp), content width becomes 336 − 56.113 = 279.887dp, figure grows to
- *   147.186dp, and context's budget is 279.887 − 147.186 − 8 = 124.701dp against "9,999 voters"
- *   grown to 108.108dp: a 16.593dp margin. The name line is not part of either computation, so its
+ *   padding is unscaled, sp text scales by the raw factor) the action's label grows to 40.713dp
+ *   (rendered width 56.713dp), content width becomes 336 − 56.713 = 279.287dp, figure grows to
+ *   147.186dp, and context's budget is 279.287 − 147.186 − 8 = 124.101dp against "9,999 voters"
+ *   grown to 108.108dp: a 15.993dp margin. The name line is not part of either computation, so its
  *   own 1.0x and 1.3x margins above ("Meta Platforms, Inc." at 121.638dp and 59.734dp) are untouched
  *   by this row carrying a leader's own worst catalog ticker and company at the same time.
  * - **Watchlist's row** (`figure` = null, no figure at all on this caller; `context` = the report
  *   and tracking clauses `list_row_meta_join`s together; action = "Unwatch", the widest label this
- *   row draws, 56.812dp at 1.0x, rendered width 72.812dp). Content width with the action present:
- *   336 − 72.812 = 263.188dp, all of it context's own budget since there is no figure to share it
- *   with. The realistic join ("Reports Oct 22 · $2.7k behind, too thin", 39 characters) measures
- *   246.568dp: a 16.62dp margin at 1.0x, but at 1.3x (the action's own label growing to 73.856dp,
- *   the budget shrinking to 246.144dp) that same clause grows to 320.54dp and no longer clears one
+ *   row draws, 60.648dp at 1.0x, rendered width 76.648dp). Content width with the action present:
+ *   336 − 76.648 = 259.352dp, all of it context's own budget since there is no figure to share it
+ *   with. The realistic join ("Reports 22 Oct · $2.7k behind, too thin", 39 characters) measures
+ *   246.568dp: a 12.78dp margin at 1.0x, but at 1.3x (the action's own label growing to 78.842dp,
+ *   the budget shrinking to 241.158dp) that same clause grows to 320.54dp and no longer clears one
  *   line. The pathological join ("Not in the analysis list · $99.9k behind, too thin", 50
  *   characters, 305.144dp) does not clear the 1.0x budget either. Both wrap to a second line rather
  *   than clipping — [context] keeps `maxLines = 2` and `TextOverflow.Ellipsis`, the same resolution
  *   the 54-character company outlier above accepts, and even the pathological join grown to 1.3x
- *   (396.69dp) fits inside two lines' own combined capacity (2 × 246.144 = 492.29dp) with room to
+ *   (396.69dp) fits inside two lines' own combined capacity (2 × 241.158 = 482.32dp) with room to
  *   spare, so `maxLines = 2` is a real backstop here, not a silent third line of truncation waiting
  *   to happen.
  */

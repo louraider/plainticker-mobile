@@ -243,12 +243,16 @@ class FmtTest {
         assertEquals("31 Dec 2025", Fmt.day(LocalDate.of(2025, 12, 31)))
     }
 
+    /**
+     * Changed 2026-09-26 (audit, item 4): the month-first `monthDay` ("Oct 22") was retired so the
+     * app prints one short date format, day first, the one Today's own headings already used
+     * ("Monday 28 Sep"). The same dates, the same no-year rule, now day before month.
+     */
     @Test
-    fun `month day drops the year`() {
-        assertEquals("Oct 22", Fmt.monthDay(Instant.parse("2026-10-22T20:00:00Z")))
-        assertEquals("Jan 1", Fmt.monthDay(Instant.parse("2026-01-01T00:00:00Z")))
-        assertEquals("Oct 22", Fmt.monthDay(LocalDate.of(2026, 10, 22)))
-        assertEquals("Jan 1", Fmt.monthDay(LocalDate.of(2026, 1, 1)))
+    fun `day month drops the year, day first`() {
+        assertEquals("22 Oct", Fmt.dayMonth(LocalDate.of(2026, 10, 22)))
+        assertEquals("1 Jan", Fmt.dayMonth(LocalDate.of(2026, 1, 1)))
+        assertEquals("31 Dec", Fmt.dayMonth(LocalDate.of(2025, 12, 31)))
     }
 
     // ---- relative time --------------------------------------------------------------------
@@ -282,12 +286,8 @@ class FmtTest {
         assertEquals("45 s old", Fmt.ageOld(now.minusSeconds(45L), now))
     }
 
-    @Test
-    fun `days old takes the server count as is`() {
-        assertEquals("2 d old", Fmt.daysOld(2))
-        assertEquals("0 d old", Fmt.daysOld(0))
-        assertEquals("1,204 d old", Fmt.daysOld(1_204))
-    }
+    // `days old takes the server count as is` moved to CountCopyTest (2026-09-26): the age is
+    // counted copy now ("1 day old", "1,204 days old", list_row_age_days), not an Fmt suffix.
 
     // ---- durations ------------------------------------------------------------------------
 

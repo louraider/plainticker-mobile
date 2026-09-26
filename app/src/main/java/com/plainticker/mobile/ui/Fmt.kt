@@ -201,7 +201,11 @@ object Fmt {
      */
     fun weekday(date: LocalDate): String = WEEKDAYS[date.dayOfWeek.value - 1]
 
-    /** The same calendar day [monthDay] prints, day before month, no year: "29 Sep". */
+    /**
+     * A calendar day without the year, day before month: "29 Sep". The one short date format the
+     * app prints (audit 2026-09-26): Today drew "Reports Oct 27" beside "Monday 28 Sep" until the
+     * month-first `monthDay` was retired in its favour.
+     */
     fun dayMonth(date: LocalDate): String = "${date.dayOfMonth} ${MONTHS[date.monthValue - 1]}"
 
     /** How many calendar days, in the reader's own zone, lie between [nowMillis] and [thenMillis]. */
@@ -210,15 +214,6 @@ object Fmt {
         val now = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
         return ChronoUnit.DAYS.between(now, then)
     }
-
-    /** A calendar day in UTC without the year, for report dates and history rows: "Oct 22". */
-    fun monthDay(instant: Instant): String {
-        val t = instant.atOffset(ZoneOffset.UTC)
-        return "${MONTHS[t.monthValue - 1]} ${t.dayOfMonth}"
-    }
-
-    /** The same day without the year, for a report date the payload sends as a calendar day. */
-    fun monthDay(date: LocalDate): String = "${MONTHS[date.monthValue - 1]} ${date.dayOfMonth}"
 
     /** A calendar day, for a stamp that carries no time of day: "12 Sep 2026". */
     fun day(date: LocalDate): String = "${date.dayOfMonth} ${MONTHS[date.monthValue - 1]} ${date.year}"
@@ -234,9 +229,6 @@ object Fmt {
 
     /** The age of an analysis, same ladder as [relativeAgo] with the "old" suffix: "2 d old". */
     fun ageOld(then: Instant, now: Instant): String = elapsed(then, now) + " old"
-
-    /** The age of an analysis when the server already counted the days: "2 d old". */
-    fun daysOld(days: Int): String = count(days) + " d old"
 
     private fun elapsed(then: Instant, now: Instant): String {
         val seconds = Duration.between(then, now).seconds.coerceAtLeast(0L)

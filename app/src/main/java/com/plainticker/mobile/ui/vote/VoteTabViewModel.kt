@@ -160,6 +160,10 @@ class VoteTabViewModel(
         val classified = summary.rows.map { it.ticker.trim().uppercase() }.toSet() // lint-allow uppercase: map key
         allBallot = assets
             .filter { it.solanaMint != null && it.underlyingTicker.trim().uppercase() !in classified } // lint-allow uppercase: map key
+            // US underlyings only: the server refuses every other listing, so a London or Hong
+            // Kong row here dead-ended after the wallet connected (1,072 rows became 898 live,
+            // 2026-09-26). The catalog map above keeps them, for naming only.
+            .filter { it.isUsUnderlying }
             .map { BallotEntry(ticker = it.underlyingTicker, symbol = it.symbol, company = it.name) }
             .sortedBy { it.symbol }
         _state.update {

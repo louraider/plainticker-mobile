@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.onboarding
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,38 +31,48 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.AmberBottomNav
+import com.plainticker.mobile.ui.components.AmberDestination
+import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.TodayStrip
 import com.plainticker.mobile.ui.components.TopBar
-import com.plainticker.mobile.ui.components.TopTabs
-import com.plainticker.mobile.ui.components.focusOutline
 import com.plainticker.mobile.ui.components.defaultAmberColors
-import com.plainticker.mobile.ui.list.RowState
+import com.plainticker.mobile.ui.components.focusOutline
 import com.plainticker.mobile.ui.theme.AmberColors
-import com.plainticker.mobile.ui.theme.PlainTickerType
-import java.time.Instant
+import com.plainticker.mobile.ui.theme.AmberType
+import java.time.LocalDate
 
 /**
- * The one-time onboarding (DT11; plan section 13 Pass 3, design/canvas/instrument.py
- * screen_onboarding). The first frame is the product, not a form: the List sits behind at 25
- * percent and the panel over it carries the promise, the self-certification and the one action.
- * "Read the list" renders disabled until the box is checked; checking writes nothing, the flag is
- * persisted only when the button is pressed, and AppNavHost then starts at home for good.
+ * The one-time onboarding (DT11), rewritten for the app as it ships (the pre-freeze audit,
+ * 2026-09-26): the first frame is the product, not a form. A picture of Today sits behind at 25
+ * percent, drawn with the real Amber pieces (the top bar, a section head, ticker rows in their
+ * tonal group, the five-destination bottom bar), and the panel over it carries the promise, a
+ * short map of the five destinations, the self-certification and the one action. "Open Today"
+ * renders disabled until the box is checked; checking writes nothing, the flag is persisted only
+ * when the button is pressed, and AppNavHost then starts at home, on Today, for good.
+ *
+ * The version before this one described a dead app: a List to start on, four text tabs, a
+ * Watchlist that sent the digest, and You "top right". Every one of those moved when the shell
+ * became the bottom bar, and a reader who trusted the first screen learned the wrong navigation.
  *
  * Insets (ui/components/Insets.kt): the backdrop's TopBar absorbs the status bar and the panel
  * absorbs the navigation bar, so the screen pads nothing at its root and neither edge counts twice.
@@ -86,7 +98,7 @@ fun OnboardingScreen(
     )
 }
 
-/** The whole screen without a ViewModel, so the three preview frames can drive both states. */
+/** The whole screen without a ViewModel, so the preview frames can drive both states. */
 @Composable
 private fun OnboardingContent(
     checked: Boolean,
@@ -97,12 +109,14 @@ private fun OnboardingContent(
 ) {
     val colors = defaultAmberColors()
     Box(modifier.fillMaxSize().background(colors.surfaceGround)) {
-        ListBackdrop(
+        TodayBackdrop(
             Modifier
                 .matchParentSize()
                 .alpha(BackdropAlpha)
-                // Decoration, not content: TalkBack reads the panel and nothing else.
-                .clearAndSetSemantics {},
+                // Decoration, not content: TalkBack reads the panel and nothing else, and no touch
+                // reaches the picture's own bottom bar either.
+                .clearAndSetSemantics {}
+                .swallowTouches(),
         )
         ConsentPanel(
             checked = checked,
@@ -115,78 +129,68 @@ private fun OnboardingContent(
 }
 
 /**
- * The List screen as a picture of itself (task U3: the backdrop draws the real tabs, the You
- * action and a sector heading, so the first frame stops lying about what the app is). Every piece
- * is built without a click handler, so there is nothing to tap and nothing to focus even before
- * the semantics are cleared: the tabs are decorative (TopTabs with no onSelect), the You action is
- * TopBar's own picture of itself (onAction left null), the strip offers no refresh and the rows do
- * not open.
- *
- * The six sample rows draw through [AmberTickerRow], the same row the real List screen now draws
- * (`ListScreen.kt`'s own `AnalyzedRow`), in [AmberTickerRowGroup]: the row count here is fixed at
- * six, never the roughly 830-row real list, so the non-lazy group this backdrop uses is not the
- * performance trap a real scrolling chapter would be. The composite is the figure and the
- * disclosure sentence is the context, the same resolution `AnalyzedRow` settled on; the state word
- * ("strong", "fair", "weak") is not drawn beside it any more, because [AmberTickerRow] has one
- * figure and one context line, not a value plus a separately aligned sub-value (`ListRow.kt`'s own
- * `valueSub`), and `AnalyzedRow`'s own doc comment already made that same call for the real row
- * this one is a picture of.
+ * Consumes every pointer event on the way down, before any child sees it, so the backdrop's bottom
+ * bar (a real [AmberBottomNav], which cannot be built without a select handler) can never be tapped
+ * or show a ripple through the 25 percent picture.
  */
-@Composable
-private fun ListBackdrop(modifier: Modifier = Modifier) {
-    Column(modifier) {
-        TopBar(action = stringResource(R.string.you_action))
-        TopTabs(
-            items = listOf(
-                stringResource(R.string.tab_list),
-                stringResource(R.string.tab_vote),
-                stringResource(R.string.tab_portfolio),
-                stringResource(R.string.tab_watchlist),
-            ),
-            selected = 0,
-            onSelect = null,
-        )
-        TodayStrip(
-            text = pluralStringResource(
-                R.plurals.list_today,
-                BackdropWatched,
-                Fmt.count(BackdropWatched),
-                BackdropNextReport.ticker,
-                Fmt.monthDay(BackdropNextReport.reportsAt),
-            ),
-        )
-        // The settled List draws a sector chapter heading here, its row count as the meta, never
-        // the "Analyzed" heading the skeleton alone uses (ListScreen.kt): the backdrop's six
-        // sample rows are one illustrative chapter rather than six real, differently sectored ones.
-        AmberSectionHead(title = BackdropSector, meta = Fmt.count(BackdropRows.size))
-        AmberTickerRowGroup {
-            BackdropRows.forEach { row ->
-                AmberTickerRow(
-                    ticker = row.ticker,
-                    company = row.company,
-                    figure = Fmt.decimal(row.composite, decimals = 0),
-                    context = stringResource(
-                        R.string.list_row_meta_join,
-                        stringResource(R.string.list_row_meta_premium, Fmt.percent(row.premiumPct)),
-                        Fmt.daysOld(row.ageDays),
-                    ),
-                )
-            }
+private fun Modifier.swallowTouches(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
         }
     }
 }
 
 /**
+ * Today as a picture of itself: the top bar, the venue line, "Reports this week" with four sample
+ * rows in [AmberTickerRowGroup] (one marked Watched the way Today marks it), and the bottom bar
+ * with Today selected. Every piece is the component the real screen draws; nothing here has a
+ * handler of its own, and [swallowTouches] stops the bar's.
+ */
+@Composable
+private fun TodayBackdrop(modifier: Modifier = Modifier) {
+    Column(modifier) {
+        TopBar()
+        Text(
+            text = stringResource(R.string.today_status_closed_tomorrow, BackdropOpensAt),
+            style = AmberType.body,
+            color = defaultAmberColors().textPrimary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        AmberSectionHead(
+            title = stringResource(R.string.today_heading_reports),
+            meta = Fmt.count(BackdropRows.size),
+        )
+        AmberTickerRowGroup {
+            BackdropRows.forEach { row ->
+                AmberTickerRow(
+                    ticker = row.symbol,
+                    company = row.company,
+                    figure = if (row.watched) stringResource(R.string.today_reports_watched) else null,
+                    context = "${Fmt.weekday(row.reportsOn)} ${Fmt.dayMonth(row.reportsOn)}",
+                )
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        AmberBottomNav(selected = AmberDestination.TODAY, onSelect = {})
+    }
+}
+
+/**
  * The gate: [AmberColors.surfaceHigh] with the 1dp [AmberColors.border] top edge
- * ([com.plainticker.mobile.ui.components.AmberSheetSurface] without its handle, the sheet family's
- * own static surface, migrated off Instrument's retired `SheetSurface`), the wordmark, the
- * headline, the three paragraphs, the self-certification and the one button.
+ * ([com.plainticker.mobile.ui.components.AmberSheetSurface] without its handle), the wordmark,
+ * the headline, one sentence on what a stock page reads, the map of the five destinations, the
+ * disclaimer, the self-certification and the one button. All of it Bricolage ([AmberType]); the
+ * panel no longer borrows a single Outfit style.
+ *
+ * The map is five sentences, each opening with the destination's own bottom-bar label in weight
+ * 600 ([MapLine]), so the words a reader learns here are the words under the icons they tap next.
  *
  * The promise scrolls, the button does not. The panel grows to at most the window height, and
  * when the copy no longer fits (a 360dp frame at font scale 1.3 needs more than a short phone
- * has) the block above scrolls inside the panel while "Read the list" stays on screen. The
- * bottom inset is padded outside that scroll, so the button clears the navigation bar the way
- * every other screen-ending button does (ui/components/Insets.kt).
+ * has) the block above scrolls inside the panel while "Open Today" stays on screen. The bottom
+ * inset is padded outside that scroll, so the button clears the navigation bar the way every other
+ * screen-ending button does (ui/components/Insets.kt).
  */
 @Composable
 private fun ConsentPanel(
@@ -197,9 +201,7 @@ private fun ConsentPanel(
     modifier: Modifier = Modifier,
 ) {
     // The one real, always-opaque content on this screen (the backdrop behind it is a decorative,
-    // 25-percent watermark), so it reads a theme-following palette rather than Instrument's
-    // fixed-dark Ink/Ink2/Accent/LineStrong: this is the gate every reader passes through once,
-    // and it must read on Amber's light ground as correctly as on its dark one.
+    // 25-percent watermark), so it reads the theme-following palette.
     val colors = defaultAmberColors()
     AmberSheetSurface(modifier = modifier, handle = false, colors = colors) {
         Column(
@@ -215,39 +217,31 @@ private fun ConsentPanel(
                 modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(PanelGap),
             ) {
-                Text(text = stringResource(R.string.app_name), style = PlainTickerType.wordmark, color = colors.textPrimary)
+                Text(text = stringResource(R.string.app_name), style = AmberType.wordmark, color = colors.textPrimary)
                 Text(
                     text = stringResource(R.string.onboarding_headline),
-                    style = PlainTickerType.onboardingTitle,
+                    style = AmberType.screenTitle,
                     color = colors.textPrimary,
                 )
+                Text(
+                    text = stringResource(R.string.onboarding_body_reads),
+                    style = AmberType.body,
+                    color = colors.textSecondary,
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(BodyGap)) {
-                    Text(
-                        text = stringResource(R.string.onboarding_body_chain),
-                        style = PlainTickerType.body,
-                        color = colors.textSecondary,
-                    )
-                    Text(
-                        text = stringResource(R.string.onboarding_body_fundamentals),
-                        style = PlainTickerType.body,
-                        color = colors.textSecondary,
-                    )
-                    // The map (task U3): what each tab is for, and where the wallet, the pass and
-                    // this device's record live, since the backdrop behind this panel can only
-                    // show that as a picture, never say it.
-                    Text(
-                        text = stringResource(R.string.onboarding_body_map),
-                        style = PlainTickerType.body,
-                        color = colors.textSecondary,
-                    )
-                    // The disclaimer is the one paragraph in primary text: it is the sentence that
-                    // must land.
-                    Text(
-                        text = stringResource(R.string.onboarding_body_disclaimer),
-                        style = PlainTickerType.body,
-                        color = colors.textPrimary,
-                    )
+                    MapLine(R.string.nav_today, R.string.onboarding_map_today, colors)
+                    MapLine(R.string.nav_stocks, R.string.onboarding_map_stocks, colors)
+                    MapLine(R.string.nav_vote, R.string.onboarding_map_vote, colors)
+                    MapLine(R.string.nav_portfolio, R.string.onboarding_map_portfolio, colors)
+                    MapLine(R.string.nav_you, R.string.onboarding_map_you, colors)
                 }
+                // The disclaimer is the one paragraph in primary text: it is the sentence that
+                // must land.
+                Text(
+                    text = stringResource(R.string.onboarding_body_disclaimer),
+                    style = AmberType.body,
+                    color = colors.textPrimary,
+                )
                 ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange, colors = colors)
             }
             AmberPrimaryAction(
@@ -258,6 +252,27 @@ private fun ConsentPanel(
             )
         }
     }
+}
+
+/**
+ * One destination of the map: a sentence that opens with the destination's own bottom-bar label,
+ * that label drawn in weight 600 and primary text, the rest in secondary. One wrapping [Text], so
+ * there is no label column beside a sentence column to starve (DESIGN.md 5.4). If a translation
+ * ever stops opening with the label, the sentence still reads whole, only without the emphasis.
+ */
+@Composable
+private fun MapLine(@StringRes destination: Int, @StringRes sentence: Int, colors: AmberColors) {
+    val name = stringResource(destination)
+    val text = stringResource(sentence)
+    val styled = buildAnnotatedString {
+        if (text.startsWith(name)) {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) { append(name) }
+            append(text.substring(name.length))
+        } else {
+            append(text)
+        }
+    }
+    Text(text = styled, style = AmberType.body, color = colors.textSecondary)
 }
 
 /**
@@ -296,7 +311,7 @@ private fun ConsentCheckbox(
         )
         Text(
             text = stringResource(R.string.onboarding_certify),
-            style = PlainTickerType.consent,
+            style = AmberType.context,
             color = colors.textSecondary,
         )
     }
@@ -311,45 +326,34 @@ private val PanelTopPadding: Dp = 28.dp
 private val PanelSidePadding: Dp = 20.dp
 private val PanelBottomPadding: Dp = 40.dp
 
-/** The canvas' 20dp between panel blocks and 10dp between the three paragraphs. */
+/** 20dp between panel blocks, 10dp between the five lines of the map. */
 private val PanelGap: Dp = 20.dp
 private val BodyGap: Dp = 10.dp
 private val CheckboxSize: Dp = 20.dp
 
 // ---- The backdrop snapshot ---------------------------------------------------------------------
 
-/** One analyzed row of the backdrop; the numbers go through Fmt like every other screen. */
+/** One row of the backdrop's "Reports this week"; the date goes through Fmt like Today's own. */
 private data class BackdropRow(
-    val ticker: String,
+    val symbol: String,
     val company: String,
-    val premiumPct: Double,
-    val ageDays: Int,
-    val composite: Double,
-    val state: RowState,
+    val reportsOn: LocalDate,
+    val watched: Boolean = false,
 )
-
-private data class BackdropReport(val ticker: String, val reportsAt: Instant)
 
 /**
- * Illustrative sample data, the six analyzed rows of design/canvas/instrument.py, so the first
- * frame is full before any network call returns. Nothing here is read from the chain or the API,
- * and nothing here is a real holding. The composites are the integer percentile the real List
- * draws (docs/data-map.md, T8), not the 0 to 1 fraction the canvas sample still shows.
+ * Illustrative sample data, so the first frame is full before any network call returns. Nothing
+ * here is read from the chain or the API, and nothing here is a real report calendar.
  */
 private val BackdropRows = listOf(
-    BackdropRow("TSLAx", "Tesla, Inc.", 0.09, 2, 71.0, RowState.STRONG),
-    BackdropRow("NVDAx", "NVIDIA Corp.", -0.04, 1, 68.0, RowState.STRONG),
-    BackdropRow("AAPLx", "Apple Inc.", 0.01, 2, 61.0, RowState.FAIR),
-    BackdropRow("MSFTx", "Microsoft Corp.", 0.03, 6, 58.0, RowState.FAIR),
-    BackdropRow("AMZNx", "Amazon.com, Inc.", -0.02, 2, 55.0, RowState.FAIR),
-    BackdropRow("COINx", "Coinbase Global", 0.08, 3, 47.0, RowState.WEAK),
+    BackdropRow("TSLAx", "Tesla, Inc.", LocalDate.of(2026, 10, 20), watched = true),
+    BackdropRow("NVDAx", "NVIDIA Corp.", LocalDate.of(2026, 10, 21)),
+    BackdropRow("AAPLx", "Apple Inc.", LocalDate.of(2026, 10, 22)),
+    BackdropRow("MSFTx", "Microsoft Corp.", LocalDate.of(2026, 10, 23)),
 )
 
-/** One illustrative chapter's worth of sample rows; not a claim that every ticker above is GICS Technology. */
-private const val BackdropSector = "Technology"
-
-private const val BackdropWatched = 3
-private val BackdropNextReport = BackdropReport("TSLAx", Instant.parse("2026-10-22T20:00:00Z"))
+/** The venue line's sample time, in the reader's own clock as Today prints it. */
+private const val BackdropOpensAt = "15:30"
 
 // ---- Previews ----------------------------------------------------------------------------------
 
@@ -359,7 +363,7 @@ private val PreviewFrameHeight: Dp = 915.dp
 @InstrumentPreviews
 @Composable
 private fun OnboardingUncheckedPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         Box(Modifier.height(PreviewFrameHeight)) {
             OnboardingContent(checked = false, enabled = false, onCheckedChange = {}, onContinue = {})
         }
@@ -369,7 +373,7 @@ private fun OnboardingUncheckedPreview() {
 @InstrumentPreviews
 @Composable
 private fun OnboardingCheckedPreview() {
-    PreviewCanvas {
+    AmberPreviewCanvas {
         Box(Modifier.height(PreviewFrameHeight)) {
             OnboardingContent(checked = true, enabled = true, onCheckedChange = {}, onContinue = {})
         }

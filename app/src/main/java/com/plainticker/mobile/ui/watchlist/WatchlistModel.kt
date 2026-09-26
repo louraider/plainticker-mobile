@@ -91,7 +91,7 @@ fun watchRow(row: WatchedTicker, analysisUnavailable: Boolean = false): WatchRow
         // date": it is the analysis being gone, and it is the one thing on this row a reader
         // might act on.
         !row.analyzed -> words(R.string.watchlist_row_unserved)
-        row.nextReport != null -> words(R.string.watchlist_row_reports, Fmt.monthDay(row.nextReport))
+        row.nextReport != null -> words(R.string.watchlist_row_reports, Fmt.dayMonth(row.nextReport))
         else -> words(R.string.watchlist_row_no_date)
     },
     tracking = trackingCopy(row.tracking),

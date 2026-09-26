@@ -21,10 +21,10 @@ import org.junit.Test
  * - `res/font/bricolage_grotesque.ttf` (fontTools), instantiated at `wght` 700 `wdth` 100 `opsz`
  *   15, the exact variation coordinates [com.plainticker.mobile.ui.theme.PlainTickerType.wordmark]
  *   builds (`bricolage()`, `Type.kt`): "PlainTicker" measures 81.390dp.
- * - `res/font/outfit_semibold.ttf`, for the widest real action label [TopBar] ever draws beside
- *   the wordmark (`action_watching`, "Watching", `DetailScreen.kt`, drawn through
- *   [com.plainticker.mobile.ui.theme.PlainTickerType.textAction]'s own Outfit SemiBold 14sp, the
- *   one face this change does not touch): 61.768dp. "Watch" (5 characters) and "You" (3
+ * - the same file at `wght` 600 `opsz` 14, for the widest real action label [TopBar] ever draws
+ *   beside the wordmark (`action_watching`, "Watching", `DetailScreen.kt`, drawn through
+ *   [com.plainticker.mobile.ui.theme.AmberType.textAction]): 64.372dp. Re-measured 2026-09-26,
+ *   when `TextAction` left Outfit SemiBold (61.768dp there). "Watch" (5 characters) and "You" (3
  *   characters), the two other real actions [TopBar] ever draws, are both shorter.
  */
 class TopBarTest {
@@ -41,7 +41,7 @@ class TopBarTest {
     private val contentWidthDp = 360.0
 
     private val wordmarkWidthDp = 81.390 // "PlainTicker" at Bricolage 700, opsz 15, wdth 100.
-    private val watchingWidthDp = 61.768 // "Watching" (action_watching) at Outfit SemiBold 14sp.
+    private val watchingWidthDp = 64.372 // "Watching" (action_watching) at Bricolage 600 opsz 14, 14sp.
 
     @Test
     fun `the wordmark and the widest real action clear the TopBar's own budget at 1_0x`() {
@@ -63,7 +63,7 @@ class TopBarTest {
         val wordmarkAt13xDp = wordmarkWidthDp * 1.3
         val watchingAt13xDp = watchingWidthDp * 1.3
         assertEquals(105.807, wordmarkAt13xDp, 0.01)
-        assertEquals(80.298, watchingAt13xDp, 0.01)
+        assertEquals(83.684, watchingAt13xDp, 0.01)
         assertTrue(
             "grown to 1.3x, \"PlainTicker\" ($wordmarkAt13xDp dp) plus \"Watching\" " +
                 "($watchingAt13xDp dp) must still fit the TopBar's own $contentWidthDp dp content " +
@@ -95,17 +95,17 @@ class TopBarTest {
     @Test
     fun `mark, gap, wordmark and the widest real action clear the TopBar's budget at 1_0x`() {
         val used = markDp + gapDp + wordmarkWidthDp + watchingWidthDp
-        assertEquals(159.058, used, 0.01)
+        assertEquals(161.662, used, 0.01)
         assertTrue("the lockup plus \"Watching\" must fit $contentWidthDp dp", used <= contentWidthDp)
-        assertEquals("the margin left", 200.942, contentWidthDp - used, 0.01)
+        assertEquals("the margin left", 198.338, contentWidthDp - used, 0.01)
     }
 
     @Test
     fun `mark, gap, wordmark and the widest real action still clear it at 1_3x`() {
         val used = markDp * 1.3 + gapDp + wordmarkWidthDp * 1.3 + watchingWidthDp * 1.3
-        assertEquals(204.975, used, 0.01)
+        assertEquals(208.361, used, 0.01)
         assertTrue("grown to 1.3x the lockup plus \"Watching\" must still fit $contentWidthDp dp", used <= contentWidthDp)
-        assertEquals("the margin left", 155.025, contentWidthDp - used, 0.01)
+        assertEquals("the margin left", 151.639, contentWidthDp - used, 0.01)
     }
 
     @Test

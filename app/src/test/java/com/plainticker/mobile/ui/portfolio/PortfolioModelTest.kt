@@ -280,13 +280,21 @@ class PortfolioModelTest {
      * this row draws across every screen," "31,209.9," which this row's own `figure` slot shares
      * the meta line's 336dp content width with the same way every other caller of that row does.
      */
+    /*
+     * Re-measured 2026-09-26 (audit, item 4): "quantity not rescaled" was jargon, now "count at swap
+     * time". fontTools 4.63, the same method as AmberTickerRowTest (hmtx advances, context 14/400
+     * opsz 14, figureRow 18/600 opsz 18 with tnum): the new sentence is 345.814dp; the figure
+     * "31,209.9" with tnum is 73.296dp. The older constants here (340.830dp, 65.970dp) did not
+     * reproduce under that method, so both are replaced with the measured ones, and the new line
+     * still clears two lines at 1.3x with 15.87dp to spare.
+     */
     @Test
     fun `the unscaled meta line clears AmberTickerRow's two-line budget beside the widest realistic figure, at 1_3x`() {
         // The template itself, unfilled: this is what a future edit could quietly lengthen back
         // toward the old defect, so it is pinned as its own literal rather than only through one
         // rendered example.
         assertEquals(
-            "Swapped %1\$s · quantity not rescaled",
+            "Swapped %1\$s · count at swap time",
             ShippedCopy.strings.getValue("portfolio_recorded_meta_unscaled"),
         )
 
@@ -296,16 +304,16 @@ class PortfolioModelTest {
         // one fontTools measured below; any other two-digit-day stamp sums to the same order of
         // width, since every character in it is a digit, a space or one of a fixed set of letters.
         val rendered = ShippedCopy.string("portfolio_recorded_meta_unscaled", "10 Sep 2026 14:55 UTC")
-        assertEquals("Swapped 10 Sep 2026 14:55 UTC · quantity not rescaled", rendered)
+        assertEquals("Swapped 10 Sep 2026 14:55 UTC · count at swap time", rendered)
         assertEquals(21, "10 Sep 2026 14:55 UTC".length)
 
         val contentWidthDp = 336.0
         val gapDp = 8.0
-        val figureWidthDp = 65.970 // "31,209.9" at figureRow's 18sp/600 tnum, 1.0x.
-        val contextWidthDp = 340.830 // the rendered sentence above, at context's 14sp/400, 1.0x.
+        val figureWidthDp = 73.296 // "31,209.9" at figureRow's 18sp/600 tnum, 1.0x.
+        val contextWidthDp = 345.814 // the rendered sentence above, at context's 14sp/400, 1.0x.
 
         val budgetDp = contentWidthDp - figureWidthDp - gapDp
-        assertEquals(262.030, budgetDp, 0.01)
+        assertEquals(254.704, budgetDp, 0.01)
         // Two lines, not one: this sentence carries a full timestamp and does not need to clear a
         // single line, only the row's real two-line ceiling, the same backstop
         // `AmberTickerRowTest`'s own watchlist test already accepts for a join this long.
@@ -317,8 +325,8 @@ class PortfolioModelTest {
         val figureWidthAt13xDp = figureWidthDp * 1.3
         val contextWidthAt13xDp = contextWidthDp * 1.3
         val budgetAt13xDp = contentWidthDp - figureWidthAt13xDp - gapDp
-        assertEquals(242.239, budgetAt13xDp, 0.01)
-        assertEquals(443.079, contextWidthAt13xDp, 0.01)
+        assertEquals(232.715, budgetAt13xDp, 0.01)
+        assertEquals(449.558, contextWidthAt13xDp, 0.01)
         assertTrue(
             "the unscaled meta (\"$rendered\", $contextWidthAt13xDp dp at 1.3x) must clear the " +
                 "row's own two-line ceiling ($budgetAt13xDp dp per line) beside the widest " +

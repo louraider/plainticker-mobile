@@ -61,12 +61,13 @@ class SolanaRpcApi(
     suspend fun getMultipleAccounts(
         pubkeys: List<String>,
         encoding: RpcEncoding = RpcEncoding.BASE64,
+        minContextSlot: Long? = null,
     ): ContextValue<List<RpcAccount?>> {
         require(pubkeys.isNotEmpty()) { "no pubkeys" }
         require(pubkeys.size <= MAX_MULTIPLE_ACCOUNTS) { "at most $MAX_MULTIPLE_ACCOUNTS pubkeys per call" }
         return call(METHOD_GET_MULTIPLE_ACCOUNTS, buildJsonArray {
             addJsonArray { pubkeys.forEach { add(pubkey(it)) } }
-            add(config(encoding))
+            add(config(encoding, minContextSlot))
         })
     }
 

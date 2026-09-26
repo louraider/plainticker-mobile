@@ -1,12 +1,15 @@
 package com.plainticker.mobile.ui.vote
 
+import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.PreviousRound
 import com.plainticker.mobile.data.plainticker.PreviousRoundStatus
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.receipts.VoteReceipt
 import com.plainticker.mobile.data.xstocks.XStockAsset
+import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.words
 import com.plainticker.mobile.ui.list.NextUpLeader
 import java.math.BigInteger
 
@@ -62,16 +65,18 @@ fun leadersFor(rows: List<NextUpRow>, ballot: List<BallotEntry>): List<NextUpLea
 /**
  * The previous round's winner, named against the catalog rather than the ballot: a published
  * winner has an analysis by definition and has therefore left the ballot, so only the catalog (not
- * [BallotEntry]) can still say what to call it. Null when there is nothing to state honestly: no
- * winner, or a [PreviousRound.status] this build does not recognize (see
- * [PreviousRoundStatus.of]), because a sentence built on a status it cannot name would be a guess.
+ * [BallotEntry]) can still say what to call it. Null only when there is no winner to name. A
+ * status this build does not recognize is not a reason to hide the section: it reads as
+ * [PreviousRoundStatus.UNRECOGNIZED], drawn as the same neutral "Round N closed" line the live
+ * `closed` status draws (see [PreviousRoundStatus.of]).
  */
 fun previousDisplay(previous: PreviousRound?, catalogByTicker: Map<String, XStockAsset>): PreviousRoundDisplay? {
     if (previous == null) return null
     val ticker = previous.winner?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    val status = PreviousRoundStatus.of(previous.status) ?: return null
+    val status = PreviousRoundStatus.of(previous.status)
     val asset = catalogByTicker[ticker.uppercase()] // lint-allow uppercase: map key
     return PreviousRoundDisplay(
+        roundId = previous.id,
         ticker = ticker,
         display = asset?.symbol?.takeIf { it.isNotBlank() } ?: ticker,
         company = asset?.name,
@@ -83,6 +88,7 @@ fun previousDisplay(previous: PreviousRound?, catalogByTicker: Map<String, XStoc
 }
 
 data class PreviousRoundDisplay(
+    val roundId: Int,
     val ticker: String,
     val display: String,
     val company: String?,
@@ -90,7 +96,21 @@ data class PreviousRoundDisplay(
     val weightRaw: BigInteger?,
     val voters: Int,
     val closedAtText: String?,
-)
+) {
+    /**
+     * The status sentence. `closed` (the live server's word) and any status this build does not
+     * recognize both read "Round 1 closed. JEF had the most stake.", which is true of every previous
+     * round; only the three tally words claim anything about coverage.
+     */
+    val sentence: Copy
+        get() = when (status) {
+            PreviousRoundStatus.PENDING -> words(R.string.vote_tab_last_round_pending, display)
+            PreviousRoundStatus.PUBLISHED -> words(R.string.vote_tab_last_round_published, display)
+            PreviousRoundStatus.UNCOVERABLE -> words(R.string.vote_tab_last_round_uncoverable, display)
+            PreviousRoundStatus.CLOSED, PreviousRoundStatus.UNRECOGNIZED ->
+                words(R.string.vote_tab_last_round_closed, Fmt.count(roundId), display) // lint-allow count: a round's number, not a quantity
+        }
+}
 
 /**
  * The wallet's own votes for the round in progress: task A3's receipts, scoped twice.

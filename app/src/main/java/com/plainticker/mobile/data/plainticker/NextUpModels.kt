@@ -47,10 +47,13 @@ data class VoteRound(
 }
 
 /**
- * `next-up.previous`: the round that closed most recently. [status] is the tally's own word,
- * `pending`, `published` or `uncoverable` today; a status this app does not recognize is treated
- * as none at all ([PreviousRoundStatus.of]), because a sentence built on an unrecognized state
- * would be a guess wearing the server's certainty.
+ * `next-up.previous`: the round that closed most recently. [status] is the round row's own word.
+ * The live server sends `closed` (read 2026-09-26: `lib/vote/rounds.ts` knows only `open` and
+ * `closed`, and `previous` is by definition a closed round); `pending`, `published` and
+ * `uncoverable` are the tally words the monetisation plan named for later and are kept so a server
+ * that starts sending them reads correctly. Any other word ([PreviousRoundStatus.of]) degrades to
+ * the same neutral "Round N closed" line `closed` draws, because that much is true of every
+ * `previous` whatever its status says, and hiding the section taught readers the round had vanished.
  */
 @Serializable
 data class PreviousRound(
@@ -74,8 +77,11 @@ data class PreviousRound(
     }
 }
 
-/** The three states a closed round's winner can be in, read from [PreviousRound.status]. */
+/** The states a closed round's winner can be in, read from [PreviousRound.status]. */
 enum class PreviousRoundStatus {
+    /** The round closed and the tally named a winner; nothing more is claimed. The live server's word. */
+    CLOSED,
+
     /** The winner has not been analyzed yet: a founder's line and a deploy are still owed. */
     PENDING,
 
@@ -83,15 +89,22 @@ enum class PreviousRoundStatus {
     PUBLISHED,
 
     /** The winner could not be covered. The contract carries no reason, so none is invented. */
-    UNCOVERABLE;
+    UNCOVERABLE,
+
+    /**
+     * A blank, missing or unrecognized status. Drawn exactly as [CLOSED] is: a `previous` round has
+     * closed whatever else its status says, so the neutral line is still true, and a sentence that
+     * claimed more (covered, being covered) would be a guess wearing the server's certainty.
+     */
+    UNRECOGNIZED;
 
     companion object {
-        /** Null for a blank, missing or unrecognized status: an unread state says nothing rather than guesses. */
-        fun of(raw: String?): PreviousRoundStatus? = when (raw?.trim()?.lowercase()) {
+        fun of(raw: String?): PreviousRoundStatus = when (raw?.trim()?.lowercase()) {
+            "closed" -> CLOSED
             "pending" -> PENDING
             "published" -> PUBLISHED
             "uncoverable" -> UNCOVERABLE
-            else -> null
+            else -> UNRECOGNIZED
         }
     }
 }

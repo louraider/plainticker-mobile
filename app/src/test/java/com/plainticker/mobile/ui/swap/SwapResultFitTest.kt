@@ -100,17 +100,18 @@ class SwapResultFitTest {
 
     @Test
     fun `Portfolio's Swap to USDC line has the row's whole width, and the meta line could not have held it`() {
-        // Outfit SemiBold 14 (TextAction's own face): 91.84dp, 119.392dp at 1.3x, plus 16dp start.
-        val action = 91.84
+        // "Swap to USDC" at TextAction's own face, Bricolage 600 opsz 14 (AmberType.textAction,
+        // re-measured 2026-09-26; 91.84dp in Outfit): 96.726dp, 125.744dp at 1.3x, plus 16dp start.
+        val action = 96.726
         assertTrue(16.0 + at13(action) <= 336.0)
         // The rejected shape: on the meta line beside "$12,345.67" (figureRow, 95.724dp), the
-        // context would keep 336 - (16 + 91.84) - 95.724 - 8 = 124.436dp at 1.0x and 68.169dp at
+        // context would keep 336 - (16 + 96.726) - 95.724 - 8 = 119.550dp at 1.0x and 61.815dp at
         // 1.3x, less than "1.37 TSLAx · +0.09%" needs (124.726dp; 162.144dp at 1.3x), so the
         // quantity itself would have ellipsized.
         val metaRoom10 = 336.0 - (16.0 + action) - 95.724 - 8.0
         val metaRoom13 = 336.0 - (16.0 + at13(action)) - at13(95.724) - 8.0
-        assertEquals(124.436, metaRoom10, 0.01)
-        assertEquals(68.169, metaRoom13, 0.01)
+        assertEquals(119.550, metaRoom10, 0.01)
+        assertEquals(61.815, metaRoom13, 0.01)
         assertFalse(124.726 <= metaRoom10)
         assertFalse(at13(124.726) <= 2 * metaRoom13)
     }
