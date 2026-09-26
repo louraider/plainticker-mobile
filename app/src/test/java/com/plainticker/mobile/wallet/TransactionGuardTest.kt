@@ -597,4 +597,85 @@ class TransactionGuardTest {
             assertRefused(checkSwap(o, cut.transaction(), c.taker), "too short")
         }
     }
+
+    // ---- System instructions, by tag (judges' review, 2026-09-26) -------------------------
+
+    private val nonceAccount = "9fX7DHqX5nFzV1aNAKZsfFnbHRyBn2VgXNiMGrbKV1CM"
+    private val recentBlockhashes = "SysvarRecentB1ockHashes11111111111111111111"
+    private val rentSysvar = "SysvarRent111111111111111111111111111111111"
+
+    /** The RFQ fixture's market maker: a fee payer that is none of the three takers. */
+    private val maker = "2Cq2RNFFxxPXL7teNQAji1beA2vFbBDYW5BGPBFvoN9m"
+
+    @Test
+    fun `swap - a System instruction naming the wallet as nonce authority or seed base is refused, whatever slot 0 is`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            // WithdrawNonceAccount: [nonce, to, recent blockhashes, rent, authority] + u64.
+            val withdraw = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, attacker, recentBlockhashes, rentSysvar, c.taker), leData(5, 1_000_000L))
+            assertRefused(checkSwap(o, withdraw.transaction(), c.taker), "naming the wallet")
+            // AuthorizeNonceAccount: [nonce, authority] + new authority.
+            val authorize = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, c.taker), leData(7, WireMessage.key(attacker)))
+            assertRefused(checkSwap(o, authorize.transaction(), c.taker), "naming the wallet")
+            // TransferWithSeed: [from, base, to] + u64 lamports + seed + owner.
+            val seedBytes = "x".encodeToByteArray()
+            val withSeed = m.plus(
+                KnownPrograms.SYSTEM,
+                listOf(attacker, c.taker, attacker),
+                leData(11, 1_000_000L, seedBytes.size.toLong(), seedBytes, WireMessage.key(KnownPrograms.SYSTEM)),
+            )
+            assertRefused(checkSwap(o, withSeed.transaction(), c.taker), "naming the wallet")
+        }
+    }
+
+    @Test
+    fun `swap - CreateAccount funded by the wallet is refused, even for its own token account`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val own = TransactionGuard.ata(c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022)
+            val create = m.plus(
+                KnownPrograms.SYSTEM,
+                listOf(c.taker, own),
+                leData(0, TransactionGuard.TOKEN_ACCOUNT_RENT_LAMPORTS, 165L, WireMessage.key(KnownPrograms.TOKEN_2022)),
+            )
+            assertRefused(checkSwap(o, create.transaction(), c.taker), "naming the wallet")
+            val withSeed = m.plus(
+                KnownPrograms.SYSTEM,
+                listOf(c.taker, own, c.taker),
+                leData(3, WireMessage.key(c.taker), 1L, "x".encodeToByteArray(), TransactionGuard.TOKEN_ACCOUNT_RENT_LAMPORTS, 165L, WireMessage.key(KnownPrograms.TOKEN_2022)),
+            )
+            assertRefused(checkSwap(o, withSeed.transaction(), c.taker), "naming the wallet")
+        }
+    }
+
+    @Test
+    fun `swap - a 0-lamport transfer from the wallet is allowed, one that names it only as the recipient is not`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertAllowed(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(c.taker, attacker), leData(2, 0L)).transaction(), c.taker))
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(attacker, c.taker), leData(2, 0L)).transaction(), c.taker), "not as the source")
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(c.taker), leData(2, 0L)).transaction(), c.taker), "malformed")
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(c.taker, attacker), byteArrayOf(2)).transaction(), c.taker))
+        }
+    }
+
+    @Test
+    fun `swap - a System instruction that does not name the wallet passes only as a create or a transfer`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertAllowed(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(maker, attacker), leData(2, 5_000L)).transaction(), c.taker))
+            val payerCreates = m.plus(KnownPrograms.SYSTEM, listOf(maker, attacker), leData(0, 890_880L, 0L, WireMessage.key(KnownPrograms.SYSTEM)))
+            assertAllowed(checkSwap(o, payerCreates.transaction(), c.taker))
+            // AdvanceNonceAccount would make the order durable, landable long after it was shown.
+            val advance = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, recentBlockhashes, maker), leData(4))
+            assertRefused(checkSwap(o, advance.transaction(), c.taker), "System instruction 4")
+            val withdraw = m.plus(KnownPrograms.SYSTEM, listOf(nonceAccount, attacker, recentBlockhashes, rentSysvar, maker), leData(5, 1L))
+            assertRefused(checkSwap(o, withdraw.transaction(), c.taker), "System instruction 5")
+            assertRefused(checkSwap(o, m.plus(KnownPrograms.SYSTEM, listOf(maker), byteArrayOf(1, 0)).transaction(), c.taker), "without a tag")
+        }
+    }
 }

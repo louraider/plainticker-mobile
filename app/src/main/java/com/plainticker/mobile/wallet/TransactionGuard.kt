@@ -121,6 +121,9 @@ object TransactionGuard {
 
     private const val SYSTEM_TRANSFER = 2
 
+    /** CreateAccount (0), Transfer (2), CreateAccountWithSeed (3): see [checkSwapSystem]. */
+    private val SWAP_SYSTEM_TAGS_WITHOUT_WALLET = setOf(0L, 2L, 3L)
+
     // ---- The three flows -------------------------------------------------------------------
 
     /**
@@ -283,6 +286,9 @@ object TransactionGuard {
      * was not, so the "at least" on the sheet was the JSON's word alone. [checkSwapOutput] now
      * reads `route_v2`'s quoted amount and slippage, or `fill`'s output amount, and refuses bytes
      * that would accept less than the sheet displays.
+     *
+     * **System instructions are allowlisted by tag (2026-09-26).** One that names the wallet in
+     * any slot may only be a 0-lamport Transfer from it; see [checkSwapSystem].
      */
     suspend fun checkSwap(
         bytes: ByteArray,
@@ -363,14 +369,7 @@ object TransactionGuard {
                     if (kind != 0 && kind != 1) return@guarded refuse("swap carries an associated-token instruction that is not a create")
                     if (acc.getOrNull(2) != wallet) return@guarded refuse("swap creates a token account for another owner")
                 }
-                KnownPrograms.SYSTEM -> {
-                    // A System instruction funded by someone else (a gasless payer) costs the
-                    // wallet nothing; one funded by the wallet may move no lamports.
-                    if (acc.getOrNull(0) == wallet) {
-                        val lamports = systemTransferLamports(acc.map { it.orEmpty() }, data)
-                        if (lamports != 0L) return@guarded refuse("swap moves lamports out of the wallet")
-                    }
-                }
+                KnownPrograms.SYSTEM -> checkSwapSystem(acc, data, wallet)?.let { return@guarded it }
                 KnownPrograms.COMPUTE_BUDGET -> Unit
                 else -> return@guarded refuse("program $program is not allowed in a swap")
             }
@@ -494,6 +493,40 @@ object TransactionGuard {
             }
             else -> refuse("the swap instruction's output terms are not ones this app can read")
         }
+    }
+
+    /**
+     * A top-level System instruction in a swap, by tag rather than by slot (judges' review,
+     * 2026-09-26). The old rule looked only at slot 0, so `WithdrawNonceAccount` and
+     * `AuthorizeNonceAccount` with the wallet as the nonce authority, or `TransferWithSeed` with
+     * the wallet as the base, passed untouched while the wallet's signature covered them.
+     *
+     * None of the seven real orders carries a top-level System instruction at all: token
+     * accounts are created by the associated-token program by CPI, and a top-level
+     * `CreateAccount` for an associated token account cannot exist, because that account is a
+     * program address and cannot sign as the new account. So:
+     *
+     * - one that names the wallet in any slot may only be a `Transfer` of 0 lamports from it;
+     *   every other System instruction naming the wallet, `CreateAccount` and
+     *   `CreateAccountWithSeed` included, is refused;
+     * - one that does not name the wallet cannot spend under its signature, and is let through
+     *   only as `CreateAccount`, `Transfer` or `CreateAccountWithSeed`, what a gasless payer might
+     *   plausibly send. `AdvanceNonceAccount` is not among them: it would turn the order into a
+     *   durable one that someone holding the signed bytes could land at any later time.
+     */
+    private fun checkSwapSystem(acc: List<String?>, data: ByteArray, wallet: String): Verdict? {
+        if (data.size < 4) return refuse("swap carries a System instruction without a tag")
+        val tag = readU32(data, 0)
+        if (wallet in acc) {
+            if (tag != SYSTEM_TRANSFER.toLong()) return refuse("swap carries System instruction $tag naming the wallet")
+            val lamports = systemTransferLamports(acc.map { it.orEmpty() }, data)
+                ?: return refuse("swap System transfer naming the wallet is malformed")
+            if (acc[0] != wallet) return refuse("swap System transfer names the wallet, but not as the source")
+            if (lamports != 0L) return refuse("swap moves lamports out of the wallet")
+            return null
+        }
+        if (tag !in SWAP_SYSTEM_TAGS_WITHOUT_WALLET) return refuse("swap carries System instruction $tag")
+        return null
     }
 
     /** [owner]'s associated token accounts for [mint], under the classic and the Token-2022 program. */
