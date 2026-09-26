@@ -134,7 +134,20 @@ class TodayScreenTest {
         assertTrue("a watched ticker is marked, never dropped, unlike the retired Tracked block", "reportRowWatched(row.ticker, state.watchedTickers)" in fn)
         assertTrue("the marker draws in the figure slot", "figure = if (watched) stringResource(R.string.today_reports_watched) else null" in fn)
         assertTrue("estimated joins the date with one middle dot, list_row_meta_join's own pattern", "list_row_meta_join" in fn)
-        assertTrue("a quiet week's message replaces the lede rather than adding a second sentence", "reportsEmptyCopy(nextReportAfterThisWeek(state.reports, today))" in fn)
+        assertTrue(
+            "a quiet week's message replaces the lede rather than adding a second sentence",
+            "reportsEmptyCopy(nextReportAfterThisWeek(state.reports, today), nextWeek)" in fn,
+        )
+    }
+
+    @Test
+    fun `the weekend moves the reports block to next week, heading and empty state alike`() {
+        val fn = body("private fun TodayReportsBlock(", "private fun TodayNextUpBlock(")
+        assertTrue("the window itself moves on the reader's own Saturday or Sunday", "val nextWeek = reportsIsNextWeek(today)" in fn)
+        assertTrue(
+            "the heading follows the same switch, never a separate, driftable condition",
+            "title = stringResource(if (nextWeek) R.string.today_heading_reports_next else R.string.today_heading_reports)" in fn,
+        )
     }
 
     @Test

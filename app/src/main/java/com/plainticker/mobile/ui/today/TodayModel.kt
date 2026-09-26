@@ -17,6 +17,7 @@ import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -263,23 +264,53 @@ fun weekEnd(today: LocalDate): LocalDate = today.plusDays(((7 - today.dayOfWeek.
  * to, which is exactly the re-zoning the rule above refuses to do; the honest position is a plain
  * date compared against a plain date, stated as what it is instead of quietly guessed at.
  *
- * **No late-Friday roll-forward.** The window never reaches into next week early, even late on a
- * Friday: a weekend with nothing scheduled already reads honestly through [reportsEmptyCopy]'s own
- * next-date sentence, and "late" has no single answer once a reader's zone and New York's trading
- * day are two different clocks. Rolling forward would trade that honest empty state for a guess.
+ * **No late-Friday roll-forward, but a real one across the weekend.** The window never reaches
+ * into next week early on a weekday, even late on a Friday: "late" has no single answer once a
+ * reader's zone and New York's trading day are two different clocks, and rolling a weekday forward
+ * would trade an honest empty state for a guess. **Saturday and Sunday are the one deliberate
+ * exception**, added after the real device caught it: on Saturday 26 Sep 2026 the window was
+ * "today through the coming Sunday," which on a Saturday is only Saturday and Sunday themselves,
+ * so the block read "No covered company reports this week" with an empty list every single
+ * weekend, exactly when a reader has time to look. [reportsWindowStart] moves the window's start
+ * to the coming Monday on those two days only ([reportsIsNextWeek]), so it reaches next Monday
+ * through next Sunday instead, and `TodayReportsBlock` (`TodayScreen.kt`) swaps the heading to
+ * "Reports next week" to match. Monday through Friday are untouched: the window is still today
+ * through the coming Sunday, read by this same function.
  */
 fun reportsThisWeek(rows: List<ReportRow>, today: LocalDate): List<ReportRow> {
-    val end = weekEnd(today)
-    return rows.filter { it.date in today..end }.sortedWith(compareBy({ it.date }, { it.ticker }))
+    val start = reportsWindowStart(today)
+    val end = weekEnd(start)
+    return rows.filter { it.date in start..end }.sortedWith(compareBy({ it.date }, { it.ticker }))
 }
 
 /**
- * The soonest known report after this week closes, read off every candidate [rows] carries
- * (not only the ones [reportsThisWeek] kept), for the empty state's own second sentence: a quiet
- * week still says when the next one is, if this app knows.
+ * Whether [today] itself is the reader's own Saturday or Sunday: the one condition that moves
+ * [reportsThisWeek]'s window to next Monday through next Sunday and swaps the section's heading
+ * from "Reports this week" to "Reports next week" ([reportsThisWeek]'s own doc comment has the
+ * full reasoning, off the real device that caught the bug this closes).
+ */
+fun reportsIsNextWeek(today: LocalDate): Boolean =
+    today.dayOfWeek == DayOfWeek.SATURDAY || today.dayOfWeek == DayOfWeek.SUNDAY
+
+/**
+ * The first day [reportsThisWeek]'s window reaches: [today] itself Monday through Friday, or the
+ * coming Monday when [today] is the reader's own Saturday or Sunday ([reportsIsNextWeek]). Never
+ * re-zoned, the same as every other date this file compares: [today] is already the reader's own
+ * local calendar day by the time it reaches here.
+ */
+private fun reportsWindowStart(today: LocalDate): LocalDate = when (today.dayOfWeek) {
+    DayOfWeek.SATURDAY -> today.plusDays(2)
+    DayOfWeek.SUNDAY -> today.plusDays(1)
+    else -> today
+}
+
+/**
+ * The soonest known report after this week (or, on a weekend, next week) closes, read off every
+ * candidate [rows] carries (not only the ones [reportsThisWeek] kept), for the empty state's own
+ * second sentence: a quiet week still says when the next one is, if this app knows.
  */
 fun nextReportAfterThisWeek(rows: List<ReportRow>, today: LocalDate): ReportRow? {
-    val end = weekEnd(today)
+    val end = weekEnd(reportsWindowStart(today))
     return rows.filter { it.date > end }.minWithOrNull(compareBy({ it.date }, { it.ticker }))
 }
 
@@ -289,10 +320,19 @@ fun nextReportAfterThisWeek(rows: List<ReportRow>, today: LocalDate): ReportRow?
  * has already decided the block should not draw at all (every date null, the server field not yet
  * deployed): this function does not tell those two apart, which is why that decision is made
  * before this one is ever reached ([WatchlistUiState.reportsKnown]).
+ *
+ * [isNextWeek] follows the heading ([reportsIsNextWeek]): a quiet weekend says "next week," not
+ * "this week," the same swap the heading makes, so the empty sentence never contradicts the title
+ * sitting right above it. Defaulted to false so every Monday-through-Friday caller, including every
+ * test written before the weekend fix, keeps reading exactly as it did.
  */
-fun reportsEmptyCopy(next: ReportRow?): Copy =
+fun reportsEmptyCopy(next: ReportRow?, isNextWeek: Boolean = false): Copy = if (isNextWeek) {
+    if (next == null) words(R.string.today_reports_empty_next_week)
+    else words(R.string.today_reports_empty_next_week_next, next.company ?: next.display, next.dateLabel)
+} else {
     if (next == null) words(R.string.today_reports_empty)
     else words(R.string.today_reports_empty_next, next.company ?: next.display, next.dateLabel)
+}
 
 /**
  * Whether [ticker] is one the reader already watches, the same case- and whitespace-tolerant key
