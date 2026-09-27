@@ -56,6 +56,35 @@ class MintRepositoryTest {
         assertFalse(facts.pausable!!.paused)
     }
 
+    /**
+     * The shared server contract, item 5: the forwarder says how old a cached answer already is
+     * in `X-Rpc-Age`, whole seconds, 0 on a miss. The reading carries it, and "N s ago" counts
+     * from when the node answered rather than from when this phone received it.
+     */
+    @Test
+    fun `the forwarder's X-Rpc-Age travels with the reading, and absent is zero`() = runTest {
+        val cached = MockApi { respondJson(Fixtures.read("rpc/mint-tslax.json"), HttpStatusCode.OK, SolanaRpcApi.HEADER_RPC_AGE to "42") }
+        val reading = repository(cached).mint(KnownMints.TSLAX)
+        assertEquals(42L, reading.rpcAgeSeconds)
+        assertEquals(now - 42_000L, reading.observedAtMillis)
+
+        val miss = MockApi { respondJson(Fixtures.read("rpc/mint-tslax.json"), HttpStatusCode.OK, SolanaRpcApi.HEADER_RPC_AGE to "0") }
+        assertEquals(0L, repository(miss).mint(KnownMints.TSLAX).rpcAgeSeconds)
+        val absent = MockApi { respondJson(Fixtures.read("rpc/mint-tslax.json")) }
+        assertEquals(0L, repository(absent).mint(KnownMints.TSLAX).rpcAgeSeconds)
+    }
+
+    @Test
+    fun `an X-Rpc-Age that is not a whole number of seconds reads as zero`() {
+        assertEquals(0L, SolanaRpcApi.rpcAgeSeconds(null))
+        assertEquals(0L, SolanaRpcApi.rpcAgeSeconds(""))
+        assertEquals(0L, SolanaRpcApi.rpcAgeSeconds("-5"))
+        assertEquals(0L, SolanaRpcApi.rpcAgeSeconds("12.5"))
+        assertEquals(0L, SolanaRpcApi.rpcAgeSeconds("soon"))
+        assertEquals("past a day is a bad header, not an age", 0L, SolanaRpcApi.rpcAgeSeconds("999999"))
+        assertEquals(60L, SolanaRpcApi.rpcAgeSeconds(" 60 "))
+    }
+
     @Test
     fun `an account that is not there is a successful read with nothing to report`() = runTest {
         val mock = MockApi {

@@ -191,7 +191,7 @@
     <string name="detail_live_unread_meta">Nothing below this line is read from the chain</string>
     <string name="detail_price_absent">Jupiter does not price this token</string>
     <string name="detail_heading_backing">Backing and controls</string>
-    <string name="detail_fact_por">Proof of reserves</string>
+    <string name="detail_fact_por">Proof of reserves, reported by xStocks</string>
     <string name="detail_fact_por_sub">%1$s shares held for %2$s tokens</string>
     <string name="detail_fact_por_custodian_sub">%1$s shares held by %2$s for %3$s tokens</string>
     <string name="detail_fact_por_absent_sub">xStocks publishes no reserves for this token</string>
@@ -199,6 +199,14 @@
     <string name="detail_fact_delegate">Permanent delegate</string>
     <string name="detail_fact_delegate_sub">Issuer can move tokens</string>
     <string name="detail_fact_delegate_none_sub">No issuer delegate</string>
+    <!-- Judges' review 2026-09-27 (Mert): the issuer's circulating count held up against the supply
+         the mint itself states, scaled by its multiplier; and the delegate named by address. -->
+    <string name="detail_fact_supply">Supply on chain</string>
+    <string name="detail_fact_supply_matches">Matches chain</string>
+    <string name="detail_fact_supply_sub">%1$s tokens on chain, %2$s in circulation reported by xStocks</string>
+    <string name="detail_fact_supply_no_report_sub">xStocks reports no circulating count to compare</string>
+    <string name="detail_fact_delegate_address">Delegate address</string>
+    <string name="detail_copy_address">Copy the address</string>
     <string name="detail_fact_pausable">Transfers pausable</string>
     <string name="detail_fact_pausable_sub">Not paused now, issuer can pause</string>
     <string name="detail_fact_pausable_paused_sub">Transfers are paused</string>
@@ -217,8 +225,6 @@
     <string name="detail_fact_fresh_account">New account state</string>
     <string name="detail_fact_fresh_account_open_sub">A new account can receive this token</string>
     <string name="detail_fact_fresh_account_frozen_sub">A new account starts frozen until the issuer unfreezes it</string>
-    <string name="detail_fact_supply">Supply on chain</string>
-    <string name="detail_fact_supply_sub">%1$s tokens at %2$s decimals</string>
     <string name="detail_heading_sector">Against the sector</string>
     <string name="detail_composite">composite %1$s</string>
     <!-- The Pro-numbers lock (2026-09-23): what the section head's meta reads instead of
