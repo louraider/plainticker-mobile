@@ -655,7 +655,7 @@
          furthest from the last close, only where the pool clears the liquidity floor. -->
     <string name="today_closed_title">While New York is closed</string>
     <string name="today_closed_lede">The tokens furthest from the last NYSE close, only where the pool is deep enough for the price to mean something.</string>
-    <string name="today_closed_pool">Pool %1$s</string>
+    <string name="today_closed_pool">Depth %1$s</string>
     <!-- The digest screen, under You. -->
     <string name="digest_screen_lede">One short check a day on the stocks you watch.</string>
     <string name="digest_produced_today">Today at %1$s</string>
