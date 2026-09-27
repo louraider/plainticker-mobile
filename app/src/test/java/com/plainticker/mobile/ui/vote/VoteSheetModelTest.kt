@@ -367,7 +367,7 @@ class VoteSheetModelTest {
     fun `the share line is the plain sentence and the public transaction, nothing else`() {
         val shared = render(sheetOf(landed()).shareText)
         assertEquals(
-            "I voted for NFLX to be analysed next on PlainTicker. https://solscan.io/tx/$signature",
+            "I voted for NFLX to be analyzed next on PlainTicker. https://solscan.io/tx/$signature",
             shared,
         )
         val others = allStates.filter { it !is VoteState.Landed }.map { sheetOf(it) }

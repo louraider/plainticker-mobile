@@ -72,7 +72,7 @@
     <string name="onboarding_continue">Open Today</string>
     <!-- Step one ends on the consent; step two (judges' round 2) lets the reader pick stocks to
          watch, so onboarding ends on a filled Today or on the open AAPLx example, never on an
-         empty screen. The chips are real analysed stocks, never copy. -->
+         empty screen. The chips are real analyzed stocks, never copy. -->
     <string name="onboarding_consent_continue">Continue</string>
     <string name="onboarding_pick_title">Pick stocks to watch</string>
     <string name="onboarding_pick_body">Today will show their next report dates and how closely each token follows its share. One short digest a day says what changed.</string>
@@ -447,7 +447,7 @@
     <string name="vote_landed_label">Vote sent</string>
     <string name="vote_landed_note">The vote is on the chain. Counted within about 20 minutes.</string>
     <!-- Share from the landed state: a plain sentence and the public transaction, nothing else. -->
-    <string name="vote_share_text">I voted for %1$s to be analysed next on PlainTicker. https://solscan.io/tx/%2$s</string>
+    <string name="vote_share_text">I voted for %1$s to be analyzed next on PlainTicker. https://solscan.io/tx/%2$s</string>
 
     <!-- What is in flight, one sentence each. Reaching the first means no wallet was connected. -->
     <string name="vote_phase_connecting">No wallet is connected, so the wallet is being asked to authorize.</string>
@@ -685,9 +685,9 @@
          still sends as closed rather than published). %1$s is the round's own number, never a
          quantity: it does not pluralise anything after it. -->
     <string name="digest_vote_round_closes">Round %1$s closes %2$s.</string>
-    <string name="digest_vote_winner_analysed">%1$s, last round\'s winner, is now analysed.</string>
+    <string name="digest_vote_winner_analysed">%1$s, last round\'s winner, is now analyzed.</string>
     <!-- The reader's own pick (a vote receipt on this device names it), said once, then left out. -->
-    <string name="digest_vote_pick_analysed">%1$s, which you voted for, is now analysed.</string>
+    <string name="digest_vote_pick_analysed">%1$s, which you voted for, is now analyzed.</string>
     <!-- A round closing later on the reader's own today; %2$s is the reader's clock time. -->
     <string name="digest_vote_round_closes_today">Round %1$s closes today at %2$s your time.</string>
 

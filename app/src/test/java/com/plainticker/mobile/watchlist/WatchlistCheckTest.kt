@@ -252,12 +252,12 @@ class WatchlistCheckTest {
 
         val outcome = votingCheck.run()
 
-        val full = "JEF, last round's winner, is now analysed. Round 2 closes Monday."
+        val full = "JEF, last round's winner, is now analyzed. Round 2 closes Monday."
         assertEquals(CheckOutcome.Produced(full), outcome)
         assertEquals(full, digests.record.value.text)
         assertEquals(
             "the shade's title is the most useful line, here the winner, and the round follows it",
-            listOf("JEF, last round's winner, is now analysed"),
+            listOf("JEF, last round's winner, is now analyzed"),
             notifier.posted,
         )
     }
@@ -317,8 +317,8 @@ class WatchlistCheckTest {
         assertTrue("the pick is watched before the digest reads the list", "JEF" in watchlist.tickers.value)
         assertTrue("and no longer pending", pending.tickers.isEmpty())
         val text = (outcome as CheckOutcome.Produced).text
-        assertTrue(text, text.startsWith("JEF, which you voted for, is now analysed."))
-        assertEquals("JEF, which you voted for, is now analysed", notifier.notices.single().title)
+        assertTrue(text, text.startsWith("JEF, which you voted for, is now analyzed."))
+        assertEquals("JEF, which you voted for, is now analyzed", notifier.notices.single().title)
         assertEquals("JEF", notifier.notices.single().ticker)
         assertEquals("the record keeps that it was said", "JEF", digests.record.value.announcedPick)
 
@@ -344,7 +344,7 @@ class WatchlistCheckTest {
         )
 
         val text = (votingCheck.run() as CheckOutcome.Produced).text
-        assertTrue(text, text.startsWith("JEF, last round's winner, is now analysed."))
+        assertTrue(text, text.startsWith("JEF, last round's winner, is now analyzed."))
         assertNull(digests.record.value.announcedPick)
     }
 }

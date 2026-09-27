@@ -221,7 +221,7 @@ class DigestTest {
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
         val result = digest(DigestInput(today, rows, voteRound = round, analysedWinner = "JEF"))
         assertEquals(
-            "JEF, last round's winner, is now analysed. Round 3 closes Monday.",
+            "JEF, last round's winner, is now analyzed. Round 3 closes Monday.",
             result.text(RealStrings.strings),
         )
     }
@@ -230,7 +230,7 @@ class DigestTest {
     fun `a winner named with no round in progress still gets its own sentence`() {
         val rows = listOf(watched("AAPL"))
         val result = digest(DigestInput(today, rows, analysedWinner = "JEF"))
-        assertEquals("JEF, last round's winner, is now analysed.", result.text(RealStrings.strings))
+        assertEquals("JEF, last round's winner, is now analyzed.", result.text(RealStrings.strings))
     }
 
     @Test
@@ -249,7 +249,7 @@ class DigestTest {
         val result = digest(DigestInput(today, rows, analysedWinner = "JEF"))
         assertTrue(result.hasNews)
         val notice = result.notice(RealStrings.strings)!!
-        assertEquals("JEF, last round's winner, is now analysed", notice.title)
+        assertEquals("JEF, last round's winner, is now analyzed", notice.title)
         assertEquals("the title is the whole of the news", "", notice.body)
         assertEquals("JEF", notice.ticker)
         assertFalse(notice.opensVote)
@@ -271,7 +271,7 @@ class DigestTest {
         assertEquals("the fuller reading carries all five clauses", 5, full.split(". ").size)
         val notice = result.notice(RealStrings.strings)!!
         assertEquals("NVDAx moved from -0.04% to -0.61% against the NYSE close", notice.title)
-        assertEquals("NVDAx reports in 3 days. JEF, last round's winner, is now analysed.", notice.body)
+        assertEquals("NVDAx reports in 3 days. JEF, last round's winner, is now analyzed.", notice.body)
         assertEquals("a move opens the stock that moved", "NVDA", notice.ticker)
         assertFalse("no digest ever opens on a count of what is watched", full.contains("watched"))
     }
@@ -301,11 +301,11 @@ class DigestTest {
         val rows = listOf(watched("AAPL", nextReport = today.plusDays(1)))
         val result = digest(DigestInput(today, rows, analysedWinner = "JEF", votedForWinner = true))
         assertEquals(
-            "JEF, which you voted for, is now analysed. AAPLx reports tomorrow.",
+            "JEF, which you voted for, is now analyzed. AAPLx reports tomorrow.",
             result.text(RealStrings.strings),
         )
         val notice = result.notice(RealStrings.strings)!!
-        assertEquals("JEF, which you voted for, is now analysed", notice.title)
+        assertEquals("JEF, which you voted for, is now analyzed", notice.title)
         assertEquals("JEF", notice.ticker)
         assertEquals("JEF", result.personalPick)
     }
@@ -322,7 +322,7 @@ class DigestTest {
     fun `a winner the reader did not vote for is named the ordinary way, never as theirs`() {
         val rows = listOf(watched("AAPL"))
         val result = digest(DigestInput(today, rows, analysedWinner = "JEF", votedForWinner = false))
-        assertEquals("JEF, last round's winner, is now analysed.", result.text(RealStrings.strings))
+        assertEquals("JEF, last round's winner, is now analyzed.", result.text(RealStrings.strings))
         assertNull(result.personalPick)
     }
 

@@ -46,7 +46,7 @@ class SharedPrefsPendingWatchStore(private val prefs: SharedPreferences) : Pendi
  * - **A vote that lands** watches its ticker at once when PlainTicker already analyses it, and
  *   otherwise remembers it ([PendingWatchStore]) and watches it the first time a check finds it
  *   analysed ([resolvePending]), which is the day the digest can say "JEF, which you voted for,
- *   is now analysed" about a row the reader already has.
+ *   is now analyzed" about a row the reader already has.
  * - **A swap that lands** watches the stock token it went into. A swap back to USDC names no
  *   stock and watches nothing.
  *

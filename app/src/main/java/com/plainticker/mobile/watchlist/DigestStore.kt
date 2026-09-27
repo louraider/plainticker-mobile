@@ -36,7 +36,7 @@ data class DigestRecord(
     val nextReportOn: String? = null,
     /**
      * The reader's own vote pick a produced digest already named personally ("JEF, which you
-     * voted for, is now analysed"), so the next one does not say it again.
+     * voted for, is now analyzed"), so the next one does not say it again.
      */
     val announcedPick: String? = null,
 ) {
