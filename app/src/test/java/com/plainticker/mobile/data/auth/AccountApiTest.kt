@@ -11,6 +11,8 @@ import io.ktor.http.HttpStatusCode
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -43,6 +45,46 @@ class AccountApiTest {
         assertEquals("ann@example.com", answer.user.email)
         assertEquals("Ann", answer.user.name)
         assertEquals(listOf(wallet), answer.linkedWallets)
+    }
+
+    /**
+     * Every 200 `buildAccountResponse` (web repo, lib/auth/account-response.ts) can produce, as its
+     * own route tests pin it: `user.email`/`user.name` null for a wallet-first account, `source`
+     * any of `stake`/`pass`/`promo`/`subscription` or null, `until` null for a stake or for no Pro,
+     * and `linkedWallets` empty after the last wallet is unlinked. A non-null field or a closed
+     * enum here would throw on one of these and the refresh would be swallowed silently.
+     */
+    @Test
+    fun `every 200 shape the server builds decodes`() = runTest {
+        val bodies = listOf(
+            """{"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":["WalletA"],"pro":true,"source":"pass","until":"2026-10-20T00:00:00.000Z"}""",
+            """{"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":["WalletA"],"pro":true,"source":"stake","until":null}""",
+            """{"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":["WalletA"],"pro":false,"source":null,"until":null}""",
+            """{"user":{"email":null,"name":null},"linkedWallets":[],"pro":true,"source":"promo","until":"2026-11-01T00:00:00.000Z"}""",
+            """{"user":{"email":"ann@example.com","name":null},"linkedWallets":["$wallet"],"pro":true,"source":"subscription","until":"2026-12-01T00:00:00.000Z"}""",
+        )
+        bodies.forEach { body ->
+            val answer = AccountApi(MockApi { respondJson(body) }.client).get("K7M9QRSTXYK7M9QRSTXYK7M9QR")
+            val parsed = Json.parseToJsonElement(body).jsonObject
+            assertEquals(body, parsed.getValue("linkedWallets").jsonArray.map { it.jsonPrimitive.content }, answer.linkedWallets)
+            assertEquals(body, parsed.getValue("source").jsonPrimitive.contentOrNull, answer.source)
+            assertEquals(body, parsed.getValue("until").jsonPrimitive.contentOrNull, answer.until)
+            assertEquals(body, parsed.getValue("pro").jsonPrimitive.content.toBoolean(), answer.pro)
+        }
+        val walletFirst = AccountApi(MockApi { respondJson(bodies[3]) }.client).get(null)
+        assertNull(walletFirst.user.email)
+        assertNull(walletFirst.user.name)
+        assertEquals("promo", walletFirst.source)
+        assertEquals(emptyList<String>(), walletFirst.linkedWallets)
+    }
+
+    @Test
+    fun `a 200 that cannot be decoded names the decoder, never echoes the account body`() = runTest {
+        val mock = MockApi { respondJson("""{"user":{"email":"ann@example.com"},"linkedWallets":"$wallet"}""") }
+        val error = expectThrows<AccountApiError.Unavailable> { AccountApi(mock.client).get(null) }
+        assertTrue(error.message.orEmpty(), "undecodable" in error.message.orEmpty())
+        assertFalse("the email stays out of the message", "ann@example.com" in error.message.orEmpty())
+        assertFalse("the wallet stays out of the message", wallet in error.message.orEmpty())
     }
 
     @Test

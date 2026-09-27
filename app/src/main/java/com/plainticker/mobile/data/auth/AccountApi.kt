@@ -62,9 +62,7 @@ class AccountApi(
         if (!response.status.isSuccess()) {
             throw AccountApiError.fromErrorBody(response.status.value, text, json)
         }
-        return text
-            ?.let { runCatching { json.decodeFromString(GoogleAuthResponse.serializer(), it) }.getOrNull() }
-            ?: throw AccountApiError.Unavailable(response.status.value, text?.trim()?.take(EXCERPT))
+        return decodeAccount(response.status.value, text)
     }
 
     /**
@@ -89,16 +87,28 @@ class AccountApi(
         if (!response.status.isSuccess()) {
             throw AccountApiError.fromErrorBody(response.status.value, text, json)
         }
-        return text
-            ?.let { runCatching { json.decodeFromString(GoogleAuthResponse.serializer(), it) }.getOrNull() }
-            ?: throw AccountApiError.Unavailable(response.status.value, text?.trim()?.take(EXCERPT))
+        return decodeAccount(response.status.value, text)
+    }
+
+    /**
+     * A 2xx body as the shared account shape, or [AccountApiError.Unavailable] naming why not. The
+     * detail names the decoder's exception class, never the body: a 200 here carries the account's
+     * email and wallets, which have no business in a log line, debug build or not.
+     */
+    private fun decodeAccount(status: Int, text: String?): GoogleAuthResponse {
+        if (text.isNullOrBlank()) throw AccountApiError.Unavailable(status, "empty body")
+        return try {
+            json.decodeFromString(GoogleAuthResponse.serializer(), text)
+        } catch (e: IllegalArgumentException) {
+            // SerializationException is an IllegalArgumentException.
+            throw AccountApiError.Unavailable(status, "undecodable body (${e::class.simpleName})")
+        }
     }
 
     companion object {
         const val PATH = "/account"
         const val UNLINK_PATH = "/account/wallets/unlink"
         const val HEADER_CODE = EntitlementApi.HEADER_CODE
-        private const val EXCERPT = 200
     }
 }
 
