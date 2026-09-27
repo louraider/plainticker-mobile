@@ -291,7 +291,7 @@ class DigestTest {
         val notice = result.notice(RealStrings.strings)!!
         assertEquals("AAPLx reports tomorrow", notice.title)
         assertEquals("AAPL", notice.ticker)
-        assertEquals("NVDAx moved from +0.00% to +3.00% against the NYSE close.", notice.body)
+        assertEquals("NVDAx moved from 0.00% to +3.00% against the NYSE close.", notice.body)
     }
 
     // ---- The reader's own pick ----------------------------------------------------------------
@@ -362,7 +362,7 @@ class DigestTest {
             ),
         )
         assertEquals(
-            "NVDAx moved from +0.00% to +3.00% against the NYSE close. Round 3 closes Monday.",
+            "NVDAx moved from 0.00% to +3.00% against the NYSE close. Round 3 closes Monday.",
             result.text(RealStrings.strings),
         )
     }
