@@ -191,11 +191,15 @@
     <string name="detail_fact_delegate">Permanent delegate</string>
     <string name="detail_fact_delegate_sub">Issuer can move tokens</string>
     <string name="detail_fact_delegate_none_sub">No issuer delegate</string>
-    <!-- Judges' review 2026-09-27 (Mert): the issuer's circulating count held up against the supply
-         the mint itself states, scaled by its multiplier; and the delegate named by address. -->
-    <string name="detail_fact_supply">Supply on chain</string>
-    <string name="detail_fact_supply_matches">Matches chain</string>
-    <string name="detail_fact_supply_sub">%1$s tokens on chain, %2$s in circulation reported by xStocks</string>
+    <!-- Judges' review 2026-09-27 (Mert): the supply the mint itself states, scaled by its
+         multiplier, beside the issuer's circulating count; and the delegate named by address.
+         Device QA of 1.3.16: the two counts are stated side by side, never as a signed gap. They
+         are not the same measure (AAPLx on 2026-09-27: 154,265 on the Solana mint, 38,800 counted
+         in circulation by xStocks), and the app cannot see why they differ, so it says neither
+         that one is wrong nor why. -->
+    <string name="detail_fact_supply">Minted on chain</string>
+    <string name="detail_fact_supply_matches">Matches the %1$s in circulation per xStocks</string>
+    <string name="detail_fact_supply_sub">In circulation per xStocks: %1$s</string>
     <string name="detail_fact_supply_no_report_sub">xStocks reports no circulating count to compare</string>
     <string name="detail_fact_delegate_address">Delegate address</string>
     <string name="detail_copy_address">Copy the address</string>

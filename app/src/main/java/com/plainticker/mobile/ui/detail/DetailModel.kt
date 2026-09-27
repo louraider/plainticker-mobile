@@ -439,35 +439,40 @@ internal fun ChainRead.supplyShown(): java.math.BigDecimal {
 }
 
 /**
- * The issuer's circulating count against the supply the mint states (Mert, judges' review
- * 2026-09-27): "matches chain" within [SUPPLY_MATCH_TOLERANCE], or the gap as a percent of the
- * issuer's figure with both counts under it. Unknown when either side is missing.
+ * The supply the mint states, with the issuer's circulating count beside it (Mert, judges' review
+ * 2026-09-27). The value is the mint's own count; the sub line says the two match within
+ * [SUPPLY_MATCH_TOLERANCE], or states xStocks' count as it is.
+ *
+ * **Never a signed gap** (device QA of 1.3.16). The row used to print the difference as a percent
+ * of the issuer's figure, and on 2026-09-27 AAPLx read "+297.6%", TSLAx +21.2% and NVDAx +72.7%.
+ * That was checked for a unit bug first and is not one: the AAPLx mint's raw supply is 153,762.68
+ * tokens and its multiplier in force is 1.00327, so the mint states 154,265.34 (the same figure
+ * Jupiter's `scaledUiConfig` and `getTokenSupply`'s `uiAmount` give), while xStocks' own
+ * proof-of-reserves answers 38,800.68 in circulation, backed by 39,102 shares. No multiplier or
+ * decimals choice closes a four-to-one gap, and TSLAx, whose multiplier is exactly 1, differs too.
+ * The two are different measures (tokens minted on this chain against the count xStocks calls in
+ * circulation), and the app can see neither why nor where the rest sits, so it states both counts
+ * and draws no conclusion: a signed percentage read as a claim of over-issuance nothing backs.
+ * Unknown when either side is missing.
  */
 private fun DetailUiState.supplyCell(): TrustFact {
     val label = words(R.string.detail_fact_supply)
     val read = chain.valueOrNull ?: return unreadCell(label).copy(span = 2)
-    val reported = reserves.valueOrNull
-        ?: return TrustFact(label = label, value = words(R.string.detail_value_unknown), sub = words(R.string.detail_fact_supply_no_report_sub), span = 2)
     val onChain = read.supplyShown()
+    val value = raw(Fmt.tokenAmount(onChain, maxDecimals = 2))
+    val reported = reserves.valueOrNull
+        ?: return TrustFact(label = label, value = value, sub = words(R.string.detail_fact_supply_no_report_sub), span = 2)
     val issuer = java.math.BigDecimal.valueOf(reported.tokensInCirculation)
-    val sub = words(
-        R.string.detail_fact_supply_sub,
-        Fmt.tokenAmount(onChain, maxDecimals = 2),
-        Fmt.tokenAmount(issuer, maxDecimals = 2),
-    )
+    val issuerText = Fmt.tokenAmount(issuer, maxDecimals = 2)
     if (issuer.signum() <= 0) {
-        return TrustFact(label = label, value = words(R.string.detail_value_unknown), sub = sub, span = 2, subMono = true)
+        return TrustFact(label = label, value = value, sub = words(R.string.detail_fact_supply_no_report_sub), span = 2)
     }
     val gap = onChain.subtract(issuer).toDouble() / issuer.toDouble()
+    val matches = kotlin.math.abs(gap) <= SUPPLY_MATCH_TOLERANCE
     return TrustFact(
         label = label,
-        value = if (kotlin.math.abs(gap) <= SUPPLY_MATCH_TOLERANCE) {
-            words(R.string.detail_fact_supply_matches)
-        } else {
-            // The gap as a percent of the issuer's own count: positive when the mint states more.
-            raw(Fmt.percent(gap * 100.0, signed = true, decimals = 1))
-        },
-        sub = sub,
+        value = value,
+        sub = words(if (matches) R.string.detail_fact_supply_matches else R.string.detail_fact_supply_sub, issuerText),
         span = 2,
         subMono = true,
     )
@@ -597,7 +602,7 @@ private fun DetailUiState.hookCell(): TrustFact {
     val hook = facts.transferHook
     val program = hook?.programId
     return if (program != null) {
-        TrustFact(label = label, value = raw(Fmt.shortKey(program)), sub = words(R.string.detail_fact_hook_runs_sub))
+        TrustFact(label = label, value = raw(Fmt.shortKey(program)), sub = words(R.string.detail_fact_hook_runs_sub), valueMono = true)
     } else {
         // No extension, or the extension with an empty slot: either way no program runs on a
         // transfer, which is the fact a reader needs and the only one the mint supports.
