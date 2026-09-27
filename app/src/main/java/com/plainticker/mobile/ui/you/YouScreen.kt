@@ -31,6 +31,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -601,6 +605,8 @@ private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: A
     val placeholder = stringResource(R.string.promo_field_placeholder)
     val label = stringResource(R.string.promo_field_label)
     val focus = remember { FocusRequester() }
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
     LaunchedEffect(focus) { runCatching { focus.requestFocus() } }
     BasicTextField(
         value = value,
@@ -615,9 +621,21 @@ private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: A
             keyboardType = KeyboardType.Ascii,
         ),
         cursorBrush = SolidColor(colors.actionText),
+        interactionSource = interaction,
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
+            // The same underline [com.plainticker.mobile.ui.components.Field] draws, amber while
+            // focused (device QA of 1.3.17: the field had no visible edge at all).
+            .drawBehind {
+                val stroke = 1.dp.toPx()
+                drawRect(
+                    color = if (focused) colors.actionText else colors.border,
+                    topLeft = Offset(0f, size.height - stroke),
+                    size = Size(size.width, stroke),
+                )
+            }
+            .padding(bottom = 10.dp)
             .focusRequester(focus)
             .semantics { contentDescription = label },
         decorationBox = { innerField ->

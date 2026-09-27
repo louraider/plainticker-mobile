@@ -68,7 +68,12 @@ fun AmberChip(
     val interactionSource = remember { MutableInteractionSource() }
     val motionEnabled = rememberMotionEnabled()
     val shape = shapeFor(selected, motionEnabled)
-    val background = if (selected) colors.surfaceHigh else colors.surfaceRaised
+    // Selected fills with the action colour and its own text colour (device QA of 1.3.17: the
+    // selected chip drew surfaceHigh with a hairline, one tonal step from its neighbours, and
+    // "Watched 1" could not be told apart from the chips beside it). actionOnFill on actionFill is
+    // 8.8:1 dark and 6.65:1 light (AmberContrastTest), the primary button's own pair.
+    val background = if (selected) colors.actionFill else colors.surfaceRaised
+    val labelColor = if (selected) colors.actionOnFill else colors.textPrimary
     // Captured under its own name: inside `.semantics { }` below, `this` is a
     // SemanticsPropertyReceiver whose own `selected` (a property, not a function; see
     // SemanticsProperties.kt's `var SemanticsPropertyReceiver.selected by ...`) would otherwise
@@ -83,7 +88,7 @@ fun AmberChip(
             .focusOutline(interactionSource, colors)
             .clip(shape)
             .background(background)
-            .then(if (selected || colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier)
+            .then(if (!selected && colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
@@ -98,7 +103,7 @@ fun AmberChip(
         Text(
             text = label,
             style = AmberType.context,
-            color = colors.textPrimary,
+            color = labelColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

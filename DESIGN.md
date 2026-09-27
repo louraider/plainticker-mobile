@@ -127,12 +127,12 @@ is, never for its colour, so a surface cannot be reached for as if it were an ac
 |---|---|---|---|
 | `surfaceGround` | `#16130D` | `#FFFBF2` | Page background |
 | `surfaceRaised` | `#221E15` | `#FFFFFF` | Cards, tonal containers, the status card |
-| `surfaceHigh` | `#2E281C` | `#F3EBD6` | The highest surface: a selected chip, a sheet |
+| `surfaceHigh` | `#2E281C` | `#F3EBD6` | The highest surface: a sheet, a pressed row |
 | `textPrimary` | `#F5EEDD` (16.0:1) | `#1F1A0E` (16.8:1) | Primary text and figures |
 | `textSecondary` | `#C6BCA4` (9.8:1) | `#5A5240` (7.5:1) | Secondary text, context lines |
 | `textTertiary(on)` | `#948B74` (5.5:1) | `#7A7059` (4.7:1) | Metadata; see the rule below |
 | `border` | `#3A3324` | `#E2D9C2` | Hairlines, an active chip's border |
-| `actionFill` / `actionOnFill` | `#FFC247` / `#3B2800` (8.8:1) | `#7A5600` / `#FFFFFF` (6.65:1) | Primary button fill and its text |
+| `actionFill` / `actionOnFill` | `#FFC247` / `#3B2800` (8.8:1) | `#7A5600` / `#FFFFFF` (6.65:1) | Primary button fill and its text; a selected chip |
 | `actionText`, `stateLive` | `#FFC247` (11.5:1) | `#7A5600` (6.4:1) | Text actions, the active tab, the live bar |
 | `stateCaution` | `#FF6B57` (6.6:1) | `#B4220C` (6.4:1) | The only red-orange anywhere; never on a number |
 
@@ -346,11 +346,12 @@ baseline), more than Outfit's 1.824sp, which closes the "Sian out" clipping clas
 level.
 
 **`AmberChip`** (`AmberChip.kt`) is Amber's filter chip: 32dp, `surfaceRaised`/`textPrimary`
-unselected, `surfaceHigh` with a 1dp border ring selected, `minimumInteractiveComponentSize()`
+unselected, `actionFill`/`actionOnFill` selected (device QA of 1.3.17: `surfaceHigh` with a hairline
+was one tonal step from its neighbours and did not read as selected), `minimumInteractiveComponentSize()`
 reserving the 48dp touch target without growing the visual chip. The corner radius morphs 8dp to
 full (16dp) with a spring on selection (section 6). `label` is `maxLines = 1` with ellipsis; every
 caller (a sector name, a deep-pool/watched count) is short, bounded content, so no arithmetic budget
-is pinned the way the ticker row's is. Light theme draws the same 1dp border ring unselected too,
+is pinned the way the ticker row's is. Light theme draws a 1dp border ring on an unselected chip,
 for the reason given above.
 
 ### 4.4 Sheets and grids
@@ -528,7 +529,7 @@ of them:
 |---|---|
 | `surfaceGround` | The page background; the seam between rows inside a tonal group; a `stickyHeader`'s own default background. |
 | `surfaceRaised` | A ticker row's own fill; the venue/total card body; `AmberChip` and `AmberBottomNav`'s container unselected; `FactGrid`'s default cell surface; `SkeletonBar`'s fill. |
-| `surfaceHigh` | The highest surface: a selected chip; `AmberSheet`/`AmberSheetSurface`; the pressed state of a ticker row; the active bottom-nav pill; the `Gauge`/`Track` capsule fill (drawn directly on the page, not inside a card); `FactGrid`'s surface on the swap and pass sheets. |
+| `surfaceHigh` | The highest surface: `AmberSheet`/`AmberSheetSurface`; the pressed state of a ticker row; the active bottom-nav pill; the `Gauge`/`Track` capsule fill (drawn directly on the page, not inside a card); `FactGrid`'s surface on the swap and pass sheets. |
 
 **Tertiary text never sits on `surfaceHigh`**, and it is enforced in code, not by convention:
 `AmberColors.textTertiary(on: AmberSurface)` is the only way to read that colour out of the class,

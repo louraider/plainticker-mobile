@@ -269,4 +269,13 @@ class YouScreenTest {
             .filterNot { it in resourceValues }
         assertTrue("copy spelled in Kotlin: $sentences", sentences.isEmpty())
     }
+
+    /** Device QA of 1.3.17: the promo code field had no visible edge. */
+    @Test
+    fun `the promo field draws the same underline Field does, amber while focused`() {
+        val start = source.indexOf("private fun PromoField(")
+        val field = source.substring(start, source.indexOf("private fun DeviceGroup(", start))
+        assertTrue("color = if (focused) colors.actionText else colors.border" in field)
+        assertTrue("interactionSource = interaction" in field)
+    }
 }

@@ -75,12 +75,14 @@ class AmberChipTest {
     @Test
     fun `unselected reads surfaceRaised and textPrimary, exactly the mockup's un-morphed chip`() {
         assertTrue("colors.surfaceRaised" in source)
-        assertTrue("color = colors.textPrimary" in source)
+        assertTrue("val labelColor = if (selected) colors.actionOnFill else colors.textPrimary" in source)
+        assertTrue("color = labelColor" in source)
     }
 
+    /** Device QA of 1.3.17: a selected chip one tonal step off its neighbours was not visibly selected. */
     @Test
-    fun `selected takes a border, unselected does not, per DESIGN-md section 2's a selected chip carries a border`() {
-        assertTrue("border(1.dp, colors.border, shape)" in source)
+    fun `selected fills with the action colour and its own text colour, the primary button's pair`() {
+        assertTrue("val background = if (selected) colors.actionFill else colors.surfaceRaised" in source)
     }
 
     // ---- The light-only edge on an unselected chip (DESIGN.md section 8's added exception) -----
@@ -96,7 +98,7 @@ class AmberChipTest {
     fun `an unselected chip also takes the border in light, gated on the light palette rather than a repaint`() {
         assertTrue(
             "the unselected ring must be gated on colors === AmberLightColors, not drawn unconditionally",
-            "selected || colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier" in source,
+            "!selected && colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier" in source,
         )
     }
 
