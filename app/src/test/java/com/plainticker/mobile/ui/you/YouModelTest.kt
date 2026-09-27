@@ -331,4 +331,23 @@ class YouModelTest {
         val terms = ShippedCopy.strings.getValue("you_license_terms")
         assertTrue(terms.contains("SIL Open Font License 1.1"))
     }
+
+    // ---- About's links (judges' round 2) ------------------------------------------------------
+
+    @Test
+    fun `about links name plainticker's own privacy, terms and account deletion pages`() {
+        assertEquals("https://www.plainticker.com/en/privacy", AboutLinks.PRIVACY)
+        assertEquals("https://www.plainticker.com/en/terms", AboutLinks.TERMS)
+        assertEquals("https://www.plainticker.com/en/account#delete", AboutLinks.DELETE_ACCOUNT)
+        listOf(AboutLinks.PRIVACY, AboutLinks.TERMS, AboutLinks.DELETE_ACCOUNT).forEach {
+            assertTrue("$it must be https on plainticker.com", it.startsWith("https://www.plainticker.com/"))
+        }
+    }
+
+    @Test
+    fun `the wallet group's words say it signs and is not a sign-in`() {
+        assertEquals("Wallet", ShippedCopy.strings.getValue("you_heading_wallet"))
+        val short = ShippedCopy.strings.getValue("you_wallet_note_short")
+        assertTrue(short.contains("not a way to sign in"))
+    }
 }

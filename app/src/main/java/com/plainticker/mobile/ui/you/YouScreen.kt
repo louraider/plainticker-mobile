@@ -1,6 +1,7 @@
 package com.plainticker.mobile.ui.you
 
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -41,6 +43,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -98,11 +102,16 @@ import kotlinx.coroutines.withContext
  *    the days-left or what-Free-opens line, and at most one action ([youHero] owns the matrix).
  * 2. **Plan** ([planRows]): source, valid until, how to extend, the staked SKR figure, a pending
  *    payment. The pass entry lands here as a text action whenever the hero does not carry it.
- * 3. **Sign-in methods** ([AccountSection]): Google and the Solana wallet as rows of one group,
- *    then the wallets linked to the Google account, if the server returned any.
- * 4. **On this device**: swaps, votes and stocks watched, each a row that opens its tab.
- * 5. **Notifications**: the delivery line with Enable, and the daily digest.
- * 6. **About**: version, disclaimer, and Fonts and licenses behind one row that shows them.
+ *    "Have a code?" is the group's first row, in full action colour, so it sits above the fold
+ *    (judges' round 2); Detail's "Have a code? Get Pro" opens You with its field already focused.
+ * 3. **Sign-in methods** ([AccountSection]): Google, then the wallets linked to the Google
+ *    account, if the server returned any.
+ * 4. **Wallet** ([WalletSection]): the phone's Solana wallet connection, its own group since the
+ *    judges' round 2 because it signs transactions and is not a way to sign in.
+ * 5. **On this device**: swaps, votes and stocks watched, each a row that opens its tab.
+ * 6. **Notifications**: the delivery line with Enable, and the daily digest.
+ * 7. **About**: version, disclaimer, privacy policy, terms, account deletion (each opening
+ *    plainticker.com in the browser), and Fonts and licenses behind one row that shows them.
  *
  * Nothing here computes: [YouModel.kt] picks every sentence and every numeral arrives formatted.
  *
@@ -130,6 +139,9 @@ fun YouScreen(
     /** The daily digest screen: its own route, reached from here and from Today's "Read it". */
     onOpenDigest: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
+    /** Detail's "Have a code? Get Pro" asked for the code field; see [YouContent]'s own. */
+    openPromo: Boolean = false,
+    onPromoOpened: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pro by passViewModel.pro.collectAsStateWithLifecycle()
@@ -192,7 +204,16 @@ fun YouScreen(
                         .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
                 )
             },
+            // Privacy, terms and account deletion live on plainticker.com: the browser opens them.
+            // A phone with no browser at all leaves the tap doing nothing rather than crashing.
+            onOpenLink = { url ->
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))
+                }
+            },
             header = header,
+            openPromo = openPromo,
+            onPromoOpened = onPromoOpened,
         )
         PassSheet(
             state = pass,
@@ -226,15 +247,37 @@ internal fun YouContent(
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onUnlink: (String) -> Unit = {},
+    /** Opens one of [AboutLinks] in the browser; a no-op in the previews. */
+    onOpenLink: (String) -> Unit = {},
     header: @Composable () -> Unit = {},
     nowMillis: Long = System.currentTimeMillis(),
+    /**
+     * True when Detail's "Have a code? Get Pro" sent the reader here (judges' round 2): the code
+     * field opens (a finished redeem's confirmation folds first, so the field can open at all),
+     * the list returns to its top, where the hero's Get Pro and the Plan group's first row, the
+     * field itself, share the first screen, and the field takes focus as it appears
+     * ([PromoField]). [onPromoOpened] clears the request so it runs once.
+     */
+    openPromo: Boolean = false,
+    onPromoOpened: () -> Unit = {},
 ) {
     val colors = amberColors()
+    val listState = rememberLazyListState()
+    val motion = rememberMotionEnabled()
+    LaunchedEffect(openPromo) {
+        if (!openPromo) return@LaunchedEffect
+        if (promo is PromoState.Success) onDismissPromo()
+        onOpenPromo()
+        // Cleared last: clearing it recomposes this effect's key and cancels whatever is left of it.
+        if (motion) listState.animateScrollToItem(0) else listState.scrollToItem(0)
+        onPromoOpened()
+    }
     val hero = youHero(account, state.account, pro, nowMillis)
     val plan = planRows(pro, hero.action, nowMillis)
     val heroMessage = (account as? AccountUiState.SignedOut)?.message?.takeIf { hero.action == HeroAction.SIGN_IN }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.surfaceGround),
+        state = listState,
         // The tab content ends above the navigation bar; the padding is part of the scroll.
         contentPadding = WindowInsets.navigationBars.asPaddingValues(),
     ) {
@@ -267,22 +310,21 @@ internal fun YouContent(
                 onPromoInputChanged = onPromoInputChanged,
                 onApplyPromo = onApplyPromo,
                 onDismissPromo = onDismissPromo,
-                pro = pro.pro,
                 colors = colors,
             )
         }
         item(key = "methods") {
             AccountSection(
                 state = account,
-                wallet = state.account,
                 onSignIn = onSignIn,
                 onSignOut = onSignOut,
-                onConnect = onConnect,
-                onDisconnect = onDisconnect,
                 onUnlink = onUnlink,
                 colors = colors,
                 showMessage = heroMessage == null,
             )
+        }
+        item(key = "wallet") {
+            WalletSection(wallet = state.account, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)
         }
         item(key = "device") { DeviceGroup(state = state, onOpenTab = onOpenTab, colors = colors) }
         item(key = "notifications") {
@@ -293,7 +335,7 @@ internal fun YouContent(
                 colors = colors,
             )
         }
-        item(key = "about") { AboutGroup(colors = colors) }
+        item(key = "about") { AboutGroup(colors = colors, onOpenLink = onOpenLink) }
         item(key = "end") { Box(Modifier.padding(bottom = EndGap)) }
     }
 }
@@ -406,12 +448,21 @@ private fun PlanGroup(
     onPromoInputChanged: (String) -> Unit,
     onApplyPromo: () -> Unit,
     onDismissPromo: () -> Unit,
-    pro: Boolean,
     colors: AmberColors,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(title = stringResource(R.string.you_heading_plan), colors = colors)
         AmberTickerRowGroup(colors = colors) {
+            // First, not last (judges' round 2): a judge holding a code found "Have a code?" only
+            // after scrolling past the fold, under every Plan row.
+            PromoRow(
+                promo = promo,
+                onOpen = onOpenPromo,
+                onInputChanged = onPromoInputChanged,
+                onApply = onApplyPromo,
+                onDismiss = onDismissPromo,
+                colors = colors,
+            )
             rows.forEach { row ->
                 CabinetRow(
                     colors = colors,
@@ -421,15 +472,6 @@ private fun PlanGroup(
                     actions = listOfNotNull(row.action?.let { planRowAction(it, onPay, onRefresh) }),
                 )
             }
-            PromoRow(
-                promo = promo,
-                pro = pro,
-                onOpen = onOpenPromo,
-                onInputChanged = onPromoInputChanged,
-                onApply = onApplyPromo,
-                onDismiss = onDismissPromo,
-                colors = colors,
-            )
         }
     }
 }
@@ -448,8 +490,8 @@ private fun planRowAction(action: PlanAction, onPay: () -> Unit, onRefresh: () -
  * and normalized as it is typed ([com.plainticker.mobile.data.plainticker.PromoApi.normalize],
  * mirrored by [com.plainticker.mobile.ui.pass.PassViewModel.promoInputChanged]), with Apply and
  * Cancel beside it. Shown even when this device is already Pro, so a judge's second code can
- * extend or stack it, but in a lower emphasis than when the device is Free: the action reads in
- * [AmberColors.textSecondary] rather than [AmberColors.actionText] while [pro] is true.
+ * extend or stack it, and always in full [AmberColors.actionText] (judges' round 2: the dimmed
+ * grey it used to take on a Pro device read as disabled).
  *
  * Errors are one plain line under the field ([PromoRefusal.text]), never the server's own
  * sentence; a success collapses the field and shows the same "Pro until" sentence the hero draws,
@@ -458,7 +500,6 @@ private fun planRowAction(action: PlanAction, onPay: () -> Unit, onRefresh: () -
 @Composable
 private fun PromoRow(
     promo: PromoState,
-    pro: Boolean,
     onOpen: () -> Unit,
     onInputChanged: (String) -> Unit,
     onApply: () -> Unit,
@@ -470,16 +511,7 @@ private fun PromoRow(
             colors = colors,
             value = stringResource(R.string.promo_prompt),
             valueKind = RowValueKind.QUIET,
-            actions = listOf(
-                RowAction(
-                    stringResource(R.string.promo_action_have_code),
-                    onOpen,
-                    // Lower emphasis once this device is already Pro: still reachable (a judge's
-                    // second code can extend or stack it), just not drawn as the amber action a
-                    // reader with nothing yet needs to notice first.
-                    color = if (pro) colors.textSecondary else null,
-                ),
-            ),
+            actions = listOf(RowAction(stringResource(R.string.promo_action_have_code), onOpen)),
         )
         is PromoState.Editing -> PromoEditingRow(promo.input, error = null, onInputChanged, onApply, onDismiss, colors)
         is PromoState.Failed -> PromoEditingRow(promo.input, error = promo.reason, onInputChanged, onApply, onDismiss, colors)
@@ -523,12 +555,18 @@ private fun PromoEditingRow(
  * face, because DESIGN.md section 3's foundation rule keeps JetBrains Mono for on-chain
  * identifiers only, and a promo code is not one. Paste works the way every [BasicTextField] on
  * Android already supports it, through the system's own context menu; nothing here disables it.
+ *
+ * The field takes focus as it appears (judges' round 2), whether "Have a code?" opened it here or
+ * Detail's "Have a code? Get Pro" did, so the keyboard is up and the next thing typed is the code.
+ * A request the node cannot take yet is dropped rather than thrown.
  */
 @Composable
 private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: AmberColors) {
     val style = AmberType.figureInline.copy(color = colors.textPrimary)
     val placeholder = stringResource(R.string.promo_field_placeholder)
     val label = stringResource(R.string.promo_field_label)
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(focus) { runCatching { focus.requestFocus() } }
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -542,6 +580,7 @@ private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: A
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
+            .focusRequester(focus)
             .semantics { contentDescription = label },
         decorationBox = { innerField ->
             Box {
@@ -618,18 +657,23 @@ private fun NotificationsGroup(
 // ---- About ---------------------------------------------------------------------------------
 
 /**
- * The version, the disclaimer every screen owes a reader, and Fonts and licenses collapsed behind
- * one row: Show opens the three bundled fonts' [LicenseRow]s in place, each able to read its own
- * shipped OFL text (task U11), and Hide folds them away again.
+ * The version, the disclaimer every screen owes a reader, the privacy policy, the terms and account
+ * deletion (judges' round 2 and the dApp Store listing: each a link row that opens plainticker.com
+ * in the browser, [AboutLinks]), and Fonts and licenses collapsed behind one row: Show opens the
+ * three bundled fonts' [LicenseRow]s in place, each able to read its own shipped OFL text (task
+ * U11), and Hide folds them away again.
  */
 @Composable
-private fun AboutGroup(colors: AmberColors) {
+private fun AboutGroup(colors: AmberColors, onOpenLink: (String) -> Unit) {
     var licensesOpen by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(title = stringResource(R.string.you_heading_about), colors = colors)
         AmberTickerRowGroup(colors = colors) {
             CabinetRow(colors = colors, value = stringResource(R.string.you_version, BuildConfig.VERSION_NAME))
             CabinetRow(colors = colors, value = stringResource(R.string.onboarding_body_disclaimer), valueKind = RowValueKind.QUIET)
+            AboutLinkRow(R.string.you_about_privacy, AboutLinks.PRIVACY, onOpenLink, colors)
+            AboutLinkRow(R.string.you_about_terms, AboutLinks.TERMS, onOpenLink, colors)
+            AboutLinkRow(R.string.you_about_delete_account, AboutLinks.DELETE_ACCOUNT, onOpenLink, colors, sub = R.string.you_about_delete_account_sub)
             CabinetRow(
                 colors = colors,
                 value = stringResource(R.string.you_heading_licenses),
@@ -646,6 +690,20 @@ private fun AboutGroup(colors: AmberColors) {
             }
         }
     }
+}
+
+/** One About row that opens [url] on plainticker.com in the browser; the whole row is the tap target. */
+@Composable
+private fun AboutLinkRow(label: Int, url: String, onOpenLink: (String) -> Unit, colors: AmberColors, sub: Int? = null) {
+    val text = stringResource(label)
+    CabinetRow(
+        colors = colors,
+        value = text,
+        sub = sub?.let { stringResource(it) },
+        valueKind = RowValueKind.LINK,
+        onTap = { onOpenLink(url) },
+        tapLabel = stringResource(R.string.you_about_open_link, text),
+    )
 }
 
 /**

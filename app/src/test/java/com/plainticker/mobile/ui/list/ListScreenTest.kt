@@ -52,7 +52,7 @@ class ListScreenTest {
 
     @Test
     fun `the sector chips scroll sideways in one row instead of wrapping`() {
-        val fn = body("private fun StocksFilterRow(", "// ---- Rows")
+        val fn = body("private fun StocksFilterRow(", "private fun groupedRowModifier(")
         assertTrue(".horizontalScroll(rememberScrollState())" in fn)
         assertFalse("a FlowRow wraps the chips to four rows again", "FlowRow(" in fn)
         assertFalse("FlowRow(" in source)
@@ -60,7 +60,7 @@ class ListScreenTest {
 
     @Test
     fun `the Deep pool chip is gated on its own count`() {
-        val fn = body("private fun StocksFilterRow(", "// ---- Rows")
+        val fn = body("private fun StocksFilterRow(", "private fun groupedRowModifier(")
         assertTrue("if (showsDeepPoolChip(trackedCount, active))" in fn)
     }
 

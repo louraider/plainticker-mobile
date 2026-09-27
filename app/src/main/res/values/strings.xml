@@ -137,14 +137,19 @@
     <!-- Detail -->
     <!-- The verdict (task app-verdict): directly under the hero and above the gauge, the same slot
          the web gives it. The label above it names what the value is; the value itself is either
-         the payload's own text (never here) or, while monetization withholds it, a placeholder
-         shape with no text standing in for the word, plus detail_pro_peek_note below it.
+         the payload's own text (never here) or, while monetization withholds it, the lock
+         detail_verdict_locked, then detail_pro_peek_note and detail_action_get_pro below it
+         (judges' round 2 replaced the grey placeholder bar, which read as still loading).
          detail_verdict_qualifier sits beside the unlocked value itself (the fix for the "no
          verdict" versus "Classification: Skip" contradiction judges flagged): the app classifies
          by a fixed rule and says so right next to the word, the same pairing the web gives it,
          rather than only lower down in Method. -->
     <string name="detail_verdict_label">Classification</string>
     <string name="detail_verdict_qualifier">By the method\'s fixed rule. Not a price forecast or advice.</string>
+    <string name="detail_verdict_locked">Pro only</string>
+    <!-- The lock's one action: You, Plan, with the promo code field open and focused, where the
+         hero's Get Pro sits too. -->
+    <string name="detail_action_get_pro">Have a code? Get Pro</string>
     <string name="detail_token_price">Token price</string>
     <!-- What the token's own figure is called below the liquidity floor, where the quote is a
          reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->
@@ -514,7 +519,10 @@
          reader, the full text once a device presents an entitled code. -->
     <string name="detail_heading_read">The read</string>
     <string name="detail_heading_next_steps">What to check next</string>
-    <string name="detail_pro_peek_note">The rest is available to a wallet with a pass, a qualifying stake, or a subscription.</string>
+    <!-- Where Pro comes from (judges' round 2: the old note said "a wallet", but Pro belongs to
+         the device or the account, and a code is a way in too). %1$s is the stake threshold,
+         formatted from ProModel's PRO_STAKE_THRESHOLD_RAW ("7,500"), never typed here. -->
+    <string name="detail_pro_peek_note">The rest is for Pro. Pro belongs to this device or your account, and comes from a pass, staking %1$s SKR, or a code.</string>
     <!-- The call reached the server and got back something this app could not read (ReadState.Failed).
          Never shown for Loading, NotServed or Disabled: those are not a fault to report. -->
     <string name="detail_read_unavailable">The read is unavailable</string>
@@ -685,6 +693,12 @@
     <string name="you_wallet_method">Solana wallet</string>
     <string name="you_wallet_none">Not connected</string>
     <string name="you_wallet_note">Stays connected between launches. This phone keeps the session token your wallet issued, encrypted, and never a key. Disconnect forgets it.</string>
+    <!-- The Wallet group (judges' round 2): the phone's wallet connection is its own group, not a
+         sign-in method, because it signs transactions through Mobile Wallet Adapter and opens no
+         account. One line under the key; the fuller you_wallet_note sits behind you_wallet_how. -->
+    <string name="you_heading_wallet">Wallet</string>
+    <string name="you_wallet_note_short">Signs swaps, votes and Pro payments. It is not a way to sign in.</string>
+    <string name="you_wallet_how">What this phone keeps of the connection</string>
     <string name="you_action_sign_in">Sign in</string>
     <string name="you_action_connect">Connect</string>
     <string name="you_action_copy">Copy</string>
@@ -712,6 +726,13 @@
     <string name="you_action_show">Show</string>
     <string name="you_action_hide">Hide</string>
     <string name="you_version">Version %1$s</string>
+    <!-- About's links (judges' round 2, and the dApp Store listing): each opens plainticker.com in
+         the browser (YouModel's AboutLinks). -->
+    <string name="you_about_privacy">Privacy policy</string>
+    <string name="you_about_terms">Terms</string>
+    <string name="you_about_delete_account">Delete account</string>
+    <string name="you_about_delete_account_sub">On plainticker.com, signed in with the same account.</string>
+    <string name="you_about_open_link">Open %1$s in the browser</string>
 
     <!-- Fonts and licenses (U11): the OFL texts ship as assets (app/src/main/assets/licenses/,
          docs/fonts.md); this device-facing name and credit line are the only part of that
