@@ -956,6 +956,47 @@ class SwapViewModelTest {
         }
     }
 
+    /**
+     * Beeman, judges' review 2026-09-27: sign_transactions is optional in MWA 2.x. A wallet whose
+     * capabilities leave it out is told so plainly, and is never asked to sign.
+     */
+    @Test
+    fun `a wallet that only signs by sending is named, and never asked to sign`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val ops = wallet.operations as FakeAdapterOperations
+        ops.optionalFeatures = arrayOf("solana:signInWithSolana")
+        val vm = viewModel(mock, wallet)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.SIGN_ONLY_UNSUPPORTED, failed.reason)
+            assertEquals(FailureOutcome.NOTHING_SENT, failed.reason.outcome)
+            assertEquals(FailureNext.NONE, failed.reason.next)
+            assertTrue("nothing was asked of the wallet", ops.signRequests.isEmpty())
+            assertTrue(mock.executes().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a wallet that lists sign-only is asked to sign in the same session, and lands`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val ops = wallet.operations as FakeAdapterOperations
+        ops.optionalFeatures = arrayOf("solana:signTransactions")
+        val vm = viewModel(mock, wallet)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Landed }
+            assertEquals(1, ops.signRequests.size)
+            assertEquals("one wallet round-trip for both", 1, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `an answer that reports no fill records the fill as unknown, never the estimate`() = runTest {
         executePlan = listOf(LANDED_NO_AMOUNTS to HttpStatusCode.OK)

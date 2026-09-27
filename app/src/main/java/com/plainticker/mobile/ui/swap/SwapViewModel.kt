@@ -22,6 +22,8 @@ import com.plainticker.mobile.repo.SecondSource
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
+import com.solana.mobilewalletadapter.clientlib.AdapterOperations
+import com.solana.mobilewalletadapter.clientlib.protocol.MobileWalletAdapterClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -422,10 +424,24 @@ class SwapViewModel(
             // ---- AwaitingWallet: the round-trip this product rests on.
             timing = timing.enterPhase(clock.nowMillis())
             _state.value = SwapState.AwaitingWallet(leg, funds, input, quote, requote, timing)
-            val outcome = wallet.call { it.signTransactions(arrayOf(unsigned)) }
+            // sign_transactions is optional in MWA 2.x (judges' review, 2026-09-27): the wallet's
+            // capabilities are read in the same session, after it authorized and before anything
+            // is asked of it, and a wallet that says it only signs by sending is told so plainly
+            // instead of failing the request with a generic error.
+            val outcome = wallet.call { ops ->
+                if (SwapWalletCapabilities.refusesSignOnly(readCapabilities(ops))) {
+                    null
+                } else {
+                    WalletSigned(ops.signTransactions(arrayOf(unsigned)).signedPayloads.firstOrNull())
+                }
+            }
             timing = timing.closeWallet(clock.nowMillis())
+            if (outcome is WalletOutcome.Success && outcome.value == null) {
+                debugLog.raw("wallet lists no solana:signTransactions, nothing asked of it")
+                return fail(leg, funds, input, SwapFailure.SIGN_ONLY_UNSUPPORTED, quote, requote, timing)
+            }
             val signed = when (outcome) {
-                is WalletOutcome.Success -> outcome.value.signedPayloads.firstOrNull()
+                is WalletOutcome.Success -> outcome.value?.payload
                 // The wallet itself is gone, which is not something a second tap can fix.
                 is WalletOutcome.NoWallet -> return fail(leg, funds, input, SwapFailure.NO_WALLET, quote, requote, timing)
                 is WalletOutcome.Cancelled -> null
@@ -730,6 +746,22 @@ class SwapViewModel(
             inputMultiplier = (leg.input.multiplier ?: BigDecimal.ONE).toDouble(),
             outputMultiplier = (leg.output.multiplier ?: BigDecimal.ONE).toDouble(),
         )
+
+    /**
+     * The wallet's capabilities, or null when it would not say. Null is not a refusal: a wallet
+     * that cannot answer is asked to sign as before, and fails there if it must.
+     */
+    private suspend fun readCapabilities(ops: AdapterOperations): MobileWalletAdapterClient.GetCapabilitiesResult? = try {
+        ops.getCapabilities()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        debugLog.raw("getCapabilities: ${e::class.simpleName}: ${e.message}")
+        null
+    }
+
+    /** What sign_transactions handed back, so a refusal before signing can be told apart from it. */
+    private class WalletSigned(val payload: ByteArray?)
 
     private fun failOpen(leg: SwapLeg, reason: SwapFailure) {
         _state.value = SwapState.Failed(leg, funds = null, input = null, reason = reason)

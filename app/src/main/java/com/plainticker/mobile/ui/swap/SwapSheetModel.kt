@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.swap
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.Explorer
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.raw
@@ -184,7 +185,18 @@ data class SheetContent(
      * Never a second primary: a sheet asks for one decision at a time.
      */
     val extra: SheetAction? = null,
+    /**
+     * What [com.plainticker.mobile.wallet.TransactionGuard] checked on this phone, stated while
+     * the wallet is open (judges' review, 2026-09-27): what the bytes spend, where they pay, and
+     * the least they accept. Only on [SwapState.AwaitingWallet], which the guard's Allow precedes.
+     */
+    val checked: Copy? = null,
+    /** Solscan's page for the landed transaction, drawn as "View on Solscan". Receipt only. */
+    val explorerUrl: String? = null,
 ) {
+    /** The label [explorerUrl] is drawn with, decided here like every other word on the sheet. */
+    val explorerLabel: Copy? get() = explorerUrl?.let { words(R.string.action_view_on_solscan) }
+
     /** The receipt replaces the sheet's own anatomy rather than being appended to it. */
     val isReceipt: Boolean get() = receipt != null
 
@@ -217,6 +229,8 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         footnote: Copy? = null,
         result: SheetResult? = null,
         extra: SheetAction? = null,
+        checked: Copy? = null,
+        explorerUrl: String? = null,
     ) = SheetContent(
         title = title,
         flip = flip,
@@ -232,6 +246,8 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         footnote = footnote,
         result = result,
         extra = extra,
+        checked = checked,
+        explorerUrl = explorerUrl,
     )
 
     return when (this) {
@@ -292,6 +308,16 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             cells = costCells(leg, quote),
             notice = if (requote) words(R.string.swap_requote_approval) else null,
             secondary = close,
+            // The guard read the bytes before the wallet opened, and required exactly these: the
+            // amount spent from the wallet's own account, the proceeds into its own account for
+            // the output, and a floor no lower than the one shown.
+            checked = words(
+                R.string.swap_guard_checked,
+                leg.input.shown(quote.inAmountRaw),
+                leg.input.symbol,
+                leg.output.symbol,
+                leg.output.shown(quote.worstCaseOutRaw),
+            ),
         )
 
         // No action at all: POST /execute is in flight and there is nothing to take back. The
@@ -342,6 +368,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
                     words(R.string.receipt_swap_back, leg.input.symbol),
                     SheetActionKind.SwapBack,
                 ),
+                explorerUrl = Explorer.transaction(fill.signature),
             )
         }
 

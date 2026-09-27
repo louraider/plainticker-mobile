@@ -50,6 +50,7 @@ import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberType
+import com.plainticker.mobile.ui.SolscanAction
 import com.plainticker.mobile.ui.text
 import kotlinx.coroutines.launch
 
@@ -128,6 +129,11 @@ internal fun ColumnScope.PassSheetBody(
     }
 
     content.notice?.let { Sentence(it.text(), colors.textSecondary, NoticeTop) }
+
+    // The landed payment on a public explorer (judges' review, 2026-09-27).
+    content.signature?.let {
+        SolscanAction(signature = it, color = colors.actionText, modifier = Modifier.padding(start = Side, top = NoticeTop))
+    }
 
     Column(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),

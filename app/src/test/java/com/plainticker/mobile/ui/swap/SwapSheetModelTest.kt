@@ -288,6 +288,32 @@ class SwapSheetModelTest {
         assertEquals(paying.solCost, paying.paidSol)
     }
 
+    /** Voynich, judges' review 2026-09-27: show the guard's result on screen before signing. */
+    @Test
+    fun `while the wallet is open the sheet says what this phone checked in the bytes`() {
+        val content = SwapState.AwaitingWallet(leg, funds, amount(), quote, requote = false, timing = timing).shown()
+        assertEquals(R.string.swap_guard_checked, id(content.checked))
+        assertEquals(listOf("5", "USDC", "TSLAx", "0.013469"), args(content.checked))
+        assertEquals(
+            "Checked on this phone: spends 5 USDC from your account, pays into your own TSLAx account, at least 0.013469 TSLAx.",
+            ShippedCopy.render(requireNotNull(content.checked)),
+        )
+        // Only there: before the guard has read anything, and after the wallet, there is no such line.
+        assertNull(SwapState.Quoting(leg, funds, amount(), requote = false, timing = timing).shown().checked)
+        assertNull(SwapState.Landing(leg, funds, amount(), quote, requoted = false, timing = timing).shown().checked)
+        assertNull(SwapState.Failed(leg, funds, amount(), SwapFailure.GUARD_REFUSED, quote, false, timing).shown().checked)
+    }
+
+    @Test
+    fun `a wallet that only signs by sending is named, with nothing to retry`() {
+        val content = SwapState.Failed(leg, funds, amount(), SwapFailure.SIGN_ONLY_UNSUPPORTED, quote, false, timing).shown()
+        assertEquals(
+            "This wallet only signs by sending, and a swap needs it to sign first. Use Seed Vault Wallet. Nothing was signed.",
+            ShippedCopy.render(requireNotNull(content.notice)),
+        )
+        assertNull(content.primary)
+    }
+
     @Test
     fun `the SOL figure is the quote's three fees and never the plan's rent constant`() {
         val constant = 2_039_280L
@@ -441,6 +467,10 @@ class SwapSheetModelTest {
 
         assertEquals("445,912,340", raw(cell(content, R.string.receipt_slot).value))
         assertNull("only the signature is a handle", cell(content, R.string.receipt_slot).copies)
+        // A real signature is 86 to 88 characters; this fixture's short one makes no link at all.
+        assertNull(content.explorerUrl)
+        val real = "5".repeat(88)
+        assertEquals("the receipt links the transaction on Solscan", "https://solscan.io/tx/$real", landed(fill.copy(signature = real)).shown().explorerUrl)
 
         // What the wallet paid in SOL, the deposit named as coming back.
         val sol = cell(content, R.string.receipt_sol_paid)

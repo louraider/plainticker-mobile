@@ -343,6 +343,7 @@
     <string name="swap_failed_dust">This amount is too small. The quote returns nothing for it.</string>
     <string name="swap_failed_wallet_changed">The wallet disconnected or changed before signing. Nothing was signed.</string>
     <string name="swap_failed_signed_mismatch">The wallet handed back a transaction other than the one checked, so it was not sent. Nothing moved.</string>
+    <string name="swap_failed_sign_only_unsupported">This wallet only signs by sending, and a swap needs it to sign first. Use Seed Vault Wallet. Nothing was signed.</string>
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
     <string name="swap_try_again">Try again</string>
@@ -387,6 +388,12 @@
     <string name="receipt_slot">Slot</string>
     <string name="receipt_view_portfolio">View in Portfolio</string>
     <string name="receipt_swap_back">Swap back to %1$s</string>
+    <!-- Explorer links, judges' review 2026-09-27: a landed transaction on Solscan. The short form is
+         a row's trailing action, where the meta line budgets for one short word. -->
+    <string name="action_view_on_solscan">View on Solscan</string>
+    <string name="action_solscan">Solscan</string>
+    <!-- Shown while the wallet is open: what TransactionGuard read in the bytes on this phone. -->
+    <string name="swap_guard_checked">Checked on this phone: spends %1$s %2$s from your account, pays into your own %3$s account, at least %4$s %3$s.</string>
 
     <!-- Portfolio -->
     <string name="portfolio_heading_holdings">Holdings</string>

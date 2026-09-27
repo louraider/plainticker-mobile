@@ -643,6 +643,13 @@ enum class SwapFailure(
     SIGNED_MISMATCH(R.string.swap_failed_signed_mismatch, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 
     /**
+     * The wallet's own capabilities leave out `solana:signTransactions`, optional in MWA 2.x: it
+     * only signs by sending, and a swap needs the signed bytes back to check and hand to Jupiter.
+     * Nothing was asked of the wallet. A retry cannot change the wallet, so only Close.
+     */
+    SIGN_ONLY_UNSUPPORTED(R.string.swap_failed_sign_only_unsupported, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
+
+    /**
      * The authorize round-trip failed, so the wallet was never read and nothing was quoted.
      *
      * This is the connect step only. An approval that comes back without a signature is not a

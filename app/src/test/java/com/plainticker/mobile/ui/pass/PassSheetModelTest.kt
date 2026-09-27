@@ -104,4 +104,11 @@ class PassSheetModelTest {
         assertEquals(sentences.size, sentences.toSet().size)
         sentences.forEach { assertTrue(it, it.startsWith("This phone refused the transaction before your wallet saw it: ")) }
     }
+
+    @Test
+    fun `a landed payment carries its signature for View on Solscan, and nothing before it does`() {
+        val sig = "5".repeat(88)
+        assertEquals(sig, requireNotNull(PassState.Landed(sig, null).sheet()).signature)
+        assertEquals(null, requireNotNull(PassState.Ready(payer, build(5_000L)).sheet()).signature)
+    }
 }

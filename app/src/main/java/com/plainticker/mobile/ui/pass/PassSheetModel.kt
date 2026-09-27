@@ -23,6 +23,8 @@ data class PassSheetContent(
     val secondary: PassAction?,
     /** True for the signing round-trip and the confirm call: neither is a swipe-away moment. */
     val holdsOpen: Boolean = false,
+    /** The landed payment's signature, for "View on Solscan". Landed only. */
+    val signature: String? = null,
 )
 
 data class PassBar(val label: Copy, val meta: Copy)
@@ -90,6 +92,7 @@ fun PassState.sheet(): PassSheetContent? = when (this) {
         notice = if (entitlement != null) words(R.string.pass_landed_note) else words(R.string.pass_landed_pending_note),
         primary = null,
         secondary = PassAction(words(R.string.action_close), PassActionKind.Close),
+        signature = signature,
     )
 
     is PassState.Refused -> PassSheetContent(
