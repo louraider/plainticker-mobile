@@ -1,7 +1,7 @@
 # Demo video: script of record
 
-Written 2026-09-27 against build 1.3.13. It replaces `docs/video-script-2026-09-15.md`, which
-was written before the redesign, before the vote went live and before Pro existed.
+Written 2026-09-27 for build 1.3.16 (checked against 1.3.13). It replaces
+`docs/video-script-2026-09-15.md`, which was written before the redesign, before the vote went live and before Pro existed.
 
 **One person's day on the current app,** filmed on a Seeker, screen capture with voice-over.
 Target 2:30 to 3:00; the Brief caps the demo at three minutes.
@@ -185,7 +185,7 @@ Re-read these against the app before recording, and change the line rather than 
   the line stays true as spoken, because it names the first round.
 - **Shot 8:** 57 is the count on 26 September (the 56-row ranked list plus JEF). Recount on the day
   from `GET /api/v1/summary`.
-- If a digest, a label or a screen changes in 1.3.14 before filming, the spoken line follows the
+- If a digest, a label or a screen changes in 1.3.16 or later before filming, the spoken line follows the
   build that is filmed.
 
 ## If it runs long, cut in this order

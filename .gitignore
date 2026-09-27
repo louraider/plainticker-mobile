@@ -29,9 +29,17 @@ __pycache__/
 # Secrets. Nothing here has ever been tracked (checked over every commit on every
 # ref, 2026-09-18); these lines are the guard rail, because the redaction guard can
 # only see what git already stored.
-.env
-.env.*
+.env*
 keystore.properties
 signing.properties
 *.p12
 *.pem
+/secrets/
+*keypair*.json
+
+# Agent skills and IDE settings: per-machine tooling, not source. Removed from the tree on
+# 2026-09-27 before the repository went public (docs/public-flip-checklist.md, step 9).
+.agents/
+.claude/
+skills-lock.json
+/.idea/

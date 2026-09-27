@@ -109,7 +109,7 @@ If you ever must build a signed release by hand (not on this machine):
 ```bash
 export KEYSTORE_PATH=~/keystores/plainticker-release.jks KEY_ALIAS=plainticker-release
 read -rs KEYSTORE_PASSWORD; export KEYSTORE_PASSWORD KEY_PASSWORD="$KEYSTORE_PASSWORD"
-./gradlew :app:assembleRelease -PversionCode=100 -PversionName=0.1.0
+./gradlew :app:assembleRelease -PversionCode=10316 -PversionName=1.3.16
 ```
 
 ## 7. If the keystore leaks

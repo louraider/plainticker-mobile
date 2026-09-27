@@ -8,21 +8,20 @@ is the web repo's `POST /api/v1/auth/google` (PR #140, `server/auth/README.md`, 
 
 1. The reader taps **Sign in with Google** in You, under Account.
 2. `AccountViewModel` asks `GoogleAuthApi.fetchNonce()` for a server nonce before opening
-   Google's sheet at all. Any failure — a 404 from a server that predates the route, a network
-   error, or anything else, a blank or unparsable answer included — falls back silently to a
-   fresh local nonce (`SignInNonce`, 256 random bits, base64url), the only kind this app ever
-   sent before this endpoint existed.
+   Google's sheet at all. The server requires that nonce, so any failure (a network error, a
+   non-2xx, a blank or unparsable answer) ends the attempt there with "Couldn't reach
+   PlainTicker, try again." (`account_msg_nonce_unavailable`) and Google is never asked. There is
+   no local fallback.
 3. `CredentialManagerGoogleSource` asks Android Credential Manager for a
    `GetSignInWithGoogleOption` with `serverClientId` set to the **web** OAuth client id
-   (`BuildConfig.GOOGLE_SERVER_CLIENT_ID`) and that nonce (the server's, or the local fallback).
+   (`BuildConfig.GOOGLE_SERVER_CLIENT_ID`) and the server's nonce.
    Google shows its own sheet.
 4. The ID token that comes back must carry the same `nonce` claim. If it does not, it is dropped
    and never sent.
 5. The token goes to `POST https://www.plainticker.com/api/v1/auth/google` as
    `{ "idToken", "nonce" }`, with the device code in the `X-PT-Code` header, the same header and
    base URL every other `/api/v1` call in the app uses (`GoogleAuthApi`). `nonce` is the server's
-   value from step 2; on a local fallback the field is left out entirely, so a server that has
-   not deployed nonce checking yet sees exactly the one-field body it always has.
+   value from step 2, always present.
 6. The server verifies the token, finds or creates the shared account, links this device to it
    and answers with the user, the linked wallets and the Pro status.
 7. The app keeps only what it draws: the email, the name and the linked wallets
@@ -46,21 +45,22 @@ into the Google request and echoes back to `POST /api/v1/auth/google` as `nonce`
 can check the token's `nonce` claim against the one it issued: a captured, still-valid ID token
 for the web client id can no longer be replayed once that nonce has expired. The app keeps its
 own local check too (`SignInNonce.matches`, `AccountViewModel`), comparing the token's claim
-against whichever nonce it actually asked Google for, server-issued or a local fallback.
+against the server nonce it asked Google for.
 
-**The fallback.** Fetching the nonce can fail — a 404 from a server that predates the route, a
-network error, or anything else the fetch throws or fails to parse. Any of these falls back to a
-fresh local random nonce, sent to Google exactly as before this endpoint existed, with no `nonce`
-field at all in the `/api/v1/auth/google` body. This is why the app never needed a release when
-the nonce endpoint was added: it degrades to its old behavior against an old server, and upgrades
-itself the moment the new route answers.
+**No fallback.** The server requires the nonce in production (`GOOGLE_SIGNIN_NONCE_REQUIRED`,
+verified on the web repo's PR #165), so a sign-in without it would only be refused. Until
+2026-09-26 the app fell back to a local random nonce when the fetch failed and left the `nonce`
+field out of the body, so it kept working against a server that predated the route. That
+fallback is gone: if the nonce cannot be fetched, the attempt ends before Google's sheet opens
+and the reader is told to try again.
 
 ## What each outcome says
 
 Every outcome is one plain line under the button (`AccountModel.kt`, strings `account_msg_*`):
 cancelled, no Google account on the phone, no Play services, a setup problem (Android or Google
 itself could not run the request — see "Mapping a Credential Manager failure" below), an
-interrupted request, Google returned nothing usable, a local nonce mismatch, a network failure,
+interrupted request, Google returned nothing usable, the server nonce could not be fetched, a
+local nonce mismatch, a network failure,
 and each server code in the README's table (`bad_request`, `bad_device_code`, `invalid_token`,
 `expired_token`, `wrong_audience`, `nonce_invalid`, `nonce_expired`, `email_not_verified`,
 `rate_limited`, `internal`, `auth_disabled`, `not_configured`, `jwks_unavailable`), plus a 404

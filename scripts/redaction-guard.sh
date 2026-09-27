@@ -97,12 +97,18 @@ else
 fi
 
 # --- 4. candidates: whole runs of key/signature length + every such window of longer runs ----
-awk -F: '{
-  t = $NF; n = length(t)
+# Runs are made unique before they are cut into windows. In --history mode the same run sits in
+# hundreds of revisions, and cutting every copy of a multi-megabyte base64 run into windows
+# before deduplicating wrote tens of gigabytes of sort spill: the CI runner ran out of disk
+# ("sort: write failed ... No space left on device", runs 35718927166 and 35778241319). The set
+# of candidates is identical either way; only the copies are gone. LC_ALL=C makes both sorts
+# byte-exact and faster.
+awk -F: '{ print $NF }' "$TMP" | LC_ALL=C sort -u | awk '{
+  t = $0; n = length(t)
   if ((n >= 32 && n <= 44) || (n >= 86 && n <= 88)) print t
   if (n > 44) for (L = 32; L <= 44; L++) for (i = 1; i + L - 1 <= n; i++) print substr(t, i, L)
   if (n > 88) for (L = 86; L <= 88; L++) for (i = 1; i + L - 1 <= n; i++) print substr(t, i, L)
-}' "$TMP" | sort -u | hash_all > "$HASHES"
+}' | LC_ALL=C sort -u | hash_all > "$HASHES"
 scanned=$(wc -l < "$HASHES" | tr -d ' ')
 
 # --- 5. compare hashes with the denylist and report every hit -------------------------------
