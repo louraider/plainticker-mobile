@@ -14,8 +14,13 @@ import kotlinx.serialization.json.Json
 /**
  * The one HTTP client the app shares across PlainTicker, xStocks and Jupiter.
  *
- * Every API here is public JSON over TLS with no credentials, so one OkHttp-backed client
- * with one JSON configuration is enough. Tests pass a Ktor MockEngine through [create].
+ * Every API here is JSON over TLS, so one OkHttp-backed client with one JSON configuration is
+ * enough. xStocks, Jupiter and the Solana nodes are public and get no credentials. PlainTicker's
+ * own routes carry this device's code, a bearer credential, in the `X-PT-Code` header: each API
+ * class (PlainTickerApi, EntitlementApi, ReadApi, PromoApi, GoogleAuthApi, AccountApi,
+ * DeviceRekeyApi) sets it on its own requests, never in a URL, so this client itself adds no
+ * credential to any request, and no logging plugin is installed that could print one. Tests pass
+ * a Ktor MockEngine through [create].
  */
 object HttpClientFactory {
 

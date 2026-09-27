@@ -123,6 +123,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.devicePassStore,
             container.passReceiptStore,
             container.clock,
+            rekeyer = container.deviceRekeyer,
         )
     }
     initializer {
@@ -138,6 +139,13 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         )
     }
     initializer {
-        AccountViewModel(container.googleAuthApi, container.accountApi, container.accountStore, container.devicePassStore)
+        AccountViewModel(
+            container.googleAuthApi,
+            container.accountApi,
+            container.accountStore,
+            container.devicePassStore,
+            rekeyer = container.deviceRekeyer,
+            signOutRunner = container.accountSignOut,
+        )
     }
 }

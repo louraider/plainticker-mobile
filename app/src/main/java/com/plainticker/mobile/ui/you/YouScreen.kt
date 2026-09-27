@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -57,6 +58,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.auth.DeviceCodeStatus
 import com.plainticker.mobile.auth.CredentialManagerGoogleSource
 import com.plainticker.mobile.data.plainticker.EntitlementSource
 import com.plainticker.mobile.prefs.SignedInAccount
@@ -136,6 +138,7 @@ fun YouScreen(
     val promo by passViewModel.promo.collectAsStateWithLifecycle()
     val pass by passViewModel.state.collectAsStateWithLifecycle()
     val account by accountViewModel.state.collectAsStateWithLifecycle()
+    val deviceCodeStatus by accountViewModel.deviceCodeStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // An Activity context: Credential Manager draws Google's sheet over it.
     val credentials = remember(context) { CredentialManagerGoogleSource(context, BuildConfig.GOOGLE_SERVER_CLIENT_ID) }
@@ -183,6 +186,7 @@ fun YouScreen(
             onOpenTab = onOpenTab,
             onOpenDigest = onOpenDigest,
             account = account,
+            deviceCodeStatus = deviceCodeStatus,
             onSignIn = { accountViewModel.signIn(credentials) },
             onSignOut = accountViewModel::signOut,
             onUnlink = accountViewModel::unlink,
@@ -223,6 +227,7 @@ internal fun YouContent(
     onEnableNotifications: (() -> Unit)? = null,
     onOpenDigest: (() -> Unit)? = null,
     account: AccountUiState = AccountUiState.Restoring,
+    deviceCodeStatus: DeviceCodeStatus = DeviceCodeStatus.OK,
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onUnlink: (String) -> Unit = {},
@@ -269,6 +274,9 @@ internal fun YouContent(
                 onDismissPromo = onDismissPromo,
                 pro = pro.pro,
                 colors = colors,
+                // A promo grant belongs to this phone's own code, which a reinstall loses; a
+                // signed-in account keeps it. Said only once the account is known to be absent.
+                promoKeepNote = account is AccountUiState.SignedOut,
             )
         }
         item(key = "methods") {
@@ -282,6 +290,7 @@ internal fun YouContent(
                 onUnlink = onUnlink,
                 colors = colors,
                 showMessage = heroMessage == null,
+                deviceCodeStatus = deviceCodeStatus,
             )
         }
         item(key = "device") { DeviceGroup(state = state, onOpenTab = onOpenTab, colors = colors) }
@@ -360,6 +369,15 @@ private fun Hero(
                 color = colors.stateCaution,
                 modifier = Modifier.padding(top = 6.dp),
             )
+            if (accountMessageOpensWeb(it)) {
+                val uriHandler = LocalUriHandler.current
+                TextAction(
+                    label = stringResource(R.string.account_action_open_web),
+                    onClick = { runCatching { uriHandler.openUri(AccountMessage.LINK_ON_WEB_URL) } },
+                    color = colors.actionText,
+                    contentPadding = MessageTextActionPadding,
+                )
+            }
         }
         hero.action?.let { action ->
             Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
@@ -408,6 +426,7 @@ private fun PlanGroup(
     onDismissPromo: () -> Unit,
     pro: Boolean,
     colors: AmberColors,
+    promoKeepNote: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(title = stringResource(R.string.you_heading_plan), colors = colors)
@@ -429,6 +448,7 @@ private fun PlanGroup(
                 onApply = onApplyPromo,
                 onDismiss = onDismissPromo,
                 colors = colors,
+                keepNote = promoKeepNote,
             )
         }
     }
@@ -464,6 +484,7 @@ private fun PromoRow(
     onApply: () -> Unit,
     onDismiss: () -> Unit,
     colors: AmberColors,
+    keepNote: Boolean = false,
 ) {
     when (promo) {
         PromoState.Idle -> CabinetRow(
@@ -491,6 +512,7 @@ private fun PromoRow(
         is PromoState.Success -> CabinetRow(
             colors = colors,
             value = promoSuccessLine(promo.untilMillis).text(),
+            sub = if (keepNote) stringResource(R.string.promo_success_keep_note) else null,
         )
     }
 }
@@ -827,6 +849,9 @@ private val HeroHeadlineStyle = AmberType.figureLarge.copy(fontSize = 28.sp, lin
 
 /** TextAction's own padding, balanced so the label centres under the hero's button. */
 private val CenteredTextActionPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+
+/** A text action under the hero's message line: flush with the line's own start edge. */
+private val MessageTextActionPadding = PaddingValues(start = 0.dp, top = 14.dp, end = 16.dp, bottom = 14.dp)
 
 /** AmberTickerRowGroup's own 16dp side inset, shared by the hero so every block lines up. */
 private val GroupSide = 16.dp

@@ -56,6 +56,12 @@ enum class PromoRefusal(@StringRes val text: Int) {
 
     RATE_LIMITED(R.string.promo_error_rate_limited),
 
+    /** 401 `rekey_required` still, after the one rekey and retry: the device code is mid-update. */
+    REKEY_PENDING(R.string.promo_error_rekey_pending),
+
+    /** 401 `code_retired`: the server no longer accepts this device's code. */
+    CODE_RETIRED(R.string.promo_error_code_retired),
+
     /** 404: the route is not deployed yet. */
     NOT_OPEN(R.string.promo_error_not_open),
 

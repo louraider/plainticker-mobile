@@ -1,5 +1,9 @@
 package com.plainticker.mobile.ui.pass
 
+import com.plainticker.mobile.data.auth.DeviceRekeyApi
+import com.plainticker.mobile.data.auth.DeviceRekeyer
+import com.plainticker.mobile.prefs.FakePrefs
+import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.funkatronics.encoders.Base58
@@ -617,6 +621,9 @@ class PassViewModelTest {
             Triple(429, """{"error":"bad","code":"rate_limited"}""", PromoRefusal.RATE_LIMITED),
             Triple(404, """{"error":"not_found"}""", PromoRefusal.NOT_OPEN),
             Triple(500, """{"error":"internal"}""", PromoRefusal.UNAVAILABLE),
+            // The pack's shared server contract (2026-09-27), with no rekeyer to act on them.
+            Triple(401, """{"error":"rekey_required"}""", PromoRefusal.REKEY_PENDING),
+            Triple(401, """{"error":"code_retired"}""", PromoRefusal.CODE_RETIRED),
         )
         table.forEach { (status, body, expected) ->
             val promo = mockApi { respondJson(body, HttpStatusCode.fromValue(status)) }
@@ -632,6 +639,47 @@ class PassViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+    }
+
+    @Test
+    fun `a legacy device redeems with its new code, rekeyed first through the rekeyer`() = runTest {
+        val legacy = "K7M9QRSTXY"
+        val prefs = FakePrefs().also { it.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacy).commit() }
+        val codes = SharedPrefsDevicePassStore(prefs)
+        val promo = mockApi { request ->
+            when {
+                request.url.encodedPath.endsWith(DeviceRekeyApi.PATH) -> respondJson("""{"ok":true}""")
+                request.headers[PromoApi.HEADER_CODE] == legacy ->
+                    respondJson("""{"error":"rekey_required"}""", HttpStatusCode.Unauthorized)
+                else -> respondJson("""{"pro":true,"source":"promo","until":"2026-10-19T00:00:00.000Z"}""")
+            }
+        }
+        val rekeyer = DeviceRekeyer(codes, DeviceRekeyApi(promo.client), Clock { now }, { }, mainDispatcherRule.dispatcher)
+        val vm = PassViewModel(
+            PassApi(passMock().client),
+            EntitlementApi(entitlementMock().client),
+            PromoApi(promo.client),
+            wallet(),
+            staking(0L),
+            codes,
+            FakePassReceiptStore(),
+            clock = Clock { now },
+            debugLog = PassDebugLog { },
+            ioDispatcher = mainDispatcherRule.dispatcher,
+            rekeyer = rekeyer,
+        ).also { machines += it }
+
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm.promo.test {
+            awaitItem()
+            vm.applyPromo()
+            awaitUntil { it is PromoState.Success }
+            cancelAndIgnoreRemainingEvents()
+        }
+        val redeem = promo.requests.filter { it.url.encodedPath.endsWith(PromoApi.PATH) }
+        assertEquals(listOf(codes.code()), redeem.map { it.headers[PromoApi.HEADER_CODE] })
+        assertFalse(codes.isLegacy())
     }
 
     @Test

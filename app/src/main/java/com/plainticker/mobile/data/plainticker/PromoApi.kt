@@ -34,6 +34,8 @@ import kotlinx.serialization.json.Json
  * @throws PromoError.ExpiredCode on 410 `expired_code`
  * @throws PromoError.AlreadyRedeemed on 409 `already_redeemed`
  * @throws PromoError.AlreadyApplied on 409 `already_applied`
+ * @throws PromoError.RekeyRequired on 401 `rekey_required` (a legacy device code, not yet rekeyed)
+ * @throws PromoError.CodeRetired on 401 `code_retired`
  * @throws PromoError.RateLimited on 429
  * @throws PromoError.NotOpen on 404, the route not deployed yet
  * @throws PromoError.Unavailable on anything else, a 200 this app cannot parse included

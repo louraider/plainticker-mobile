@@ -230,4 +230,49 @@ class AccountApiTest {
         assertFalse("K7M9QRSTXY" in error.message.orEmpty())
         assertFalse("K7M9QRSTXY" in error.toString())
     }
+
+    // ---- The device-code answers and sign-out (the pack's shared server contract, 2026-09-27) ----
+
+    @Test
+    fun `rekey_required and code_retired are their own 401s, never read as not signed in`() = runTest {
+        val table = listOf(
+            "rekey_required" to AccountApiError.RekeyRequired::class,
+            "code_retired" to AccountApiError.CodeRetired::class,
+            "not_signed_in" to AccountApiError.NotSignedIn::class,
+        )
+        table.forEach { (code, expected) ->
+            val mock = MockApi { respondJson("""{"error":"$code"}""", HttpStatusCode.Unauthorized) }
+            assertEquals(code, expected, expectThrows<AccountApiError> { AccountApi(mock.client).get("ABCDE12345") }::class)
+            assertEquals(code, expected, expectThrows<AccountApiError> { AccountApi(mock.client).unlinkWallet(wallet, "ABCDE12345") }::class)
+            assertEquals(code, expected, expectThrows<AccountApiError> { AccountApi(mock.client).signOut("ABCDE12345") }::class)
+        }
+    }
+
+    @Test
+    fun `sign out posts to account signout with the device code in the header only`() = runTest {
+        val code = "K7M9QRSTXYK7M9QRSTXYK7M9QR"
+        val mock = MockApi { respondJson("""{"ok":true}""") }
+        AccountApi(mock.client).signOut(code)
+        val request = mock.lastRequest
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("/api/v1/account/signout", request.url.encodedPath)
+        assertEquals(code, request.headers["X-PT-Code"])
+        assertFalse(code in request.url.toString())
+        assertFalse(code in request.bodyText())
+    }
+
+    @Test
+    fun `sign out refusals map like every other account route`() = runTest {
+        val table = listOf(
+            Triple(429, """{"error":"rate_limited"}""", AccountApiError.RateLimited::class),
+            Triple(404, """{"error":"not_found"}""", AccountApiError.NotOpen::class),
+            Triple(503, "<html>down</html>", AccountApiError.Unavailable::class),
+        )
+        table.forEach { (status, body, expected) ->
+            val mock = MockApi { respondJson(body, HttpStatusCode.fromValue(status)) }
+            assertEquals(body, expected, expectThrows<AccountApiError> { AccountApi(mock.client).signOut("ABCDE12345") }::class)
+        }
+        val offline = MockApi { throw IOException("offline") }
+        expectThrows<IOException> { AccountApi(offline.client).signOut("ABCDE12345") }
+    }
 }

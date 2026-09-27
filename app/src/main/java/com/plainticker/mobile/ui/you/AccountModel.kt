@@ -2,6 +2,7 @@ package com.plainticker.mobile.ui.you
 
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.auth.DeviceCodeStatus
 import com.plainticker.mobile.prefs.SignedInAccount
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
@@ -41,6 +42,21 @@ fun accountMessageRes(message: AccountMessage): Int = when (message) {
     AccountMessage.JWKS_UNAVAILABLE -> R.string.account_msg_jwks_unavailable
     AccountMessage.NOT_OPEN -> R.string.account_msg_not_open
     AccountMessage.UNKNOWN -> R.string.account_msg_unknown
+    AccountMessage.LINK_ON_WEB -> R.string.account_msg_link_on_web
+    AccountMessage.REKEY_PENDING -> R.string.account_msg_rekey_pending
+    AccountMessage.CODE_RETIRED -> R.string.account_msg_code_retired
+    AccountMessage.SIGN_OUT_UNCONFIRMED -> R.string.account_msg_sign_out_unconfirmed
+}
+
+/** Whether [message] comes with the text action that opens [AccountMessage.LINK_ON_WEB_URL]. */
+fun accountMessageOpensWeb(message: AccountMessage?): Boolean = message == AccountMessage.LINK_ON_WEB
+
+/** The line You draws about this phone's own code, or null when there is nothing to say. */
+@StringRes
+fun deviceCodeNoticeRes(status: DeviceCodeStatus): Int? = when (status) {
+    DeviceCodeStatus.OK -> null
+    DeviceCodeStatus.BLOCKED -> R.string.device_code_blocked
+    DeviceCodeStatus.RETIRED -> R.string.device_code_retired
 }
 
 /** Who is signed in: the email, else the name, else a plain "Google account". */

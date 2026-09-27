@@ -7,6 +7,7 @@ import com.funkatronics.encoders.Base58
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
+import com.plainticker.mobile.data.auth.DeviceRekeyer
 import com.plainticker.mobile.data.plainticker.EntitlementApi
 import com.plainticker.mobile.data.plainticker.EntitlementError
 import com.plainticker.mobile.data.plainticker.EntitlementResponse
@@ -119,6 +120,11 @@ class PassViewModel(
     private val debugLog: PassDebugLog = PassDebugLog.ANDROID,
     /** Where a receipt is written. viewModelScope runs on Main, and a file write does not. */
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * Rekeys a legacy device code before `promo/redeem`, and once more on its 401
+     * `rekey_required` (the pack's shared server contract, item 2). Null reads the code as stored.
+     */
+    private val rekeyer: DeviceRekeyer? = null,
 ) : ViewModel() {
 
     private val _pro = MutableStateFlow(ProUiState(pendingSignature = pendingReceipt()?.signature))
@@ -253,7 +259,9 @@ class PassViewModel(
         promoJob = viewModelScope.launch {
             _promo.value = PromoState.Applying(input)
             try {
-                val response = promoApi.redeem(input, devicePassStore.code())
+                val response = rekeyer
+                    ?.withCode({ it is PromoError.RekeyRequired }) { code -> promoApi.redeem(input, code) }
+                    ?: promoApi.redeem(input, devicePassStore.code())
                 _promo.value = PromoState.Success(response.untilEpochMillis())
                 // The hero and the Pro locks read ProUiState, not PromoState, so the fresh read
                 // this device just earned reaches them the one way anything else here does.
@@ -277,6 +285,8 @@ class PassViewModel(
         is PromoError.AlreadyRedeemed -> PromoRefusal.ALREADY_REDEEMED
         is PromoError.AlreadyApplied -> PromoRefusal.ALREADY_APPLIED
         is PromoError.RateLimited -> PromoRefusal.RATE_LIMITED
+        is PromoError.RekeyRequired -> PromoRefusal.REKEY_PENDING
+        is PromoError.CodeRetired -> PromoRefusal.CODE_RETIRED.also { rekeyer?.markRetired() }
         is PromoError.NotOpen -> PromoRefusal.NOT_OPEN
         is PromoError.Unavailable -> PromoRefusal.UNAVAILABLE
     }

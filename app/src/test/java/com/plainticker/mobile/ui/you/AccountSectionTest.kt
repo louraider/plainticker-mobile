@@ -141,7 +141,10 @@ class AccountSectionTest {
             val text = ShippedCopy.render(Copy.Words(accountMessageRes(message)))
             assertFalse("$message: $text", '!' in text)
             assertFalse("$message is not one line: $text", '\n' in text)
-            assertTrue("$message is too long to read as one line: $text", text.length <= 90)
+            // LINK_ON_WEB's sentence was given word for word with the server contract (2026-09-27),
+            // and it has to name both the place and the step; it wraps to a second line at 95.
+            val limit = if (message == AccountMessage.LINK_ON_WEB) 95 else 90
+            assertTrue("$message is too long to read as one line: $text", text.length <= limit)
         }
     }
 
@@ -161,4 +164,53 @@ class AccountSectionTest {
     // The clipping measurements this file used to carry (the sign-in button labels and the wallet
     // key) moved to CabinetFitTest with every other one-line slot on You, re-derived for the
     // hero's own button width.
+
+    // ---- The pack's shared server contract (2026-09-27) ---------------------------------------
+
+    @Test
+    fun `link_on_web offers the web account page beside Sign in and under the hero's message`() {
+        val section = sectionScan.code
+        assertTrue("uriHandler.openUri(AccountMessage.LINK_ON_WEB_URL)" in section)
+        assertTrue("openWeb.takeIf { showMessage && accountMessageOpensWeb(state.message) }" in section)
+        val screen = screenScan.code
+        assertTrue("if (accountMessageOpensWeb(it))" in screen)
+        assertTrue("onClick = { runCatching { uriHandler.openUri(AccountMessage.LINK_ON_WEB_URL) } }" in screen)
+        assertEquals(
+            "This email already has a PlainTicker account. Sign in on plainticker.com and link Google there.",
+            ShippedCopy.strings.getValue("account_msg_link_on_web"),
+        )
+    }
+
+    @Test
+    fun `a sign-out in flight offers nothing, and the device code notice leads the group`() {
+        val section = sectionScan.code
+        assertTrue("if (state.signingOut)" in section)
+        assertTrue("R.string.account_signing_out" in section)
+        val group = section.substring(section.indexOf("AmberTickerRowGroup(colors = colors) {"))
+        assertTrue("the notice comes before the Google row", group.indexOf("deviceCodeNoticeRes(") < group.indexOf("GoogleRow("))
+        assertTrue("deviceCodeStatus = deviceCodeStatus" in screenScan.code)
+    }
+
+    @Test
+    fun `the device code notice names a way to reach a person, and never the code`() {
+        assertEquals(null, deviceCodeNoticeRes(com.plainticker.mobile.data.auth.DeviceCodeStatus.OK))
+        listOf("device_code_blocked", "device_code_retired", "promo_error_code_retired").forEach { name ->
+            assertTrue(name, "hi@plainticker.com" in ShippedCopy.strings.getValue(name))
+        }
+    }
+
+    @Test
+    fun `a redeemed code tells a reader with no account how to keep Pro past a reinstall`() {
+        val screen = screenScan.code
+        assertTrue("promoKeepNote = account is AccountUiState.SignedOut" in screen)
+        assertTrue("sub = if (keepNote) stringResource(R.string.promo_success_keep_note) else null" in screen)
+        assertEquals("Sign in with Google to keep Pro if you reinstall.", ShippedCopy.strings.getValue("promo_success_keep_note"))
+    }
+
+    @Test
+    fun `the sign-out question no longer promises the account's Pro stays`() {
+        val text = ShippedCopy.strings.getValue("you_sign_out_confirm")
+        assertFalse("keeps that account" in text)
+        assertTrue("unlinks it from the account" in text)
+    }
 }

@@ -28,6 +28,17 @@ class PlainTickerApp : Application() {
         // The wallet connected before this process started, put back for display and reads. No
         // wallet opens here; the first request that needs one reauthorizes with the saved token.
         scope.launch { container.walletSession.restore() }
+
+        // A legacy 10-symbol device code is replaced by a 26-symbol one (DeviceRekeyer: the new
+        // code is on disk before the call, and current only after the server's 200), then a
+        // sign-out the server never confirmed is asked once more. Offline, the rekey backs off
+        // and tries again while the process lives, and on the next launch.
+        scope.launch {
+            container.deviceRekeyer.runOnLaunch()
+        }
+        scope.launch {
+            container.accountSignOut.retryPending()
+        }
     }
 }
 
