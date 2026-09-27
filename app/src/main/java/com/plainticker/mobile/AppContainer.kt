@@ -282,7 +282,9 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val devicePassStore: DevicePassStore get() = sharedDevicePassStore
 
     override val deviceRekeyer: DeviceRekeyer by lazy {
-        DeviceRekeyer(sharedDevicePassStore, DeviceRekeyApi(httpClient), clock)
+        // The account store too: a rekeyed code is not bound to the account (web PR #170), so a
+        // rekey on a signed-in phone clears the account shown here.
+        DeviceRekeyer(sharedDevicePassStore, DeviceRekeyApi(httpClient), clock, account = accountStore)
     }
 
     override val accountSignOut: AccountSignOut by lazy {

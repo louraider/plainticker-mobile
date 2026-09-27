@@ -55,7 +55,8 @@ fun accountMessageOpensWeb(message: AccountMessage?): Boolean = message == Accou
 @StringRes
 fun deviceCodeNoticeRes(status: DeviceCodeStatus): Int? = when (status) {
     DeviceCodeStatus.OK -> null
-    DeviceCodeStatus.BLOCKED -> R.string.device_code_blocked
+    DeviceCodeStatus.SIGN_IN_AGAIN -> R.string.device_code_sign_in_again
+    DeviceCodeStatus.REPLACED -> R.string.device_code_replaced
     DeviceCodeStatus.RETIRED -> R.string.device_code_retired
 }
 

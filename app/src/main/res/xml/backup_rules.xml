@@ -12,7 +12,7 @@
      rebuild, and moving the code to a file of its own would mean migrating a paid credential
      whose loss orphans the pass it is bound to. The same file keeps the 26-symbol code a legacy
      device has minted but the server has not yet confirmed (device_pass_pending_new_code, a
-     credential too), the flag for a rekey that cannot finish, and a sign-out still waiting for
+     credential too), the note You shows after a rekey, and a sign-out still waiting for
      the server; BackupRulesTest pins that DevicePassStore writes every one of its keys here.
    - datastore/account.preferences_pb: the signed-in Google account, which only means anything
      next to the device code above.

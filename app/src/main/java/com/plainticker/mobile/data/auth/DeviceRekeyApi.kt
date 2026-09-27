@@ -97,6 +97,9 @@ sealed class DeviceRekeyError(val status: Int?, val code: String?) :
     /** 401 `code_retired`: the old code has already been retired. */
     class CodeRetired : DeviceRekeyError(401, CODE_CODE_RETIRED)
 
+    /** 400 `legacy_sunset`: past LEGACY_CODE_SUNSET a legacy code may no longer start a rekey. */
+    class LegacySunset : DeviceRekeyError(400, CODE_LEGACY_SUNSET)
+
     class RateLimited : DeviceRekeyError(429, CODE_RATE_LIMITED)
 
     /** A 404: the route is not deployed yet, the convention every other `/api/v1` route reads. */
@@ -112,6 +115,7 @@ sealed class DeviceRekeyError(val status: Int?, val code: String?) :
         const val CODE_NEW_CODE_IN_USE = "new_code_in_use"
         const val CODE_CODE_RETIRED = "code_retired"
         const val CODE_RATE_LIMITED = "rate_limited"
+        const val CODE_LEGACY_SUNSET = "legacy_sunset"
 
         fun fromErrorBody(status: Int, body: String?, json: Json): DeviceRekeyError {
             val obj = body?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
@@ -122,11 +126,12 @@ sealed class DeviceRekeyError(val status: Int?, val code: String?) :
                 CODE_NEW_CODE_IN_USE -> NewCodeInUse()
                 CODE_CODE_RETIRED -> CodeRetired()
                 CODE_RATE_LIMITED -> RateLimited()
+                CODE_LEGACY_SUNSET -> LegacySunset()
                 else -> when (status) {
                     429 -> RateLimited()
                     404 -> NotOpen()
-                    // Only a known code may end the rekey for good; an unknown 409 or 401 is
-                    // retried later, never read as a conflict.
+                    // Only a known code may end the rekey with a fresh code adopted; an unknown 409
+                    // or 401 is retried later, never read as a conflict.
                     else -> Unavailable(status, code?.take(CODE_MAX))
                 }
             }

@@ -49,8 +49,14 @@ import java.security.SecureRandom
  *    everywhere from then on (401 `code_retired`), so on this device it could only ever be a
  *    second copy of a dead credential.
  * 3. Every refusal that means the pair can never be accepted (409 `already_rekeyed`, 409
- *    `new_code_in_use`, 401 `code_retired`) is recorded by [DeviceCodeRekeyStore.markRekeyBlocked]
- *    and deletes nothing: both codes stay on the device, so support can still act on them.
+ *    `new_code_in_use`, 401 `code_retired`, 400 `legacy_sunset`) also goes through
+ *    [DeviceCodeRekeyStore.completeRekey]: the pending code is valid on its own (only without the
+ *    old code's pass), so it becomes current and [NOTE_REPLACED][SharedPrefsDevicePassStore.NOTE_REPLACED]
+ *    is written in the same commit, for You to say where to write.
+ *
+ * A 200 moves the old code's pass and promo time but not its account binding (web PR #170), so
+ * a rekey on a signed-in phone writes [NOTE_SIGN_IN_AGAIN][SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN]
+ * in that same commit; the next successful Google sign-in clears it.
  *
  * All of it lives in the same preferences file as the code, which res/xml/backup_rules.xml and
  * data_extraction_rules.xml exclude whole, so none of the new keys can reach a backup either.
@@ -102,20 +108,24 @@ interface DeviceCodeRekeyStore {
     fun beginRekey(): String?
 
     /**
-     * The server answered 200 for the current code and [newCode]: make [newCode] current and drop
-     * the pending slot in one commit. Refuses (false, nothing written) unless [newCode] is the
+     * The server answered for the current code and [newCode] (a 200, or a refusal that adopts the
+     * fresh code): make [newCode] current, drop the pending slot and write [note] (or remove the
+     * note, when null) in one commit. Refuses (false, nothing written) unless [newCode] is the
      * pending one.
      */
-    fun completeRekey(newCode: String): Boolean
+    fun completeRekey(newCode: String, note: String? = null): Boolean
 
     /** The server says the current code needs no rekey (400 `not_legacy`): forget the pending one. */
     fun abandonRekey()
 
-    /** Why a rekey can never finish on this device, or null. Survives restarts; nothing retries it. */
-    fun rekeyBlocked(): String?
+    /**
+     * What You should say about the last rekey, or null: [SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN]
+     * or [SharedPrefsDevicePassStore.NOTE_REPLACED]. Survives restarts.
+     */
+    fun rekeyNote(): String?
 
-    /** Records [reason] (the server's error code) and keeps both codes exactly as they are. */
-    fun markRekeyBlocked(reason: String)
+    /** Replaces the note, or removes it when [note] is null. */
+    fun setRekeyNote(note: String?)
 }
 
 class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DevicePassStore, DeviceCodeRekeyStore {
@@ -142,16 +152,16 @@ class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DeviceP
     }
 
     @Synchronized
-    override fun completeRekey(newCode: String): Boolean {
+    override fun completeRekey(newCode: String, note: String?): Boolean {
         if (!isNewFormat(newCode) || pendingNewCode() != newCode) return false
-        // One editor, one commit: the new code becomes current and the pending slot goes in the
-        // same atomic file write, so no crash can leave a device with neither code, or with two
-        // that disagree about which is current.
-        return prefs.edit()
+        // One editor, one commit: the new code becomes current, the pending slot goes and the note
+        // is written in the same atomic file write, so no crash can leave a device with neither
+        // code, with two that disagree about which is current, or with a new code and no note.
+        val edit = prefs.edit()
             .putString(KEY_CODE, newCode)
             .remove(KEY_PENDING_NEW_CODE)
-            .remove(KEY_REKEY_BLOCKED)
-            .commit()
+        if (note != null) edit.putString(KEY_REKEY_NOTE, note) else edit.remove(KEY_REKEY_NOTE)
+        return edit.commit()
     }
 
     @Synchronized
@@ -160,11 +170,13 @@ class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DeviceP
     }
 
     @Synchronized
-    override fun rekeyBlocked(): String? = prefs.getString(KEY_REKEY_BLOCKED, null)
+    override fun rekeyNote(): String? = prefs.getString(KEY_REKEY_NOTE, null)
 
     @Synchronized
-    override fun markRekeyBlocked(reason: String) {
-        prefs.edit().putString(KEY_REKEY_BLOCKED, reason).commit()
+    override fun setRekeyNote(note: String?) {
+        val edit = prefs.edit()
+        if (note != null) edit.putString(KEY_REKEY_NOTE, note) else edit.remove(KEY_REKEY_NOTE)
+        edit.commit()
     }
 
     private fun generate(): String {
@@ -178,11 +190,17 @@ class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DeviceP
         /** The minted replacement for a legacy code, persisted before the rekey call is made. */
         const val KEY_PENDING_NEW_CODE = "device_pass_pending_new_code"
 
-        /** The server's error code for a rekey that can never finish on this device. */
-        const val KEY_REKEY_BLOCKED = "device_pass_rekey_blocked"
+        /** What You says about the last rekey: [NOTE_SIGN_IN_AGAIN] or [NOTE_REPLACED]. */
+        const val KEY_REKEY_NOTE = "device_pass_rekey_note"
+
+        /** The rekey landed on a signed-in phone; the new code is not bound to the account. */
+        const val NOTE_SIGN_IN_AGAIN = "sign_in_again"
+
+        /** The old code could not be moved; the fresh code was adopted without its pass. */
+        const val NOTE_REPLACED = "replaced"
 
         /** Every key this store writes: all of them live in the one preferences file backups exclude. */
-        val ALL_KEYS = setOf(KEY_CODE, KEY_PENDING_NEW_CODE, KEY_REKEY_BLOCKED)
+        val ALL_KEYS = setOf(KEY_CODE, KEY_PENDING_NEW_CODE, KEY_REKEY_NOTE)
 
         /** Length of every NEWLY minted code: 26 x log2(31) = 128.8 bits. */
         const val CODE_LENGTH = 26

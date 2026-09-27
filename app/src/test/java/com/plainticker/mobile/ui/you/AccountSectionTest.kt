@@ -234,9 +234,20 @@ class AccountSectionTest {
     @Test
     fun `the device code notice names a way to reach a person, and never the code`() {
         assertEquals(null, deviceCodeNoticeRes(com.plainticker.mobile.data.auth.DeviceCodeStatus.OK))
-        listOf("device_code_blocked", "device_code_retired", "promo_error_code_retired").forEach { name ->
+        listOf("device_code_replaced", "device_code_retired", "promo_error_code_retired").forEach { name ->
             assertTrue(name, "hi@plainticker.com" in ShippedCopy.strings.getValue(name))
         }
+        assertEquals(
+            "This phone got a new, stronger code. Sign in with Google again to reconnect your account.",
+            ShippedCopy.strings.getValue("device_code_sign_in_again"),
+        )
+        assertEquals(
+            "This phone's old code could not be moved. It now has a new code. If you paid for Pro on this phone, write to hi@plainticker.com.",
+            ShippedCopy.strings.getValue("device_code_replaced"),
+        )
+        com.plainticker.mobile.data.auth.DeviceCodeStatus.entries
+            .filter { it != com.plainticker.mobile.data.auth.DeviceCodeStatus.OK }
+            .forEach { assertTrue(it.name, deviceCodeNoticeRes(it) != null) }
     }
 
     @Test

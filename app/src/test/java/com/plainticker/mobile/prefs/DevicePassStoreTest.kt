@@ -196,14 +196,20 @@ class DevicePassStoreTest {
     }
 
     @Test
-    fun `a blocked rekey is remembered across restarts and deletes nothing`() {
+    fun `a rekey note is written in the same commit as the new code and survives a restart`() {
         val (backing, store) = legacyStore()
         val pending = store.beginRekey()!!
-        store.markRekeyBlocked("already_rekeyed")
+        val writesBefore = backing.writes.size
+        assertTrue(store.completeRekey(pending, SharedPrefsDevicePassStore.NOTE_REPLACED))
+        assertEquals("one atomic write", writesBefore + 1, backing.writes.size)
+        assertEquals(SharedPrefsDevicePassStore.NOTE_REPLACED, backing.writes.last()[SharedPrefsDevicePassStore.KEY_REKEY_NOTE])
         val cold = SharedPrefsDevicePassStore(backing)
-        assertEquals("already_rekeyed", cold.rekeyBlocked())
-        assertEquals(legacy, cold.code())
-        assertEquals(pending, cold.pendingNewCode())
+        assertEquals(SharedPrefsDevicePassStore.NOTE_REPLACED, cold.rekeyNote())
+        assertEquals(pending, cold.code())
+        assertNull(cold.pendingNewCode())
+
+        cold.setRekeyNote(null)
+        assertNull(SharedPrefsDevicePassStore(backing).rekeyNote())
     }
 
     @Test
@@ -212,7 +218,7 @@ class DevicePassStoreTest {
         // backup: this pins that the store has no second file and no key outside ALL_KEYS.
         val (backing, store) = legacyStore()
         store.beginRekey()
-        store.markRekeyBlocked("new_code_in_use")
+        store.setRekeyNote(SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN)
         assertEquals(SharedPrefsDevicePassStore.ALL_KEYS, backing.all.keys)
     }
 }

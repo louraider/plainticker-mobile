@@ -6,12 +6,16 @@ import com.plainticker.mobile.data.MockApi
 import com.plainticker.mobile.data.bodyText
 import com.plainticker.mobile.data.expectThrows
 import com.plainticker.mobile.data.respondJson
+import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.FakePrefs
+import com.plainticker.mobile.prefs.SignedInAccount
 import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.http.HttpStatusCode
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -50,6 +54,21 @@ class DeviceRekeyerTest {
         }
     }
 
+    private class InMemoryAccountStore(initial: SignedInAccount? = null) : AccountStore {
+        private val flow = MutableStateFlow(initial)
+        override val account: StateFlow<SignedInAccount?> = flow
+        var clears = 0
+        override suspend fun save(account: SignedInAccount) {
+            flow.value = account
+        }
+        override suspend fun clear() {
+            clears++
+            flow.value = null
+        }
+    }
+
+    private val ann = SignedInAccount("ann@example.com", "Ann", emptyList())
+
     private fun legacyPrefs(): FakePrefs = FakePrefs().also {
         it.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacy).commit()
     }
@@ -63,12 +82,17 @@ class DeviceRekeyerTest {
         val log: RecordingLog,
     )
 
-    private fun TestScope.rig(prefs: FakePrefs = legacyPrefs(), clock: FakeClock = FakeClock(), handler: MockRequestHandler): Rig {
+    private fun TestScope.rig(
+        prefs: FakePrefs = legacyPrefs(),
+        clock: FakeClock = FakeClock(),
+        account: AccountStore? = null,
+        handler: MockRequestHandler,
+    ): Rig {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val api = MockApi(dispatcher, handler)
         val store = SharedPrefsDevicePassStore(prefs)
         val log = RecordingLog()
-        return Rig(prefs, store, api, DeviceRekeyer(store, DeviceRekeyApi(api.client), clock, log, dispatcher), clock, log)
+        return Rig(prefs, store, api, DeviceRekeyer(store, DeviceRekeyApi(api.client), clock, log, dispatcher, account), clock, log)
     }
 
     private suspend fun MockApi.sentNewCodes(): List<String> = requests
@@ -104,6 +128,36 @@ class DeviceRekeyerTest {
         assertEquals(sent, SharedPrefsDevicePassStore(r.prefs).code())
         assertEquals(DeviceCodeStatus.OK, r.rekeyer.status.value)
         r.assertNoCodeLogged(legacy, sent)
+    }
+
+    @Test
+    fun `a 200 on a signed-in phone clears the account, since the new code is not bound to it, and asks for one sign-in`() = runTest {
+        val prefs = legacyPrefs()
+        val account = InMemoryAccountStore(ann)
+        val r = rig(prefs = prefs, account = account) { respondJson("""{"ok":true}""") }
+        assertEquals(RekeyOutcome.REKEYED, r.rekeyer.rekeyIfNeeded())
+        assertFalse(r.store.isLegacy())
+        assertNull(account.account.value)
+        assertEquals(1, account.clears)
+        assertEquals(DeviceCodeStatus.SIGN_IN_AGAIN, r.rekeyer.status.value)
+
+        // The line survives a restart, and goes once a Google sign-in succeeds.
+        val cold = rig(prefs = prefs, account = account) { error("a current code never rekeys") }
+        cold.rekeyer.runOnLaunch()
+        assertEquals(DeviceCodeStatus.SIGN_IN_AGAIN, cold.rekeyer.status.value)
+        cold.rekeyer.signedInAgain()
+        assertEquals(DeviceCodeStatus.OK, cold.rekeyer.status.value)
+        assertNull(cold.store.rekeyNote())
+    }
+
+    @Test
+    fun `a 200 on a phone with no account says nothing and clears nothing`() = runTest {
+        val account = InMemoryAccountStore(null)
+        val r = rig(account = account) { respondJson("""{"ok":true}""") }
+        assertEquals(RekeyOutcome.REKEYED, r.rekeyer.rekeyIfNeeded())
+        assertEquals(0, account.clears)
+        assertEquals(DeviceCodeStatus.OK, r.rekeyer.status.value)
+        assertNull(r.store.rekeyNote())
     }
 
     @Test
@@ -160,34 +214,44 @@ class DeviceRekeyerTest {
     // ---- Refusals ----------------------------------------------------------------------------
 
     @Test
-    fun `already_rekeyed is terminal - both codes kept, remembered, never retried, and You is told`() = runTest {
+    fun `already_rekeyed adopts the fresh code, drops the legacy one, never sends again, and You is told`() = runTest {
         val prefs = legacyPrefs()
-        val r = rig(prefs = prefs) { respondJson("""{"error":"already_rekeyed"}""", HttpStatusCode.Conflict) }
-        assertEquals(RekeyOutcome.BLOCKED, r.rekeyer.rekeyIfNeeded())
-        val pending = r.store.pendingNewCode()!!
-        assertEquals(legacy, r.store.code())
-        assertEquals("already_rekeyed", r.store.rekeyBlocked())
-        assertEquals(DeviceCodeStatus.BLOCKED, r.rekeyer.status.value)
+        val account = InMemoryAccountStore(ann)
+        val heard = mutableListOf<String>()
+        val r = rig(prefs = prefs, account = account) { request ->
+            heard += newCodeOf(request)
+            respondJson("""{"error":"already_rekeyed"}""", HttpStatusCode.Conflict)
+        }
+        assertEquals(RekeyOutcome.REPLACED, r.rekeyer.rekeyIfNeeded())
+        val adopted = heard.single()
+        assertEquals("the pending code is now current", adopted, r.store.code())
+        assertFalse(r.store.isLegacy())
+        assertNull(r.store.pendingNewCode())
+        assertEquals(DeviceCodeStatus.REPLACED, r.rekeyer.status.value)
+        assertEquals("the fresh code is bound to no account", 1, account.clears)
 
-        assertEquals(RekeyOutcome.BLOCKED, r.rekeyer.rekeyIfNeeded(force = true))
-        assertEquals("no second attempt", 1, r.api.requests.size)
+        assertEquals(RekeyOutcome.NOT_NEEDED, r.rekeyer.rekeyIfNeeded(force = true))
+        assertEquals("no second attempt", 1, heard.size)
 
-        // After a restart it is still blocked, still says so, and still keeps both codes.
-        val cold = rig(prefs = prefs) { error("a blocked rekey is never sent again") }
+        // After a restart it still says so, and a sign-in does not take the line away.
+        val cold = rig(prefs = prefs) { error("an adopted code is never rekeyed") }
         cold.rekeyer.runOnLaunch()
-        assertEquals(DeviceCodeStatus.BLOCKED, cold.rekeyer.status.value)
-        assertEquals(legacy, cold.store.code())
-        assertEquals(pending, cold.store.pendingNewCode())
-        r.assertNoCodeLogged(legacy, pending)
+        assertEquals(DeviceCodeStatus.REPLACED, cold.rekeyer.status.value)
+        assertEquals(adopted, cold.store.code())
+        cold.rekeyer.signedInAgain()
+        assertEquals(DeviceCodeStatus.REPLACED, cold.rekeyer.status.value)
+        r.assertNoCodeLogged(legacy, adopted)
     }
 
     @Test
-    fun `new_code_in_use and code_retired are terminal the same way`() = runTest {
-        listOf(409 to "new_code_in_use", 401 to "code_retired").forEach { (status, code) ->
+    fun `new_code_in_use, code_retired and legacy_sunset adopt the fresh code the same way`() = runTest {
+        listOf(409 to "new_code_in_use", 401 to "code_retired", 400 to "legacy_sunset").forEach { (status, code) ->
             val r = rig { respondJson("""{"error":"$code"}""", HttpStatusCode.fromValue(status)) }
-            assertEquals(code, RekeyOutcome.BLOCKED, r.rekeyer.rekeyIfNeeded())
-            assertEquals(code, legacy, r.store.code())
-            assertEquals(code, code, r.store.rekeyBlocked())
+            assertEquals(code, RekeyOutcome.REPLACED, r.rekeyer.rekeyIfNeeded())
+            assertFalse(code, r.store.isLegacy())
+            assertTrue(code, SharedPrefsDevicePassStore.isNewFormat(r.store.code()))
+            assertEquals(code, SharedPrefsDevicePassStore.NOTE_REPLACED, r.store.rekeyNote())
+            assertEquals(code, DeviceCodeStatus.REPLACED, r.rekeyer.status.value)
         }
     }
 
@@ -197,7 +261,7 @@ class DeviceRekeyerTest {
         assertEquals(RekeyOutcome.NOT_LEGACY, r.rekeyer.rekeyIfNeeded())
         assertNull(r.store.pendingNewCode())
         assertEquals(legacy, r.store.code())
-        assertNull(r.store.rekeyBlocked())
+        assertNull(r.store.rekeyNote())
     }
 
     @Test
@@ -213,7 +277,7 @@ class DeviceRekeyerTest {
             assertEquals("$status $body", RekeyOutcome.RETRY_LATER, r.rekeyer.rekeyIfNeeded())
             assertEquals(legacy, r.store.code())
             assertTrue(r.store.pendingNewCode() != null)
-            assertNull(r.store.rekeyBlocked())
+            assertNull(r.store.rekeyNote())
         }
     }
 
@@ -324,15 +388,15 @@ class DeviceRekeyerTest {
     }
 
     @Test
-    fun `markRetired shows the retired line unless a blocked rekey already says more`() = runTest {
+    fun `markRetired shows the retired line unless a replaced code already says more`() = runTest {
         val r = rig(prefs = FakePrefs()) { error("unused") }
         r.rekeyer.markRetired()
         assertEquals(DeviceCodeStatus.RETIRED, r.rekeyer.status.value)
 
-        val blocked = rig { respondJson("""{"error":"already_rekeyed"}""", HttpStatusCode.Conflict) }
-        blocked.rekeyer.rekeyIfNeeded()
-        blocked.rekeyer.markRetired()
-        assertEquals(DeviceCodeStatus.BLOCKED, blocked.rekeyer.status.value)
+        val replaced = rig { respondJson("""{"error":"already_rekeyed"}""", HttpStatusCode.Conflict) }
+        replaced.rekeyer.rekeyIfNeeded()
+        replaced.rekeyer.markRetired()
+        assertEquals(DeviceCodeStatus.REPLACED, replaced.rekeyer.status.value)
     }
 
     // ---- Error mapping ------------------------------------------------------------------------
@@ -348,6 +412,7 @@ class DeviceRekeyerTest {
         assertTrue(map(409, "new_code_in_use") is DeviceRekeyError.NewCodeInUse)
         assertTrue(map(401, "code_retired") is DeviceRekeyError.CodeRetired)
         assertTrue(map(429, "rate_limited") is DeviceRekeyError.RateLimited)
+        assertTrue(map(400, "legacy_sunset") is DeviceRekeyError.LegacySunset)
         assertTrue(map(429, null) is DeviceRekeyError.RateLimited)
         assertTrue(map(404, null) is DeviceRekeyError.NotOpen)
         assertTrue(map(409, null) is DeviceRekeyError.Unavailable)

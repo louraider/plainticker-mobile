@@ -86,7 +86,7 @@ class BackupRulesTest {
             setOf(
                 SharedPrefsDevicePassStore.KEY_CODE,
                 SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE,
-                SharedPrefsDevicePassStore.KEY_REKEY_BLOCKED,
+                SharedPrefsDevicePassStore.KEY_REKEY_NOTE,
             ),
             SharedPrefsDevicePassStore.ALL_KEYS,
         )
