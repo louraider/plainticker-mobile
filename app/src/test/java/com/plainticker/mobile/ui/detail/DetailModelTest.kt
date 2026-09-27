@@ -196,6 +196,9 @@ class DetailModelTest {
         val block = served(analysis = AnalysisState.Served(payload(verdict = pending))).verdictBlock
         assertTrue(block is VerdictBlock.Unavailable)
         assertEquals(R.string.detail_verdict_unavailable_sector, label((block as VerdictBlock.Unavailable).reason))
+        // The reason in plain words, after the web's sector-model copy (JEF is a bank with capital markets).
+        val sector = com.plainticker.mobile.ui.ShippedCopy.strings.getValue("detail_verdict_unavailable_sector")
+        assertTrue(sector.startsWith("Banks, capital-markets firms, brokers and insurers need their own sector model, which is in progress."))
 
         val thin = Verdict(classState = "unavailable", classReason = "insufficient-data")
         val thinBlock = served(analysis = AnalysisState.Served(payload(verdict = thin))).verdictBlock as VerdictBlock.Unavailable

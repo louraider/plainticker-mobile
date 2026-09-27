@@ -533,14 +533,18 @@ private fun PromoRow(
     keepNote: Boolean = false,
 ) {
     when (promo) {
+        // Signed out (device QA of 1.3.17): the server ties a code to an account only at the moment
+        // it is redeemed, so the way to keep Pro past a reinstall is to sign in first. Said before
+        // redemption, where it can still be acted on, and never promised after it.
         PromoState.Idle -> CabinetRow(
             colors = colors,
             value = stringResource(R.string.promo_prompt),
             valueKind = RowValueKind.QUIET,
+            sub = if (keepNote) stringResource(R.string.promo_signin_first_hint) else null,
             actions = listOf(RowAction(stringResource(R.string.promo_action_have_code), onOpen)),
         )
-        is PromoState.Editing -> PromoEditingRow(promo.input, error = null, onInputChanged, onApply, onDismiss, colors)
-        is PromoState.Failed -> PromoEditingRow(promo.input, error = promo.reason, onInputChanged, onApply, onDismiss, colors)
+        is PromoState.Editing -> PromoEditingRow(promo.input, error = null, onInputChanged, onApply, onDismiss, colors, keepNote)
+        is PromoState.Failed -> PromoEditingRow(promo.input, error = promo.reason, onInputChanged, onApply, onDismiss, colors, keepNote)
         is PromoState.Applying -> CabinetRow(
             colors = colors,
             value = stringResource(R.string.promo_field_label),
@@ -549,7 +553,7 @@ private fun PromoRow(
         is PromoState.Success -> CabinetRow(
             colors = colors,
             value = promoSuccessLine(promo.untilMillis).text(),
-            sub = if (keepNote) stringResource(R.string.promo_success_keep_note) else null,
+            sub = if (keepNote) stringResource(R.string.promo_success_saved_to_phone) else null,
         )
     }
 }
@@ -562,6 +566,7 @@ private fun PromoEditingRow(
     onApply: () -> Unit,
     onDismiss: () -> Unit,
     colors: AmberColors,
+    signInHint: Boolean = false,
 ) {
     // Label, then the input right under it, then the refusal, then Apply and Cancel (device QA of
     // 1.3.16): as a CabinetRow the two actions drew on their own row between the label and the
@@ -574,6 +579,14 @@ private fun PromoEditingRow(
     ) {
         Text(text = stringResource(R.string.promo_field_label), style = AmberType.body, color = colors.textPrimary)
         PromoField(value = input, onValueChange = onInputChanged, colors = colors)
+        if (signInHint) {
+            Text(
+                text = stringResource(R.string.promo_signin_first_hint),
+                style = AmberType.context,
+                color = colors.textSecondary,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
         error?.let {
             Text(
                 text = stringResource(it.text),
