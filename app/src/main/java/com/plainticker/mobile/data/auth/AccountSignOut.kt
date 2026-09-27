@@ -35,9 +35,10 @@ enum class SignOutResult {
  * deployed yet, a rate limit, a rekey that could not land) sets [pending]'s flag, and
  * [retryPending] asks once more: [RETRY_DELAY_MILLIS] later on [retryScope] while the process
  * lives, and again on the next launch (PlainTickerApp). The flag clears only on an answer that
- * settles it. [cancelPending] is what a new sign-in calls first: it waits out any retry
- * in flight ([mutex]) and drops the flag, so a late retry can never unbind the account the reader
- * just signed in to.
+ * settles it. A new sign-in runs inside [holdingForSignIn]: it waits out any retry in flight
+ * ([mutex]), keeps every retry out while the sign-in call runs, and drops the flag only when that
+ * call succeeded, so a late retry can never unbind the account the reader just signed in to, and
+ * a sign-in that failed still leaves the earlier sign-out queued.
  *
  * The device code is read fresh for each call through [rekeyer] when there is one (a legacy code
  * is rekeyed first, and a `rekey_required` retried once), and never logged.
@@ -70,8 +71,16 @@ class AccountSignOut(
         if (!withContext(io) { pending.isPending() }) null else attempt()
     }
 
-    /** Drops a queued retry, after any retry already in flight has finished. */
-    suspend fun cancelPending() = mutex.withLock { withContext(io) { pending.setPending(false) } }
+    /**
+     * Runs a sign-in call with no sign-out retry able to run beside it. The queued retry is
+     * dropped only once [signIn] returned: a sign-in that throws (refused, offline) keeps it, so
+     * the device still asks the server to let go of the account it signed out of.
+     */
+    suspend fun <T> holdingForSignIn(signIn: suspend () -> T): T = mutex.withLock {
+        val result = signIn()
+        withContext(io) { pending.setPending(false) }
+        result
+    }
 
     suspend fun isPending(): Boolean = withContext(io) { pending.isPending() }
 

@@ -199,7 +199,8 @@ enum class UnlinkFailure {
  * [AccountSignOut], then clears the local account whatever the answer: a 200 lands on a plain
  * [AccountUiState.SignedOut]; a network error or any unclean answer lands on
  * [AccountMessage.SIGN_OUT_UNCONFIRMED] with one retry queued, so the screen never claims the
- * server forgot this device before it said so. A new [signIn] drops that queued retry first.
+ * server forgot this device before it said so. A new [signIn] keeps that queued retry from running
+ * beside it, and drops it only when the sign-in succeeds.
  *
  * **The device code** (the pack's shared server contract, items 1 and 2). Every account call goes
  * through [rekeyer] when there is one: a legacy 10-symbol code is rekeyed before the call, and a
@@ -229,7 +230,7 @@ class AccountViewModel(
     /** Stands in for [DeviceRekeyer.status] when there is no [rekeyer]. */
     private val localDeviceCodeStatus = MutableStateFlow(DeviceCodeStatus.OK)
 
-    /** What You says about this phone's own code: nothing, a rekey that cannot finish, or a retired code. */
+    /** What You says about this phone's own code: nothing, sign in again, a code replaced, or a retired code. */
     val deviceCodeStatus: StateFlow<DeviceCodeStatus> = rekeyer?.status ?: localDeviceCodeStatus.asStateFlow()
 
     private val _state = MutableStateFlow<AccountUiState>(AccountUiState.Restoring)
@@ -335,11 +336,14 @@ class AccountViewModel(
             debugLog.raw("sign-in: the token's nonce is not the one requested")
             return Outcome.Failed(AccountMessage.NONCE_MISMATCH)
         }
-        // A sign-out that never reached the server must not land after this sign-in and unbind it.
-        signOutRunner.cancelPending()
+        // A sign-out that never reached the server must not land after this sign-in and unbind it,
+        // so no retry runs while the call does; the queued one is dropped only if the sign-in
+        // succeeds. A sign-in that fails leaves it queued, still owed to the account signed out of.
         val response = try {
-            withDeviceCode({ it is GoogleAuthError && it.failure == GoogleAuthFailure.REKEY_REQUIRED }) { code ->
-                api.signIn(idToken = idToken, deviceCode = code, nonce = nonce)
+            signOutRunner.holdingForSignIn {
+                withDeviceCode({ it is GoogleAuthError && it.failure == GoogleAuthFailure.REKEY_REQUIRED }) { code ->
+                    api.signIn(idToken = idToken, deviceCode = code, nonce = nonce)
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -353,6 +357,8 @@ class AccountViewModel(
         }
         val account = accountOf(response)
         store.save(account)
+        // The "sign in again" line after a rekey has done its job.
+        rekeyer?.signedInAgain()
         return Outcome.Done(account)
     }
 

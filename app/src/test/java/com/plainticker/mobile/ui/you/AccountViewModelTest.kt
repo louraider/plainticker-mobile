@@ -606,6 +606,64 @@ class AccountViewModelTest {
     }
 
     @Test
+    fun `a sign-in that fails keeps the queued sign-out, which still runs later`() = runTest {
+        var signOutCalls = 0
+        val api = mockApi { request ->
+            if (request.url.encodedPath.endsWith("/account/signout")) {
+                signOutCalls++
+                respondJson("""{"ok":true}""")
+            } else {
+                respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError)
+            }
+        }
+        val pending = InMemoryPendingSignOutStore(pending = true)
+        val runner = AccountSignOut(AccountApi(api.client), InMemoryDevicePassStore(deviceCode), pending, log = { }, io = mainDispatcherRule.dispatcher)
+        val vm = machine(api = api, signOut = runner)
+        advanceUntilIdle()
+
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedOut)
+        assertTrue("the earlier sign-out is still owed", pending.isPending())
+        assertEquals(0, signOutCalls)
+        assertEquals(SignOutResult.CONFIRMED, runner.retryPending())
+        assertEquals(1, signOutCalls)
+    }
+
+    @Test
+    fun `a rekey during refresh on a signed-in phone signs it out here and asks for Google again, and a sign-in clears the line`() = runTest {
+        val prefs = FakePrefs().also { it.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacyCode).commit() }
+        val codes = SharedPrefsDevicePassStore(prefs)
+        val api = mockApi { request ->
+            when {
+                request.url.encodedPath.endsWith("/device/rekey") -> respondJson("""{"ok":true}""")
+                // The new code is bound to nothing (web PR #170) until Google signs it in.
+                request.url.encodedPath.endsWith("/api/v1/account") ->
+                    respondJson("""{"error":"not_signed_in"}""", HttpStatusCode.Unauthorized)
+                else -> respondJson(okBody)
+            }
+        }
+        val store = InMemoryAccountStore(signedInAnn)
+        val rekeyer = DeviceRekeyer(codes, DeviceRekeyApi(api.client), FakeClock(), RecordingLog(), mainDispatcherRule.dispatcher, account = store)
+        val vm = machine(api = api, store = store, devicePassStore = codes, rekeyer = rekeyer)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertFalse(codes.isLegacy())
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+        assertNull(store.account.value)
+        assertEquals(DeviceCodeStatus.SIGN_IN_AGAIN, vm.deviceCodeStatus.value)
+        assertTrue("nothing opened Google on its own", api.requests.none { it.url.encodedPath.endsWith("/auth/google") })
+
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedIn)
+        assertEquals(DeviceCodeStatus.OK, vm.deviceCodeStatus.value)
+        assertEquals(codes.code(), api.requests.last { it.url.encodedPath.endsWith("/auth/google") }.headers["X-PT-Code"])
+    }
+
+    @Test
     fun `sign-in code_retired also tells You the code is retired`() = runTest {
         val vm = machine(api = mockApi { respondJson("""{"error":"code_retired"}""", HttpStatusCode.Unauthorized) })
         advanceUntilIdle()
