@@ -97,7 +97,8 @@ object Fmt {
 
     /**
      * A percentage with a fixed number of decimals, two by default: "+0.09%", "-0.04%".
-     * With [signed] the sign is explicit, and a value that rounds to zero is "+0.00%".
+     * With [signed] the sign is explicit, except on a value that rounds to zero, which has no
+     * direction and reads "0.00%" (device QA of 1.3.17: "+0.00%" claimed a direction nothing had).
      * Unsigned ("9.8%", "100.7%") is for magnitudes that have no direction.
      */
     fun percent(value: Double, signed: Boolean = true, decimals: Int = 2): String {
@@ -105,6 +106,7 @@ object Fmt {
         val scaled = BigDecimal.valueOf(value).setScale(decimals, RoundingMode.HALF_UP)
         val sign = when {
             scaled.signum() < 0 -> "-"
+            scaled.signum() == 0 -> ""
             signed -> "+"
             else -> ""
         }

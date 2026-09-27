@@ -69,4 +69,14 @@ class ReservesTest {
         assertEquals(listOf("Alpaca", "InteractiveBrokers"), two.custodians)
         assertNull("two custodians, so no single one to name", two.custodian)
     }
+
+    /**
+     * Device QA of 1.3.17: xStocks answers JEFx and AALx with zero shares for zero tokens and no
+     * custodian while their mints carry tens of thousands of tokens. That is "not published yet",
+     * and drawing it as "0 shares held for 0 tokens" read as a claim.
+     */
+    @Test
+    fun `zero shares for zero tokens with no custodian is nothing published, not a reading`() {
+        assertNull(ProofOfReserves(symbol = "JEFx", sharesHeld = "0", circulatingSupply = "0").toReserves())
+    }
 }

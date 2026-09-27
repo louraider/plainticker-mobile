@@ -1,5 +1,6 @@
 package com.plainticker.mobile.watchlist
 
+import com.plainticker.mobile.repo.researchPublished
 import android.content.SharedPreferences
 import com.plainticker.mobile.data.receipts.SwapReceipt
 import com.plainticker.mobile.data.receipts.VoteReceipt
@@ -66,8 +67,7 @@ class AutoWatch(
     suspend fun voted(ticker: String) {
         val key = normalize(ticker) ?: return
         if (key in watchlist.tickers.value) return
-        val analysed = analysedTickers()
-        if (analysed != null && key in analysed) {
+        if (isCovered(key, analysedTickers())) {
             watchlist.add(key)
             pending.remove(key)
         } else {
@@ -97,8 +97,8 @@ class AutoWatch(
     suspend fun resolvePending(): List<String> {
         val waiting = pending.tickers
         if (waiting.isEmpty()) return emptyList()
-        val analysed = analysedTickers() ?: return emptyList()
-        val ready = waiting.filter { it in analysed }.sorted()
+        val analysed = analysedTickers()
+        val ready = waiting.filter { isCovered(it, analysed) }.sorted()
         ready.forEach { ticker ->
             if (ticker !in watchlist.tickers.value) watchlist.add(ticker)
             pending.remove(ticker)
@@ -125,6 +125,16 @@ class AutoWatch(
             fresh.forEach { swappedInto(it.outputMint) }
         }
     }
+
+    /**
+     * Covered means PlainTicker has published research for it: listed on `/summary`, or, for a
+     * ticker `/summary` leaves out because its class is unavailable (JEF, round 1's winner), the
+     * analysis route itself answers ([researchPublished], the check the digest and the Vote tab
+     * share). Device QA of 1.3.17: a pending watch for JEF never resolved because only `/summary`
+     * was read. A failed read on both counts as not covered, so the pick stays remembered.
+     */
+    private suspend fun isCovered(key: String, analysed: Set<String>?): Boolean =
+        (analysed != null && key in analysed) || summaries.researchPublished(key)
 
     private suspend fun analysedTickers(): Set<String>? = try {
         summaries.summary().rows.mapNotNull { normalize(it.ticker) }.toSet()

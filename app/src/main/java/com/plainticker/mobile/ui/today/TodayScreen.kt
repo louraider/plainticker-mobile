@@ -22,11 +22,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -153,7 +158,8 @@ fun TodayScreen(
                 askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         },
-        onRetry = watchlistViewModel::refresh,
+        onRetry = { watchlistViewModel.refresh() },
+        onRefresh = { watchlistViewModel.refresh(userAsked = true) },
         onOpenVote = onOpenVote,
         onOpenDigest = onOpenDigest,
         onRunCheck = onRunCheck,
@@ -181,15 +187,72 @@ internal fun TodayContent(
     onRunCheck: (() -> Unit)?,
     modifier: Modifier = Modifier,
     header: @Composable () -> Unit = {},
+    /**
+     * Pull to refresh (device QA of 1.3.17: a pull did nothing and the Watched figure stayed on a
+     * launch-time quote). Asks every source again through the shared caches; null draws no pull.
+     */
+    onRefresh: (() -> Unit)? = null,
 ) {
     val colors = defaultAmberColors()
+    val pullState = rememberPullToRefreshState()
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = { onRefresh?.invoke() },
+        modifier = modifier.fillMaxSize().background(colors.surfaceGround),
+        state = pullState,
+        indicator = {
+            if (onRefresh != null) {
+                PullToRefreshDefaults.Indicator(
+                    state = pullState,
+                    isRefreshing = state.refreshing,
+                    // Below the clock: the list runs edge to edge under the status bar.
+                    modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars),
+                    containerColor = colors.surfaceHigh,
+                    color = colors.actionText,
+                )
+            }
+        },
+    ) {
+        TodayList(
+            state = state,
+            zone = zone,
+            onOpenDetail = onOpenDetail,
+            onOpenHours = onOpenHours,
+            onFindStock = onFindStock,
+            onWatch = onWatch,
+            onRetry = onRetry,
+            onOpenVote = onOpenVote,
+            onOpenDigest = onOpenDigest,
+            onRunCheck = onRunCheck,
+            colors = colors,
+            header = header,
+        )
+    }
+}
+
+/** The list itself, inside [TodayContent]'s pull to refresh. */
+@Composable
+private fun TodayList(
+    state: WatchlistUiState,
+    zone: ZoneId,
+    onOpenDetail: (String) -> Unit,
+    onOpenHours: () -> Unit,
+    onFindStock: (() -> Unit)?,
+    onWatch: (String) -> Unit,
+    onRetry: () -> Unit,
+    onOpenVote: (() -> Unit)?,
+    onOpenDigest: (() -> Unit)?,
+    onRunCheck: (() -> Unit)?,
+    colors: AmberColors,
+    header: @Composable () -> Unit,
+) {
     val firstOpen = state.isEmpty
     // The reader's own calendar day, off the same nowMillis/zone every other reader-time sentence
     // on this screen reads: "Reports this week"'s own window is the reader's local week, never New
     // York's (com.plainticker.mobile.ui.today.reportsThisWeek's own doc comment has the rule).
     val today = remember(state.nowMillis, zone) { Instant.ofEpochMilli(state.nowMillis).atZone(zone).toLocalDate() }
     LazyColumn(
-        modifier = modifier.fillMaxSize().background(colors.surfaceGround),
+        modifier = Modifier.fillMaxSize().background(colors.surfaceGround),
         // The content ends above the navigation bar; the padding is part of the scroll.
         contentPadding = WindowInsets.navigationBars.asPaddingValues(),
     ) {

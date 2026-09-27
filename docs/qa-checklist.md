@@ -326,5 +326,5 @@ opens.
 
 ### Screenshots
 
-Saved under `C:/Users/dubys/AppData/Local/Temp/claude/C--Users-dubys/22f921bf-1f19-4e6f-afc5-9aaf58a4ea4e/scratchpad/qa/`,
+Saved under the session scratchpad, `%USERPROFILE%\AppData\Local\Temp\claude\<project>\<session>\scratchpad\qa\`,
 named for what they show. Not committed to this repository.

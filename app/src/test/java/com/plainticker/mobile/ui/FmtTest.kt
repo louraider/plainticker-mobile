@@ -132,17 +132,19 @@ class FmtTest {
     // ---- percent --------------------------------------------------------------------------
 
     @Test
-    fun `percent is signed with two decimals and zero is positive`() {
+    fun `percent is signed with two decimals and zero carries no sign`() {
         assertEquals("+0.09%", Fmt.percent(0.09))
         assertEquals("-0.04%", Fmt.percent(-0.04))
-        assertEquals("+0.00%", Fmt.percent(0.0))
-        assertEquals("+0.00%", Fmt.percent(-0.0))
+        // Device QA of 1.3.17: zero has no direction, so "0.00%", never "+0.00%".
+        assertEquals("0.00%", Fmt.percent(0.0))
+        assertEquals("0.00%", Fmt.percent(-0.0))
         assertEquals("+1,234.57%", Fmt.percent(1234.567))
     }
 
     @Test
     fun `percent that rounds to zero loses its minus`() {
-        assertEquals("+0.00%", Fmt.percent(-0.004))
+        assertEquals("0.00%", Fmt.percent(-0.004))
+        assertEquals("0.00%", Fmt.percent(0.004))
         assertEquals("-0.01%", Fmt.percent(-0.005))
         assertEquals("+0.01%", Fmt.percent(0.005))
     }

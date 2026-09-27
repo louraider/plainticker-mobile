@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -121,6 +122,7 @@ fun VoteScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
+    val voted by voteViewModel.votedTickers.collectAsStateWithLifecycle()
     // A sibling of the LazyColumn, exactly as the List hosts it: an item is disposed when it
     // scrolls out, and a vote mid-flight would go with it.
     Box(modifier.fillMaxSize()) {
@@ -131,6 +133,7 @@ fun VoteScreen(
             onRetry = viewModel::refresh,
             onOpenDetail = onOpenDetail,
             onVote = { ticker, symbol -> voteViewModel.vote(ticker, symbol, state.round?.id) },
+            votedTickers = voted,
             header = header,
         )
         VoteSheet(
@@ -155,7 +158,13 @@ internal fun VoteTabContent(
     onVote: ((ticker: String, symbol: String) -> Unit)? = null,
     header: @Composable () -> Unit = {},
     zone: ZoneId = remember { ZoneId.systemDefault() },
+    /**
+     * [VoteViewModel.votedTickers]: the one "already voted this round" rule Stocks and Detail also
+     * read, merged with this tab's own [VoteTabUiState.votedFor] so the three can never disagree.
+     */
+    votedTickers: Set<String> = emptySet(),
 ) {
+    fun votedFor(ticker: String): Boolean = state.votedFor(ticker) || votedTickers.hasVoted(ticker)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     // Where the ballot's search field sits in this list, counted while the items below are laid
@@ -166,6 +175,15 @@ internal fun VoteTabContent(
     val searchFocus = remember { FocusRequester() }
     val density = LocalDensity.current
     val searchClearance = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + ScrimFade + SearchLandingGap
+    // A search with no match (device QA of 1.3.17): the keyboard covered "No xStock matches",
+    // which sits right under the field. The field is lifted to just below the clock, the same
+    // landing the top card's action uses, so the line under it stays above the keyboard.
+    LaunchedEffect(state.searchMiss) {
+        if (state.searchMiss) {
+            val below = with(density) { searchClearance.roundToPx() }
+            listState.animateScrollToItem(ballotSearchIndex[0], scrollOffset = -below)
+        }
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         state = listState,
@@ -231,7 +249,7 @@ internal fun VoteTabContent(
                         LeaderRow(
                             leader = leader,
                             last = index == state.leaders.lastIndex,
-                            voted = state.votedFor(leader.ticker),
+                            voted = votedFor(leader.ticker),
                             onOpenDetail = onOpenDetail,
                             onVote = onVote,
                         )
@@ -256,7 +274,7 @@ internal fun VoteTabContent(
                     }
                     item(key = "my-votes-note") { Footnote(text = stringResource(R.string.vote_tab_your_votes_note)) }
                     itemsIndexed(state.myVotes, key = { _, receipt -> "mine:" + receipt.signature }) { index, receipt ->
-                        MyVoteRow(receipt = receipt, last = index == state.myVotes.lastIndex, onOpenDetail = onOpenDetail)
+                        MyVoteRow(receipt = receipt, last = index == state.myVotes.lastIndex, onOpenDetail = onOpenDetail, zone = zone)
                     }
                     position += 2 + state.myVotes.size
                 }
@@ -308,7 +326,7 @@ internal fun VoteTabContent(
                         BallotRow(
                             entry = entry,
                             last = index == state.ballot.lastIndex,
-                            voted = state.votedFor(entry.ticker),
+                            voted = votedFor(entry.ticker),
                             onOpenDetail = onOpenDetail,
                             onVote = onVote,
                         )
@@ -472,13 +490,14 @@ private fun LeaderRow(
  * carries a trailing action.
  */
 @Composable
-private fun MyVoteRow(receipt: VoteReceipt, last: Boolean, onOpenDetail: (String) -> Unit) {
+private fun MyVoteRow(receipt: VoteReceipt, last: Boolean, onOpenDetail: (String) -> Unit, zone: ZoneId) {
     AmberRowDivider(last = last) {
         AmberTickerRow(
             ticker = receipt.symbol,
             company = null,
             figure = stringResource(R.string.next_up_weight, skrWeight(BigInteger.valueOf(receipt.weightRaw))),
-            context = stringResource(R.string.vote_tab_your_vote_meta, Fmt.utc(receipt.landedAtMillis)),
+            // The reader's own time, like the round's close above (device QA of 1.3.17).
+            context = stringResource(R.string.vote_tab_your_vote_meta, stringResource(R.string.time_your_time, Fmt.localDateTime(receipt.landedAtMillis, zone))),
             onClick = { onOpenDetail(receipt.ticker) },
             onClickLabel = stringResource(R.string.action_open_ticker, receipt.symbol),
         )
@@ -499,14 +518,16 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
     val weightVoters = previous.weightRaw?.let {
         pluralStringResource(R.plurals.next_up_detail_weight, previous.voters, skrWeight(it), Fmt.count(previous.voters))
     }
+    // The reader's own time, like the round's close (device QA of 1.3.17).
+    val closedAt = previous.closedAtText?.let { stringResource(R.string.time_your_time, it) }
     val meta = when {
-        weightVoters != null && previous.closedAtText != null ->
-            stringResource(R.string.list_row_meta_join, weightVoters, previous.closedAtText)
+        weightVoters != null && closedAt != null ->
+            stringResource(R.string.list_row_meta_join, weightVoters, closedAt)
 
         weightVoters != null -> weightVoters
-        else -> previous.closedAtText
+        else -> closedAt
     }
-    val clickable = previous.status == PreviousRoundStatus.PUBLISHED
+    val clickable = previous.opensResearch
     val openLabel = stringResource(R.string.action_open_ticker, previous.display)
     Column(
         modifier = Modifier
@@ -522,6 +543,23 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
                 color = colors.textTertiary(AmberSurface.GROUND),
                 modifier = Modifier.padding(top = 3.dp),
             )
+        }
+        if (previous.researchPublished) {
+            // The winner's research is up (device QA of 1.3.17: JEF's round still reads "closed"),
+            // so the row says so and offers the way to it.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                Text(
+                    text = stringResource(R.string.vote_tab_last_round_research, previous.display),
+                    style = AmberType.context,
+                    color = colors.textSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+                TextAction(
+                    label = stringResource(R.string.action_read),
+                    onClick = { onOpenDetail(previous.ticker) },
+                    color = colors.actionText,
+                )
+            }
         }
     }
 }
@@ -687,7 +725,7 @@ private val PreviewState = VoteTabUiState(
         status = PreviousRoundStatus.PUBLISHED,
         weightRaw = BigInteger("18500000000"),
         voters = 4,
-        closedAtText = "15 Sep 2026 00:00 UTC",
+        closedAtText = "15 Sep 2026 03:00",
     ),
     ballot = PreviewBallot,
     ballotLoaded = true,

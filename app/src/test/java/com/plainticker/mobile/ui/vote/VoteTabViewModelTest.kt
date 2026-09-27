@@ -336,4 +336,48 @@ class VoteTabViewModelTest {
         advanceUntilIdle()
         assertEquals(TabStake.Unread, model.state.value.stake)
     }
+
+    /**
+     * Device QA of 1.3.17: the live server keeps round 1 at "closed" after JEF's research went up,
+     * and /summary leaves JEF out (its class is unavailable), so the row never opened it. The
+     * analysis route itself is read now, the same check the digest and auto-watch make.
+     */
+    @Test
+    fun `a closed round whose winner has published research opens it and says so`() = runTest {
+        val nextUp = FakeNextUpRepository(
+            answer = Result.success(
+                NextUpAnswer.Open(
+                    rows = emptyList(),
+                    round = VoteRound(2, "2026-09-21T00:00:00.000Z", "2026-09-28T00:00:00.000Z"),
+                    previous = PreviousRound(id = 1, winner = "JEF", weight = "1", voters = 1, status = "closed"),
+                ),
+            ),
+        )
+        val summaries = summaryWith()
+        summaries.analyses = mapOf("JEF" to Result.success(com.plainticker.mobile.data.plainticker.AnalysisPayload(ticker = "JEF")))
+        val model = viewModel(nextUp = nextUp, summaries = summaries)
+        advanceUntilIdle()
+
+        val previous = checkNotNull(model.state.value.previous)
+        assertTrue(previous.researchPublished)
+        assertTrue(previous.opensResearch)
+    }
+
+    @Test
+    fun `a closed round whose winner has no research yet opens nothing`() = runTest {
+        val nextUp = FakeNextUpRepository(
+            answer = Result.success(
+                NextUpAnswer.Open(
+                    rows = emptyList(),
+                    round = null,
+                    previous = PreviousRound(id = 1, winner = "JEF", weight = "1", voters = 1, status = "closed"),
+                ),
+            ),
+        )
+        val model = viewModel(nextUp = nextUp)
+        advanceUntilIdle()
+        val previous = checkNotNull(model.state.value.previous)
+        assertFalse(previous.researchPublished)
+        assertFalse(previous.opensResearch)
+    }
 }

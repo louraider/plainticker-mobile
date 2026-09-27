@@ -3,6 +3,8 @@ package com.plainticker.mobile.ui.you
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
+import com.plainticker.mobile.ui.components.TopScrim
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -115,56 +117,64 @@ fun DigestScreen(viewModel: DigestViewModel, modifier: Modifier = Modifier) {
     }
 
     val footer = digestFooter(record = state.record, notificationsOn = state.notificationsOn, nowMillis = state.nowMillis)
-    LazyColumn(
-        modifier = modifier.fillMaxSize().background(colors.surfaceGround),
-        contentPadding = WindowInsets.systemBars.asPaddingValues(),
-    ) {
-        item(key = "header") { TopBar(insets = WindowInsets(0), colors = colors) }
-        item(key = "heading") {
-            AmberSectionHead(
-                title = stringResource(R.string.watchlist_heading_digest),
-                lede = stringResource(R.string.digest_screen_lede),
-                colors = colors,
-            )
-        }
-        item(key = "panel") {
-            Panel(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), colors = colors) {
-                digestStamp(state.record, state.nowMillis, zone)?.let {
-                    Text(text = it.text(), style = AmberType.meta, color = colors.textTertiary(AmberSurface.RAISED))
-                }
-                Text(text = digestBody(state.record).text(), style = AmberType.body, color = colors.textPrimary)
+    // The band the clock sits in stays the page's own ground while the digest scrolls under it,
+    // the same scrim the five home destinations and Detail draw (device QA of 1.3.17).
+    Box(modifier.fillMaxSize().background(colors.surfaceGround)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = WindowInsets.systemBars.asPaddingValues(),
+        ) {
+            item(key = "header") { TopBar(insets = WindowInsets(0), colors = colors) }
+            item(key = "heading") {
+                AmberSectionHead(
+                    title = stringResource(R.string.watchlist_heading_digest),
+                    lede = stringResource(R.string.digest_screen_lede),
+                    colors = colors,
+                )
             }
-        }
-        item(key = "delivery") {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Weighted and wrapping; Enable is short and fixed, so it can never starve it.
-                    Text(
-                        text = footer.delivery.text(),
-                        style = AmberType.context,
-                        color = colors.textSecondary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (!state.notificationsOn) {
-                        TextAction(
-                            label = stringResource(R.string.action_enable),
-                            onClick = {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
-                                )
-                            },
-                            color = colors.actionText,
+            item(key = "panel") {
+                // The page's own 16dp gutter, once: the panel's inset is the gutter, and the heading
+                // above sits on it (device QA of 1.3.17: 16dp here plus the panel's own 20dp drew the
+                // card 36dp in, well inside the heading's edge).
+                Panel(modifier = Modifier.padding(vertical = 8.dp), inset = 16.dp, colors = colors) {
+                    digestStamp(state.record, state.nowMillis, zone)?.let {
+                        Text(text = it.text(), style = AmberType.meta, color = colors.textTertiary(AmberSurface.RAISED))
+                    }
+                    Text(text = digestBody(state.record).text(), style = AmberType.body, color = colors.textPrimary)
+                }
+            }
+            item(key = "delivery") {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Weighted and wrapping; Enable is short and fixed, so it can never starve it.
+                        Text(
+                            text = footer.delivery.text(),
+                            style = AmberType.context,
+                            color = colors.textSecondary,
+                            modifier = Modifier.weight(1f),
                         )
+                        if (!state.notificationsOn) {
+                            TextAction(
+                                label = stringResource(R.string.action_enable),
+                                onClick = {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
+                                    )
+                                },
+                                color = colors.actionText,
+                            )
+                        }
+                    }
+                    footer.checked?.let {
+                        Text(text = it.text(), style = AmberType.context, color = colors.textTertiary(AmberSurface.GROUND))
                     }
                 }
-                footer.checked?.let {
-                    Text(text = it.text(), style = AmberType.context, color = colors.textTertiary(AmberSurface.GROUND))
-                }
             }
         }
+        TopScrim(Modifier.align(Alignment.TopCenter), groundColor = colors.surfaceGround)
     }
 }

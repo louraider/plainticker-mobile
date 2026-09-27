@@ -255,11 +255,17 @@ class AccountSectionTest {
     }
 
     @Test
-    fun `a redeemed code tells a reader with no account how to keep Pro past a reinstall`() {
+    fun `a reader with no account is told to sign in before redeeming, and never promised it after`() {
+        // Device QA of 1.3.17: "Sign in with Google to keep Pro" after an anonymous redeem was not
+        // true; the server records the account only at redemption.
         val screen = screenScan.code
         assertTrue("promoKeepNote = account is AccountUiState.SignedOut" in screen)
-        assertTrue("sub = if (keepNote) stringResource(R.string.promo_success_keep_note) else null" in screen)
-        assertEquals("Sign in with Google to keep Pro if you reinstall.", ShippedCopy.strings.getValue("promo_success_keep_note"))
+        assertTrue("sub = if (keepNote) stringResource(R.string.promo_signin_first_hint) else null" in screen)
+        assertTrue("if (signInHint) {" in screen)
+        assertTrue("sub = if (keepNote) stringResource(R.string.promo_success_saved_to_phone) else null" in screen)
+        assertEquals("Sign in first to keep this Pro if you reinstall.", ShippedCopy.strings.getValue("promo_signin_first_hint"))
+        assertEquals("Saved to this phone.", ShippedCopy.strings.getValue("promo_success_saved_to_phone"))
+        assertFalse(ShippedCopy.strings.containsKey("promo_success_keep_note"))
     }
 
     @Test
@@ -267,5 +273,24 @@ class AccountSectionTest {
         val text = ShippedCopy.strings.getValue("you_sign_out_confirm")
         assertFalse("keeps that account" in text)
         assertTrue("unlinks it from the account" in text)
+    }
+
+    /** Device QA of 1.3.17: "Stays connected between launches" sat under "Not connected". */
+    @Test
+    fun `the note about a kept session is offered only while a wallet is connected`() {
+        assertTrue("if (wallet != null) WalletNoteRow(colors = colors)" in walletScan.code)
+    }
+
+    /**
+     * Device QA of 1.3.17: the plan read "A subscription" beside "It does not renew by itself". The
+     * web's account-held Pro is paid once and does not renew (upgrade page: "Paid once, no
+     * renewal"), so the source no longer calls it a subscription and the two lines agree.
+     */
+    @Test
+    fun `the plan's source and its renewal line do not contradict each other`() {
+        val source = ShippedCopy.strings.getValue("you_plan_source_subscription")
+        assertFalse(source.contains("subscription", ignoreCase = true))
+        assertFalse(ShippedCopy.strings.getValue("pro_entitlement_subscription").contains("subscription", ignoreCase = true))
+        assertTrue("does not renew" in ShippedCopy.strings.getValue("you_plan_extend_subscription"))
     }
 }

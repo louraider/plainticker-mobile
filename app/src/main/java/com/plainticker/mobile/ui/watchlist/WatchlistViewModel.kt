@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.jupiter.PriceEntry
+import com.plainticker.mobile.data.plainticker.SummaryRow
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.xstocks.MarketStatus
+import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
@@ -28,6 +30,8 @@ import com.plainticker.mobile.watchlist.WatchlistScheduler
 import java.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -129,6 +133,12 @@ data class WatchlistUiState(
      * while the exchange is closed.
      */
     val closedMovers: List<ClosedMover> = emptyList(),
+    /**
+     * True while a refresh the reader asked for (pull to refresh) is out, until its prices have
+     * answered: what the pull indicator reads. A timed re-price never sets it, so nothing spins on
+     * its own.
+     */
+    val refreshing: Boolean = false,
 ) {
     /** Nothing is watched. The common first state, and the one that gets a sentence. */
     val isEmpty: Boolean get() = watched == 0
@@ -199,6 +209,14 @@ class WatchlistViewModel(
 
     private var loadJob: Job? = null
     private var todayJob: Job? = null
+    private var priceJob: Job? = null
+    private var repriceJob: Job? = null
+
+    /** The analyzed rows Today's join found, kept so a re-price can ask for the same mints again. */
+    private var analyzedAssets: List<Pair<SummaryRow, XStockAsset>> = emptyList()
+
+    /** When the last price read finished, by [clock]; null until one has. */
+    private var pricedAtMillis: Long? = null
 
     /**
      * The venue as a clock ([MarketClock] has the stale "Closed" the Seeker drew on 24 Sep 2026):
@@ -235,9 +253,13 @@ class WatchlistViewModel(
         loadToday()
     }
 
-    /** The Retry a banner offers. Asks every source again and re-reads the notification setting. */
-    fun refresh() {
+    /**
+     * The Retry a banner offers, and pull to refresh. Asks every source again and re-reads the
+     * notification setting. [userAsked] draws the pull indicator until the prices have answered.
+     */
+    fun refresh(userAsked: Boolean = false) {
         notificationsChanged()
+        if (userAsked) _state.update { it.copy(refreshing = true) }
         load(watchlist.tickers.value)
         loadToday()
     }
@@ -266,13 +288,49 @@ class WatchlistViewModel(
      * Today came back to the foreground: re-read the notification setting, move the clock, and
      * recompute the venue, then keep it current at every boundary while Today stays resumed.
      */
+    /**
+     * Also keeps Today's figures on the shared price cache's own window ([REPRICE_MS]) while Today
+     * is shown, and re-prices once on coming back to it.
+     *
+     * **Why** (device QA of 1.3.17). Today priced its rows once, when this ViewModel was made, and
+     * the ViewModel lives as long as the home entry: switching destinations, opening Detail and
+     * coming back never asked again, and there was no pull to refresh. METAx read -0.10% on Today
+     * from a quote read at launch while Stocks and Detail, which ask the same 30 s cache, read
+     * 0.00% from a fresh one; only a relaunch made the three agree. Stocks already re-prices on
+     * this window ([com.plainticker.mobile.ui.list.ListViewModel.onResume]), so Today now keeps the
+     * same cadence against the same [PriceRepository], and a row on either screen and the Detail
+     * it opens read the same cached quote.
+     */
     fun onResume() {
         notificationsChanged()
         marketClock.onResume()
+        repriceJob?.cancel()
+        repriceJob = viewModelScope.launch {
+            while (isActive) {
+                repriceIfStale()
+                delay(REPRICE_MS)
+            }
+        }
     }
 
-    /** Today left the foreground: the boundary job stops, nothing runs in the background. */
-    fun onPause() = marketClock.onPause()
+    /** Today left the foreground: the boundary job and the re-pricing stop, nothing runs in the background. */
+    fun onPause() {
+        marketClock.onPause()
+        repriceJob?.cancel()
+        repriceJob = null
+    }
+
+    /**
+     * Asks for the same mints again once the last read is older than [REPRICE_MS]. Before any read
+     * has finished there is nothing to refresh, and while Today's own join is still out it owns the
+     * pricing.
+     */
+    private fun repriceIfStale() {
+        val at = pricedAtMillis ?: return
+        if (clock.nowMillis() - at < REPRICE_MS) return
+        if (todayJob?.isActive == true || priceJob?.isActive == true) return
+        priceJob = viewModelScope.launch { priceToday() }
+    }
 
     /**
      * Fires the daily check now. Debug builds only (the screen offers no way to call it otherwise),
@@ -439,33 +497,53 @@ class WatchlistViewModel(
                 )
             }
 
-            val mints = analyzed.mapNotNull { (_, asset) -> asset.solanaMint }.distinct().take(TODAY_PRICE_BUDGET)
-            val pricesAskedAt = clock.nowMillis()
-            val fetch = if (mints.isEmpty()) null else runCatching { prices.pricesFirst(mints) }.getOrNull()
+            analyzedAssets = analyzed
+            priceToday()
+        }
+    }
 
-            val pricesFetchedAtMillis = if (fetch != null) pricesAskedAt else null
-            fetch?.priced?.let { sharedPrices = sharedPrices + it }
+    /**
+     * The one price read Today draws from: every analyzed token, plus any watched token the join
+     * does not cover, through the shared [PriceRepository] cache. Run at the end of each join and
+     * again by [repriceIfStale] while Today is shown. A mint the read answered replaces what was
+     * held for it, priced or not; a mint the read never reached keeps its last figure.
+     */
+    private suspend fun priceToday() {
+        val analyzed = analyzedAssets
+        val watchedMints = _state.value.rows.mapNotNull { it.mint }
+        val mints = (analyzed.mapNotNull { (_, asset) -> asset.solanaMint } + watchedMints)
+            .distinct()
+            .take(TODAY_PRICE_BUDGET)
+        val pricesAskedAt = clock.nowMillis()
+        val fetch = if (mints.isEmpty()) null else runCatching { prices.pricesFirst(mints) }.getOrNull()
 
-            val movers = closedMovers(
-                analyzed.map { (row, asset) ->
-                    CoveredQuote(
-                        ticker = row.ticker,
-                        symbol = asset.symbol.ifBlank { row.ticker },
-                        company = row.company ?: asset.name,
-                        price = asset.solanaMint?.let { sharedPrices[it] },
-                    )
-                },
-            )
+        val pricesFetchedAtMillis = if (fetch != null) pricesAskedAt else _state.value.pricesFetchedAtMillis
+        if (fetch != null) {
+            val answered = mints.toSet() - fetch.unfetched
+            sharedPrices = (sharedPrices - answered) + fetch.priced
+        }
 
-            _state.update { current ->
-                current.copy(
-                    pricesLoading = false,
-                    pricesFetchedAtMillis = pricesFetchedAtMillis,
-                    rows = current.rows.map(::sharedPrice),
-                    closedMovers = movers,
-                    nowMillis = clock.nowMillis(),
+        val movers = closedMovers(
+            analyzed.map { (row, asset) ->
+                CoveredQuote(
+                    ticker = row.ticker,
+                    symbol = asset.symbol.ifBlank { row.ticker },
+                    company = row.company ?: asset.name,
+                    price = asset.solanaMint?.let { sharedPrices[it] },
                 )
-            }
+            },
+        )
+
+        pricedAtMillis = clock.nowMillis()
+        _state.update { current ->
+            current.copy(
+                pricesLoading = false,
+                refreshing = false,
+                pricesFetchedAtMillis = pricesFetchedAtMillis,
+                rows = current.rows.map(::sharedPrice),
+                closedMovers = movers,
+                nowMillis = clock.nowMillis(),
+            )
         }
     }
 
@@ -475,8 +553,15 @@ class WatchlistViewModel(
         return row.copy(priceUsd = entry.usdPrice, referencePriceUsd = entry.stockData?.price, poolUsd = entry.liquidity)
     }
 
-    private companion object {
+    companion object {
         /** Same cap `ListViewModel` prices at once: a few paced Jupiter chunks, not the whole catalog. */
-        const val TODAY_PRICE_BUDGET = 200
+        private const val TODAY_PRICE_BUDGET = 200
+
+        /**
+         * How old Today's figures may get while it is on screen: the price cache's own window
+         * ([com.plainticker.mobile.repo.CachedPriceRepository.TTL_MS]), the same cadence Stocks keeps
+         * ([com.plainticker.mobile.ui.list.ListViewModel.REPRICE_MS]).
+         */
+        const val REPRICE_MS = com.plainticker.mobile.repo.CachedPriceRepository.TTL_MS
     }
 }

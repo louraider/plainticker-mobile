@@ -188,6 +188,15 @@ class TodayScreenTest {
     }
 
     @Test
+    fun `a pull refreshes Today through the ViewModel, and a banner Retry does not draw the pull`() {
+        val fn = body("fun TodayScreen(", "internal fun TodayContent(")
+        assertTrue("onRefresh = { watchlistViewModel.refresh(userAsked = true) }" in fn)
+        assertTrue("onRetry = { watchlistViewModel.refresh() }" in fn)
+        assertTrue("PullToRefreshBox(" in content)
+        assertTrue("isRefreshing = state.refreshing" in content)
+    }
+
+    @Test
     fun `the first watch asks for notifications once, the same way Detail's Watch does`() {
         val fn = body("fun TodayScreen(", "internal fun TodayContent(")
         assertTrue("val ask = watchlistViewModel.watch(ticker)" in fn)

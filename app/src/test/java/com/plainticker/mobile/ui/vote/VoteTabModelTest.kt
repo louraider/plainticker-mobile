@@ -114,11 +114,13 @@ class VoteTabModelTest {
             id = 1, winner = "JEF", weight = "878980647", voters = 1,
             closedAt = "2026-09-21T00:00:03.697Z", status = "closed",
         )
-        val display = requireNotNull(previousDisplay(previous, catalog))
+        val display = requireNotNull(previousDisplay(previous, catalog, java.time.ZoneOffset.UTC))
         assertEquals(PreviousRoundStatus.CLOSED, display.status)
         assertEquals(1, display.roundId)
         assertEquals(Copy.Words(R.string.vote_tab_last_round_closed, listOf("1", "JEFx")), display.sentence)
-        assertEquals("21 Sep 2026 00:00 UTC", display.closedAtText)
+        assertEquals("the reader's own time, here UTC", "21 Sep 2026 00:00", display.closedAtText)
+        val kyiv = requireNotNull(previousDisplay(previous, catalog, java.time.ZoneId.of("Europe/Kyiv")))
+        assertEquals("the round's close in the reader's zone, like the open round's", "21 Sep 2026 03:00", kyiv.closedAtText)
     }
 
     @Test
@@ -136,14 +138,14 @@ class VoteTabModelTest {
             id = 0, winner = "jef", weight = "18500000000", voters = 4,
             closedAt = "2026-09-15T00:00:00.000Z", status = "published",
         )
-        val display = requireNotNull(previousDisplay(previous, catalog))
+        val display = requireNotNull(previousDisplay(previous, catalog, java.time.ZoneOffset.UTC))
         assertEquals("jef", display.ticker)
         assertEquals("JEFx", display.display)
         assertEquals("Jefferies Financial Group", display.company)
         assertEquals(PreviousRoundStatus.PUBLISHED, display.status)
         assertEquals(BigInteger("18500000000"), display.weightRaw)
         assertEquals(4, display.voters)
-        assertEquals("15 Sep 2026 00:00 UTC", display.closedAtText)
+        assertEquals("15 Sep 2026 00:00", display.closedAtText)
     }
 
     @Test
@@ -253,7 +255,7 @@ class VoteTabModelTest {
         assertEquals("This wallet has 38,406.2 SKR staked. That is the weight each vote from it carries.", say(TabStake.Read(38_406_150_222L)))
         assertEquals("This wallet has no staked SKR, so a vote from it carries no weight.", say(TabStake.Read(0L)))
         assertEquals(
-            "Connect a wallet with staked SKR to vote. Your stake is the weight your vote carries.",
+            "No wallet is connected right now. To vote, connect one with staked SKR: the stake is the weight each vote carries.",
             say(TabStake.NoWallet),
         )
         listOf(TabStake.Reading, TabStake.Unread, TabStake.NoWallet).forEach { state ->
@@ -269,5 +271,16 @@ class VoteTabModelTest {
         val newYork = roundClosesLocal(round, java.time.ZoneId.of("America/New_York"))!!
         assertEquals("Closes Sunday 27 Sep at 20:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(newYork))
         assertEquals(null, roundClosesLocal(round.copy(closesAt = "not-a-date"), java.time.ZoneOffset.UTC))
+    }
+
+    /**
+     * Device QA of 1.3.17: "Connect a wallet with staked SKR to vote" sat above the reader's own
+     * listed vote (the receipts stand with no wallet connected). The line now fits both states.
+     */
+    @Test
+    fun `the no-wallet line reads true above the reader's own votes as well as with none`() {
+        val line = com.plainticker.mobile.ui.ShippedCopy.strings.getValue("vote_tab_stake_no_wallet")
+        assertTrue(line.startsWith("No wallet is connected right now."))
+        assertFalse("never an order that ignores the votes listed below it", line.startsWith("Connect a wallet"))
     }
 }

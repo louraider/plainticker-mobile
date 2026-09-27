@@ -38,6 +38,10 @@ fun ProofOfReserves?.toReserves(): Reserves? {
     val por = this ?: return null
     val held = por.sharesHeldValue?.takeIf { it.isFinite() && it >= 0.0 } ?: return null
     val supply = por.circulatingSupplyValue?.takeIf { it.isFinite() && it >= 0.0 } ?: return null
+    // Zero shares for zero tokens with no custodian named is xStocks' shape for "nothing published
+    // yet", not an attestation (device QA of 1.3.17: JEFx and AALx answered exactly that while
+    // their mints held 94,230 and 230,622 tokens, and the row read "0 shares held for 0 tokens").
+    if (held == 0.0 && supply == 0.0 && por.holdings.none { !it.provider.isNullOrBlank() }) return null
     return Reserves(
         sharesHeld = held,
         tokensInCirculation = supply,

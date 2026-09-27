@@ -10,9 +10,12 @@ import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.plainticker.VoteApi
 import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteError
+import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.receipts.VoteReceipt
 import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
+import com.plainticker.mobile.repo.NextUpAnswer
+import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
@@ -23,7 +26,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -87,10 +94,59 @@ class VoteViewModel(
     private val debugLog: VoteDebugLog = VoteDebugLog.ANDROID,
     /** Where the receipt is written. viewModelScope runs on Main, and a file write does not. */
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * The open round, for [votedTickers] and for stamping a receipt whose caller did not know the
+     * round (a Stocks row, Detail). Null (tests written before this) knows no round: nothing reads
+     * as voted and receipts are stamped only with what the caller passed.
+     */
+    private val nextUp: NextUpRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<VoteState>(VoteState.Closed)
     val state: StateFlow<VoteState> = _state.asStateFlow()
+
+    /** The round `next-up` says is open, or null while unknown or when none is. */
+    private val openRound = MutableStateFlow<VoteRound?>(null)
+
+    /**
+     * Tickers the server refused with 409 `already_voted` in this session: this wallet has a
+     * counted vote this device holds no receipt for (cast on another device, or before receipts).
+     */
+    private val refusedAsVoted = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * The tickers, uppercase, this wallet already voted for in the open round, from the vote
+     * receipts ([votedTickers], the one rule) plus what the server itself refused as already voted.
+     * Every surface that offers a Vote outside the Vote tab (Stocks' rows, Detail) reads this and
+     * draws a quiet "Voted" instead (device QA of 1.3.17). Empty when no round is open.
+     */
+    val votedTickers: StateFlow<Set<String>> = combine(
+        voteReceipts.receipts,
+        openRound,
+        wallet.account,
+        refusedAsVoted,
+    ) { receipts, round, account, refused ->
+        if (round == null) emptySet() else com.plainticker.mobile.ui.vote.votedTickers(receipts, round, account?.address) + refused
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    init {
+        refreshRound()
+    }
+
+    /** Reads the open round again (the repository caches it for its own window). */
+    fun refreshRound() {
+        val source = nextUp ?: return
+        viewModelScope.launch {
+            val answer = try {
+                source.current()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failed: Exception) {
+                return@launch
+            }
+            openRound.value = (answer as? NextUpAnswer.Open)?.round
+        }
+    }
 
     private var job: Job? = null
 
@@ -107,7 +163,9 @@ class VoteViewModel(
      */
     fun vote(ticker: String, symbol: String, roundId: Int? = null) {
         if (_state.value.isBusy) return
-        pendingRoundId = roundId
+        // A Stocks row or Detail does not know the round; the one this class read stands in, so
+        // the receipt counts for the round it was cast in and every surface draws "Voted".
+        pendingRoundId = roundId ?: openRound.value?.id
         // Set here and not inside the coroutine, so the sheet is up on the frame the row was
         // tapped and so a second tap on a second row cannot start a second attempt in the gap
         // before the first one is scheduled.
@@ -227,7 +285,10 @@ class VoteViewModel(
             // this. Every other refusal, explained or not, is the server not having built the vote.
             val reason = when (e) {
                 is VoteError.NotOpen -> VoteRefusal.NOT_OPEN
-                is VoteError.AlreadyVoted -> VoteRefusal.ALREADY_VOTED
+                is VoteError.AlreadyVoted -> {
+                    refusedAsVoted.update { it + ticker.trim().uppercase() } // lint-allow uppercase: set key
+                    VoteRefusal.ALREADY_VOTED
+                }
                 is VoteError.RateLimited -> VoteRefusal.RATE_LIMITED
                 else -> VoteRefusal.UNAVAILABLE
             }

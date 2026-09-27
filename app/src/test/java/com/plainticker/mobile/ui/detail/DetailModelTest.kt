@@ -186,6 +186,31 @@ class DetailModelTest {
         assertEquals(VerdictBlock.Locked, state.verdictBlock)
     }
 
+    /**
+     * Device QA of 1.3.17: JEFx (a financial) drew no Classification block at all. The server says
+     * `class_state: "unavailable"` with a reason; the block now says so in the web's own words.
+     */
+    @Test
+    fun `an unavailable class says why, in the web's words, and is never sold as Pro`() {
+        val pending = Verdict(classState = "unavailable", classReason = "sector-model-pending")
+        val block = served(analysis = AnalysisState.Served(payload(verdict = pending))).verdictBlock
+        assertTrue(block is VerdictBlock.Unavailable)
+        assertEquals(R.string.detail_verdict_unavailable_sector, label((block as VerdictBlock.Unavailable).reason))
+        // The reason in plain words, after the web's sector-model copy (JEF is a bank with capital markets).
+        val sector = com.plainticker.mobile.ui.ShippedCopy.strings.getValue("detail_verdict_unavailable_sector")
+        assertTrue(sector.startsWith("Banks, capital-markets firms, brokers and insurers need their own sector model, which is in progress."))
+
+        val thin = Verdict(classState = "unavailable", classReason = "insufficient-data")
+        val thinBlock = served(analysis = AnalysisState.Served(payload(verdict = thin))).verdictBlock as VerdictBlock.Unavailable
+        assertEquals(R.string.detail_verdict_unavailable_data, label(thinBlock.reason))
+
+        val alsoLocked = Verdict(classState = "unavailable", classReason = "sector-model-pending", locked = true)
+        assertTrue(
+            "no class exists, so there is nothing to lock",
+            served(analysis = AnalysisState.Served(payload(verdict = alsoLocked))).verdictBlock is VerdictBlock.Unavailable,
+        )
+    }
+
     @Test
     fun `an unlocked verdict with a blank label draws nothing, rather than an empty value`() {
         val state = served(analysis = AnalysisState.Served(payload(verdict = Verdict(labelEn = ""))))
@@ -245,6 +270,9 @@ class DetailModelTest {
         val unpriced = served(quote = Piece.Absent).priceRow
         assertNull(unpriced.tokenPrice)
         assertEquals(R.string.detail_price_absent, label(unpriced.tokenNote))
+        // Device QA of 1.3.17: the sentence stands in the figure's place, no bare dash above it.
+        assertTrue(unpriced.tokenAbsent)
+        assertFalse("a refused quote keeps its placeholder", refused.tokenAbsent)
 
         // Still in flight is neither: the row draws a skeleton, so it states nothing at all.
         assertNull(served(quote = Piece.Loading).priceRow.tokenNote)
@@ -546,7 +574,8 @@ class DetailModelTest {
     @Test
     fun `proof of reserves unavailable - an absence and a failure are different sentences`() {
         val absent = served(reservesPiece = Piece.Absent).trustFacts.first()
-        assertEquals(R.string.detail_value_unknown, label(absent.value))
+        // Device QA of 1.3.17: xStocks not having published is said as that, not as Unknown.
+        assertEquals(R.string.detail_value_not_published, label(absent.value))
         assertEquals(R.string.detail_fact_por_absent_sub, label(absent.sub))
 
         val failed = served(reservesPiece = Piece.Failed).trustFacts.first()
@@ -942,6 +971,30 @@ class DetailModelTest {
         val quoted = state.costLine(0.09)
         assertEquals(R.string.detail_cost_line, label(quoted))
         assertEquals(listOf("0.09%", "\$1.3M"), args(quoted))
+    }
+
+    /**
+     * Device QA of 1.3.17: ABBVx on $2 to $3 of depth read "Depth $3 behind this price" under an
+     * active Swap. Below the floor the line now says "too thin", as every list row does.
+     */
+    @Test
+    fun `below the liquidity floor the line under Swap says too thin, in the lists' words`() {
+        val thin = served(quote = Piece.Ready(PriceEntry(usdPrice = 266.03, liquidity = 2.6, stockData = StockData(price = 264.34))))
+        assertEquals(R.string.list_row_meta_thin, label(thin.costLine(null)))
+        assertEquals(listOf("\$2"), args(thin.costLine(null)))
+        val quoted = thin.costLine(1.2)
+        assertEquals(R.string.detail_cost_line_thin, label(quoted))
+        assertEquals(listOf("1.20%", "\$2"), args(quoted))
+        assertNull("a thin pool keeps the button on", thin.swapBlockedReason)
+    }
+
+    /** Device QA of 1.3.17: JEFx and AALx offered an active Swap though Jupiter has no price. */
+    @Test
+    fun `a token Jupiter has no price for turns the swap off, with the reason in one line`() {
+        assertEquals(R.string.detail_swap_no_price, label(served(quote = Piece.Absent).swapBlockedReason))
+        assertNull("a refused quote is transient, the swap machine asks again", served(quote = Piece.Failed).swapBlockedReason)
+        assertNull("still in flight blocks nothing", served(quote = Piece.Loading).swapBlockedReason)
+        assertNull(served().swapBlockedReason)
     }
 
     @Test

@@ -127,6 +127,29 @@ class DetailReadModelTest {
         assertEquals(listOf("Margins rose again.", "The filing added detail."), steps.items.map { it.detail })
     }
 
+    /**
+     * Device QA of 1.3.17: old server caches still carry em dashes and ISO dates in the prose; the
+     * screen normalises both before drawing ([com.plainticker.mobile.ui.ReadText]).
+     */
+    @Test
+    fun `the read and the steps are drawn without dashes and with the app's own dates`() {
+        val em = Char(0x2014)
+        val payload = TickerReadResponse(
+            ticker = "AAPL",
+            pro = true,
+            narrative = NarrativeRead(excerptEn = "x", fullEn = "Leverage is contained $em debt sits low."),
+            nextSteps = NextStepsRead(
+                titlesEn = listOf("Watch the report $em closely"),
+                stepsEn = listOf(NextStepDetail("Watch the report", "When Apple reports on 2026-10-28, track revenue.")),
+            ),
+        )
+        val s = DetailUiState(ticker = "AAPL", read = ReadState.Ready(payload), nowMillis = java.time.Instant.parse("2026-09-27T12:00:00Z").toEpochMilli())
+        assertEquals("Leverage is contained: debt sits low.", (s.readNarrative!!.text as Copy.Raw).text)
+        val step = s.nextStepsBlock!!.items.single()
+        assertEquals("Watch the report: closely", step.title)
+        assertEquals("When Apple reports on 28 Oct, track revenue.", step.detail)
+    }
+
     /** `pro: true` but no full field sent yet: the excerpt still stands rather than a blank block. */
     @Test
     fun `pro true with no full field yet falls back to the excerpt, not to nothing`() {

@@ -77,4 +77,21 @@ class HomeScreenTest {
         assertTrue("openPromo = openPromo," in source)
         assertTrue("onPromoOpened = onPromoOpened," in source)
     }
+
+    /**
+     * Device QA of 1.3.17: with the keyboard up the window panned, the scrim left the screen and
+     * text ran under the clock, and "No xStock matches" sat behind the keys. The window resizes now
+     * and the shell lays out above the keyboard, with the bar out of the way.
+     */
+    @Test
+    fun `the shell lays out above the keyboard instead of the window panning behind it`() {
+        val manifest = File(module, "src/main/AndroidManifest.xml").readText()
+        assertTrue("android:windowSoftInputMode=\"adjustResize\"" in manifest)
+        assertTrue("Column(Modifier.fillMaxSize().imePadding())" in source)
+        assertTrue("if (!imeVisible) AmberBottomNav(" in source)
+        assertTrue("the clock's scrim still draws over every destination", "TopScrim(Modifier.align(Alignment.TopCenter)" in source)
+        val digest = File(module, "src/main/java/com/plainticker/mobile/ui/you/DigestScreen.kt").readText()
+        assertTrue("the digest screen scrolls under the same scrim", "TopScrim(Modifier.align(Alignment.TopCenter)" in digest)
+        assertTrue("its card sits on the page gutter, once", "Panel(modifier = Modifier.padding(vertical = 8.dp), inset = 16.dp" in digest)
+    }
 }
