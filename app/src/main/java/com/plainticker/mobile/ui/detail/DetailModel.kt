@@ -815,14 +815,26 @@ fun DetailUiState.costLine(allInCostPct: Double?): Copy? {
 }
 
 /**
- * Why the swap button is off, or null when it is on. Jupiter answered about this token and has no
- * price for it (device QA of 1.3.17: JEFx and AALx, "Jupiter does not price this token", under an
- * active Swap): a swap cannot be quoted, so the button is disabled and says why in one line. A
- * quote that failed (Jupiter refused, a network hiccup) is not this: that is transient, and the
+ * True when Jupiter answered about this token and has no reference price for it (device QA of
+ * 1.3.17: JEFx and AALx). A missing price is not a missing route (judges' review, 2026-09-27), so
+ * the button is not switched off: it reads "Check swap availability" and opens the same machine,
+ * whose quote answers whether a route exists ([com.plainticker.mobile.ui.swap.SwapViewModel.checkAvailability]).
+ * A quote that failed (Jupiter refused, a network hiccup) is not this: that is transient, and the
  * swap machine asks again and reports its own failure.
  */
-val DetailUiState.swapBlockedReason: Copy?
-    get() = if (mint != null && quote.isAbsent) words(R.string.detail_swap_no_price) else null
+val DetailUiState.swapUnpriced: Boolean
+    get() = mint != null && quote.isAbsent
+
+/** The one line under the button on an unpriced token, or null: why it asks rather than promises. */
+val DetailUiState.swapUnpricedNote: Copy?
+    get() = if (swapUnpriced) words(R.string.detail_swap_no_price) else null
+
+/**
+ * The swap button's label: "Swap USDC to TSLAx", or "Check swap availability" on a token Jupiter
+ * has no reference price for. Null until the catalog names the token.
+ */
+val DetailUiState.swapButtonLabel: Copy?
+    get() = if (swapUnpriced && symbol != null) words(R.string.detail_swap_check_availability) else swapLabel
 
 /**
  * The token this screen swaps, carrying the scaled UI multiplier Detail's own chain read found in

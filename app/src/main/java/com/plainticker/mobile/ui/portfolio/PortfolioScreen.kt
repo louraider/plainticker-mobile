@@ -151,6 +151,7 @@ fun PortfolioScreen(
                 onViewPortfolio = swapViewModel::close,
                 onRetry = swapViewModel::retry,
                 onSwapBack = swapViewModel::swapBack,
+                onContinue = swapViewModel::continueToWallet,
             ),
         )
     }

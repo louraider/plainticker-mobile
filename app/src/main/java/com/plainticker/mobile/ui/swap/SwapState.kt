@@ -38,9 +38,13 @@ import java.util.Locale
  *                              :                                                :
  *                              : the quote needs more SOL than the wallet has   : enough SOL
  *                              v                                                v
- *                          Shortfall                                      AwaitingWallet
- *                        (never opened                                        :   :
- *                         the wallet)                                         :   : signed
+ *                          Shortfall                                         Review
+ *                        (never opened                    continueToWallet() :   : the quote ran
+ *                         the wallet)                     (quote still fresh):   : out: Quoting
+ *                                                                            v   : (refreshed),
+ *                                                                   AwaitingWallet  back to Review
+ *                                                                             :   :
+ *                                                                             :   : signed
  *                                                                             :   v
  *                                        no signature came back ..............+  Landing
  *                                        (back to Amount, nothing lost:           :   :
@@ -52,9 +56,14 @@ import java.util.Locale
  *                                        (debug: never submitted)
  *
  *     From Landing, a -1003, -2003 or -2004 goes back to Quoting(requote = true) exactly once,
- *     and that requote reaches AwaitingWallet(requote = true): a fresh order is fresh bytes, so
- *     it needs a second approval and the state says so. A second requotable code, or any other
- *     refusal, is Failed and the attempt is over.
+ *     and that requote reaches Review(requote = true): a fresh order is fresh bytes and fresh
+ *     figures, so it is reviewed and approved again, and the state says so. A second requotable
+ *     code, or any other refusal, is Failed and the attempt is over.
+ *
+ *     Review is the one stop between the checks and the wallet (judges' review, 2026-09-27): the
+ *     wallet used to open the moment the guard passed, before the person had seen what the bytes
+ *     spend and cost. Nothing is in flight there, and nothing is asked of the wallet until
+ *     "Continue to wallet".
  *
  *     Closed <- close(), from any state.
  *     Amount <- edit(), from Shortfall and Failed, with the typed amount intact.
@@ -127,7 +136,8 @@ sealed interface SwapState {
 
     /**
      * The quote is in hand and the wallet cannot pay for it. Reached before any approval is
-     * asked for, and every number in it is the quote's own: no rent constant appears anywhere.
+     * asked for. The requirement is what the guard read the bytes can charge: their own fees, and
+     * the deposit at its upper bound, so a wallet is never sent to sign what it may not cover.
      */
     data class Shortfall(
         override val leg: SwapLeg,
@@ -136,10 +146,33 @@ sealed interface SwapState {
         val quote: SwapQuote,
         override val timing: SwapTiming,
     ) : Terminal {
-        val need: SolCost get() = quote.solCost
+        /** What the wallet can be charged: the bytes' own fees and the deposit at its upper bound. */
+        val need: SolCost get() = quote.paidSol
         val haveLamports: Long get() = funds.lamports
-        val missingLamports: Long get() = quote.solCost.missingFrom(funds.lamports)
+        val missingLamports: Long get() = quote.paidSol.missingFrom(funds.lamports)
     }
+
+    /**
+     * The quote is in hand, the bytes passed [TransactionGuard], the wallet can pay, and nothing
+     * has been asked of the wallet yet (judges' review, 2026-09-27). The sheet states what the
+     * bytes spend, the least they deliver, the network fees they charge, the most the deposit can
+     * be and the all-in cost, and waits for "Continue to wallet".
+     *
+     * [quotedAtMillis] is when the quote came back, for [SwapViewModel]'s freshness rule: an RFQ
+     * quote expires at its `expireAt`, and a Metis order's blockhash stops landing after about a
+     * minute, so a quote older than its budget is fetched again before the wallet opens.
+     * [refreshed] says this Review follows such a fetch, so the sheet can say the figures are new.
+     */
+    data class Review(
+        override val leg: SwapLeg,
+        val funds: SwapFunds,
+        val input: AmountInput,
+        val quote: SwapQuote,
+        val requote: Boolean,
+        val quotedAtMillis: Long,
+        val timing: SwapTiming,
+        val refreshed: Boolean = false,
+    ) : OnLeg
 
     /** The wallet is open. [requote] says this is the second approval of the same attempt. */
     data class AwaitingWallet(
@@ -220,6 +253,7 @@ sealed interface SwapState {
 val SwapState.quoteOrNull: SwapQuote?
     get() = when (this) {
         is SwapState.Shortfall -> quote
+        is SwapState.Review -> quote
         is SwapState.AwaitingWallet -> quote
         is SwapState.Landing -> quote
         is SwapState.Signed -> quote
@@ -265,7 +299,19 @@ data class SwapToken(
  * The direction. Flipping is the same machine with the two sides exchanged, which is why this is
  * a pair and not a boolean: nothing downstream needs to know which way round it is.
  */
-data class SwapLeg(val input: SwapToken, val output: SwapToken) {
+data class SwapLeg(
+    val input: SwapToken,
+    val output: SwapToken,
+    /**
+     * Jupiter answered for the xStock and has no reference price for it (JEFx and AALx on
+     * 2026-09-27). A missing price is not a missing route (judges' review, 2026-09-27), so the
+     * sheet asks "Check swap availability" and lets the quote answer: an executable order goes to
+     * Review with a line saying the value check is limited to the quote itself, and no route says
+     * so. Swap to USDC still refuses without a price ([SwapFailure.VALUE_UNCHECKED]): there the
+     * price is what checks the base units the app computed itself.
+     */
+    val unpriced: Boolean = false,
+) {
 
     /** True while USDC is the side being spent. */
     val intoToken: Boolean get() = input.mint == KnownMints.USDC
@@ -273,7 +319,7 @@ data class SwapLeg(val input: SwapToken, val output: SwapToken) {
     /** The xStock side of the pair, whichever way the leg points. */
     val token: SwapToken get() = if (intoToken) output else input
 
-    fun flipped(): SwapLeg = SwapLeg(output, input)
+    fun flipped(): SwapLeg = SwapLeg(output, input, unpriced)
 
     /** The same pair with the xStock side replaced, for a multiplier read after the leg was built. */
     fun withToken(replacement: SwapToken): SwapLeg =
@@ -282,7 +328,7 @@ data class SwapLeg(val input: SwapToken, val output: SwapToken) {
     companion object {
         val USDC = SwapToken(KnownMints.USDC, "USDC", 6)
 
-        fun into(token: SwapToken): SwapLeg = SwapLeg(USDC, token)
+        fun into(token: SwapToken, unpriced: Boolean = false): SwapLeg = SwapLeg(USDC, token, unpriced)
 
         /** The xStock back to USDC: the exit from a holding, "Swap to USDC". */
         fun outOf(token: SwapToken): SwapLeg = SwapLeg(token, USDC)
@@ -419,11 +465,29 @@ data class SwapQuote(
      * cost", never "All-in cost" (judges' review, 2026-09-27).
      */
     val solUsd: Double? = null,
+    /**
+     * What [TransactionGuard.readSwap] read the bytes can charge this wallet: the signature and
+     * priority fees from the message itself and the deposit at its upper bound (security review,
+     * 2026-09-27). Null only before the guard has read the bytes; once it has, every SOL figure on
+     * the sheet, the SOL check and the receipt are these and never the JSON's declared fields.
+     */
+    val costs: TransactionGuard.SwapCosts? = null,
 ) {
     val hasExpiry: Boolean get() = expireAtEpochSec != null
 
-    /** The SOL the wallet pays: [walletSol] where the order named payers, else every one of [solCost]. */
-    val paidSol: SolCost get() = walletSol ?: solCost
+    /**
+     * The SOL the wallet pays: what the guard read from the bytes where it has, else [walletSol]
+     * where the order named payers, else every one of [solCost]. The rent in it is an upper
+     * bound once the guard has read the bytes: the deposit can be less, never more.
+     */
+    val paidSol: SolCost
+        get() = costs?.let {
+            SolCost(
+                signatureFeeLamports = it.signatureFeeLamports,
+                rentFeeLamports = it.rentUpperBoundLamports,
+                prioritizationFeeLamports = it.priorityFeeLamports,
+            )
+        } ?: walletSol ?: solCost
 
     private val usablePrice: Double? get() = solUsd?.takeIf { it.isFinite() && it > 0.0 }
 
@@ -541,8 +605,11 @@ data class SwapFill(
     }
 
     /**
-     * All-in cost actually paid: [routeCostPaidPct] plus the SOL the wallet paid, at the SOL
-     * price read for the quote, as a share of what went in. Null without that price.
+     * All-in cost of the landed swap: [routeCostPaidPct], which the fill corrects, plus the SOL
+     * the quote said the wallet would pay (its fees and the deposit at its upper bound) at the
+     * SOL price read for the quote, as a share of what went in. The SOL part is an estimate: the
+     * app does not read the landed transaction's fee, so no screen calls it paid. Null without
+     * that price.
      */
     fun allInCostPaidPct(quote: SwapQuote): Double? {
         val route = routeCostPaidPct(quote) ?: return null
@@ -583,6 +650,13 @@ enum class SwapFailure(
 
     /** The order came back without a transaction, so there is nothing to approve. */
     NO_TRANSACTION(R.string.swap_failed_no_transaction, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /**
+     * "Check swap availability" on a token Jupiter has no reference price for, and Jupiter had no
+     * executable order for it: a refusal of the order, or an order with nothing to sign. Said as
+     * no route right now, which is what it is; a retry may find one.
+     */
+    NO_ROUTE(R.string.swap_failed_no_route, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 
     /**
      * The order carried a transaction, and [com.plainticker.mobile.wallet.TransactionGuard] read

@@ -126,6 +126,8 @@ data class SwapActions(
     val onRetry: () -> Unit = {},
     /** From a fresh receipt, the other direction. */
     val onSwapBack: () -> Unit = {},
+    /** From the Review step, the one way to the wallet. */
+    val onContinue: () -> Unit = {},
 )
 
 @Composable
@@ -226,7 +228,7 @@ internal fun ColumnScope.SwapSheetBody(
         }
     }
 
-    // What this phone checked in the bytes, while the wallet is open (2026-09-27).
+    // What this phone checked in the bytes, on the Review step and while the wallet is open (2026-09-27).
     content.checked?.let { Sentence(it, AmberType.context, colors.textSecondary, NoticeTop) }
     // The receipt's way to check it on the chain, under the signature and the slot.
     val explorerLabel = content.explorerLabel
@@ -258,6 +260,7 @@ private fun SwapActions.of(kind: SheetActionKind): () -> Unit = when (kind) {
     SheetActionKind.ViewPortfolio -> onViewPortfolio
     SheetActionKind.Retry -> onRetry
     SheetActionKind.SwapBack -> onSwapBack
+    SheetActionKind.Continue -> onContinue
 }
 
 // ---- The pieces ---------------------------------------------------------------------------------
