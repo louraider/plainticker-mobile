@@ -125,20 +125,33 @@ class FakePriceRepository(
 ) : PriceRepository {
     val requested = mutableListOf<List<String>>()
 
+    /** Every answer lands here too, the way [CachedPriceRepository] publishes it to every screen. */
+    val published = kotlinx.coroutines.flow.MutableStateFlow<Map<String, PriceEntry>>(emptyMap())
+
+    override val latest: kotlinx.coroutines.flow.StateFlow<Map<String, PriceEntry>> get() = published
+
     override suspend fun prices(mints: Collection<String>): Map<String, PriceEntry> {
         requested += mints.toList()
-        return result.getOrThrow()
+        val answer = result.getOrThrow()
+        publish(mints.toSet(), answer.filterKeys { it in mints })
+        return answer
     }
 
     override suspend fun pricesFirst(mints: List<String>, limit: Int): PriceFetch {
         val window = if (limit >= 0) mints.take(limit) else mints
         requested += window
         val inWindow = window.toSet()
-        return PriceFetch(
+        val fetch = PriceFetch(
             priced = result.getOrNull().orEmpty().filterKeys { it in inWindow },
             unfetched = unfetched.intersect(inWindow),
             failure = result.exceptionOrNull(),
         )
+        if (result.isSuccess) publish(inWindow - fetch.unfetched, fetch.priced)
+        return fetch
+    }
+
+    private fun publish(answered: Set<String>, priced: Map<String, PriceEntry>) {
+        published.value = (published.value - (answered - priced.keys)) + priced
     }
 }
 

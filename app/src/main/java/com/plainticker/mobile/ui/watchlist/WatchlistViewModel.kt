@@ -248,6 +248,20 @@ class WatchlistViewModel(
         viewModelScope.launch {
             digests.record.collect { record -> _state.update { it.copy(digest = record) } }
         }
+        // The one price source every screen observes (PriceRepository.latest, device QA of 1.3.18):
+        // Stocks' refresh or a Detail's quote moves Today's figures at once, and Today's own pull
+        // to refresh moves theirs, so the same token never reads two figures on two tabs.
+        viewModelScope.launch {
+            prices.latest.collect { latest ->
+                if (latest.isEmpty()) return@collect
+                val merged = sharedPrices + latest
+                if (merged == sharedPrices) return@collect
+                sharedPrices = merged
+                _state.update { current ->
+                    current.copy(rows = current.rows.map(::sharedPrice), closedMovers = moversFrom(analyzedAssets))
+                }
+            }
+        }
         // Today's other blocks: a second, unrelated join that the watched set does not drive and
         // does not re-run for.
         loadToday()
@@ -523,16 +537,7 @@ class WatchlistViewModel(
             sharedPrices = (sharedPrices - answered) + fetch.priced
         }
 
-        val movers = closedMovers(
-            analyzed.map { (row, asset) ->
-                CoveredQuote(
-                    ticker = row.ticker,
-                    symbol = asset.symbol.ifBlank { row.ticker },
-                    company = row.company ?: asset.name,
-                    price = asset.solanaMint?.let { sharedPrices[it] },
-                )
-            },
-        )
+        val movers = moversFrom(analyzed)
 
         pricedAtMillis = clock.nowMillis()
         _state.update { current ->
@@ -546,6 +551,18 @@ class WatchlistViewModel(
             )
         }
     }
+
+    /** "While New York is closed" off [sharedPrices], the same quotes every other block draws. */
+    private fun moversFrom(analyzed: List<Pair<SummaryRow, XStockAsset>>): List<ClosedMover> = closedMovers(
+        analyzed.map { (row, asset) ->
+            CoveredQuote(
+                ticker = row.ticker,
+                symbol = asset.symbol.ifBlank { row.ticker },
+                company = row.company ?: asset.name,
+                price = asset.solanaMint?.let { sharedPrices[it] },
+            )
+        },
+    )
 
     /** A watched row priced from [sharedPrices] when that read covers its mint; unchanged otherwise. */
     private fun sharedPrice(row: WatchedTicker): WatchedTicker {

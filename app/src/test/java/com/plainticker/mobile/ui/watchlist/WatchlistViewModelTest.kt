@@ -128,6 +128,26 @@ class WatchlistViewModelTest {
         }
     }
 
+    /**
+     * Device QA of 1.3.18: after a Stocks refresh read METAx at +0.35%, Today still showed the older
+     * figure. A quote any screen fetches reaches Today's rows and its closed movers at once.
+     */
+    @Test
+    fun `a quote another screen fetches moves today's watched figure at once`() = runTest {
+        serving("AAPL")
+        prices.result = Result.success(mapOf("mint-AAPL" to price(usd = 100.1, reference = 100.0)))
+        val vm = viewModel(setOf("AAPL"))
+
+        vm.state.test {
+            awaitUntil { it.rows.singleOrNull()?.priceUsd == 100.1 }
+            // Stocks' refresh lands in the shared source; nothing on Today asked for it.
+            prices.published.value = mapOf("mint-AAPL" to price(usd = 100.35, reference = 100.0))
+            val moved = awaitUntil { it.rows.singleOrNull()?.priceUsd == 100.35 }
+            assertEquals(100.0, moved.rows.single().referencePriceUsd!!, 0.0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `a watched ticker becomes a row with its report date and its premium`() = runTest {
         serving("AAPL")

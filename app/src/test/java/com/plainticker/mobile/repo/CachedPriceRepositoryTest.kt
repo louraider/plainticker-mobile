@@ -45,6 +45,61 @@ class CachedPriceRepositoryTest {
         ttlMillis: Long = 30_000L,
     ): PriceRepository = CachedPriceRepository(JupiterPriceApi(mock.client, sleep = {}), clock, ttlMillis)
 
+    // ---- The shared source every screen observes (device QA of 1.3.18) ------------------------
+
+    @Test
+    fun `every fetch lands in the shared latest quotes, whichever screen asked`() = runTest {
+        var usd = 2.0
+        val mock = MockApi { request ->
+            respondJson(request.ids().joinToString(",", "{", "}") { "\"$it\": {\"usdPrice\": $usd}" })
+        }
+        val clock = FakeClock()
+        val repo = repo(mock, clock)
+        assertTrue("nothing asked, nothing held", repo.latest.value.isEmpty())
+
+        // Today asks for one mint, Stocks for another: both land in the one source.
+        repo.prices(listOf("MintA"))
+        repo.pricesFirst(listOf("MintB"))
+        assertEquals(mapOf("MintA" to 2.0, "MintB" to 2.0), repo.latest.value.mapValues { it.value.usdPrice })
+
+        // A later refresh on any screen moves the quote every screen reads.
+        usd = 2.5
+        clock.now += 30_000L
+        repo.prices(listOf("MintA"))
+        assertEquals(2.5, repo.latest.value.getValue("MintA").usdPrice, 0.0)
+        assertEquals("a mint nobody re-asked keeps its quote", 2.0, repo.latest.value.getValue("MintB").usdPrice, 0.0)
+    }
+
+    @Test
+    fun `a mint Jupiter now answers without a price leaves the shared quotes, an unreached one stays`() = runTest {
+        var unpriced = false
+        var refuse = false
+        val mock = MockApi { request ->
+            when {
+                refuse -> respondJson(gateway429, HttpStatusCode.TooManyRequests)
+                unpriced -> respondJson(request.ids().joinToString(",", "{", "}") { "\"$it\": null" })
+                else -> respondJson(priceAll(request.ids()))
+            }
+        }
+        val clock = FakeClock()
+        val repo = repo(mock, clock)
+        repo.prices(listOf("MintA", "MintB"))
+        assertEquals(setOf("MintA", "MintB"), repo.latest.value.keys)
+
+        // The ask never lands: the last quote is still the best answer anyone has.
+        refuse = true
+        clock.now += 30_000L
+        repo.pricesFirst(listOf("MintA"))
+        assertEquals(setOf("MintA", "MintB"), repo.latest.value.keys)
+
+        // Jupiter answers and has no price any more: no screen may keep drawing the old one.
+        refuse = false
+        unpriced = true
+        clock.now += 30_000L
+        repo.pricesFirst(listOf("MintA"))
+        assertEquals(setOf("MintB"), repo.latest.value.keys)
+    }
+
     @Test
     fun `a second ask inside the TTL makes no request, one after it does`() = runTest {
         val mock = mock()

@@ -475,6 +475,38 @@ class DetailViewModelTest {
         }
     }
 
+    /**
+     * Device QA of 1.3.18: Today's pull to refresh read METAx at +0.10% while the Detail already
+     * open kept +0.30%. A quote any screen fetches reaches this one through the shared source.
+     */
+    @Test
+    fun `a quote another screen fetches moves the open Detail's price`() = runTest {
+        val prices = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4))))
+        val vm = viewModel(prices = prices)
+
+        vm.state.test {
+            awaitUntil { it.price?.usdPrice == 232.5 }
+            // Today or Stocks refreshes: the shared source moves, and so does this screen.
+            prices.published.value = mapOf(aaplMint to price(233.0, reference = 232.4))
+            val moved = awaitUntil { it.price?.usdPrice == 233.0 }
+            assertTrue(moved.quote is Piece.Ready)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failed ask keeps the quote another screen already holds`() = runTest {
+        val prices = FakePriceRepository(Result.failure(IOException("429")))
+        prices.published.value = mapOf(aaplMint to price(231.0, reference = 232.4))
+        val vm = viewModel(prices = prices)
+
+        vm.state.test {
+            val state = awaitUntil { !it.isLoading }
+            assertEquals(231.0, state.price!!.usdPrice, 0.0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `a mint Jupiter cannot price is absent, which raises no prices banner`() = runTest {
         val vm = viewModel(prices = FakePriceRepository(Result.success(emptyMap())))
