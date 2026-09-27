@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -23,6 +24,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -42,6 +45,7 @@ import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.PreviewCanvas
+import com.plainticker.mobile.ui.components.ScrimFade
 import com.plainticker.mobile.ui.components.SkeletonRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.defaultAmberColors
@@ -157,6 +161,11 @@ internal fun VoteTabContent(
     // Where the ballot's search field sits in this list, counted while the items below are laid
     // out, so the top card's action can scroll straight to it (LazyListState scrolls by index).
     val ballotSearchIndex = remember { IntArray(1) }
+    // The action lands the field below the status bar and its scrim, then puts the caret in it
+    // (device QA of 1.3.16: scrolled to offset 0 the field sat half under the clock).
+    val searchFocus = remember { FocusRequester() }
+    val density = LocalDensity.current
+    val searchClearance = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + ScrimFade + SearchLandingGap
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         state = listState,
@@ -198,7 +207,15 @@ internal fun VoteTabContent(
                         round = state.round,
                         stake = state.stake,
                         zone = zone,
-                        onPick = { scope.launch { listState.animateScrollToItem(ballotSearchIndex[0]) } },
+                        onPick = {
+                            scope.launch {
+                                // A negative offset leaves the item that far below the top edge.
+                                val below = with(density) { searchClearance.roundToPx() }
+                                listState.animateScrollToItem(ballotSearchIndex[0], scrollOffset = -below)
+                                // Dropped rather than thrown if the field is not attached yet.
+                                runCatching { searchFocus.requestFocus() }
+                            }
+                        },
                     )
                 }
                 position++
@@ -211,7 +228,13 @@ internal fun VoteTabContent(
                         )
                     }
                     itemsIndexed(state.leaders, key = { _, leader -> "leader:" + leader.ticker }) { index, leader ->
-                        LeaderRow(leader = leader, last = index == state.leaders.lastIndex, onOpenDetail = onOpenDetail, onVote = onVote)
+                        LeaderRow(
+                            leader = leader,
+                            last = index == state.leaders.lastIndex,
+                            voted = state.votedFor(leader.ticker),
+                            onOpenDetail = onOpenDetail,
+                            onVote = onVote,
+                        )
                     }
                     position += 1 + state.leaders.size
                 } else if (state.round != null) {
@@ -259,7 +282,7 @@ internal fun VoteTabContent(
                 position++
                 ballotSearchIndex[0] = position
                 item(key = "ballot-search") {
-                    BallotSearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)
+                    BallotSearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch, focusRequester = searchFocus)
                 }
 
                 when {
@@ -282,7 +305,13 @@ internal fun VoteTabContent(
                     }
 
                     else -> itemsIndexed(state.ballot, key = { _, entry -> "ballot:" + entry.ticker }) { index, entry ->
-                        BallotRow(entry = entry, last = index == state.ballot.lastIndex, onOpenDetail = onOpenDetail, onVote = onVote)
+                        BallotRow(
+                            entry = entry,
+                            last = index == state.ballot.lastIndex,
+                            voted = state.votedFor(entry.ticker),
+                            onOpenDetail = onOpenDetail,
+                            onVote = onVote,
+                        )
                     }
                 }
             }
@@ -382,11 +411,11 @@ private fun Explainer() {
  */
 @Composable
 private fun RoundHeader(round: VoteRound, zone: ZoneId, colors: AmberColors) {
-    val roundId = Fmt.count(round.id)
     val closesText = roundClosesLocal(round, zone)?.text()
+    // "Round 2" as one title (device QA of 1.3.16): the id used to go to the meta slot, which
+    // drew it as a small grey figure at the far right of the card, styled like a count of rows.
     AmberSectionHead(
-        title = stringResource(R.string.vote_tab_round_heading),
-        meta = roundId,
+        title = stringResource(R.string.vote_tab_round_heading, Fmt.count(round.id)), // lint-allow count: a round's number, not a quantity
         lede = closesText,
         colors = colors,
         background = colors.surfaceRaised,
@@ -415,17 +444,22 @@ private fun RoundHeader(round: VoteRound, zone: ZoneId, colors: AmberColors) {
 private fun LeaderRow(
     leader: NextUpLeader,
     last: Boolean,
+    voted: Boolean,
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
 ) {
+    // A token this wallet already backed this round offers no second Vote (device QA of 1.3.16):
+    // the server counts one vote per wallet per token per round, so the action would only fail.
+    val offersVote = onVote != null && !voted
     AmberRowDivider(last = last) {
         AmberTickerRow(
             ticker = leader.display,
             company = leader.company,
             figure = leader.weight.text(),
             context = leader.votersCopy.text(),
-            trailingAction = if (onVote == null) null else stringResource(R.string.vote_action_row),
-            onTrailingAction = if (onVote == null) null else ({ onVote(leader.ticker, leader.display) }),
+            trailingAction = if (offersVote) stringResource(R.string.vote_action_row) else null,
+            onTrailingAction = if (offersVote) ({ onVote?.invoke(leader.ticker, leader.display) }) else null,
+            trailingNote = if (voted) stringResource(R.string.vote_voted_row) else null,
             onClick = { onOpenDetail(leader.ticker) },
             onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
         )
@@ -505,6 +539,7 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
 private fun BallotRow(
     entry: BallotEntry,
     last: Boolean,
+    voted: Boolean,
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
 ) {
@@ -517,7 +552,15 @@ private fun BallotRow(
                 onClick = { onOpenDetail(entry.ticker) },
                 onClickLabel = stringResource(R.string.action_open_ticker, entry.display),
             )
-            if (onVote != null) {
+            if (voted) {
+                // The same quiet word the leader row draws, where the action would sit.
+                Text(
+                    text = stringResource(R.string.vote_voted_row),
+                    style = AmberType.context,
+                    color = colors.textTertiary(AmberSurface.RAISED),
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
+                )
+            } else if (onVote != null) {
                 TextAction(
                     label = stringResource(R.string.vote_action_row),
                     onClick = { onVote(entry.ticker, entry.display) },
@@ -562,8 +605,14 @@ private fun AmberRowDivider(last: Boolean, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun BallotSearchField(query: String, onQueryChange: (String) -> Unit, onClearSearch: () -> Unit) {
+private fun BallotSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClearSearch: () -> Unit,
+    focusRequester: FocusRequester,
+) {
     Field(
+        focusRequester = focusRequester,
         label = stringResource(R.string.list_search_label),
         value = query,
         onValueChange = onQueryChange,
@@ -593,6 +642,8 @@ private val CardInset = 16.dp
 private val CardRadius = 28.dp
 /** Vertical centering for a standalone Footnote's sentence; unrelated to Heading's own rhythm (U6). */
 private val EmptyLineGap = 30.dp
+/** Air between the status bar's scrim and the ballot's search label once the top card scrolls there. */
+private val SearchLandingGap = 8.dp
 private const val SkeletonRowCount = 4
 
 // ---- Previews ------------------------------------------------------------------------------

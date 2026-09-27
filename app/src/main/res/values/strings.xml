@@ -439,6 +439,9 @@
          exists anywhere in this app. -->
     <string name="vote_action">Vote to cover next</string>
     <string name="vote_action_row">Vote</string>
+    <!-- In place of the row's Vote once this wallet has voted for the token this round (device QA
+         of 1.3.16): a quiet state word, not an action. -->
+    <string name="vote_voted_row">Voted</string>
     <string name="vote_title">Vote to cover %1$s</string>
     <string name="vote_lede">This asks for %1$s to be analyzed next. The vote is a transaction carrying a memo, so the wallet that signs it is the voter. It weighs the stake the server reads when it counts.</string>
     <string name="vote_gameable">Today the largest stake decides: one wallet staking more than the rest outweighs them all. The planned next change is one Seeker, one voice, checked through the Seeker Genesis Token.</string>
@@ -482,7 +485,9 @@
     <!-- The ballot's own catalog-and-summary join failing is a source outage separate from
          next-up, so it carries its own banner and its own Retry (VoteTabViewModel.refresh). -->
     <string name="vote_tab_ballot_unavailable">Ballot unavailable</string>
-    <string name="vote_tab_round_heading">Round</string>
+    <!-- Device QA of 1.3.16: the number is part of the title, "Round 2", not a grey count drawn
+         at the far right of the card like the size of a list. -->
+    <string name="vote_tab_round_heading">Round %1$s</string>
     <!-- The top card (judges' round 2): the round's close in the reader's own time, the
          connected wallet's stake, and the one action that leads to the ballot. -->
     <string name="vote_tab_round_closes_local">Closes %1$s %2$s at %3$s your time</string>

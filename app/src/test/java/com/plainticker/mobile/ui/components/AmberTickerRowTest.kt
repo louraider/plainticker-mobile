@@ -136,10 +136,13 @@ class AmberTickerRowTest {
         // The meta content (context, figure) is what carries the weight, not TextAction: the same
         // "unweighted fixed content first, weighted flexible content claims the rest" pairing
         // proven twice already, never a fixed-width sibling either side of it.
-        val metaContentWeight = "modifier = Modifier.weight(1f, fill = false)"
+        // fill = false by default, so a short meta line keeps its action beside it; Portfolio's
+        // swap rows pass trailingActionAtEnd so a column of Solscan actions lines up (device QA
+        // of 1.3.16). Either way the weight sits on the meta content, never on the action.
+        val metaContentWeight = "modifier = Modifier.weight(1f, fill = trailingActionAtEnd)"
         val metaContentIndex = fn.indexOf(metaContentWeight, wrapperIndex)
         assertTrue(
-            "the meta content Row must carry weight(1f, fill = false) against trailingAction",
+            "the meta content Row must carry the weight against trailingAction",
             metaContentIndex in (wrapperIndex + 1) until fn.length,
         )
         assertEquals(1, Regex(Regex.escape(metaContentWeight)).findAll(fn).count())
@@ -160,7 +163,7 @@ class AmberTickerRowTest {
         // Bounded before the meta line's own Row header (a code token, not a comment: KotlinScan
         // blanks comment text out of `code`), so this block is the name line's remainder only.
         val companyStart = row.indexOf("if (company != null)")
-        val metaLineStart = row.indexOf("if (figure != null || context != null || trailingAction != null)")
+        val metaLineStart = row.indexOf("if (figure != null || context != null || trailingAction != null || trailingNote != null)")
         val companyBlock = row.substring(companyStart, metaLineStart)
         assertTrue("TextOverflow.Ellipsis" in companyBlock)
         assertTrue("maxLines = 1" in companyBlock)
@@ -232,11 +235,14 @@ class AmberTickerRowTest {
      * Updated 2026-09-26 (audit, item 4): the age reads "2 days old", not "2 d old", so the same
      * clause is three characters longer. Its width at context 14/400 is now 215.852dp (was
      * 192.444dp); the budget test below takes the new width.
+     *
+     * Updated for device QA of 1.3.16: the thin-pool clause reads "Pool $2.7k, too thin", two
+     * characters shorter, so the clause is now 199.752dp and every budget below only gains margin.
      */
     @Test
     fun `the real worst-case meta clause is exactly what the meta line's own budget sizes against`() {
-        val longestMeta = "$2.7k behind, too thin · 2 days old"
-        assertTrue(longestMeta.length == 35)
+        val longestMeta = "Pool $2.7k, too thin · 2 days old"
+        assertTrue(longestMeta.length == 33)
     }
 
     // ---- Proof by arithmetic: the real budget this anatomy gives company and context -------------
@@ -453,8 +459,9 @@ class AmberTickerRowTest {
         // and nothing to share it with.
 
         // watchlist_row_reports joined with list_row_meta_premium's own worst premium clause
-        // (list_row_meta_join), at context's 14sp/400: "Reports 22 Oct · $2.7k behind, too thin".
-        val realisticJoinWidthDp = 246.568
+        // (list_row_meta_join), at context's 14sp/400: "Reports 22 Oct · Pool $2.7k, too thin"
+        // (246.568dp as "$2.7k behind, too thin" before device QA of 1.3.16).
+        val realisticJoinWidthDp = 230.468
         assertTrue(
             "the realistic join ($realisticJoinWidthDp dp) must clear the 1.0x budget " +
                 "($metaContentBudgetDp dp) with Unwatch present",
@@ -474,10 +481,10 @@ class AmberTickerRowTest {
         )
 
         // watchlist_row_unserved joined with the same worst premium clause, at a wider pool
-        // figure: "Not in the analysis list · $99.9k behind, too thin". Recorded, not fixed, the
-        // same resolution the 54-character company outlier above accepts: it does not clear the
-        // 1.0x budget either.
-        val pathologicalJoinWidthDp = 305.144
+        // figure: "Not in the analysis list · Pool $99.9k, too thin" (305.144dp in the old
+        // wording). Recorded, not fixed, the same resolution the 54-character company outlier
+        // above accepts: it does not clear the 1.0x budget either.
+        val pathologicalJoinWidthDp = 289.044
         assertFalse(pathologicalJoinWidthDp <= metaContentBudgetDp)
 
         // The backstop actually backstops: two lines' own combined capacity at 1.3x comfortably

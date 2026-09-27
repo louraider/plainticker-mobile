@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberLightColors
+import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 
 /**
@@ -96,8 +97,8 @@ import com.plainticker.mobile.ui.theme.AmberType
  * - **Meta line.** The widest realistic [figure] this row draws across every screen that calls it
  *   is a worded one, `next_up_weight` ("38,406.2 SKR", 12 characters, [VoteScreen]'s own vote
  *   weight), 113.22dp; less the 8dp gap, [context] gets **214.78dp** in that worst case. The
- *   longest real [context], `list_row_meta_join`'s own worst join ("$2.7k behind, too thin · 2 d
- *   old", 32 characters) measures 192.44dp: a 22.34dp margin, and at 1.3x scale against the far more
+ *   longest real [context], `list_row_meta_join`'s own worst join ("Pool $2.7k, too thin · 2 d
+ *   old", 30 characters) measures 176.34dp: a 38.44dp margin, and at 1.3x scale against the far more
  *   common bare-figure case ("100", the composite score this exact row draws) it still clears one
  *   line, 250.18dp of text against a 284.97dp budget — [context]'s `maxLines = 2` stays a backstop
  *   for a case this arithmetic says should not occur, not the thing making the row correct.
@@ -146,11 +147,11 @@ import com.plainticker.mobile.ui.theme.AmberType
  *   and tracking clauses `list_row_meta_join`s together; action = "Unwatch", the widest label this
  *   row draws, 60.648dp at 1.0x, rendered width 76.648dp). Content width with the action present:
  *   336 − 76.648 = 259.352dp, all of it context's own budget since there is no figure to share it
- *   with. The realistic join ("Reports 22 Oct · $2.7k behind, too thin", 39 characters) measures
- *   246.568dp: a 12.78dp margin at 1.0x, but at 1.3x (the action's own label growing to 78.842dp,
- *   the budget shrinking to 241.158dp) that same clause grows to 320.54dp and no longer clears one
- *   line. The pathological join ("Not in the analysis list · $99.9k behind, too thin", 50
- *   characters, 305.144dp) does not clear the 1.0x budget either. Both wrap to a second line rather
+ *   with. The realistic join ("Reports 22 Oct · Pool $2.7k, too thin", 37 characters) measures
+ *   230.468dp: a 28.88dp margin at 1.0x, but at 1.3x (the action's own label growing to 78.842dp,
+ *   the budget shrinking to 241.158dp) that same clause grows to 299.61dp and no longer clears one
+ *   line. The pathological join ("Not in the analysis list · Pool $99.9k, too thin", 48
+ *   characters, 289.044dp) does not clear the 1.0x budget either. Both wrap to a second line rather
  *   than clipping — [context] keeps `maxLines = 2` and `TextOverflow.Ellipsis`, the same resolution
  *   the 54-character company outlier above accepts, and even the pathological join grown to 1.3x
  *   (396.69dp) fits inside two lines' own combined capacity (2 × 241.158 = 482.32dp) with room to
@@ -172,7 +173,17 @@ fun AmberTickerRow(
      */
     trailingAction: String? = null,
     onTrailingAction: (() -> Unit)? = null,
+    /**
+     * A quiet state word in the action's place when there is no action to take ("Voted" on a
+     * leader this wallet already backed this round). Drawn only when no [trailingAction] is.
+     */
+    trailingNote: String? = null,
     colors: AmberColors = defaultAmberColors(),
+    /**
+     * Pins [trailingAction] to the row's end edge instead of letting it follow a short meta line,
+     * so a column of rows (Portfolio's recent swaps) lines its actions up whatever each line says.
+     */
+    trailingActionAtEnd: Boolean = false,
     onClick: (() -> Unit)? = null,
     onClickLabel: String = "Open $ticker",
     /** What a merged screen reader item says instead of its parts read end to end; see [ListRow]. */
@@ -244,10 +255,10 @@ fun AmberTickerRow(
         // flexible content claims the rest, the same pairing this row already proves twice. Never
         // right-aligned as a block any more (the old Column's horizontalAlignment = End): a full
         // sentence with room to itself reads better start-aligned than right-ragged.
-        if (figure != null || context != null || trailingAction != null) {
+        if (figure != null || context != null || trailingAction != null || trailingNote != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Row(
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f, fill = trailingActionAtEnd),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (context != null) {
@@ -279,6 +290,15 @@ fun AmberTickerRow(
                         onClick = onTrailingAction,
                         color = colors.actionText,
                         contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 0.dp, bottom = 10.dp),
+                    )
+                } else if (trailingNote != null) {
+                    Text(
+                        text = trailingNote,
+                        style = AmberType.context,
+                        color = colors.textTertiary(AmberSurface.RAISED),
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(start = 16.dp),
                     )
                 }
             }

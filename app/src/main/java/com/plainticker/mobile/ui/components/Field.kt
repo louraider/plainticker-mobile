@@ -61,10 +61,11 @@ fun Field(
     enabled: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     colors: AmberColors = defaultAmberColors(),
+    /** A caller that moves focus here itself (Vote's "Choose a stock to vote for") passes its own. */
+    focusRequester: FocusRequester = remember { FocusRequester() },
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
-    val focusRequester = remember { FocusRequester() }
     // `mono` keeps its name for the callers, but the number face is Bricolage with tabular
     // figures now (2026-09-26): an amount is a number, not an on-chain identifier, and JetBrains
     // Mono is kept for identifiers only. The value is a single-line input that scrolls rather

@@ -218,12 +218,17 @@ class VoteScreenTest {
      * clause-in-a-shared-width-slot bug the class doc above names.
      */
     @Test
-    fun `the round id goes to the short meta slot and the close time goes to the full width lede`() {
+    fun `the round number is part of the title and the close time goes to the full width lede`() {
+        // Device QA of 1.3.16: the id in the meta slot drew as a grey "2" at the far right of the
+        // card, styled like a count; the title now reads "Round 2" and the meta slot is unused.
         val block = body(voteTabScreen, "private fun RoundHeader(")
-        assertTrue("the round id is Fmt.count, a plain grouped integer, never a sentence", "val roundId = Fmt.count(round.id)" in block)
-        assertTrue("the meta slot gets the round id and nothing else", "meta = roundId" in block)
+        assertTrue(
+            "the round id is in the title, a plain grouped integer, never a sentence",
+            "stringResource(R.string.vote_tab_round_heading, Fmt.count(round.id))" in block,
+        )
+        assertFalse("nothing is drawn in the count slot", "meta =" in block)
+        assertEquals("Round %1\$s", ShippedCopy.strings["vote_tab_round_heading"])
         assertTrue("the close clause is the lede, drawn full width below the title, not squeezed beside it", "lede = closesText" in block)
-        assertFalse("the close clause never reaches the meta slot", "meta = closesText" in block)
     }
 
     /**
@@ -499,10 +504,42 @@ class VoteScreenTest {
     @Test
     fun `the card's action scrolls to the ballot search, the index counted where the items are laid out`() {
         assertTrue("ballotSearchIndex[0] = position" in voteTabScreen)
-        assertTrue("listState.animateScrollToItem(ballotSearchIndex[0])" in voteTabScreen)
+        assertTrue("listState.animateScrollToItem(ballotSearchIndex[0], scrollOffset = -below)" in voteTabScreen)
         val between = voteTabScreen.substringAfter("ballotSearchIndex[0] = position").substringBefore("BallotSearchField(query")
         assertTrue("the index is set just before the search item", between.length < voteTabScreen.length / 2)
         assertFalse("nothing is counted between the index and the search item", "position" in between || "item(key" !in between)
+    }
+
+    /**
+     * Device QA of 1.3.16: scrolled to offset 0 the search field sat half under the status bar,
+     * which this screen draws under (edge to edge, Insets.kt). The field lands below the status
+     * bar and its scrim, and takes focus so the next thing typed is the search.
+     */
+    @Test
+    fun `the card's action lands the search field clear of the status bar, and focuses it`() {
+        assertTrue(
+            "the clearance is the status bar, its scrim and a gap",
+            "WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + ScrimFade + SearchLandingGap" in voteTabScreen,
+        )
+        val pick = voteTabScreen.substringAfter("onPick = {").substringBefore("position++")
+        assertTrue("a negative offset leaves the field below the top edge", "scrollOffset = -below" in pick)
+        assertTrue("focus follows the scroll", pick.indexOf("searchFocus.requestFocus()") > pick.indexOf("animateScrollToItem("))
+        assertTrue("the field is the one focused", "focusRequester = searchFocus" in voteTabScreen)
+        assertTrue("Field takes the caller's requester", "focusRequester = focusRequester" in body(voteTabScreen, "private fun BallotSearchField("))
+    }
+
+    /** Device QA of 1.3.16: a leader this wallet already voted for this round offered Vote again. */
+    @Test
+    fun `a token this wallet already voted for this round shows a quiet Voted, not a Vote`() {
+        assertEquals("Voted", ShippedCopy.strings["vote_voted_row"])
+        val leader = body(voteTabScreen, "private fun LeaderRow(")
+        assertTrue("val offersVote = onVote != null && !voted" in leader)
+        assertTrue("trailingAction = if (offersVote) stringResource(R.string.vote_action_row) else null" in leader)
+        assertTrue("trailingNote = if (voted) stringResource(R.string.vote_voted_row) else null" in leader)
+        val ballot = body(voteTabScreen, "private fun BallotRow(")
+        assertTrue("the ballot row says it too", ballot.indexOf("R.string.vote_voted_row") in 0 until ballot.indexOf("TextAction("))
+        assertTrue("voted = state.votedFor(leader.ticker)" in voteTabScreen)
+        assertTrue("voted = state.votedFor(entry.ticker)" in voteTabScreen)
     }
 
     @Test
