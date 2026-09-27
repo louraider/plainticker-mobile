@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.receipts.SwapReceipt
+import com.plainticker.mobile.ui.Explorer
+import com.plainticker.mobile.ui.rememberExplorerOpener
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberFigure
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
@@ -472,11 +474,17 @@ private fun Swap(receipt: SwapReceipt, first: Boolean, last: Boolean, colors: Am
     val received = row.received.text()
     val cost = row.cost.text()
     val landed = row.landed.text()
+    // The landed transaction on a public explorer (judges' review, 2026-09-27), as the row's
+    // trailing action: a fixed short word, the width AmberTickerRow's meta line budgets for.
+    val explorer = Explorer.transaction(receipt.signature)
+    val open = rememberExplorerOpener()
     AmberRowFrame(first = first, last = last, colors = colors) {
         AmberTickerRow(
             ticker = paid,
             company = received,
             context = stringResource(R.string.portfolio_swap_row_meta, cost, landed),
+            trailingAction = explorer?.let { stringResource(R.string.action_solscan) },
+            onTrailingAction = explorer?.let { url -> { open(url) } },
             colors = colors,
             description = sentence(paid, received, cost, landed),
         )
@@ -644,7 +652,7 @@ private fun sampleReceipt(
     outputSymbol = symbol,
     outputAmountRaw = receivedRaw,
     outputDecimals = 8,
-    allInCostPct = cost,
+    routeCostPct = cost,
     route = "Metis",
     landedAtMillis = landedAtMillis,
 )

@@ -90,7 +90,12 @@ data class ChainRead(
     val slot: Long,
     /** Wall clock at the read, for "2 s ago". */
     val readAtMillis: Long,
-)
+    /** The forwarder's `X-Rpc-Age`: how old its answer already was on arrival. */
+    val rpcAgeSeconds: Long = 0L,
+) {
+    /** When the node answered: [readAtMillis] less the forwarder's own age. What "N s ago" counts from. */
+    val observedAtMillis: Long get() = readAtMillis - rpcAgeSeconds * 1_000L
+}
 
 /**
  * Everything the Detail screen draws, with every source carried as its own piece.

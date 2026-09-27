@@ -57,8 +57,8 @@ class JupiterSwapApiTest {
 
         // The spike's formula, applied to the fixture's own USD values.
         val expected = (4.999342 - 4.99462) / 4.999342 * 100.0
-        assertEquals(expected, order.allInCostPct, 1e-9)
-        assertTrue(order.allInCostPct > 0.0 && order.allInCostPct < 1.0)
+        assertEquals(expected, order.routeCostPct, 1e-9)
+        assertTrue(order.routeCostPct > 0.0 && order.routeCostPct < 1.0)
 
         assertEquals(KnownMints.USDC, order.inputMint)
         assertEquals(KnownMints.TSLAX, order.outputMint)
@@ -108,7 +108,7 @@ class JupiterSwapApiTest {
         val order = api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 5_000_000L)
         assertNull(order.transaction)
         assertFalse(order.isSignable)
-        assertEquals(0.0, order.allInCostPct, 0.0)
+        assertEquals(0.0, order.routeCostPct, 0.0)
     }
 
     @Test
@@ -122,7 +122,7 @@ class JupiterSwapApiTest {
             assertEquals(1757534400L, order.expireAt)
             assertEquals(10L, order.secondsLeft(1757534390L))
             assertEquals(-5L, order.secondsLeft(1757534405L))
-            assertEquals(0.2, order.allInCostPct, 1e-9)
+            assertEquals(0.2, order.routeCostPct, 1e-9)
         }
     }
 
@@ -170,7 +170,7 @@ class JupiterSwapApiTest {
         assertFalse(order.hasExpiry)
         assertNull("no expiry is never an expired quote", order.secondsLeft(System.currentTimeMillis() / 1000))
 
-        assertEquals(0.586, order.allInCostPct, 1e-9)
+        assertEquals(0.586, order.routeCostPct, 1e-9)
     }
 
     @Test

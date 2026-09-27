@@ -26,6 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -572,7 +577,7 @@ private fun LiveBlock(state: DetailUiState) {
     )
 }
 
-/** The blueprint grid: five facts, the reserves spanning the first row. */
+/** The blueprint grid: the trust facts, the reserves and the chain supply spanning a row each. */
 @Composable
 private fun TrustBlock(state: DetailUiState) {
     if (state.trustLoading) {
@@ -585,9 +590,13 @@ private fun TrustBlock(state: DetailUiState) {
         return
     }
     val hookLabel = stringResource(R.string.detail_fact_hook)
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val copyLabel = stringResource(R.string.detail_copy_address)
     FactGrid(
         cells = state.trustFacts.map { fact ->
             val labelText = fact.label.text()
+            val copied = fact.copies
             FactCell(
                 label = labelText,
                 value = fact.value.text(),
@@ -602,7 +611,12 @@ private fun TrustBlock(state: DetailUiState) {
                 // no field to say so (DetailModel.kt is outside this file set), so the one cell is
                 // picked out by its own label, which is unique among the five trust facts and is
                 // already resolved above for the row itself.
-                valueMono = labelText == hookLabel,
+                valueMono = fact.valueMono || labelText == hookLabel,
+                // The delegate's address copies whole on tap (judges' review, 2026-09-27).
+                onTap = copied?.let {
+                    { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(copyLabel, it))) } }
+                },
+                tapLabel = if (copied == null) null else copyLabel,
             )
         },
         // FactGrid now reads a theme-following AmberColors by default for both its surface and

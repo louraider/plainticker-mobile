@@ -1,6 +1,7 @@
 package com.plainticker.mobile.data.rpc
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -51,6 +52,13 @@ data class RpcContext(
 data class ContextValue<T>(
     val context: RpcContext? = null,
     val value: T? = null,
+    /**
+     * How old the forwarder's answer already was when it left, in whole seconds: its `X-Rpc-Age`
+     * header (the pack's shared server contract, item 5; 0 on a cache miss). The forwarder caches
+     * 60 s, so a "read 2 s ago" that ignored it could be a minute off. Never in the JSON body;
+     * 0 when the header is absent or unreadable, which is the old behaviour.
+     */
+    @Transient val rpcAgeSeconds: Long = 0L,
 )
 
 @Serializable

@@ -154,7 +154,7 @@ class PortfolioModelTest {
 
     private fun receipt(
         outputAmountRaw: Long? = 1_364_000L,
-        allInCostPct: Double? = 0.09,
+        routeCostPct: Double? = 0.09,
     ) = SwapReceipt(
         signature = "5xY1",
         inputMint = "usdc",
@@ -165,7 +165,7 @@ class PortfolioModelTest {
         outputSymbol = "TSLAx",
         outputAmountRaw = outputAmountRaw,
         outputDecimals = 8,
-        allInCostPct = allInCostPct,
+        routeCostPct = routeCostPct,
         route = "Metis",
         landedAtMillis = 1_789_045_020_000L,
     )
@@ -176,13 +176,22 @@ class PortfolioModelTest {
 
         assertEquals(Copy.Words(R.string.portfolio_row_quantity, listOf("5", "USDC")), row.paid)
         assertEquals(Copy.Words(R.string.portfolio_swap_row_received, listOf("0.01364", "TSLAx")), row.received)
-        assertEquals(Copy.Words(R.string.portfolio_swap_cost, listOf("0.09%")), row.cost)
+        // A receipt with no SOL priced in has the route's cost, and says route (judges' review, 2026-09-27).
+        assertEquals(Copy.Words(R.string.portfolio_swap_route_cost, listOf("0.09%")), row.cost)
         assertEquals(Copy.Raw("10 Sep 2026 12:57 UTC"), row.landed)
     }
 
     @Test
+    fun `a receipt that priced its SOL states the all-in cost paid`() {
+        // 0.09 percent route, plus 0.30 dollars of SOL (fees and a refundable deposit) over 5 in.
+        val priced = receipt().copy(solCostUsd = 0.30, rentUsd = 0.2977, inputUsd = 5.0)
+        assertEquals(0.09 + 6.0, priced.allInCostPct!!, 1e-9)
+        assertEquals(Copy.Words(R.string.portfolio_swap_cost, listOf("6.09%")), swapRow(priced).cost)
+    }
+
+    @Test
     fun `a fill the execute answer never reported stays unreported`() {
-        val row = swapRow(receipt(outputAmountRaw = null, allInCostPct = null))
+        val row = swapRow(receipt(outputAmountRaw = null, routeCostPct = null))
 
         assertEquals(Copy.Words(R.string.portfolio_swap_row_received_unknown, listOf("TSLAx")), row.received)
         assertEquals(Copy.Words(R.string.portfolio_swap_cost_unknown), row.cost)

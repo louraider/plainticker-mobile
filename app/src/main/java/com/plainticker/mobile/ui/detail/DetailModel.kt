@@ -119,6 +119,10 @@ data class TrustFact(
     val subMono: Boolean = false,
     /** Caution on the value only, and only where the issuer actually holds the control. */
     val caution: Boolean = false,
+    /** True when [value] is an on-chain address, set in JetBrains Mono (DESIGN.md section 3). */
+    val valueMono: Boolean = false,
+    /** The full text a tap copies, for a cell whose value is a shortened address. */
+    val copies: String? = null,
 )
 
 /**
@@ -379,13 +383,16 @@ val DetailUiState.liveLine: LiveLine?
             )
         }
         val slot = Fmt.slot(read.slot)
-        val ageMillis = (nowMillis - read.readAtMillis).coerceAtLeast(0L)
+        // Counted from when the node answered, not from when the answer reached this phone: the
+        // forwarder's X-Rpc-Age says how long it sat in its cache (Mert, judges' review 2026-09-27).
+        val observedAt = read.observedAtMillis
+        val ageMillis = (nowMillis - observedAt).coerceAtLeast(0L)
         return LiveLine(
             label = words(R.string.detail_live_label),
             meta = words(
                 R.string.detail_live_meta,
                 slot,
-                Fmt.relativeAgo(Instant.ofEpochMilli(read.readAtMillis), Instant.ofEpochMilli(nowMillis)),
+                Fmt.relativeAgo(Instant.ofEpochMilli(observedAt), Instant.ofEpochMilli(nowMillis)),
             ),
             live = ageMillis <= LIVE_WINDOW_MILLIS,
             announcement = words(R.string.detail_live_a11y, slot),
@@ -397,8 +404,11 @@ val DetailUiState.trustLoading: Boolean
     get() = chain.isLoading || reserves.isLoading || split.isLoading
 
 /**
- * The five cells of "Backing and controls", in the order DESIGN.md section 5 fixes: the reserves
- * spanning the first row, then the two issuer controls, then the multiplier and the hook.
+ * The cells of "Backing and controls", in the order DESIGN.md section 5 fixes: the reserves
+ * spanning the first row, then the two issuer controls, then the multiplier and the hook. Since
+ * the judges' review of 2026-09-27 (Mert) the reserves say they are the issuer's own report, a
+ * second full-width row holds that report up against the supply the mint states, and a mint
+ * with an active permanent delegate names the delegate's address on a last full-width row.
  *
  * Every cell has three renderings and they are kept apart on purpose. An extension the mint does
  * not carry reads "None", which is a fact. A mint that could not be read reads "Unknown" with the
@@ -406,7 +416,80 @@ val DetailUiState.trustLoading: Boolean
  * a control the issuer actually holds takes Caution.
  */
 val DetailUiState.trustFacts: List<TrustFact>
-    get() = listOf(reservesCell(), delegateCell(), pausableCell(), splitCell(), hookCell())
+    get() = listOfNotNull(reservesCell(), supplyCell(), delegateCell(), pausableCell(), splitCell(), hookCell(), delegateAddressCell())
+
+/**
+ * Relative gap, as a fraction, under which the chain's supply and the issuer's circulating count
+ * are called a match. The two are read at different moments (the attestation is stamped, the
+ * mint is live), so the two are almost never exactly equal for a token that trades.
+ */
+internal const val SUPPLY_MATCH_TOLERANCE = 0.001
+
+/**
+ * The supply the mint states, as a wallet counts it: raw supply over 10^decimals, times the
+ * scaled UI multiplier in force at the read (the Token-2022 gotcha: a split changes the
+ * multiplier, not the raw supply, so raw alone would be off by the split ratio). Null when the
+ * mint was not read.
+ */
+internal fun ChainRead.supplyShown(): java.math.BigDecimal {
+    val multiplier = facts.scaledUiAmount
+        ?.let { com.plainticker.mobile.data.SplitMultiplier.ofMint(it).effectiveAt(readAtMillis) }
+        ?: com.plainticker.mobile.data.SplitMultiplier.NONE
+    return facts.supplyTokens().multiply(java.math.BigDecimal.valueOf(multiplier))
+}
+
+/**
+ * The issuer's circulating count against the supply the mint states (Mert, judges' review
+ * 2026-09-27): "matches chain" within [SUPPLY_MATCH_TOLERANCE], or the gap as a percent of the
+ * issuer's figure with both counts under it. Unknown when either side is missing.
+ */
+private fun DetailUiState.supplyCell(): TrustFact {
+    val label = words(R.string.detail_fact_supply)
+    val read = chain.valueOrNull ?: return unreadCell(label).copy(span = 2)
+    val reported = reserves.valueOrNull
+        ?: return TrustFact(label = label, value = words(R.string.detail_value_unknown), sub = words(R.string.detail_fact_supply_no_report_sub), span = 2)
+    val onChain = read.supplyShown()
+    val issuer = java.math.BigDecimal.valueOf(reported.tokensInCirculation)
+    val sub = words(
+        R.string.detail_fact_supply_sub,
+        Fmt.tokenAmount(onChain, maxDecimals = 2),
+        Fmt.tokenAmount(issuer, maxDecimals = 2),
+    )
+    if (issuer.signum() <= 0) {
+        return TrustFact(label = label, value = words(R.string.detail_value_unknown), sub = sub, span = 2, subMono = true)
+    }
+    val gap = onChain.subtract(issuer).toDouble() / issuer.toDouble()
+    return TrustFact(
+        label = label,
+        value = if (kotlin.math.abs(gap) <= SUPPLY_MATCH_TOLERANCE) {
+            words(R.string.detail_fact_supply_matches)
+        } else {
+            // The gap as a percent of the issuer's own count: positive when the mint states more.
+            raw(Fmt.percent(gap * 100.0, signed = true, decimals = 1))
+        },
+        sub = sub,
+        span = 2,
+        subMono = true,
+    )
+}
+
+/**
+ * The permanent delegate's address, which [MintFacts] parses and the grid never drew (Mert,
+ * judges' review 2026-09-27: name the delegate). Shortened, in the identifier face, and copied
+ * whole on tap. Only for a delegate that can act; absent otherwise, since the delegate cell
+ * already says "None".
+ */
+private fun DetailUiState.delegateAddressCell(): TrustFact? {
+    val address = chain.valueOrNull?.facts?.permanentDelegate?.delegate ?: return null
+    return TrustFact(
+        label = words(R.string.detail_fact_delegate_address),
+        value = raw(Fmt.shortKey(address)),
+        sub = words(R.string.receipt_tap_to_copy),
+        span = 2,
+        valueMono = true,
+        copies = address,
+    )
+}
 
 private fun DetailUiState.reservesCell(): TrustFact {
     val label = words(R.string.detail_fact_por)

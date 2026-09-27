@@ -181,7 +181,8 @@ class SwapSheetTest {
         // The receipt's "Swap back" is drawn through that same one call site, never a second
         // primary: a sheet asks for one decision at a time.
         assertTrue("listOfNotNull(content.secondary, content.extra).forEach" in scan.code)
-        assertEquals("the direction is the only text action", 1, count("TextAction("))
+        // The direction, and on a receipt "View on Solscan" (judges' review, 2026-09-27).
+        assertEquals("two text actions: the direction and the explorer link", 2, count("TextAction("))
     }
 
     // ---- No slippage, and no arithmetic ------------------------------------------------------

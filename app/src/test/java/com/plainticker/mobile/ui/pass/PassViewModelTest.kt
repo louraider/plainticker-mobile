@@ -22,6 +22,7 @@ import com.plainticker.mobile.data.rpc.SkrStakeAccount
 import com.plainticker.mobile.prefs.InMemoryDevicePassStore
 import com.plainticker.mobile.data.PinnedAddresses
 import com.plainticker.mobile.wallet.ServerBuilt
+import com.plainticker.mobile.wallet.TransactionGuard
 import kotlinx.coroutines.runBlocking
 import com.plainticker.mobile.repo.FakeRpcRepository
 import com.plainticker.mobile.wallet.FakeAdapterOperations
@@ -326,15 +327,26 @@ class PassViewModelTest {
         val summary = """{"mint":"USDC","amount":12000000,"destination":"$destination","treasury":"$treasury","lamports":5000}"""
         val wrongAmount = ServerBuilt.pass(payer.address, devicePassStore.codeHash(), amount = 1_000_000_000L).base64()
         val wrongMemo = ServerBuilt.pass(payer.address, "f".repeat(64)).base64()
-        for (tx in listOf(wrongAmount, wrongMemo)) {
+        // Judges' review, 2026-09-27: the server did build these, so the refusal is this phone's
+        // own, with its plain reason, and never "the server did not build this payment".
+        val expected = listOf(TransactionGuard.Why.WRONG_AMOUNT, TransactionGuard.Why.NOT_THIS_REQUEST)
+        for ((tx, why) in listOf(wrongAmount, wrongMemo).zip(expected)) {
             val tampered = passMock(build = """{"transaction":"$tx","summary":$summary}""")
             val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64)))
             val session = wallet().apply { this.operations = operations }
 
-            assertEquals(PassRefusal.UNAVAILABLE, refusalOf(settle(machine(pass = tampered, wallet = session))))
+            val refused = settle(machine(pass = tampered, wallet = session)) as PassState.Refused
+            assertEquals(PassRefusal.GUARD_REFUSED, refused.reason)
+            assertEquals(why, refused.why)
+            assertTrue(PassRefusal.GUARD_REFUSED.retryable)
             assertTrue(operations.sendRequests.isEmpty())
             assertTrue(operations.signRequests.isEmpty())
         }
+        // Above the pinned price, even with a summary that agrees with the bytes.
+        val dear = ServerBuilt.pass(payer.address, devicePassStore.codeHash(), amount = 50_000_000L).base64()
+        val dearSummary = summary.replace("12000000", "50000000")
+        val refused = settle(machine(pass = passMock(build = """{"transaction":"$dear","summary":$dearSummary}"""))) as PassState.Refused
+        assertEquals(TransactionGuard.Why.ABOVE_PASS_PRICE, refused.why)
     }
 
     @Test

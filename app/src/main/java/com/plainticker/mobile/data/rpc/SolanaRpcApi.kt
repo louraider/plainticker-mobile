@@ -5,6 +5,7 @@ import com.plainticker.mobile.data.net.bodyOrThrow
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.json.JsonArray
@@ -51,11 +52,15 @@ class SolanaRpcApi(
             add(config(null, minContextSlot))
         })
 
-    suspend fun getAccountInfo(pubkey: String, encoding: RpcEncoding = RpcEncoding.BASE64): ContextValue<RpcAccount> =
-        call(METHOD_GET_ACCOUNT_INFO, buildJsonArray {
+    /** The answer carries [ContextValue.rpcAgeSeconds] from the forwarder's `X-Rpc-Age` header. */
+    suspend fun getAccountInfo(pubkey: String, encoding: RpcEncoding = RpcEncoding.BASE64): ContextValue<RpcAccount> {
+        var age = 0L
+        val answer: ContextValue<RpcAccount> = call(METHOD_GET_ACCOUNT_INFO, buildJsonArray {
             add(pubkey(pubkey))
             add(config(encoding))
-        })
+        }) { response -> age = rpcAgeSeconds(response.headers[HEADER_RPC_AGE]) }
+        return answer.copy(rpcAgeSeconds = age)
+    }
 
     /** Up to [MAX_MULTIPLE_ACCOUNTS] accounts; a missing one is a null in the same position. */
     suspend fun getMultipleAccounts(
@@ -96,11 +101,17 @@ class SolanaRpcApi(
     suspend fun getSkrStakeAccounts(wallet: String): List<KeyedAccount> =
         call(METHOD_GET_PROGRAM_ACCOUNTS, skrStakeParams(wallet))
 
-    private suspend inline fun <reified T> call(method: String, params: JsonArray): T {
-        val response: RpcResponse<T> = client.post(baseUrl) {
+    private suspend inline fun <reified T> call(
+        method: String,
+        params: JsonArray,
+        onResponse: (HttpResponse) -> Unit = {},
+    ): T {
+        val http = client.post(baseUrl) {
             contentType(ContentType.Application.Json)
             setBody(RpcRequest(jsonrpc = JSON_RPC_VERSION, id = REQUEST_ID, method = method, params = params))
-        }.bodyOrThrow()
+        }
+        onResponse(http)
+        val response: RpcResponse<T> = http.bodyOrThrow()
         response.error?.let { throw RpcException(it.code, method, it.message) }
         return response.result ?: throw RpcException(0, method, "empty result")
     }
@@ -117,6 +128,16 @@ class SolanaRpcApi(
 
     companion object {
         const val BASE_URL = "https://www.plainticker.com/api/v1/rpc"
+
+        /** Whole seconds since the forwarder's upstream read; 0 on a miss (shared contract, item 5). */
+        const val HEADER_RPC_AGE = "X-Rpc-Age"
+
+        /** The longest age believed: the forwarder caches 60 s, so anything past a day is a bad header. */
+        private const val MAX_RPC_AGE_SECONDS = 86_400L
+
+        /** The header's whole seconds, or 0 when it is absent, negative or not a whole number. */
+        fun rpcAgeSeconds(header: String?): Long =
+            header?.trim()?.toLongOrNull()?.takeIf { it in 0L..MAX_RPC_AGE_SECONDS } ?: 0L
 
         const val JSON_RPC_VERSION = "2.0"
 

@@ -170,7 +170,7 @@
     <string name="detail_live_unread_meta">Nothing below this line is read from the chain</string>
     <string name="detail_price_absent">Jupiter does not price this token</string>
     <string name="detail_heading_backing">Backing and controls</string>
-    <string name="detail_fact_por">Proof of reserves</string>
+    <string name="detail_fact_por">Proof of reserves, reported by xStocks</string>
     <string name="detail_fact_por_sub">%1$s shares held for %2$s tokens</string>
     <string name="detail_fact_por_custodian_sub">%1$s shares held by %2$s for %3$s tokens</string>
     <string name="detail_fact_por_absent_sub">xStocks publishes no reserves for this token</string>
@@ -178,6 +178,14 @@
     <string name="detail_fact_delegate">Permanent delegate</string>
     <string name="detail_fact_delegate_sub">Issuer can move tokens</string>
     <string name="detail_fact_delegate_none_sub">No issuer delegate</string>
+    <!-- Judges' review 2026-09-27 (Mert): the issuer's circulating count held up against the supply
+         the mint itself states, scaled by its multiplier; and the delegate named by address. -->
+    <string name="detail_fact_supply">Supply on chain</string>
+    <string name="detail_fact_supply_matches">Matches chain</string>
+    <string name="detail_fact_supply_sub">%1$s tokens on chain, %2$s in circulation reported by xStocks</string>
+    <string name="detail_fact_supply_no_report_sub">xStocks reports no circulating count to compare</string>
+    <string name="detail_fact_delegate_address">Delegate address</string>
+    <string name="detail_copy_address">Copy the address</string>
     <string name="detail_fact_pausable">Transfers pausable</string>
     <string name="detail_fact_pausable_sub">Not paused now, issuer can pause</string>
     <string name="detail_fact_pausable_paused_sub">Transfers are paused</string>
@@ -196,8 +204,6 @@
     <string name="detail_fact_fresh_account">New account state</string>
     <string name="detail_fact_fresh_account_open_sub">A new account can receive this token</string>
     <string name="detail_fact_fresh_account_frozen_sub">A new account starts frozen until the issuer unfreezes it</string>
-    <string name="detail_fact_supply">Supply on chain</string>
-    <string name="detail_fact_supply_sub">%1$s tokens at %2$s decimals</string>
     <string name="detail_heading_sector">Against the sector</string>
     <string name="detail_composite">composite %1$s</string>
     <!-- The Pro-numbers lock (2026-09-23): what the section head's meta reads instead of
@@ -268,7 +274,6 @@
     <string name="swap_balance">Balance %1$s %2$s</string>
     <string name="swap_you_receive">You receive</string>
     <string name="swap_all_in_cost">All-in cost</string>
-    <string name="swap_route">Route %1$s</string>
     <string name="swap_button">Swap %1$s to %2$s</string>
     <string name="swap_signs_in">Signs in Seed Vault Wallet. Not investment advice.</string>
     <string name="swap_cost_at_tap">The cost is quoted when you tap Swap, not before.</string>
@@ -301,7 +306,7 @@
     <string name="swap_amount_above_balance">More than the %1$s in this wallet</string>
     <string name="swap_worst_case">At least %1$s %2$s after slippage</string>
     <string name="swap_sol_label">SOL needed</string>
-    <string name="swap_sol_sub_rent">Fee, priority, and %1$s for the token account</string>
+    <string name="swap_sol_sub_rent">Fee, priority, and a %1$s deposit for the token account, returned if it is closed</string>
     <string name="swap_sol_sub_no_rent">Fee and priority, the token account exists</string>
     <string name="swap_sol_short">Short %1$s SOL, this wallet has %2$s</string>
     <string name="swap_back_to_amount">Back to the amount</string>
@@ -323,6 +328,7 @@
     <string name="swap_failed_dust">This amount is too small. The quote returns nothing for it.</string>
     <string name="swap_failed_wallet_changed">The wallet disconnected or changed before signing. Nothing was signed.</string>
     <string name="swap_failed_signed_mismatch">The wallet handed back a transaction other than the one checked, so it was not sent. Nothing moved.</string>
+    <string name="swap_failed_sign_only_unsupported">This wallet only signs by sending, and a swap needs it to sign first. Use Seed Vault Wallet. Nothing was signed.</string>
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
     <string name="swap_try_again">Try again</string>
@@ -331,6 +337,18 @@
     <string name="swap_no_balance">No %1$s in this wallet</string>
     <string name="swap_account_frozen">The %1$s account in this wallet is frozen by its issuer, so it cannot be swapped</string>
     <string name="swap_amount_below_unit">Smaller than the least %1$s that can be sent</string>
+
+    <!-- The cost, judges' review 2026-09-27. "All-in" only when the SOL the wallet pays (signature,
+         priority, token account rent) is priced in; without a SOL price the figure is the route's
+         alone and says so. The rent is a deposit that comes back if the account is closed. -->
+    <string name="swap_route_cost">Route cost</string>
+    <string name="swap_all_in_sub">Route %1$s. Includes %2$s in SOL fees and account deposit</string>
+    <string name="swap_route_cost_sub">Route %1$s. SOL fees and deposit are on the SOL line, not in this figure</string>
+    <string name="receipt_route_cost_paid">Route cost paid</string>
+    <string name="receipt_sol_paid">SOL paid</string>
+    <string name="receipt_sol_paid_rent">Fee, priority, and a %1$s deposit, returned if the account is closed</string>
+    <string name="receipt_sol_paid_no_rent">Fee and priority</string>
+    <string name="portfolio_swap_route_cost">route cost %1$s</string>
 
     <!-- Result: the finished attempt's own moment, above everything else on the sheet -->
     <string name="result_landed">Swap landed</string>
@@ -355,6 +373,12 @@
     <string name="receipt_slot">Slot</string>
     <string name="receipt_view_portfolio">View in Portfolio</string>
     <string name="receipt_swap_back">Swap back to %1$s</string>
+    <!-- Explorer links, judges' review 2026-09-27: a landed transaction on Solscan. The short form is
+         a row's trailing action, where the meta line budgets for one short word. -->
+    <string name="action_view_on_solscan">View on Solscan</string>
+    <string name="action_solscan">Solscan</string>
+    <!-- Shown while the wallet is open: what TransactionGuard read in the bytes on this phone. -->
+    <string name="swap_guard_checked">Checked on this phone: spends %1$s %2$s from your account, pays into your own %3$s account, at least %4$s %3$s.</string>
 
     <!-- Portfolio -->
     <string name="portfolio_heading_holdings">Holdings</string>
@@ -514,6 +538,23 @@
     <string name="pass_unavailable">The server did not build this payment, so nothing was signed and nothing was sent.</string>
     <string name="pass_not_approved">No signature came back, so no payment was sent.</string>
     <string name="pass_failed">The wallet answered with a failure and no signature, so whether the payment was sent is not known.</string>
+
+    <!-- TransactionGuard refusals, judges' review 2026-09-27. The server built the transaction and
+         this phone read it and would not hand it to the wallet, which is not the server failing.
+         One sentence per TransactionGuard.Why, shared by pass, vote and swap. -->
+    <string name="guard_refused_unreadable">This phone refused the transaction before your wallet saw it: it could not be read. Nothing was signed or sent.</string>
+    <string name="guard_refused_not_your_wallet">This phone refused the transaction before your wallet saw it: it would be paid for or signed by a wallet other than yours. Nothing was signed or sent.</string>
+    <string name="guard_refused_wrong_recipient">This phone refused the transaction before your wallet saw it: it pays somewhere other than the destination shown. Nothing was signed or sent.</string>
+    <string name="guard_refused_wrong_amount">This phone refused the transaction before your wallet saw it: its amount is not the one shown. Nothing was signed or sent.</string>
+    <string name="guard_refused_hands_over_control">This phone refused the transaction before your wallet saw it: it would give someone else control of your tokens. Nothing was signed or sent.</string>
+    <string name="guard_refused_unknown_program">This phone refused the transaction before your wallet saw it: it calls a program this app does not allow. Nothing was signed or sent.</string>
+    <string name="guard_refused_costs_more">This phone refused the transaction before your wallet saw it: it could cost more, or pay out less, than shown. Nothing was signed or sent.</string>
+    <string name="guard_refused_above_pass_price">This phone refused the transaction before your wallet saw it: it asks more than %1$s USDC, the most a pass costs in this app. Nothing was signed or sent.</string>
+    <string name="guard_refused_slippage">This phone refused the transaction before your wallet saw it: it lets the price slip further than this app accepts. Nothing was signed or sent.</string>
+    <string name="guard_refused_token_account">This phone refused the transaction before your wallet saw it: it opens a token account this swap does not need. Nothing was signed or sent.</string>
+    <string name="guard_refused_not_this_request">This phone refused the transaction before your wallet saw it: it does something other than what this screen shows. Nothing was signed or sent.</string>
+    <!-- The pass sheet's destination: the treasury account is pinned in the app, not taken from the server. -->
+    <string name="pass_destination_pinned">Sent to, pinned in this app</string>
 
     <!-- Detail gains The read and What to check next (task A6): the honest short form for every
          reader, the full text once a device presents an entitled code. -->

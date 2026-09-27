@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.swap
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.Explorer
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.raw
@@ -184,7 +185,18 @@ data class SheetContent(
      * Never a second primary: a sheet asks for one decision at a time.
      */
     val extra: SheetAction? = null,
+    /**
+     * What [com.plainticker.mobile.wallet.TransactionGuard] checked on this phone, stated while
+     * the wallet is open (judges' review, 2026-09-27): what the bytes spend, where they pay, and
+     * the least they accept. Only on [SwapState.AwaitingWallet], which the guard's Allow precedes.
+     */
+    val checked: Copy? = null,
+    /** Solscan's page for the landed transaction, drawn as "View on Solscan". Receipt only. */
+    val explorerUrl: String? = null,
 ) {
+    /** The label [explorerUrl] is drawn with, decided here like every other word on the sheet. */
+    val explorerLabel: Copy? get() = explorerUrl?.let { words(R.string.action_view_on_solscan) }
+
     /** The receipt replaces the sheet's own anatomy rather than being appended to it. */
     val isReceipt: Boolean get() = receipt != null
 
@@ -217,6 +229,8 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         footnote: Copy? = null,
         result: SheetResult? = null,
         extra: SheetAction? = null,
+        checked: Copy? = null,
+        explorerUrl: String? = null,
     ) = SheetContent(
         title = title,
         flip = flip,
@@ -232,6 +246,8 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         footnote = footnote,
         result = result,
         extra = extra,
+        checked = checked,
+        explorerUrl = explorerUrl,
     )
 
     return when (this) {
@@ -292,6 +308,16 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             cells = costCells(leg, quote),
             notice = if (requote) words(R.string.swap_requote_approval) else null,
             secondary = close,
+            // The guard read the bytes before the wallet opened, and required exactly these: the
+            // amount spent from the wallet's own account, the proceeds into its own account for
+            // the output, and a floor no lower than the one shown.
+            checked = words(
+                R.string.swap_guard_checked,
+                leg.input.shown(quote.inAmountRaw),
+                leg.input.symbol,
+                leg.output.symbol,
+                leg.output.shown(quote.worstCaseOutRaw),
+            ),
         )
 
         // No action at all: POST /execute is in flight and there is nothing to take back. The
@@ -342,12 +368,13 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
                     words(R.string.receipt_swap_back, leg.input.symbol),
                     SheetActionKind.SwapBack,
                 ),
+                explorerUrl = Explorer.transaction(fill.signature),
             )
         }
 
         is SwapState.Failed -> base(
             cells = quote?.let { costCells(leg, it) }.orEmpty(),
-            notice = words(reason.text),
+            notice = sentence,
             primary = failurePrimary(),
             secondary = close,
             result = failedResult(),
@@ -404,7 +431,7 @@ private fun SwapState.Failed.failedResult(): SheetResult {
         FailureOutcome.NOT_LANDED -> ResultTone.Failed to words(R.string.result_not_landed)
         FailureOutcome.UNKNOWN -> ResultTone.Pending to words(R.string.result_pending)
     }
-    val detail = words(reason.text)
+    val detail = sentence
     return SheetResult(tone = tone, headline = headline, detail = detail, announcement = listOf(headline, detail))
 }
 
@@ -498,19 +525,14 @@ private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
         subMono = true,
         size = SheetCellSize.Headline,
     ),
-    SheetCell(
-        label = words(R.string.swap_all_in_cost),
-        // An order that priced neither side in dollars leaves this unknown, and unknown is drawn
-        // as the missing value. Zero here would read as a swap that cost nothing.
-        value = quote.allInCostPct?.let { raw(Fmt.percent(it, signed = false)) }
-            ?: words(R.string.value_missing),
-        sub = words(R.string.swap_route, quote.route),
-    ),
+    costCell(quote),
     SheetCell(
         label = words(R.string.swap_sol_label),
         value = raw(Fmt.tokenAmount(quote.solCost.totalLamports, LAMPORT_DECIMALS, SOL_DECIMALS)),
         // The rent is most of it and it is charged once, for the first account of this mint, so
         // the sub says which of the two this quote is: a new account, or one that already exists.
+        // The rent is a deposit held in the new account, not a fee: it comes back if the account
+        // is closed, and the sub says so (judges' review, 2026-09-27).
         sub = if (quote.solCost.rentFeeLamports > 0L) {
             words(
                 R.string.swap_sol_sub_rent,
@@ -523,6 +545,34 @@ private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
 )
 
 /**
+ * The cost cell (judges' review, 2026-09-27). "All-in" only when it is: the route's cost plus the
+ * signature fee, the priority fee and the token account rent this wallet pays, priced at the SOL
+ * price read with the quote, with the SOL share named under it. Without a SOL price the figure is
+ * the route's alone, so it is called "Route cost", and the sub points at the SOL line beneath,
+ * where the SOL costs stand on their own.
+ */
+private fun costCell(quote: SwapQuote): SheetCell {
+    val allIn = quote.allInCostPct
+    val sol = quote.solCostUsd
+    return if (allIn != null && sol != null) {
+        SheetCell(
+            label = words(R.string.swap_all_in_cost),
+            value = raw(Fmt.percent(allIn, signed = false)),
+            sub = words(R.string.swap_all_in_sub, quote.route, Fmt.price(sol)),
+        )
+    } else {
+        SheetCell(
+            label = words(R.string.swap_route_cost),
+            // An order that priced neither side in dollars leaves this unknown, and unknown is
+            // drawn as the missing value. Zero here would read as a swap that cost nothing.
+            value = quote.routeCostPct?.let { raw(Fmt.percent(it, signed = false)) }
+                ?: words(R.string.value_missing),
+            sub = words(R.string.swap_route_cost_sub, quote.route),
+        )
+    }
+}
+
+/**
  * The receipt's cells: what was paid, what it cost against what it was quoted at, and the two
  * things that let a person check this swap on any explorer.
  *
@@ -530,12 +580,28 @@ private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
  * 0.037 percent, so repeating the estimate here would print a number nobody was charged.
  */
 private fun SwapState.Landed.quotedAgainstFill(): Copy? {
-    val quoted = quote.allInCostPct ?: return null
+    // The quote's figure in the same measure as the one above it: all-in where that is known.
+    val quoted = (if (allInCostPaidPct != null) quote.allInCostPct else quote.routeCostPct) ?: return null
     val delta = fillDeltaPct ?: return null
     return words(R.string.receipt_cost_sub, Fmt.percent(quoted, signed = false), Fmt.percent(delta))
 }
 
-private fun SwapState.Landed.receiptCells(): List<SheetCell> = listOf(
+/** The SOL the wallet paid for this swap, with the refundable rent named, or null when it paid none. */
+private fun SwapState.Landed.solPaidCell(): SheetCell? {
+    val paid = quote.paidSol
+    if (paid.totalLamports <= 0L) return null
+    return SheetCell(
+        label = words(R.string.receipt_sol_paid),
+        value = raw(Fmt.tokenAmount(paid.totalLamports, LAMPORT_DECIMALS, SOL_DECIMALS)),
+        sub = if (paid.rentFeeLamports > 0L) {
+            words(R.string.receipt_sol_paid_rent, Fmt.tokenAmount(paid.rentFeeLamports, LAMPORT_DECIMALS, SOL_DECIMALS))
+        } else {
+            words(R.string.receipt_sol_paid_no_rent)
+        },
+    )
+}
+
+private fun SwapState.Landed.receiptCells(): List<SheetCell> = listOfNotNull(
     SheetCell(
         label = words(R.string.receipt_paid),
         value = words(
@@ -545,13 +611,16 @@ private fun SwapState.Landed.receiptCells(): List<SheetCell> = listOf(
         ),
     ),
     SheetCell(
-        label = words(R.string.receipt_cost_paid),
-        value = allInCostPaidPct?.let { raw(Fmt.percent(it, signed = false)) }
+        // "All-in" only when the SOL was priced; otherwise the route's own cost, named as such.
+        label = words(if (allInCostPaidPct != null) R.string.receipt_cost_paid else R.string.receipt_route_cost_paid),
+        value = (allInCostPaidPct ?: routeCostPaidPct)?.let { raw(Fmt.percent(it, signed = false)) }
             ?: words(R.string.value_missing),
         // The sub line compares the quote against the fill, so it exists only when both do.
         sub = quotedAgainstFill(),
         subMono = true,
     ),
+    // What the wallet paid in SOL, the deposit named apart because it comes back.
+    solPaidCell(),
     SheetCell(
         label = words(R.string.receipt_signature),
         value = raw(Fmt.shortKey(fill.signature, head = 6, tail = 6)),

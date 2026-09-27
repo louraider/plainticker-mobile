@@ -35,7 +35,7 @@ data class StockData(
  * A GET /order answer: a quote and, when a `taker` was given, the transaction to sign.
  *
  * Amounts stay as the decimal strings Jupiter sends (u64-safe); the `...Raw` accessors
- * give them as Long. [allInCostPct], [hasExpiry] and [secondsLeft] carry over from the
+ * give them as Long. [routeCostPct], [hasExpiry] and [secondsLeft] carry over from the
  * spike unchanged.
  */
 @Serializable
@@ -83,8 +83,12 @@ data class SwapOrder(
     val outAmountRaw: Long get() = outAmount.toLongOrNull() ?: 0L
     val platformFeeBps: Int get() = platformFee?.feeBps ?: 0
 
-    /** All-in cost, the number worth showing a user: what went in vs what came out. */
-    val allInCostPct: Double
+    /**
+     * What the route cost: dollars in against dollars out, fees Jupiter takes from the tokens
+     * included. Not all-in: the SOL the wallet pays (signature, priority, token account rent) is
+     * outside it, and the swap sheet adds it at the SOL price (judges' review, 2026-09-27).
+     */
+    val routeCostPct: Double
         get() = if (inUsdValue > 0) (inUsdValue - outUsdValue) / inUsdValue * 100.0 else 0.0
 
     /** True only for RFQ quotes. Metis orders carry no expireAt at all. */

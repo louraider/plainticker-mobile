@@ -23,7 +23,15 @@ data class MintReading(
     val slot: Long,
     /** Wall clock at the moment of the read, in epoch millis. */
     val readAtMillis: Long,
+    /**
+     * How old the forwarder's answer already was when it arrived, from its `X-Rpc-Age` header
+     * (0 when absent). The chain read happened this long before [readAtMillis].
+     */
+    val rpcAgeSeconds: Long = 0L,
 ) {
+    /** When the node actually answered: the receive time less the forwarder's own age. */
+    val observedAtMillis: Long get() = readAtMillis - rpcAgeSeconds * 1_000L
+
     val readable: Boolean get() = facts != null
 }
 
@@ -36,7 +44,9 @@ interface MintRepository {
 /**
  * Straight through the forwarder, which already caches 60 s per (method, params) server-side, so
  * this adds no cache of its own: a second open of the same Detail screen costs an edge hit, and
- * the slot it reports stays the slot the node actually answered at.
+ * the slot it reports stays the slot the node actually answered at. The age of a cached answer
+ * comes back in [MintReading.rpcAgeSeconds], so "read N s ago" counts it (Mert, judges' review
+ * 2026-09-27: "8 s ago" ignored the forwarder's 60 s cache).
  */
 class ForwarderMintRepository(
     private val rpc: RpcRepository,
@@ -49,6 +59,7 @@ class ForwarderMintRepository(
             facts = MintFacts.from(answer.value),
             slot = answer.context?.slot ?: 0L,
             readAtMillis = clock.nowMillis(),
+            rpcAgeSeconds = answer.rpcAgeSeconds,
         )
     }
 }
