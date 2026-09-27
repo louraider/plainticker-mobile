@@ -120,7 +120,7 @@ class TodayScreenTest {
             "if (!state.todayLoading && !state.reportsKnown) return" in fn,
         )
         assertTrue("the count is null, never a guess, while still loading", "if (state.todayLoading) null else Fmt.count(thisWeek.size)" in fn)
-        assertTrue("the skeleton shows only while todayLoading is out", "if (state.todayLoading) {" in fn && "SkeletonRows(" in fn)
+        assertTrue("the skeleton shows only while todayLoading is out", "if (state.todayLoading) {" in fn && "SkeletonTickerRows(" in fn)
         assertTrue(
             "the rest is handed to Stocks through the honest, argument-less link: Stocks cannot " +
                 "sort or filter by report date, so it never claims a filtered count",
@@ -305,5 +305,25 @@ class TodayScreenTest {
     @Test
     fun `the settle is a spring with no bounce, so alpha and translation cannot overshoot`() {
         assertTrue("private val EntranceSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy" in source)
+    }
+
+    // ---- Device QA of 1.3.18 --------------------------------------------------------------------
+
+    @Test
+    fun `next up's row reads Voted through the shared rule, off the home entry's vote model`() {
+        val block = body("private fun TodayNextUpBlock(", "private fun TodayHoursSheet(")
+        assertTrue("the shared round rule decides", "nextUpVoted(leader, votedTickers)" in block)
+        assertTrue("the same quiet word the Vote tab draws", "R.string.vote_voted_row" in block)
+        assertTrue("Today reads the vote model's own set", "voteViewModel?.votedTickers" in source)
+        val home = KotlinScan(File(module, "src/main/java/com/plainticker/mobile/ui/home/HomeScreen.kt").readText()).code
+        val today = home.substring(home.indexOf("TodayScreen("), home.indexOf("AmberDestination.STOCKS ->"))
+        assertTrue("HomeScreen hands Today the home entry's VoteViewModel", "voteViewModel = viewModel(factory = factory)" in today)
+    }
+
+    @Test
+    fun `reports and watched skeletons stand inside the card the rows will fill`() {
+        assertTrue("SkeletonTickerRows(count = ReportsPreviewCount" in source)
+        assertTrue("SkeletonTickerRows(count = minOf(state.watched, ColdRowCap)" in source)
+        assertFalse("no bare skeleton rows outside a card", "SkeletonRows(" in source)
     }
 }

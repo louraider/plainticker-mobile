@@ -186,6 +186,8 @@ fun HomeScreen(
                             onOpenVote = { select(AmberDestination.VOTE) },
                             onOpenDigest = onOpenDigest,
                             header = header,
+                            // The same home-entry instance Stocks and Vote read, for Next up's "Voted".
+                            voteViewModel = viewModel(factory = factory),
                         )
                     }
 

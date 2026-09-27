@@ -624,4 +624,15 @@ class TodayModelTest {
         assertFalse("an unknown venue is not a closed one", closedMoversShown(null, movers))
         assertFalse("nothing moved, nothing drawn", closedMoversShown(closed, emptyList()))
     }
+
+    // ---- Next up's "Voted" (device QA of 1.3.18) ------------------------------------------------
+
+    @Test
+    fun `next up's leader reads Voted by the shared round rule, whatever the case`() {
+        val leader = TodayLeader(ticker = "AAL", symbol = "AALx", company = "American Airlines", weightRaw = java.math.BigInteger.ONE, voters = 1)
+        assertTrue(nextUpVoted(leader, setOf("AAL")))
+        assertTrue(nextUpVoted(leader.copy(ticker = "aal "), setOf("AAL")))
+        assertFalse(nextUpVoted(leader, setOf("TSLA")))
+        assertFalse(nextUpVoted(leader, emptySet()))
+    }
 }
