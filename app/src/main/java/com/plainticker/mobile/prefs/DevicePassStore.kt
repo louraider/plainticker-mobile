@@ -1,8 +1,11 @@
 package com.plainticker.mobile.prefs
 
 import android.content.SharedPreferences
+import com.plainticker.mobile.wallet.AesGcmSessionCipher
+import java.io.IOException
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.Base64
 
 /**
  * This device's own code for Pro entitlement (docs/plan-monetisation-2026-09-19.md section 1.2,
@@ -61,6 +64,28 @@ import java.security.SecureRandom
  * All of it lives in the same preferences file as the code, which res/xml/backup_rules.xml and
  * data_extraction_rules.xml exclude whole, so none of the new keys can reach a backup either.
  *
+ * **Sealed at rest (security review, 2026-09-27).** The current and the pending code used to sit
+ * in that file as plain text, readable by anything that can read the app's data directory (a
+ * rooted phone, an adb backup on a debuggable build). Both are now sealed with
+ * [AesGcmSessionCipher], the same Keystore-backed AES-GCM the wallet session uses, under a key of
+ * their own ([SharedPrefsDevicePassStore.KEY_ALIAS]) that never leaves the phone's secure
+ * hardware. A code that is lost cannot be recovered and its pass goes with it, so every step is
+ * ordered to never lose one:
+ * - **Migration** of a plain code: seal it, write the sealed copy beside the plain one, read the
+ *   sealed copy back from the file and open it, and only when it opens to the same code remove
+ *   the plain one. A Keystore that fails at any step leaves the plain copy where it is, and the
+ *   next launch tries again. A crash between two steps leaves either the plain copy alone or both
+ *   copies, and the next read finishes the job.
+ * - **Reading**: the sealed copy when it opens; the plain copy when it does not and the plain copy
+ *   is still there. When neither can be read, [DevicePassStore.code] throws
+ *   [DeviceCodeUnreadableException] and You says so: a fresh code is never minted in its place,
+ *   because the sealed one may open on the next launch, and a fresh code would orphan the pass
+ *   bound to the old one. The sealed copy is never deleted for failing to open.
+ * - **Writing** (a first code, a pending code, a completed rekey): the code is sealed and opened
+ *   again in memory before anything is written, and written sealed in the same single commit that
+ *   removes any plain copy. When the Keystore cannot seal, it is written plain, removing any
+ *   sealed copy in that same commit, and migrated on a later launch.
+ *
  * **What a wallet change does.** The code belongs to this device, not to whichever wallet
  * happens to be connected when it is minted or presented. Connecting a different wallet and
  * paying, or linking, with it signs this SAME code's hash into that wallet's own memo, so the new
@@ -79,7 +104,25 @@ interface DevicePassStore {
 
     /** SHA-256 hex digest of [code], lowercase, the only form that ever leaves the device. */
     fun codeHash(): String
+
+    /**
+     * [code], or null when this phone cannot read it ([DeviceCodeUnreadableException]). For the
+     * reads that work without a code (the summary, a ticker's read) and would rather ask
+     * unauthenticated than fail.
+     */
+    fun codeOrNull(): String? = try {
+        code()
+    } catch (e: DeviceCodeUnreadableException) {
+        null
+    }
 }
+
+/**
+ * This phone holds a sealed device code it cannot open right now, and no plain copy of it (see
+ * [DevicePassStore], "Sealed at rest"). An [IOException], so every call that sends the code treats
+ * it as a call that could not be made; nothing mints a replacement.
+ */
+class DeviceCodeUnreadableException : IOException("the device code is sealed and could not be opened")
 
 /**
  * The rekey half of [SharedPrefsDevicePassStore] (see [DevicePassStore], "Replacing a legacy
@@ -128,11 +171,38 @@ interface DeviceCodeRekeyStore {
     fun setRekeyNote(note: String?)
 }
 
-class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DevicePassStore, DeviceCodeRekeyStore {
+class SharedPrefsDevicePassStore(
+    private val prefs: SharedPreferences,
+    /**
+     * Seals both codes at rest ([DevicePassStore], "Sealed at rest"). On the phone, an
+     * [AesGcmSessionCipher] over the Keystore key [KEY_ALIAS]; null only in tests that exercise
+     * the plain layout, where nothing is sealed and nothing is migrated.
+     */
+    private val cipher: AesGcmSessionCipher? = null,
+) : DevicePassStore, DeviceCodeRekeyStore {
+
+    /** What one slot (the current code, or the pending one) holds, read through the seal. */
+    private sealed interface Slot {
+        data object Empty : Slot
+
+        data class Value(val code: String) : Slot
+
+        /** A sealed copy that does not open, and no plain copy: never replaced, never deleted. */
+        data object Unreadable : Slot
+    }
+
+    /** Slots whose migration this process already tried; a failed one is tried again next launch. */
+    private val migrationTried = mutableSetOf<String>()
 
     @Synchronized
-    override fun code(): String =
-        prefs.getString(KEY_CODE, null) ?: generate().also { prefs.edit().putString(KEY_CODE, it).apply() }
+    override fun code(): String = when (val slot = read(KEY_CODE, KEY_CODE_SEALED)) {
+        is Slot.Value -> slot.code
+        Slot.Unreadable -> throw DeviceCodeUnreadableException()
+        Slot.Empty -> generate().also { minted ->
+            // Only a slot with no copy at all, sealed or plain, is ever given a fresh code.
+            write(prefs.edit(), KEY_CODE, KEY_CODE_SEALED, minted).commit()
+        }
+    }
 
     override fun codeHash(): String = sha256Hex(code())
 
@@ -140,33 +210,139 @@ class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DeviceP
     override fun isLegacy(): Boolean = code().length == LEGACY_CODE_LENGTH
 
     @Synchronized
-    override fun pendingNewCode(): String? = prefs.getString(KEY_PENDING_NEW_CODE, null)?.takeIf(::isNewFormat)
+    override fun pendingNewCode(): String? =
+        (read(KEY_PENDING_NEW_CODE, KEY_PENDING_NEW_CODE_SEALED) as? Slot.Value)?.code?.takeIf(::isNewFormat)
 
     @Synchronized
     override fun beginRekey(): String? {
         if (!isLegacy()) return null
-        pendingNewCode()?.let { return it }
+        when (val pending = read(KEY_PENDING_NEW_CODE, KEY_PENDING_NEW_CODE_SEALED)) {
+            is Slot.Value -> if (isNewFormat(pending.code)) return pending.code
+            // A replacement the server may already have heard of, that this phone cannot read
+            // right now: nothing is sent, and no second replacement is minted over it.
+            Slot.Unreadable -> return null
+            Slot.Empty -> Unit
+        }
         val minted = generate()
         // commit(), not apply(): the replacement must be on disk before the server can hear of it.
-        return if (prefs.edit().putString(KEY_PENDING_NEW_CODE, minted).commit()) minted else null
+        val edit = write(prefs.edit(), KEY_PENDING_NEW_CODE, KEY_PENDING_NEW_CODE_SEALED, minted)
+        return if (edit.commit()) minted else null
     }
 
     @Synchronized
     override fun completeRekey(newCode: String, note: String?): Boolean {
         if (!isNewFormat(newCode) || pendingNewCode() != newCode) return false
-        // One editor, one commit: the new code becomes current, the pending slot goes and the note
-        // is written in the same atomic file write, so no crash can leave a device with neither
-        // code, with two that disagree about which is current, or with a new code and no note.
-        val edit = prefs.edit()
-            .putString(KEY_CODE, newCode)
+        // One editor, one commit: the new code becomes current (sealed, or plain when the Keystore
+        // cannot seal), the pending slot goes in both forms and the note is written in the same
+        // atomic file write, so no crash can leave a device with neither code, with two that
+        // disagree about which is current, or with a new code and no note.
+        val edit = write(prefs.edit(), KEY_CODE, KEY_CODE_SEALED, newCode)
             .remove(KEY_PENDING_NEW_CODE)
+            .remove(KEY_PENDING_NEW_CODE_SEALED)
         if (note != null) edit.putString(KEY_REKEY_NOTE, note) else edit.remove(KEY_REKEY_NOTE)
         return edit.commit()
     }
 
     @Synchronized
     override fun abandonRekey() {
-        prefs.edit().remove(KEY_PENDING_NEW_CODE).commit()
+        prefs.edit().remove(KEY_PENDING_NEW_CODE).remove(KEY_PENDING_NEW_CODE_SEALED).commit()
+    }
+
+    // ---- The seal -------------------------------------------------------------------------
+
+    /**
+     * One slot, read through the seal ([DevicePassStore], "Sealed at rest"), finishing or starting
+     * the migration of a plain copy on the way.
+     */
+    private fun read(plainKey: String, sealedKey: String): Slot {
+        val plain = prefs.getString(plainKey, null)
+        val sealed = prefs.getString(sealedKey, null)
+        if (sealed != null) {
+            val opened = open(sealed)
+            if (opened != null) {
+                // Both copies, the same code: a migration stopped after it verified the sealed
+                // copy and before it removed the plain one. Finish it.
+                if (plain == opened) prefs.edit().remove(plainKey).commit()
+                return Slot.Value(opened)
+            }
+            // The sealed copy does not open. The plain one, while it is still there, is the code;
+            // the sealed copy is left in place, and replaced only by a verified seal of that code.
+            if (plain == null) return Slot.Unreadable
+            migrate(plainKey, sealedKey, plain)
+            return Slot.Value(plain)
+        }
+        if (plain == null) return Slot.Empty
+        migrate(plainKey, sealedKey, plain)
+        return Slot.Value(plain)
+    }
+
+    /**
+     * Seals a plain copy: write the sealed copy beside it, read it back from the file and open it,
+     * and remove the plain copy only when that gives the same code back. Once per slot per
+     * process; any failure leaves the plain copy, and the next launch tries again.
+     */
+    private fun migrate(plainKey: String, sealedKey: String, plain: String) {
+        if (cipher == null || !migrationTried.add(plainKey)) return
+        val blob = seal(plain) ?: return
+        if (!prefs.edit().putString(sealedKey, blob).commit()) return
+        // Read back from the file and opened by the Keystore itself, never answered from memory:
+        // this is the proof the plain copy may go.
+        val readBack = prefs.getString(sealedKey, null)?.let { open(it, fromMemory = false) }
+        if (readBack != plain) return
+        prefs.edit().remove(plainKey).commit()
+    }
+
+    /**
+     * [value] into [edit] under the slot: sealed (and the plain key removed) when the Keystore
+     * seals and opens it again in memory, plain (and the sealed key removed) when it cannot. Either
+     * way one copy, written in the caller's one commit.
+     */
+    private fun write(edit: SharedPreferences.Editor, plainKey: String, sealedKey: String, value: String): SharedPreferences.Editor {
+        val blob = seal(value)
+        return if (blob != null) {
+            edit.putString(sealedKey, blob).remove(plainKey)
+        } else {
+            edit.putString(plainKey, value).remove(sealedKey)
+        }
+    }
+
+    /** The sealed form of [value], Base64, or null when the Keystore failed or did not round-trip. */
+    private fun seal(value: String): String? {
+        val c = cipher ?: return null
+        return try {
+            val sealed = c.seal(value.toByteArray(Charsets.UTF_8))
+            if (c.open(sealed).toString(Charsets.UTF_8) != value) return null
+            // Remembered as opened: a Keystore that fails after this write (between a rekey's
+            // begin and its completion) cannot make this process lose the code it just wrote.
+            Base64.getEncoder().encodeToString(sealed).also { remember(it, value) }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * The code in [blob], or null when it does not open: another key, a failing Keystore, an edit.
+     * A blob this process already opened is answered from memory, so the many reads of the code
+     * (one per API call) cost one Keystore round-trip per sealed value, not one each; the plain
+     * code lived in the preferences' own memory before, so this keeps nothing new in memory.
+     */
+    private fun open(blob: String, fromMemory: Boolean = true): String? {
+        if (fromMemory) opened[blob]?.let { return it }
+        val c = cipher ?: return null
+        return try {
+            c.open(Base64.getDecoder().decode(blob)).toString(Charsets.UTF_8).takeIf { it.isNotEmpty() }
+                ?.also { code -> remember(blob, code) }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Sealed blobs this process opened or wrote, and the code in each. */
+    private val opened = HashMap<String, String>()
+
+    private fun remember(blob: String, code: String) {
+        if (opened.size >= 4) opened.clear()
+        opened[blob] = code
     }
 
     @Synchronized
@@ -190,6 +366,15 @@ class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DeviceP
         /** The minted replacement for a legacy code, persisted before the rekey call is made. */
         const val KEY_PENDING_NEW_CODE = "device_pass_pending_new_code"
 
+        /** [KEY_CODE]'s sealed form: Base64 of [AesGcmSessionCipher.seal] over the code's UTF-8. */
+        const val KEY_CODE_SEALED = "device_pass_code_sealed"
+
+        /** [KEY_PENDING_NEW_CODE]'s sealed form. */
+        const val KEY_PENDING_NEW_CODE_SEALED = "device_pass_pending_new_code_sealed"
+
+        /** The Keystore key both codes are sealed under, apart from the wallet session's. */
+        const val KEY_ALIAS = "plainticker.device_code.v1"
+
         /** What You says about the last rekey: [NOTE_SIGN_IN_AGAIN] or [NOTE_REPLACED]. */
         const val KEY_REKEY_NOTE = "device_pass_rekey_note"
 
@@ -200,7 +385,7 @@ class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DeviceP
         const val NOTE_REPLACED = "replaced"
 
         /** Every key this store writes: all of them live in the one preferences file backups exclude. */
-        val ALL_KEYS = setOf(KEY_CODE, KEY_PENDING_NEW_CODE, KEY_REKEY_NOTE)
+        val ALL_KEYS = setOf(KEY_CODE, KEY_PENDING_NEW_CODE, KEY_REKEY_NOTE, KEY_CODE_SEALED, KEY_PENDING_NEW_CODE_SEALED)
 
         /** Length of every NEWLY minted code: 26 x log2(31) = 128.8 bits. */
         const val CODE_LENGTH = 26

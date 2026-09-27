@@ -918,6 +918,7 @@
     <string name="device_code_label">This phone</string>
     <string name="device_code_sign_in_again">This phone got a new, stronger code. Sign in with Google again to reconnect your account.</string>
     <string name="device_code_replaced">This phone\'s old code could not be moved. It now has a new code. If you paid for Pro on this phone, write to hi@plainticker.com.</string>
+    <string name="device_code_unreadable">This phone could not open its saved code just now, so nothing was replaced. Close and reopen the app to try again. If this keeps happening, write to hi@plainticker.com.</string>
     <string name="device_code_retired">PlainTicker no longer accepts this phone\'s code, so it is signed out here. Write to hi@plainticker.com and we will sort it out.</string>
 
     <!-- Unlinking a wallet (GET /api/v1/account, POST /api/v1/account/wallets/unlink), built
