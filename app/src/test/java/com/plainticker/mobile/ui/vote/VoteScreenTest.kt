@@ -560,4 +560,14 @@ class VoteScreenTest {
             strings.getValue("vote_tab_explainer_how").contains("several stocks in a round"),
         )
     }
+
+    @Test
+    fun `the last round opens the winner whenever its research is published, and says so with Read`() {
+        val row = body(voteTabScreen, "private fun LastRoundRow(")
+        assertTrue("val clickable = previous.opensResearch" in row)
+        assertTrue("if (previous.researchPublished) {" in row)
+        assertTrue("R.string.vote_tab_last_round_research" in row)
+        assertTrue("R.string.action_read" in row)
+        assertEquals("%1\$s research published", ShippedCopy.strings["vote_tab_last_round_research"])
+    }
 }

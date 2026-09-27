@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.vote
 
+import com.plainticker.mobile.repo.researchPublished
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.plainticker.mobile.data.plainticker.NextUpRow
@@ -65,6 +66,10 @@ class VoteTabViewModel(
     private var lastPrevious: PreviousRound? = null
     private var allReceipts: List<VoteReceipt> = emptyList()
     private var everAnswered = false
+
+    /** The previous winner whose research is known to be published, or null. */
+    private var winnerResearch: String? = null
+    private var researchAskedFor: String? = null
     private var stakeJob: Job? = null
     private var stakeFor: String? = null
 
@@ -104,11 +109,12 @@ class VoteTabViewModel(
                                 failed = false,
                                 notOpen = false,
                                 round = answer.round,
-                                previous = previousDisplay(lastPrevious, catalogByTicker),
+                                previous = previousNow(),
                                 leaders = leadersFor(lastRows, allBallot),
                             )
                         }
                         republishVotes()
+                        checkWinnerResearch()
                     }
 
                     NextUpAnswer.NotOpen -> {
@@ -134,6 +140,28 @@ class VoteTabViewModel(
                 // Nothing has ever loaded: the reader is owed a banner, not a blank screen.
                 // Once something has, a later failure keeps it rather than wiping it away.
                 if (!everAnswered) _state.update { it.copy(isLoading = false, failed = true) }
+            }
+        }
+    }
+
+    /** The previous round as the screen draws it, with what is known about its winner's research. */
+    private fun previousNow(): PreviousRoundDisplay? =
+        previousDisplay(lastPrevious, catalogByTicker)?.copy(researchPublished = winnerResearch == lastPrevious?.winner?.trim())
+
+    /**
+     * Asks whether the previous winner's research is published ([researchPublished], the check the
+     * digest and auto-watch share), once per winner, and redraws the row when it is.
+     */
+    private fun checkWinnerResearch() {
+        val winner = lastPrevious?.winner?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        if (winner == winnerResearch || winner == researchAskedFor) return
+        researchAskedFor = winner
+        viewModelScope.launch {
+            if (summaries.researchPublished(winner)) {
+                winnerResearch = winner
+                _state.update { it.copy(previous = previousNow()) }
+            } else {
+                researchAskedFor = null
             }
         }
     }
@@ -165,7 +193,7 @@ class VoteTabViewModel(
         }
         catalogByTicker = assets.associateBy { it.underlyingTicker.trim().uppercase() } // lint-allow uppercase: map key
         // The previous winner may now be resolvable even if the summary call below never answers.
-        _state.update { it.copy(previous = previousDisplay(lastPrevious, catalogByTicker)) }
+        _state.update { it.copy(previous = previousNow()) }
 
         val summary = runCatching { summaries.summary() }.getOrNull()
         if (summary == null) {

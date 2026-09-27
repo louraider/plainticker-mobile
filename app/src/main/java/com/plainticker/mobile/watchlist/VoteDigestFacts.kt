@@ -1,5 +1,6 @@
 package com.plainticker.mobile.watchlist
 
+import com.plainticker.mobile.repo.researchPublished
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.repo.NextUpAnswer
@@ -50,16 +51,9 @@ class VoteDigestFacts(
             return VoteFacts.NONE
         }
         val winner = answer.previous?.winner?.trim()?.uppercase()?.takeIf { it.isNotEmpty() } // lint-allow uppercase: map key
-        val analysed = winner?.takeIf { ticker ->
-            try {
-                summaries.analysis(ticker)
-                true
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failed: Exception) {
-                false
-            }
-        }
+        // The shared check (repo/ResearchAvailability.kt): the analysis route itself, since
+        // /summary leaves out a winner served with its class unavailable (JEF).
+        val analysed = winner?.takeIf { ticker -> summaries.researchPublished(ticker) }
         val previousId = answer.previous?.id
         val voted = analysed != null && voteReceipts?.receipts?.value.orEmpty().any { receipt ->
             receipt.ticker.trim().equals(analysed, ignoreCase = true) &&

@@ -127,4 +127,20 @@ class AutoWatchTest {
         auto.swappedInto("mint-JEF")
         assertEquals(setOf("NVDA", "AAPL", "JEF"), watchlist.tickers.value)
     }
+
+    /**
+     * Device QA of 1.3.17: JEF, round 1's winner, is served with its class unavailable, so /summary
+     * never lists it and a pending watch for it never resolved. The analysis route counts too.
+     */
+    @Test
+    fun `a pick served with no class, absent from the summary, still resolves once its research is up`() = runTest {
+        analyses("AAPL")
+        auto.voted("JEF")
+        assertTrue("JEF" in pending.tickers)
+
+        summaries.analyses = mapOf("JEF" to Result.success(com.plainticker.mobile.data.plainticker.AnalysisPayload(ticker = "JEF")))
+        assertEquals(listOf("JEF"), auto.resolvePending())
+        assertTrue("JEF" in watchlist.tickers.value)
+        assertTrue(pending.tickers.isEmpty())
+    }
 }

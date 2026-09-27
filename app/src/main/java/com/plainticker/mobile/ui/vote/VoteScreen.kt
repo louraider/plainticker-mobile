@@ -527,7 +527,7 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
         weightVoters != null -> weightVoters
         else -> closedAt
     }
-    val clickable = previous.status == PreviousRoundStatus.PUBLISHED
+    val clickable = previous.opensResearch
     val openLabel = stringResource(R.string.action_open_ticker, previous.display)
     Column(
         modifier = Modifier
@@ -543,6 +543,23 @@ private fun LastRoundRow(previous: PreviousRoundDisplay, onOpenDetail: (String) 
                 color = colors.textTertiary(AmberSurface.GROUND),
                 modifier = Modifier.padding(top = 3.dp),
             )
+        }
+        if (previous.researchPublished) {
+            // The winner's research is up (device QA of 1.3.17: JEF's round still reads "closed"),
+            // so the row says so and offers the way to it.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                Text(
+                    text = stringResource(R.string.vote_tab_last_round_research, previous.display),
+                    style = AmberType.context,
+                    color = colors.textSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+                TextAction(
+                    label = stringResource(R.string.action_read),
+                    onClick = { onOpenDetail(previous.ticker) },
+                    color = colors.actionText,
+                )
+            }
         }
     }
 }

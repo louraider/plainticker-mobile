@@ -102,7 +102,16 @@ data class PreviousRoundDisplay(
     val weightRaw: BigInteger?,
     val voters: Int,
     val closedAtText: String?,
+    /**
+     * PlainTicker has published research for the winner ([com.plainticker.mobile.repo.researchPublished]):
+     * the row opens it and says so, whatever [status] reads (device QA of 1.3.17: the live server
+     * keeps JEF's round at `closed` after its research went up, so the row never opened it).
+     */
+    val researchPublished: Boolean = false,
 ) {
+    /** The row opens the winner's Detail: the tally says published, or the research is there. */
+    val opensResearch: Boolean get() = researchPublished || status == PreviousRoundStatus.PUBLISHED
+
     /**
      * The status sentence. `closed` (the live server's word) and any status this build does not
      * recognize both read "Round 1 closed. JEF had the most stake.", which is true of every previous
