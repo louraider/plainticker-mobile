@@ -1539,6 +1539,82 @@ class SwapViewModelTest {
         }
     }
 
+    /**
+     * Prices that answer at their own pace (security review, 2026-09-27): SOL's after [solDelayMs],
+     * any other mint's after [tokenDelayMs]. The SOL price is the all-in cost's alone and may never
+     * hold a swap; the token's is the value check's, bound as it always was.
+     */
+    private class PacedPrices(private val solDelayMs: Long, private val tokenDelayMs: Long = 0L) : com.plainticker.mobile.repo.PriceRepository {
+        val requested = mutableListOf<List<String>>()
+        override suspend fun prices(mints: Collection<String>): Map<String, com.plainticker.mobile.data.jupiter.PriceEntry> {
+            requested += mints.toList()
+            return if (KnownMints.WSOL in mints) {
+                kotlinx.coroutines.delay(solDelayMs)
+                mapOf(KnownMints.WSOL to price(SOL_USD))
+            } else {
+                kotlinx.coroutines.delay(tokenDelayMs)
+                mints.associateWith { price(TSLAX_USD) }
+            }
+        }
+        override suspend fun pricesFirst(mints: List<String>, limit: Int) =
+            com.plainticker.mobile.data.jupiter.PriceFetch(priced = mints.associateWith { price(if (it == KnownMints.WSOL) SOL_USD else TSLAX_USD) })
+    }
+
+    @Test
+    fun `a slow SOL price never holds Swap to USDC, which lands on the route cost after the value check`() = runTest {
+        orderResponse = reverseOrder
+        executePlan = listOf(reverseLanded to HttpStatusCode.OK)
+        val prices = PacedPrices(solDelayMs = 60_000L)
+        val wallet = wallet()
+        val vm = viewModel(jupiter(), wallet, rpc = chain(tokenRaw = 264_600L), prices = prices)
+        vm.state.test {
+            awaitItem()
+            openOutAndMax(vm, this)
+            vm.submit()
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertNull("past the bound the sheet says Route cost", landed.quote.solUsd)
+            assertNull(landed.quote.allInCostPct)
+            assertEquals(1, wallet.callCount)
+            assertTrue("the value check read the token's own price", listOf(KnownMints.TSLAX) in prices.requested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the value check is not cut short by the SOL price's bound, as before the all-in cost`() = runTest {
+        orderResponse = reverseOrder
+        executePlan = listOf(reverseLanded to HttpStatusCode.OK)
+        // The token's price takes twice the SOL bound: the value check still waits for it and passes.
+        val prices = PacedPrices(solDelayMs = 0L, tokenDelayMs = 5_000L)
+        val wallet = wallet()
+        val vm = viewModel(jupiter(), wallet, rpc = chain(tokenRaw = 264_600L), prices = prices)
+        vm.state.test {
+            awaitItem()
+            openOutAndMax(vm, this)
+            vm.submit()
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertEquals(SOL_USD, landed.quote.solUsd!!, 0.0)
+            assertEquals(1, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a slow SOL price never holds a swap into a token either`() = runTest {
+        val prices = PacedPrices(solDelayMs = 60_000L)
+        val wallet = wallet()
+        val vm = viewModel(jupiter(), wallet, prices = prices)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertNull(landed.quote.solUsd)
+            assertEquals(1, wallet.callCount)
+            assertEquals(listOf(listOf(KnownMints.WSOL)), prices.requested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `swap back asks the second source for a balance no older than the landing's slot`() = runTest {
         val rpc = chain()

@@ -28,6 +28,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay
@@ -381,24 +382,32 @@ class SwapViewModel(
             // meant. Jupiter's value of the order it built must match the typed quantity at the
             // price the app shows, within SwapTrust.VALUE_BOUND. Swap to USDC only: the other
             // direction spends USDC, whose decimals are pinned in SwapLeg.USDC.
-            // One Price v3 call for both the value check (Swap to USDC) and the SOL price the
-            // all-in cost needs (judges' review, 2026-09-27). Bounded: a slow or refused price
-            // costs the all-in figure, never the swap, and the sheet then says "Route cost".
-            val priced = pricesOf(if (leg.intoToken) listOf(KnownMints.WSOL) else listOf(leg.input.mint, KnownMints.WSOL))
-            quote = quote.copy(solUsd = priced[KnownMints.WSOL])
-            if (!leg.intoToken) {
-                val price = priced[leg.input.mint]
-                when (val value = SwapTrust.checkValue(leg.input.ui(input.raw), price, order.inUsdValue)) {
-                    is SwapTrust.ValueVerdict.Consistent -> Unit
-                    is SwapTrust.ValueVerdict.Mismatch -> {
-                        debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
-                        return fail(leg, funds, input, SwapFailure.VALUE_MISMATCH, quote, requote, timing)
-                    }
-                    is SwapTrust.ValueVerdict.Unchecked -> {
-                        debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
-                        return fail(leg, funds, input, SwapFailure.VALUE_UNCHECKED, quote, requote, timing)
+            //
+            // The SOL price the all-in cost needs (judges' review, 2026-09-27) is a call of its own,
+            // started here beside the value check and bounded by [PRICE_TIMEOUT_MS]: slow, refused
+            // or unpriced, it costs the all-in figure and never the swap, and the sheet then says
+            // "Route cost". The value check keeps its own call, exactly as before that change: the
+            // token's price alone, bounded only by the HTTP client's timeout, and a check that
+            // cannot be made is still a refusal (security review, 2026-09-27).
+            val solPrice = viewModelScope.async { solPriceOf() }
+            try {
+                if (!leg.intoToken) {
+                    val price = priceOf(leg.input.mint)
+                    when (val value = SwapTrust.checkValue(leg.input.ui(input.raw), price, order.inUsdValue)) {
+                        is SwapTrust.ValueVerdict.Consistent -> Unit
+                        is SwapTrust.ValueVerdict.Mismatch -> {
+                            debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
+                            return fail(leg, funds, input, SwapFailure.VALUE_MISMATCH, quote, requote, timing)
+                        }
+                        is SwapTrust.ValueVerdict.Unchecked -> {
+                            debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
+                            return fail(leg, funds, input, SwapFailure.VALUE_UNCHECKED, quote, requote, timing)
+                        }
                     }
                 }
+                quote = quote.copy(solUsd = solPrice.await())
+            } finally {
+                solPrice.cancel()
             }
 
             // ---- Dust. A quote that delivers nothing, or whose floor is nothing, is fees for no
@@ -710,19 +719,31 @@ class SwapViewModel(
     }
 
     /**
-     * The prices the app shows for [mints], in one call, or without the ones that did not come
-     * back. Bounded by [PRICE_TIMEOUT_MS] so a backed-off price never holds the wallet shut.
+     * The price the value check reads for [mint], or null when there is none to check against:
+     * the same call, and the same bound (the HTTP client's own timeout), as before the all-in cost.
      */
-    private suspend fun pricesOf(mints: List<String>): Map<String, Double> = try {
-        withTimeoutOrNull(PRICE_TIMEOUT_MS) { prices.prices(mints) }
-            ?.mapNotNull { (mint, entry) -> entry.usdPrice.takeIf { it.isFinite() && it > 0.0 }?.let { mint to it } }
-            ?.toMap()
-            ?: emptyMap<String, Double>().also { debugLog.raw("price: no answer within $PRICE_TIMEOUT_MS ms") }
+    private suspend fun priceOf(mint: String): Double? = try {
+        prices.prices(listOf(mint))[mint]?.usdPrice
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         debugLog.raw("price: ${e::class.simpleName}: ${e.message}")
-        emptyMap()
+        null
+    }
+
+    /**
+     * SOL's price for the all-in cost, or null: bounded by [PRICE_TIMEOUT_MS], and never a reason
+     * to stop a swap. A null makes the sheet say "Route cost".
+     */
+    private suspend fun solPriceOf(): Double? = try {
+        val answer = withTimeoutOrNull(PRICE_TIMEOUT_MS) { prices.prices(listOf(KnownMints.WSOL)) }
+        if (answer == null) debugLog.raw("price: SOL had no answer within $PRICE_TIMEOUT_MS ms")
+        answer?.get(KnownMints.WSOL)?.usdPrice?.takeIf { it.isFinite() && it > 0.0 }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        debugLog.raw("price: SOL ${e::class.simpleName}: ${e.message}")
+        null
     }
 
     private fun receiptOf(leg: SwapLeg, quote: SwapQuote, fill: SwapFill, nowMillis: Long): SwapReceipt =
@@ -783,7 +804,10 @@ class SwapViewModel(
         /** One beat between two reads that asked for a slot the node had not reached yet. */
         const val FRESH_READ_RETRY_MS = 1_000L
 
-        /** The longest the price read before the wallet may take; past it the sheet says "Route cost". */
+        /**
+         * The longest the SOL price read for the all-in cost may take; past it the swap goes on and
+         * the sheet says "Route cost". The value check's own price read is not bound by it.
+         */
         const val PRICE_TIMEOUT_MS = 2_500L
 
         /** Jupiter's program error for a route that ended below its slippage bound. */
