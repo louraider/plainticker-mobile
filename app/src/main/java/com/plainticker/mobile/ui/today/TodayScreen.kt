@@ -224,6 +224,9 @@ internal fun TodayContent(
                 colors = colors,
             )
         }
+        if (closedMoversShown(state.market, state.closedMovers)) {
+            item(key = "closed-movers") { TodayClosedBlock(state = state, onOpenDetail = onOpenDetail, colors = colors) }
+        }
         if (!firstOpen) {
             item(key = "next-up") { TodayNextUpBlock(state = state, zone = zone, onOpenVote = onOpenVote) }
         }
@@ -444,24 +447,84 @@ private fun TodayReportsBlock(
     }
 }
 
-/** Next up: one row, the vote leader, the round's close in the reader's own time. Undrawn with no leader. */
+/**
+ * "While New York is closed" (Toly's weekend idea): up to three covered tokens whose onchain price
+ * sits furthest from the last NYSE close, deep pools only, each opening its own page. Drawn only
+ * while the exchange is closed ([closedMoversShown]); the figure is the same signed premium the
+ * watched rows print, so the two can never disagree.
+ */
+@Composable
+private fun TodayClosedBlock(state: WatchlistUiState, onOpenDetail: (String) -> Unit, colors: AmberColors) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = SectionGap)) {
+        AmberSectionHead(
+            title = stringResource(R.string.today_closed_title),
+            lede = stringResource(R.string.today_closed_lede),
+            colors = colors,
+        )
+        AmberTickerRowGroup(colors = colors) {
+            state.closedMovers.forEach { mover ->
+                AmberTickerRow(
+                    ticker = mover.symbol,
+                    company = mover.company,
+                    figure = Fmt.percent(mover.premiumPct),
+                    context = stringResource(R.string.today_closed_pool, Fmt.compactMoney(mover.poolUsd)),
+                    colors = colors,
+                    onClick = { onOpenDetail(mover.ticker) },
+                    onClickLabel = stringResource(R.string.action_open_ticker, mover.symbol),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Next up: one row, the vote leader, the round's close in the reader's own time. With a round open
+ * and nobody voted yet, the block still draws (judges' round 2): one line saying so, and the way to
+ * Vote, because an empty round is exactly when one vote decides it. Undrawn with no round and no
+ * leader, where there is nothing true to say.
+ */
 @Composable
 private fun TodayNextUpBlock(state: WatchlistUiState, zone: ZoneId, onOpenVote: (() -> Unit)?) {
-    val leader = state.nextUpLeader ?: return
+    val leader = state.nextUpLeader
+    val round = state.voteRound
+    if (leader == null && round == null) return
+    val colors = defaultAmberColors()
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp).amberBlockEntrance(step = NextUpEntranceStep)) {
         AmberSectionHead(
             title = stringResource(R.string.today_next_up_title),
-            lede = nextUpLede(state.voteRound, zone)?.text(),
+            lede = nextUpLede(round, zone)?.text(),
         )
-        AmberTickerRowGroup {
-            AmberTickerRow(
-                ticker = leader.display,
-                company = leader.company,
-                figure = leader.weight.text(),
-                context = leader.votersContext.text(),
-                onClick = onOpenVote,
-                onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
-            )
+        if (leader != null) {
+            AmberTickerRowGroup {
+                AmberTickerRow(
+                    ticker = leader.display,
+                    company = leader.company,
+                    figure = leader.weight.text(),
+                    context = leader.votersContext.text(),
+                    onClick = onOpenVote,
+                    onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
+                )
+            }
+        } else if (round != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = Side),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = nextUpEmpty(round).text(),
+                    style = AmberType.body,
+                    color = colors.textPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                if (onOpenVote != null) {
+                    TextAction(
+                        label = stringResource(R.string.vote_action_row),
+                        onClick = onOpenVote,
+                        color = colors.actionText,
+                        modifier = Modifier.padding(end = Side),
+                    )
+                }
+            }
         }
     }
 }

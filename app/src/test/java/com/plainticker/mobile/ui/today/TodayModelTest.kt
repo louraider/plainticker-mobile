@@ -570,4 +570,58 @@ class TodayModelTest {
         val leader = TodayLeader(ticker = "AMD", symbol = null, company = null, weightRaw = BigInteger.ZERO, voters = 0)
         assertEquals("AMD", leader.display)
     }
+
+    // ---- Next up with nobody voted yet ------------------------------------------------------------
+
+    @Test
+    fun `an open round with no votes says so by its number, and that one vote decides it`() {
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
+        assertEquals("Round 3 is open. No votes yet: one vote decides it.", ShippedCopy.render(nextUpEmpty(round)))
+    }
+
+    // ---- While New York is closed ---------------------------------------------------------------
+
+    private fun quote(ticker: String, premiumPct: Double, pool: Double? = 250_000.0) = CoveredQuote(
+        ticker = ticker,
+        symbol = "${ticker}x",
+        company = "$ticker Inc.",
+        price = com.plainticker.mobile.repo.price(usd = 100.0 * (1.0 + premiumPct / 100.0), reference = 100.0, liquidity = pool),
+    )
+
+    @Test
+    fun `the movers are the furthest from the close, at most three, furthest first`() {
+        val movers = closedMovers(
+            listOf(quote("AAPL", 0.9), quote("NVDA", -2.4), quote("TSLA", 1.6), quote("META", 3.1), quote("JEF", 0.7)),
+        )
+        assertEquals(listOf("METAx", "NVDAx", "TSLAx"), movers.map { it.symbol })
+        assertEquals(-2.4, movers[1].premiumPct, 1e-9)
+    }
+
+    @Test
+    fun `a thin pool or an unreported depth is never a mover, however far its quote sits`() {
+        val movers = closedMovers(
+            listOf(
+                quote("APP", 89.34, pool = 34.0),
+                quote("JPM", 37.98, pool = null),
+                quote("AAPL", 0.9),
+            ),
+        )
+        assertEquals(listOf("AAPLx"), movers.map { it.symbol })
+    }
+
+    @Test
+    fun `a gap inside the half point band is not a move`() {
+        assertTrue(closedMovers(listOf(quote("AAPL", 0.3), quote("NVDA", -0.49))).isEmpty())
+    }
+
+    @Test
+    fun `the block shows only while the exchange is known to be closed`() {
+        val movers = closedMovers(listOf(quote("META", 3.1)))
+        val closed = MarketStatus(MarketState.CLOSED, MarketSource.VENUE, venueOpen = false, nextChangeAtMillis = null)
+        val open = MarketStatus(MarketState.REGULAR, MarketSource.VENUE, venueOpen = true, nextChangeAtMillis = null)
+        assertTrue(closedMoversShown(closed, movers))
+        assertFalse("the session's live figure is on the watched rows already", closedMoversShown(open, movers))
+        assertFalse("an unknown venue is not a closed one", closedMoversShown(null, movers))
+        assertFalse("nothing moved, nothing drawn", closedMoversShown(closed, emptyList()))
+    }
 }

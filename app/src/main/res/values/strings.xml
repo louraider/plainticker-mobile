@@ -608,6 +608,13 @@
     <string name="action_read_it">Read it</string>
     <string name="today_next_up_title">Next up for analysis</string>
     <string name="today_next_up_lede">Chosen by staked SKR. Round closes %1$s at %2$s your time.</string>
+    <!-- An open round nobody has voted in yet: the block still draws, because this is when one vote matters most. -->
+    <string name="today_next_up_empty">Round %1$s is open. No votes yet: one vote decides it.</string>
+    <!-- While the NYSE is closed (Toly's weekend idea): the covered tokens whose onchain price sits
+         furthest from the last close, only where the pool clears the liquidity floor. -->
+    <string name="today_closed_title">While New York is closed</string>
+    <string name="today_closed_lede">The tokens furthest from the last NYSE close, only where the pool is deep enough for the price to mean something.</string>
+    <string name="today_closed_pool">Pool %1$s</string>
     <!-- The digest screen, under You. -->
     <string name="digest_screen_lede">One short check a day on the stocks you watch.</string>
     <string name="digest_produced_today">Today at %1$s</string>

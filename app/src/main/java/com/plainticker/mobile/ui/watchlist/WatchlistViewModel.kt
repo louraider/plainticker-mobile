@@ -14,7 +14,10 @@ import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SummaryRepository
+import com.plainticker.mobile.ui.today.ClosedMover
+import com.plainticker.mobile.ui.today.CoveredQuote
 import com.plainticker.mobile.ui.today.ReportRow
+import com.plainticker.mobile.ui.today.closedMovers
 import com.plainticker.mobile.ui.today.TodayLeader
 import com.plainticker.mobile.watchlist.DigestNotifier
 import com.plainticker.mobile.watchlist.DigestRecord
@@ -120,6 +123,12 @@ data class WatchlistUiState(
     /** The vote leader Next up names, or null when nothing staked SKR chose can be read. */
     val nextUpLeader: TodayLeader? = null,
     val voteRound: VoteRound? = null,
+    /**
+     * The covered tokens furthest from the last NYSE close, deep pools only, off the same price
+     * fetch Today already makes ([com.plainticker.mobile.ui.today.closedMovers]). Drawn only
+     * while the exchange is closed.
+     */
+    val closedMovers: List<ClosedMover> = emptyList(),
 ) {
     /** Nothing is watched. The common first state, and the one that gets a sentence. */
     val isEmpty: Boolean get() = watched == 0
@@ -437,11 +446,23 @@ class WatchlistViewModel(
             val pricesFetchedAtMillis = if (fetch != null) pricesAskedAt else null
             fetch?.priced?.let { sharedPrices = sharedPrices + it }
 
+            val movers = closedMovers(
+                analyzed.map { (row, asset) ->
+                    CoveredQuote(
+                        ticker = row.ticker,
+                        symbol = asset.symbol.ifBlank { row.ticker },
+                        company = row.company ?: asset.name,
+                        price = asset.solanaMint?.let { sharedPrices[it] },
+                    )
+                },
+            )
+
             _state.update { current ->
                 current.copy(
                     pricesLoading = false,
                     pricesFetchedAtMillis = pricesFetchedAtMillis,
                     rows = current.rows.map(::sharedPrice),
+                    closedMovers = movers,
                     nowMillis = clock.nowMillis(),
                 )
             }
