@@ -1542,7 +1542,7 @@ class SwapViewModelTest {
     /**
      * Prices that answer at their own pace (security review, 2026-09-27): SOL's after [solDelayMs],
      * any other mint's after [tokenDelayMs]. The SOL price is the all-in cost's alone and may never
-     * hold a swap; the token's is the value check's, bound as it always was.
+     * stop a swap; the token's is the value check's, bound as it always was.
      */
     private class PacedPrices(private val solDelayMs: Long, private val tokenDelayMs: Long = 0L) : com.plainticker.mobile.repo.PriceRepository {
         val requested = mutableListOf<List<String>>()
@@ -1561,7 +1561,7 @@ class SwapViewModelTest {
     }
 
     @Test
-    fun `a slow SOL price never holds Swap to USDC, which lands on the route cost after the value check`() = runTest {
+    fun `a slow SOL price never stops Swap to USDC, which lands on the route cost after the value check`() = runTest {
         orderResponse = reverseOrder
         executePlan = listOf(reverseLanded to HttpStatusCode.OK)
         val prices = PacedPrices(solDelayMs = 60_000L)
@@ -1600,7 +1600,7 @@ class SwapViewModelTest {
     }
 
     @Test
-    fun `a slow SOL price never holds a swap into a token either`() = runTest {
+    fun `a slow SOL price never stops a swap into a token either`() = runTest {
         val prices = PacedPrices(solDelayMs = 60_000L)
         val wallet = wallet()
         val vm = viewModel(jupiter(), wallet, prices = prices)
