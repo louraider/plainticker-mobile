@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.vote
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.VoteBuild
+import com.plainticker.mobile.wallet.TransactionGuard
 
 /**
  * The vote machine's states, and every transition between them.
@@ -117,6 +118,8 @@ sealed interface VoteState {
         override val ticker: String,
         override val symbol: String,
         val reason: VoteRefusal,
+        /** Set only with [VoteRefusal.GUARD_REFUSED]: the plain reason this phone refused. */
+        val why: TransactionGuard.Why? = null,
     ) : OnTicker
 
     val isBusy: Boolean get() = this is Running
@@ -187,6 +190,12 @@ enum class VoteRefusal(@StringRes val text: Int, val retryable: Boolean = false)
 
     /** The server did not build the vote: a refusal it explained, a 5xx, or no answer at all. */
     UNAVAILABLE(R.string.vote_unavailable, retryable = true),
+
+    /**
+     * The server built a vote and [TransactionGuard] refused it before the wallet saw it (judges'
+     * review, 2026-09-27). The sheet states [VoteState.Refused.why] in plain words.
+     */
+    GUARD_REFUSED(R.string.guard_refused_not_this_request, retryable = true),
 
     /**
      * The approval round-trip came back with no signature. Declined, closed, or a session that

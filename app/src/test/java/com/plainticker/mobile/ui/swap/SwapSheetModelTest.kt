@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.swap
 
+import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.ui.Copy
@@ -666,6 +667,11 @@ class SwapSheetModelTest {
             "The transaction did not match this swap, so it never reached the wallet",
             ShippedCopy.render(requireNotNull(failed(SwapFailure.GUARD_REFUSED).result?.detail)),
         )
+        // With the guard's plain reason (judges' review, 2026-09-27), the sheet states it.
+        val withWhy = SwapState.Failed(leg, funds, amount(), SwapFailure.GUARD_REFUSED, quote, false, timing, TransactionGuard.Why.WRONG_RECIPIENT).shown()
+        val sentence = "This phone refused the transaction before your wallet saw it: it pays somewhere other than the destination shown. Nothing was signed or sent."
+        assertEquals(sentence, ShippedCopy.render(requireNotNull(withWhy.result?.detail)))
+        assertEquals(sentence, ShippedCopy.render(requireNotNull(withWhy.notice)))
         // Dust: back to the amount, because the same amount will return nothing again.
         assertEquals(SheetActionKind.Edit, failed(SwapFailure.QUOTE_DUST).primary?.kind)
         // Wallet changed: nothing to retry with, only Close.

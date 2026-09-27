@@ -531,6 +531,23 @@
     <string name="pass_not_approved">No signature came back, so no payment was sent.</string>
     <string name="pass_failed">The wallet answered with a failure and no signature, so whether the payment was sent is not known.</string>
 
+    <!-- TransactionGuard refusals, judges' review 2026-09-27. The server built the transaction and
+         this phone read it and would not hand it to the wallet, which is not the server failing.
+         One sentence per TransactionGuard.Why, shared by pass, vote and swap. -->
+    <string name="guard_refused_unreadable">This phone refused the transaction before your wallet saw it: it could not be read. Nothing was signed or sent.</string>
+    <string name="guard_refused_not_your_wallet">This phone refused the transaction before your wallet saw it: it would be paid for or signed by a wallet other than yours. Nothing was signed or sent.</string>
+    <string name="guard_refused_wrong_recipient">This phone refused the transaction before your wallet saw it: it pays somewhere other than the destination shown. Nothing was signed or sent.</string>
+    <string name="guard_refused_wrong_amount">This phone refused the transaction before your wallet saw it: its amount is not the one shown. Nothing was signed or sent.</string>
+    <string name="guard_refused_hands_over_control">This phone refused the transaction before your wallet saw it: it would give someone else control of your tokens. Nothing was signed or sent.</string>
+    <string name="guard_refused_unknown_program">This phone refused the transaction before your wallet saw it: it calls a program this app does not allow. Nothing was signed or sent.</string>
+    <string name="guard_refused_costs_more">This phone refused the transaction before your wallet saw it: it could cost more, or pay out less, than shown. Nothing was signed or sent.</string>
+    <string name="guard_refused_above_pass_price">This phone refused the transaction before your wallet saw it: it asks more than %1$s USDC, the most a pass costs in this app. Nothing was signed or sent.</string>
+    <string name="guard_refused_slippage">This phone refused the transaction before your wallet saw it: it lets the price slip further than this app accepts. Nothing was signed or sent.</string>
+    <string name="guard_refused_token_account">This phone refused the transaction before your wallet saw it: it opens a token account this swap does not need. Nothing was signed or sent.</string>
+    <string name="guard_refused_not_this_request">This phone refused the transaction before your wallet saw it: it does something other than what this screen shows. Nothing was signed or sent.</string>
+    <!-- The pass sheet's destination: the treasury account is pinned in the app, not taken from the server. -->
+    <string name="pass_destination_pinned">Sent to, pinned in this app</string>
+
     <!-- Detail gains The read and What to check next (task A6): the honest short form for every
          reader, the full text once a device presents an entitled code. -->
     <string name="detail_heading_read">The read</string>

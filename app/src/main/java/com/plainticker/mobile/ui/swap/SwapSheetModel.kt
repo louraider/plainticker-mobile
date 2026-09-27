@@ -347,7 +347,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
 
         is SwapState.Failed -> base(
             cells = quote?.let { costCells(leg, it) }.orEmpty(),
-            notice = words(reason.text),
+            notice = sentence,
             primary = failurePrimary(),
             secondary = close,
             result = failedResult(),
@@ -404,7 +404,7 @@ private fun SwapState.Failed.failedResult(): SheetResult {
         FailureOutcome.NOT_LANDED -> ResultTone.Failed to words(R.string.result_not_landed)
         FailureOutcome.UNKNOWN -> ResultTone.Pending to words(R.string.result_pending)
     }
-    val detail = words(reason.text)
+    val detail = sentence
     return SheetResult(tone = tone, headline = headline, detail = detail, announcement = listOf(headline, detail))
 }
 

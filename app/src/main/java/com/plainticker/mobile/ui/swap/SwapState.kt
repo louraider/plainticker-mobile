@@ -4,7 +4,11 @@ import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.jupiter.SwapOrder
+import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.refusal
+import com.plainticker.mobile.ui.words
 import com.plainticker.mobile.wallet.SwapFloor
+import com.plainticker.mobile.wallet.TransactionGuard
 import java.math.BigDecimal
 import java.util.Locale
 
@@ -192,7 +196,13 @@ sealed interface SwapState {
         val quote: SwapQuote? = null,
         val requoted: Boolean = false,
         override val timing: SwapTiming? = null,
-    ) : Terminal
+        /** Set only with [SwapFailure.GUARD_REFUSED]: the plain reason this phone refused it. */
+        val why: TransactionGuard.Why? = null,
+    ) : Terminal {
+        /** The failure's sentence: the guard's plain reason where it refused, else [reason]'s own. */
+        val sentence: Copy
+            get() = why?.takeIf { reason == SwapFailure.GUARD_REFUSED }?.refusal() ?: words(reason.text)
+    }
 
     val isBusy: Boolean get() = this is Running
 }

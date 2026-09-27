@@ -390,7 +390,9 @@ class PassViewModel(
         }
         if (verdict is TransactionGuard.Verdict.Refuse) {
             debugLog.raw("pass/build transaction refused before the wallet: ${verdict.reason}")
-            return refuse(PassRefusal.UNAVAILABLE)
+            // The server did build one; this phone would not hand it on, and says why.
+            _state.value = PassState.Refused(PassRefusal.GUARD_REFUSED, verdict.why)
+            return
         }
         _state.value = PassState.Ready(payer, build, refreshed = refreshed)
     }

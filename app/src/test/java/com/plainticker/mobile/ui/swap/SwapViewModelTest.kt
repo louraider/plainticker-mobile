@@ -116,6 +116,16 @@ class SwapViewModelTest {
                 TransactionGuard.ata(realTaker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022),
                 TransactionGuard.ata(seeker.address, KnownMints.TSLAX, KnownPrograms.TOKEN_2022),
             )
+            // The reverse route's wrapped-SOL account and its pool-token hop account, which the
+            // guard requires to be the wallet's own since 2026-09-27.
+            .replaceKey(
+                TransactionGuard.ata(realTaker, KnownMints.WSOL, KnownPrograms.TOKEN),
+                TransactionGuard.ata(seeker.address, KnownMints.WSOL, KnownPrograms.TOKEN),
+            )
+            .replaceKey(
+                TransactionGuard.ata(realTaker, REVERSE_HOP_MINT, KnownPrograms.TOKEN),
+                TransactionGuard.ata(seeker.address, REVERSE_HOP_MINT, KnownPrograms.TOKEN),
+            )
     }
 
     /** The golden order's own transaction line, as this file serves it. */
@@ -759,7 +769,8 @@ class SwapViewModelTest {
             golden.replace(""""outputMint": "${KnownMints.TSLAX}",""", """"outputMint": "${KnownMints.SKR}","""),
             golden.replace(transactionField, """"transaction": "$approve","""),
         )
-        for (case in cases) {
+        val reasons = listOf(TransactionGuard.Why.WRONG_AMOUNT, TransactionGuard.Why.NOT_THIS_REQUEST, TransactionGuard.Why.HANDS_OVER_CONTROL)
+        for ((case, why) in cases.zip(reasons)) {
             assertTrue("the case must differ from the golden order", case != golden)
             orderResponse = case
             val mock = jupiter()
@@ -770,6 +781,7 @@ class SwapViewModelTest {
                 submitFive(vm, this)
                 val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
                 assertEquals(SwapFailure.GUARD_REFUSED, failed.reason)
+                assertEquals("the plain reason travels with the refusal", why, failed.why)
                 assertEquals("the wallet is never opened for it", 0, wallet.callCount)
                 assertTrue(mock.executes().isEmpty())
                 cancelAndIgnoreRemainingEvents()
@@ -1647,6 +1659,9 @@ class SwapViewModelTest {
 
         /** The taker of the real 2026-09-23 order whose bytes stand in for the redacted ones. */
         const val REAL_TAKER = "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"
+
+        /** The pool token the real reverse route passes through, named in its own route plan. */
+        const val REVERSE_HOP_MINT = "BjcRmwm8e25RgjkyaFE56fc7bxRgGPw96JUkXRJFEroT"
 
         /** The taker of the real 2026-09-24 TSLAx-to-USDC order, replaced by the test wallet. */
         const val REVERSE_TAKER = "AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2"

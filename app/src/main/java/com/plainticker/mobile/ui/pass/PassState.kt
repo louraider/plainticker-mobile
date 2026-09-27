@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.EntitlementResponse
 import com.plainticker.mobile.data.plainticker.PassBuild
+import com.plainticker.mobile.wallet.TransactionGuard
 
 /**
  * The pay machine's states, and every transition between them (task A6: paying for Pro from the
@@ -73,8 +74,11 @@ sealed interface PassState {
      */
     data class Landed(val signature: String, val entitlement: EntitlementResponse?) : PassState
 
-    /** The attempt is over. [reason] is one of this app's own sentences, never the server's. */
-    data class Refused(val reason: PassRefusal) : PassState
+    /**
+     * The attempt is over. [reason] is one of this app's own sentences, never the server's.
+     * [why] is set only with [PassRefusal.GUARD_REFUSED]: the plain reason this phone refused.
+     */
+    data class Refused(val reason: PassRefusal, val why: TransactionGuard.Why? = null) : PassState
 
     val isBusy: Boolean get() = this is Running
 }
@@ -105,6 +109,13 @@ enum class PassRefusal(@StringRes val text: Int, val retryable: Boolean = false)
 
     /** The server did not build the transfer: a refusal it explained, a 5xx, or no answer at all. */
     UNAVAILABLE(R.string.pass_unavailable, retryable = true),
+
+    /**
+     * The server built a transfer and [TransactionGuard] refused it before the wallet saw it
+     * (judges' review, 2026-09-27). Not [UNAVAILABLE]: the server did answer. The sheet states
+     * [PassState.Refused.why] in plain words; [text] is the fallback when it is missing.
+     */
+    GUARD_REFUSED(R.string.guard_refused_not_this_request, retryable = true),
 
     /** No signature came back: declined, closed, or a session that dropped. */
     NOT_APPROVED(R.string.pass_not_approved, retryable = true),

@@ -138,13 +138,16 @@ class VoteScreenTest {
         val state = source("ui/vote/VoteState.kt")
         val refused = state.substring(state.indexOf("data class Refused("))
             .substringBefore(") : OnTicker")
-        // The ticker it is about, what a reader calls it, and one of this app's own reasons.
-        // There is no fourth field, so there is nowhere for a server sentence to travel.
+        // The ticker it is about, what a reader calls it, one of this app's own reasons, and, for a
+        // guard refusal, the guard's own plain category (TransactionGuard.Why, an enum as well,
+        // judges' review 2026-09-27). No field is a string, so there is nowhere for a server
+        // sentence to travel.
         val fields = Regex("""val (\w+):\s*(\w+)""").findAll(refused).map { it.groupValues[1] to it.groupValues[2] }
         assertEquals(
-            listOf("ticker" to "String", "symbol" to "String", "reason" to "VoteRefusal"),
+            listOf("ticker" to "String", "symbol" to "String", "reason" to "VoteRefusal", "why" to "TransactionGuard"),
             fields.toList(),
         )
+        assertTrue("the fourth field is the guard's enum", "val why: TransactionGuard.Why?" in refused)
 
         // Every reason names a resource, so every sentence this feature shows is in strings.xml
         // and subject to CopyLintTest. The server's words go to the log and nowhere else.

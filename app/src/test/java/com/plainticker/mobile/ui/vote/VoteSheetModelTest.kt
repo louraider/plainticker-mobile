@@ -4,6 +4,7 @@ import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteSummary
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.ShippedCopy
+import com.plainticker.mobile.wallet.TransactionGuard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -176,6 +177,21 @@ class VoteSheetModelTest {
         assertNull("a landed vote has nothing left to do", content.primary)
         assertEquals(VoteActionKind.Close, content.secondary?.kind)
         assertTrue(render(content.notice)!!.contains("anyone can count it"))
+    }
+
+    /**
+     * Judges' review, 2026-09-27: a vote this phone refused read "The server did not build this
+     * vote". The server did build it; the sentence now says who refused and why.
+     */
+    @Test
+    fun `a guard refusal says this phone refused it, with the plain reason`() {
+        val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.GUARD_REFUSED, TransactionGuard.Why.WRONG_RECIPIENT))
+        assertEquals(
+            "This phone refused the transaction before your wallet saw it: it pays somewhere other than the destination shown. Nothing was signed or sent.",
+            render(content.notice),
+        )
+        assertEquals(VoteActionKind.Retry, content.primary?.kind)
+        assertNotEquals(render(content.notice), render(sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.UNAVAILABLE)).notice))
     }
 
     // ---- Every state ------------------------------------------------------------------------------------

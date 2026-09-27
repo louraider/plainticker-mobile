@@ -278,7 +278,7 @@ object TransactionGuard {
                         val lamports = systemTransferLamports(acc, data)
                             ?: return@guarded refuse("pass carries a System instruction that is not a transfer", Why.UNKNOWN_PROGRAM)
                         if (lamports != 0L || acc[0] != wallet || acc[1] != treasury) {
-                            return@guarded refuse("pass System transfer is not the 0-lamport treasury reference", Why.WRONG_AMOUNT)
+                            return@guarded refuse("pass System transfer is not the 0-lamport treasury reference", if (lamports != 0L) Why.WRONG_AMOUNT else Why.WRONG_RECIPIENT)
                         }
                     }
                     KnownPrograms.MEMO -> {
@@ -326,7 +326,7 @@ object TransactionGuard {
                         val lamports = systemTransferLamports(acc, ix.data)
                             ?: return@guarded refuse("vote carries a System instruction that is not a transfer", Why.UNKNOWN_PROGRAM)
                         if (lamports != 0L || acc[0] != wallet || acc[1] != collector) {
-                            return@guarded refuse("vote System transfer is not the 0-lamport transfer to the collector", Why.WRONG_AMOUNT)
+                            return@guarded refuse("vote System transfer is not the 0-lamport transfer to the collector", if (lamports != 0L) Why.WRONG_AMOUNT else Why.WRONG_RECIPIENT)
                         }
                         transfers++
                     }

@@ -6,6 +6,7 @@ import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.raw
+import com.plainticker.mobile.ui.refusal
 import com.plainticker.mobile.ui.words
 
 /**
@@ -129,7 +130,7 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         phase = null,
         bar = null,
         cells = emptyList(),
-        notice = words(reason.text),
+        notice = why?.takeIf { reason == VoteRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text),
         disclosure = null,
         primary = if (reason.retryable) {
             VoteAction(words(R.string.action_retry), VoteActionKind.Retry)

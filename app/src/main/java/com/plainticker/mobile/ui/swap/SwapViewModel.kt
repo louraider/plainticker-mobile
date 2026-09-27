@@ -369,7 +369,8 @@ class SwapViewModel(
             )
             if (verdict is TransactionGuard.Verdict.Refuse) {
                 debugLog.raw("order ${quote.requestId} refused before the wallet: ${verdict.reason}")
-                return fail(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing)
+                _state.value = SwapState.Failed(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing, verdict.why)
+                return
             }
 
             // ---- The dollar value against what was typed (security audit, 2026-09-26). The guard

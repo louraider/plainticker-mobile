@@ -5,6 +5,7 @@ import com.plainticker.mobile.data.plainticker.PassSummary
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.raw
+import com.plainticker.mobile.ui.refusal
 import com.plainticker.mobile.ui.words
 
 /**
@@ -96,7 +97,7 @@ fun PassState.sheet(): PassSheetContent? = when (this) {
         phase = null,
         bar = null,
         cells = emptyList(),
-        notice = words(reason.text),
+        notice = why?.takeIf { reason == PassRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text),
         primary = if (reason.retryable) PassAction(words(R.string.action_retry), PassActionKind.Retry) else null,
         secondary = PassAction(words(R.string.action_close), PassActionKind.Close),
     )
@@ -124,9 +125,12 @@ private fun readyCells(summary: PassSummary) = listOf(
         label = words(R.string.vote_fee_label),
         value = words(R.string.vote_fee, Fmt.tokenAmount(summary.lamports, LAMPORT_DECIMALS, maxDecimals = LAMPORT_DISPLAY_DECIMALS)),
     ),
+    // The guard refuses any destination but this app's own pinned treasury account, so the label
+    // says where the address comes from: this app, not the server's answer.
     PassCell(
-        label = words(R.string.pass_destination_label),
+        label = words(R.string.pass_destination_pinned),
         value = raw(Fmt.shortKey(summary.destination)),
+        span = 2,
         copies = summary.destination,
     ),
 )
