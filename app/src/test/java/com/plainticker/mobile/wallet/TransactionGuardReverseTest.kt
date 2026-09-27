@@ -121,6 +121,42 @@ class TransactionGuardReverseTest {
         }
     }
 
+    /**
+     * Why wrapped SOL and the route's own hops are among the mints a swap may open an account for
+     * (judges' review, 2026-09-27): both real reverse orders open the taker's own wrapped-SOL
+     * account, route through it, and close it back to the taker, and the default route
+     * (TSLAx, then pool token Bjc..., then SOL, then USDC) also opens the taker's own account for
+     * the pool token its route plan names. Input and output alone would refuse a real swap.
+     */
+    @Test
+    fun `the real reverse creates open the taker's wrapped-SOL and route-hop accounts, and a third create is refused`() = runTest {
+        val wsol = TransactionGuard.ata(taker, KnownMints.WSOL, KnownPrograms.TOKEN)
+        val hopMint = "BjcRmwm8e25RgjkyaFE56fc7bxRgGPw96JUkXRJFEroT"
+        val hop = TransactionGuard.ata(taker, hopMint, KnownPrograms.TOKEN)
+        assertTrue(order(reverse[0]).routePlan.any { it.swapInfo?.outputMint == hopMint })
+        for (path in reverse) {
+            val m = WireMessage.parseBase64(order(path).transaction!!)
+            val created = m.instructions.filter { m.keys[it.program] == KnownPrograms.ASSOCIATED_TOKEN }.map { m.keys[it.accounts[1]] }
+            assertEquals(path, wsol, created.first())
+            assertTrue(path, created.all { it == wsol || it == hop })
+            val closed = m.instructions.filter { m.keys[it.program] == KnownPrograms.TOKEN && it.data.firstOrNull()?.toInt() == 9 }
+            assertEquals(path, listOf(wsol), closed.map { m.keys[it.accounts[0]] })
+        }
+        val o = order(reverse[0])
+        val m = WireMessage.parseTransaction(bytesOf(o))
+        assertEquals(2, m.instructions.count { m.keys[it.program] == KnownPrograms.ASSOCIATED_TOKEN })
+        val tslax = TransactionGuard.ata(taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022)
+        val third = m.plus(
+            KnownPrograms.ASSOCIATED_TOKEN,
+            listOf(taker, tslax, taker, KnownMints.TSLAX, KnownPrograms.SYSTEM, KnownPrograms.TOKEN_2022),
+            byteArrayOf(1),
+        )
+        assertRefused(checkOut(o, third.transaction()), "more than 2")
+        // The same bytes with a route plan that does not name the pool token: its account is no
+        // longer one this swap may open.
+        assertRefused(checkOut(o.copy(routePlan = emptyList())), "nor a hop")
+    }
+
     // ---- The request against the order -------------------------------------------------------
 
     @Test

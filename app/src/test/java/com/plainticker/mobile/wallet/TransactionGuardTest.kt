@@ -710,4 +710,178 @@ class TransactionGuardTest {
             assertEquals(false, TransactionGuard.signedMatches(unsigned, signedIn(unsigned, slot), attacker))
         }
     }
+
+    // ---- Token account creates, fees, slippage and the pass price (judges' review, 2026-09-27) ----
+
+    private class Create(val accounts: List<String>, val data: ByteArray)
+
+    private fun create(funder: String, account: String, owner: String, mint: String, tokenProgram: String, data: ByteArray = byteArrayOf(1)) =
+        Create(listOf(funder, account, owner, mint, KnownPrograms.SYSTEM, tokenProgram), data)
+
+    private fun WireMessage.plusCreate(c: Create) = plus(KnownPrograms.ASSOCIATED_TOKEN, c.accounts, c.data)
+
+    private fun assertWhy(v: Verdict, why: TransactionGuard.Why) {
+        assertTrue("expected a refusal, got $v", v is Verdict.Refuse)
+        assertEquals((v as Verdict.Refuse).reason, why, v.why)
+    }
+
+    @Test
+    fun `swap - every real order's own creates open the wallet's account for one side, funded by the wallet or the fee payer`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val creates = m.instructions.filter { m.keys[it.program] == KnownPrograms.ASSOCIATED_TOKEN }
+            assertTrue(c.path, creates.size <= TransactionGuard.MAX_SWAP_ACCOUNT_CREATES)
+            for (ix in creates) {
+                assertEquals(c.path, c.taker, m.keys[ix.accounts[2]])
+                assertTrue(c.path, m.keys[ix.accounts[0]] == c.taker || ix.accounts[0] == 0)
+                assertEquals(c.path, TransactionGuard.ata(c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022), m.keys[ix.accounts[1]])
+            }
+        }
+        // The gasless order is funded by Jupiter's gas payer at account 0, not by the taker.
+        val gasless = WireMessage.parseTransaction(bytesOf(order(swaps[0].path)))
+        val create = gasless.instructions.first { gasless.keys[it.program] == KnownPrograms.ASSOCIATED_TOKEN }
+        assertEquals(0, create.accounts[0])
+        assertTrue(gasless.keys[0] != swaps[0].taker)
+    }
+
+    @Test
+    fun `swap - a create of the wallet's own account for a mint that is neither side is refused`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val own = TransactionGuard.ata(c.taker, KnownMints.SKR, KnownPrograms.TOKEN)
+            val v = checkSwap(o, m.plusCreate(create(c.taker, own, c.taker, KnownMints.SKR, KnownPrograms.TOKEN)).transaction(), c.taker)
+            assertRefused(v, "neither side")
+            assertWhy(v, TransactionGuard.Why.STRANGE_TOKEN_ACCOUNT)
+            // The same account with the mint slot naming a side of the swap: the account still gives it away.
+            assertRefused(checkSwap(o, m.plusCreate(create(c.taker, own, c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN)).transaction(), c.taker), "neither side")
+        }
+    }
+
+    @Test
+    fun `swap - a create whose static mint slot disagrees with the account it opens is refused`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val usdcAccount = TransactionGuard.ata(c.taker, KnownMints.USDC, KnownPrograms.TOKEN)
+            val v = checkSwap(o, m.plusCreate(create(c.taker, usdcAccount, c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN)).transaction(), c.taker)
+            assertRefused(v, "another mint")
+        }
+    }
+
+    @Test
+    fun `swap - a create funded by a stranger, or by the wallet for a stranger, is refused`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val own = TransactionGuard.ata(c.taker, KnownMints.USDC, KnownPrograms.TOKEN)
+            assertRefused(checkSwap(o, m.plusCreate(create(attacker, own, c.taker, KnownMints.USDC, KnownPrograms.TOKEN)).transaction(), c.taker), "funded by neither")
+            val theirs = TransactionGuard.ata(attacker, KnownMints.USDC, KnownPrograms.TOKEN)
+            assertRefused(checkSwap(o, m.plusCreate(create(c.taker, theirs, attacker, KnownMints.USDC, KnownPrograms.TOKEN)).transaction(), c.taker), "owner")
+        }
+    }
+
+    @Test
+    fun `swap - an associated-token instruction that is not a plain create, or names the wrong programs, is refused`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val own = TransactionGuard.ata(c.taker, KnownMints.USDC, KnownPrograms.TOKEN)
+            assertRefused(checkSwap(o, m.plusCreate(create(c.taker, own, c.taker, KnownMints.USDC, KnownPrograms.TOKEN, byteArrayOf(1, 0))).transaction(), c.taker), "not a create")
+            // RecoverNested (2) moves tokens out of a nested account: never a create.
+            assertRefused(checkSwap(o, m.plusCreate(create(c.taker, own, c.taker, KnownMints.USDC, KnownPrograms.TOKEN, byteArrayOf(2))).transaction(), c.taker), "not a create")
+            assertRefused(checkSwap(o, m.plusCreate(create(c.taker, own, c.taker, KnownMints.USDC, attacker)).transaction(), c.taker), "wrong programs")
+            val short = m.plus(KnownPrograms.ASSOCIATED_TOKEN, listOf(c.taker, own, c.taker), byteArrayOf(1))
+            assertRefused(checkSwap(o, short.transaction(), c.taker), "malformed")
+        }
+    }
+
+    @Test
+    fun `swap - the wallet's own account for the output or wrapped SOL may be created, up to two creates in all`() = runTest {
+        val c = swaps[2] // taker pays, and the real order opens no account at all
+        val o = order(c.path)
+        val m = WireMessage.parseTransaction(bytesOf(o))
+        val tslax = TransactionGuard.ata(c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022)
+        val wsol = TransactionGuard.ata(c.taker, KnownMints.WSOL, KnownPrograms.TOKEN)
+        val usdc = TransactionGuard.ata(c.taker, KnownMints.USDC, KnownPrograms.TOKEN)
+        val one = m.plusCreate(create(c.taker, tslax, c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022))
+        assertAllowed(checkSwap(o, one.transaction(), c.taker))
+        val two = one.plusCreate(create(c.taker, wsol, c.taker, KnownMints.WSOL, KnownPrograms.TOKEN, byteArrayOf()))
+        assertAllowed(checkSwap(o, two.transaction(), c.taker))
+        val three = two.plusCreate(create(c.taker, usdc, c.taker, KnownMints.USDC, KnownPrograms.TOKEN))
+        assertRefused(checkSwap(o, three.transaction(), c.taker), "more than 2")
+    }
+
+    @Test
+    fun `swap - route_v2 bytes charging a platform fee above the order's feeBps are refused`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertEquals("the real bytes state the order's own fee", o.feeBps, u16At(m.jupiterData(), 26))
+            val dearer = checkSwap(o, m.patchJupiter(26, u16(o.feeBps + 1)).transaction(), c.taker)
+            assertRefused(dearer, "platform fee")
+            assertWhy(dearer, TransactionGuard.Why.COSTS_MORE_THAN_SHOWN)
+            assertRefused(checkSwap(o.copy(feeBps = 0), bytesOf(o), c.taker), "platform fee")
+            assertAllowed(checkSwap(o, m.patchJupiter(26, u16(0)).transaction(), c.taker))
+        }
+        // The gasless order folds the gas into the fee: 378 in the bytes and in feeBps, 10 in platformFee.
+        val gasless = order(swaps[0].path)
+        assertEquals(378, gasless.feeBps)
+        assertEquals(10, gasless.platformFeeBps)
+    }
+
+    @Test
+    fun `swap - route_v2 positive slippage share is allowed up to the whole surplus and refused past it`() = runTest {
+        for (c in metisSwaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            assertEquals(0, u16At(m.jupiterData(), 28))
+            assertAllowed(checkSwap(o, m.patchJupiter(28, u16(10_000)).transaction(), c.taker))
+            assertRefused(checkSwap(o, m.patchJupiter(28, u16(10_001)).transaction(), c.taker), "positive slippage")
+        }
+    }
+
+    @Test
+    fun `swap - an order allowing more than the slippage ceiling is refused, whatever the bytes say`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val wide = checkSwap(o.copy(slippageBps = TransactionGuard.MAX_SLIPPAGE_BPS + 1), bytesOf(o), c.taker)
+            assertRefused(wide, "ceiling")
+            assertWhy(wide, TransactionGuard.Why.SLIPPAGE_TOO_WIDE)
+            assertAllowed(checkSwap(o.copy(slippageBps = TransactionGuard.MAX_SLIPPAGE_BPS), bytesOf(o), c.taker))
+        }
+        // Every real order sits well inside it.
+        for (c in swaps) assertTrue(order(c.path).slippageBps <= 100)
+    }
+
+    @Test
+    fun `pass - a price above the pinned ceiling is refused, even when summary and bytes agree`() = runTest {
+        val build = passBuild(pass)
+        assertEquals(TransactionGuard.PASS_PRICE_CEILING_RAW, build.summary.amount)
+        val dear = ServerBuilt.pass(simPayer, codeHash, amount = TransactionGuard.PASS_PRICE_CEILING_RAW + 1)
+        val v = TransactionGuard.checkPass(dear.transaction(), simPayer, build.summary.copy(amount = TransactionGuard.PASS_PRICE_CEILING_RAW + 1), codeHash)
+        assertRefused(v, "ceiling")
+        assertWhy(v, TransactionGuard.Why.ABOVE_PASS_PRICE)
+        val thousand = ServerBuilt.pass(simPayer, codeHash, amount = 1_000_000_000L)
+        assertRefused(TransactionGuard.checkPass(thousand.transaction(), simPayer, build.summary.copy(amount = 1_000_000_000L), codeHash), "ceiling")
+        // A lower price, a discount, is still a pass.
+        val cheaper = ServerBuilt.pass(simPayer, codeHash, amount = 6_000_000L)
+        assertAllowed(TransactionGuard.checkPass(cheaper.transaction(), simPayer, build.summary.copy(amount = 6_000_000L), codeHash))
+    }
+
+    @Test
+    fun `each refusal carries the plain category a screen states`() = runTest {
+        assertWhy(TransactionGuard.checkPass(byteArrayOf(1, 2, 3), simPayer, passBuild(pass).summary, codeHash), TransactionGuard.Why.UNREADABLE)
+        val m = passWire()
+        val approve = m.plus(KnownPrograms.TOKEN, listOf(m.keys[1], attacker, simPayer), leData(4.toByte(), Long.MAX_VALUE))
+        assertWhy(checkPass(approve), TransactionGuard.Why.HANDS_OVER_CONTROL)
+        val t = m.indexOfProgram(KnownPrograms.TOKEN)
+        val (withAttacker, a) = m.withKey(attacker)
+        assertWhy(checkPass(withAttacker.mapInstruction(t) { it.copy(accounts = listOf(it.accounts[0], a, it.accounts[2])) }), TransactionGuard.Why.WRONG_RECIPIENT)
+        assertWhy(checkPass(m.mapInstruction(t) { it.copy(data = leData(3.toByte(), 1_000_000L)) }), TransactionGuard.Why.WRONG_AMOUNT)
+        assertWhy(checkPass(m, wallet = attacker), TransactionGuard.Why.NOT_YOUR_WALLET)
+        assertWhy(checkPass(m.plus(attacker, listOf(simPayer), byteArrayOf(0))), TransactionGuard.Why.UNKNOWN_PROGRAM)
+        assertWhy(checkVote(voteWire(), ticker = "NFLX"), TransactionGuard.Why.NOT_THIS_REQUEST)
+    }
 }

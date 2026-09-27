@@ -30,16 +30,82 @@ import com.solana.transaction.VersionedMessage
  * invoked at all, and that every instruction this class can read beside them is one it allows.
  *
  * It never throws. A transaction it cannot parse is a [Verdict.Refuse], like any other it will not
- * let through, and the reason is for a debug log only, never for a screen.
+ * let through. The refusal's reason is for a debug log only, never for a screen; its [Why] is the
+ * plain category a screen may state.
  */
 object TransactionGuard {
 
     sealed interface Verdict {
         data object Allow : Verdict
 
-        /** [reason] is for the debug log; the screen shows the flow's existing plain error state. */
-        data class Refuse(val reason: String) : Verdict
+        /**
+         * [reason] is for the debug log only: it names programs, offsets and base units. [why] is
+         * the same refusal in the few plain categories a screen may state (judges' review,
+         * 2026-09-27: a refused pass read "The server did not build this payment", which was not
+         * what happened).
+         */
+        data class Refuse(val reason: String, val why: Why = Why.NOT_THIS_REQUEST) : Verdict
     }
+
+    /** Why a transaction was refused, in the words a reader can act on. One sentence each in strings.xml. */
+    enum class Why {
+        /** The bytes could not be decoded, or a part of them this class must read is malformed. */
+        UNREADABLE,
+
+        /** Another wallet pays for it or signs it, or it was built for another taker. */
+        NOT_YOUR_WALLET,
+
+        /** The money would land somewhere other than the destination shown. */
+        WRONG_RECIPIENT,
+
+        /** The amount in the bytes is not the amount shown. */
+        WRONG_AMOUNT,
+
+        /** An Approve, SetAuthority or CloseAccount that hands control of a token account away. */
+        HANDS_OVER_CONTROL,
+
+        /** A program this flow does not allow, or an instruction this class cannot read. */
+        UNKNOWN_PROGRAM,
+
+        /** It could cost more in fees, or pay out less, than the sheet shows. */
+        COSTS_MORE_THAN_SHOWN,
+
+        /** A pass above [PASS_PRICE_CEILING_RAW]. */
+        ABOVE_PASS_PRICE,
+
+        /** A swap allowing more slippage than [MAX_SLIPPAGE_BPS]. */
+        SLIPPAGE_TOO_WIDE,
+
+        /** A token account opened for someone else, for another token, or too many of them. */
+        STRANGE_TOKEN_ACCOUNT,
+
+        /** Anything else that is not the request on the screen: a memo, a ticker, a mint. */
+        NOT_THIS_REQUEST,
+    }
+
+    /**
+     * The most a pass may ever ask, in base units of a six-decimal stablecoin: 12 USDC or 12 USDT
+     * (judges' review, 2026-09-27). The price lives on the server and the server's own summary
+     * states it, so without this a compromised server could put 1,000 USDC in both the summary
+     * and the bytes, and every other check here would agree with it. Pinned in the app, so a
+     * change of price is an app release, on purpose.
+     */
+    const val PASS_PRICE_CEILING_RAW = 12_000_000L
+
+    /**
+     * The widest slippage a swap may allow, in basis points, whatever the order says (judges'
+     * review, 2026-09-27). Every real order captured (five Metis, both directions) carries 100,
+     * and the RFQ fill carries 0 because the maker's output is exact. 300 is three times the
+     * widest seen: room for Jupiter's own dynamic slippage on a thin hour, and still a hard stop
+     * on an order that would accept a 50 percent worse fill. A refusal costs a retry.
+     */
+    const val MAX_SLIPPAGE_BPS = 300
+
+    /**
+     * How many associated token accounts a swap may open. The most any real order opened is two
+     * (Swap to USDC: a temporary wrapped-SOL account and the USDC account).
+     */
+    const val MAX_SWAP_ACCOUNT_CREATES = 2
 
     /** A pass is paid in USDC or USDT, both classic-Token mints, named by symbol in the summary. */
     private val PASS_MINTS = mapOf("USDC" to KnownMints.USDC, "USDT" to KnownMints.USDT)
@@ -85,6 +151,25 @@ object TransactionGuard {
      */
     private const val ROUTE_V2_QUOTED_OUT = 16
     private const val ROUTE_V2_SLIPPAGE = 24
+
+    /**
+     * `platform_fee_bps` is bound to the order's own `feeBps` (judges' review, 2026-09-27): the
+     * bytes may not charge a larger fee than the JSON the cost figure is computed from. On every
+     * real Metis order the two are equal: 10 on the taker-pays and both reverse orders, 378 on the
+     * gasless order, where Jupiter folds the gas it pays into the fee (its `platformFee.feeBps`
+     * says 10 there, which is why the bound is `feeBps` and not that).
+     */
+    private const val ROUTE_V2_PLATFORM_FEE = 26
+
+    /**
+     * `positive_slippage_bps` is read and deliberately not bound to the JSON, which does not
+     * state it (0 on every real order). It is the share of a fill *above* `quoted_out_amount`
+     * that goes to the integrator, so it can only take from a surplus: it can never bring the
+     * delivery below the quoted amount, and the floor the sheet shows and [checkSwapOutput]
+     * enforces lies below the quoted amount. It is required to be a readable share (at most
+     * 10,000) so a nonsense value is refused rather than trusted.
+     */
+    private const val ROUTE_V2_POSITIVE_SLIPPAGE = 28
     private const val ROUTE_V2_ARGS_END = 30
 
     /**
@@ -135,19 +220,22 @@ object TransactionGuard {
      */
     suspend fun checkPass(bytes: ByteArray, wallet: String, summary: PassSummary, codeHash: String): Verdict =
         guarded {
-            val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read")
+            val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read", Why.UNREADABLE)
             val m = tx.message
             val keys = staticKeys(m)
             requireServerBuiltShape(m, keys, wallet)?.let { return@guarded it }
             requirePrograms(m, keys, PASS_PROGRAMS)?.let { return@guarded it }
 
-            val mint = PASS_MINTS[summary.mint] ?: return@guarded refuse("pass mint ${summary.mint} is not one this app pays in")
+            val mint = PASS_MINTS[summary.mint] ?: return@guarded refuse("pass mint ${summary.mint} is not one this app pays in", Why.NOT_THIS_REQUEST)
+            if (summary.amount > PASS_PRICE_CEILING_RAW) {
+                return@guarded refuse("pass amount ${summary.amount} is above the pinned ceiling $PASS_PRICE_CEILING_RAW", Why.ABOVE_PASS_PRICE)
+            }
             val treasury = PinnedAddresses.TREASURY
             val treasuryAccount = ata(treasury, mint, KnownPrograms.TOKEN)
             val walletAccount = ata(wallet, mint, KnownPrograms.TOKEN)
-            if (summary.treasury != treasury) return@guarded refuse("summary names a treasury that is not the pinned one")
+            if (summary.treasury != treasury) return@guarded refuse("summary names a treasury that is not the pinned one", Why.WRONG_RECIPIENT)
             if (summary.destination != treasuryAccount) {
-                return@guarded refuse("summary destination is not the pinned treasury's token account")
+                return@guarded refuse("summary destination is not the pinned treasury's token account", Why.WRONG_RECIPIENT)
             }
 
             var transfers = 0
@@ -160,22 +248,25 @@ object TransactionGuard {
                 when (program) {
                     KnownPrograms.TOKEN, KnownPrograms.TOKEN_2022 -> {
                         val tag = data.firstOrNull()?.toInt()?.and(0xff)
-                            ?: return@guarded refuse("token instruction without data")
+                            ?: return@guarded refuse("token instruction without data", Why.UNREADABLE)
                         when (tag) {
                             TOKEN_TRANSFER, TOKEN_TRANSFER_CHECKED -> {
-                                if (program != KnownPrograms.TOKEN) return@guarded refuse("pass transfer is not on the classic Token program")
-                                val t = tokenTransfer(tag, acc, data) ?: return@guarded refuse("token transfer is malformed")
-                                if (t.mint != null && t.mint != mint) return@guarded refuse("transfer mint is not the pinned mint")
-                                if (t.destination != treasuryAccount) return@guarded refuse("transfer does not go to the pinned treasury")
-                                if (t.source != walletAccount) return@guarded refuse("transfer does not come from the wallet's own token account")
-                                if (t.authority != wallet) return@guarded refuse("transfer is not authorised by the wallet")
-                                if (t.amount != summary.amount) return@guarded refuse("transfer amount ${t.amount} is not the displayed ${summary.amount}")
+                                if (program != KnownPrograms.TOKEN) return@guarded refuse("pass transfer is not on the classic Token program", Why.NOT_THIS_REQUEST)
+                                val t = tokenTransfer(tag, acc, data) ?: return@guarded refuse("token transfer is malformed", Why.UNREADABLE)
+                                if (t.mint != null && t.mint != mint) return@guarded refuse("transfer mint is not the pinned mint", Why.NOT_THIS_REQUEST)
+                                if (t.destination != treasuryAccount) return@guarded refuse("transfer does not go to the pinned treasury", Why.WRONG_RECIPIENT)
+                                if (t.source != walletAccount) return@guarded refuse("transfer does not come from the wallet's own token account", Why.NOT_YOUR_WALLET)
+                                if (t.authority != wallet) return@guarded refuse("transfer is not authorised by the wallet", Why.NOT_YOUR_WALLET)
+                                if (t.amount != summary.amount) return@guarded refuse("transfer amount ${t.amount} is not the displayed ${summary.amount}", Why.WRONG_AMOUNT)
+                                if (t.amount > PASS_PRICE_CEILING_RAW) {
+                                    return@guarded refuse("transfer amount ${t.amount} is above the pinned ceiling $PASS_PRICE_CEILING_RAW", Why.ABOVE_PASS_PRICE)
+                                }
                                 transfers++
                             }
-                            TOKEN_APPROVE, TOKEN_APPROVE_CHECKED -> return@guarded refuse("pass carries an Approve")
-                            TOKEN_SET_AUTHORITY -> return@guarded refuse("pass carries a SetAuthority")
-                            TOKEN_CLOSE_ACCOUNT -> return@guarded refuse("pass carries a CloseAccount")
-                            else -> return@guarded refuse("pass carries token instruction $tag")
+                            TOKEN_APPROVE, TOKEN_APPROVE_CHECKED -> return@guarded refuse("pass carries an Approve", Why.HANDS_OVER_CONTROL)
+                            TOKEN_SET_AUTHORITY -> return@guarded refuse("pass carries a SetAuthority", Why.HANDS_OVER_CONTROL)
+                            TOKEN_CLOSE_ACCOUNT -> return@guarded refuse("pass carries a CloseAccount", Why.HANDS_OVER_CONTROL)
+                            else -> return@guarded refuse("pass carries token instruction $tag", Why.UNKNOWN_PROGRAM)
                         }
                     }
                     KnownPrograms.ASSOCIATED_TOKEN -> {
@@ -185,27 +276,27 @@ object TransactionGuard {
                     }
                     KnownPrograms.SYSTEM -> {
                         val lamports = systemTransferLamports(acc, data)
-                            ?: return@guarded refuse("pass carries a System instruction that is not a transfer")
+                            ?: return@guarded refuse("pass carries a System instruction that is not a transfer", Why.UNKNOWN_PROGRAM)
                         if (lamports != 0L || acc[0] != wallet || acc[1] != treasury) {
-                            return@guarded refuse("pass System transfer is not the 0-lamport treasury reference")
+                            return@guarded refuse("pass System transfer is not the 0-lamport treasury reference", Why.WRONG_AMOUNT)
                         }
                     }
                     KnownPrograms.MEMO -> {
-                        if (acc.any { it != wallet }) return@guarded refuse("memo names an account that is not the wallet")
+                        if (acc.any { it != wallet }) return@guarded refuse("memo names an account that is not the wallet", Why.NOT_THIS_REQUEST)
                         if (data.decodeToString() != "PT-PASS:${codeHash.trim().lowercase()}") {
-                            return@guarded refuse("memo is not this device's PT-PASS memo")
+                            return@guarded refuse("memo is not this device's PT-PASS memo", Why.NOT_THIS_REQUEST)
                         }
                         memos++
                     }
                     KnownPrograms.COMPUTE_BUDGET -> Unit
-                    else -> return@guarded refuse("program $program is not allowed in a pass")
+                    else -> return@guarded refuse("program $program is not allowed in a pass", Why.UNKNOWN_PROGRAM)
                 }
             }
-            if (transfers != 1) return@guarded refuse("pass carries $transfers token transfers, not exactly one")
-            if (memos != 1) return@guarded refuse("pass carries $memos memos, not exactly one")
-            val cost = feeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed")
+            if (transfers != 1) return@guarded refuse("pass carries $transfers token transfers, not exactly one", Why.WRONG_AMOUNT)
+            if (memos != 1) return@guarded refuse("pass carries $memos memos, not exactly one", Why.NOT_THIS_REQUEST)
+            val cost = feeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed", Why.UNREADABLE)
             if (cost + createdAccounts * TOKEN_ACCOUNT_RENT_LAMPORTS > summary.lamports) {
-                return@guarded refuse("pass can cost more lamports than the ${summary.lamports} displayed")
+                return@guarded refuse("pass can cost more lamports than the ${summary.lamports} displayed", Why.COSTS_MORE_THAN_SHOWN)
             }
             Verdict.Allow
         }
@@ -217,13 +308,13 @@ object TransactionGuard {
      */
     suspend fun checkVote(bytes: ByteArray, wallet: String, ticker: String, summary: VoteSummary): Verdict =
         guarded {
-            val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read")
+            val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read", Why.UNREADABLE)
             val m = tx.message
             val keys = staticKeys(m)
             requireServerBuiltShape(m, keys, wallet)?.let { return@guarded it }
             requirePrograms(m, keys, VOTE_PROGRAMS)?.let { return@guarded it }
             val collector = PinnedAddresses.VOTE_COLLECTOR
-            if (summary.collector != collector) return@guarded refuse("summary names a collector that is not the pinned one")
+            if (summary.collector != collector) return@guarded refuse("summary names a collector that is not the pinned one", Why.WRONG_RECIPIENT)
 
             var transfers = 0
             var memos = 0
@@ -233,27 +324,27 @@ object TransactionGuard {
                 when (program) {
                     KnownPrograms.SYSTEM -> {
                         val lamports = systemTransferLamports(acc, ix.data)
-                            ?: return@guarded refuse("vote carries a System instruction that is not a transfer")
+                            ?: return@guarded refuse("vote carries a System instruction that is not a transfer", Why.UNKNOWN_PROGRAM)
                         if (lamports != 0L || acc[0] != wallet || acc[1] != collector) {
-                            return@guarded refuse("vote System transfer is not the 0-lamport transfer to the collector")
+                            return@guarded refuse("vote System transfer is not the 0-lamport transfer to the collector", Why.WRONG_AMOUNT)
                         }
                         transfers++
                     }
                     KnownPrograms.MEMO -> {
-                        if (acc.any { it != wallet }) return@guarded refuse("memo names an account that is not the wallet")
+                        if (acc.any { it != wallet }) return@guarded refuse("memo names an account that is not the wallet", Why.NOT_THIS_REQUEST)
                         if (ix.data.decodeToString() != "PT-VOTE:${ticker.trim().uppercase()}") {
-                            return@guarded refuse("memo is not the PT-VOTE memo for the requested ticker")
+                            return@guarded refuse("memo is not the PT-VOTE memo for the requested ticker", Why.NOT_THIS_REQUEST)
                         }
                         memos++
                     }
                     KnownPrograms.COMPUTE_BUDGET -> Unit
-                    else -> return@guarded refuse("program $program is not allowed in a vote")
+                    else -> return@guarded refuse("program $program is not allowed in a vote", Why.UNKNOWN_PROGRAM)
                 }
             }
-            if (transfers != 1) return@guarded refuse("vote carries $transfers collector transfers, not exactly one")
-            if (memos != 1) return@guarded refuse("vote carries $memos memos, not exactly one")
-            val cost = feeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed")
-            if (cost > summary.lamports) return@guarded refuse("vote can cost more lamports than the ${summary.lamports} displayed")
+            if (transfers != 1) return@guarded refuse("vote carries $transfers collector transfers, not exactly one", Why.NOT_THIS_REQUEST)
+            if (memos != 1) return@guarded refuse("vote carries $memos memos, not exactly one", Why.NOT_THIS_REQUEST)
+            val cost = feeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed", Why.UNREADABLE)
+            if (cost > summary.lamports) return@guarded refuse("vote can cost more lamports than the ${summary.lamports} displayed", Why.COSTS_MORE_THAN_SHOWN)
             Verdict.Allow
         }
 
@@ -289,6 +380,12 @@ object TransactionGuard {
      *
      * **System instructions are allowlisted by tag (2026-09-26).** One that names the wallet in
      * any slot may only be a 0-lamport Transfer from it; see [checkSwapSystem].
+     *
+     * **Token account creates, fees and slippage (judges' review, 2026-09-27).** A create must open
+     * the wallet's own account for one side of the swap ([checkSwapCreateAta]), at most
+     * [MAX_SWAP_ACCOUNT_CREATES] of them; `route_v2`'s platform fee may not exceed the order's
+     * `feeBps`; and no order may allow more than [MAX_SLIPPAGE_BPS] of slippage, in the JSON or in
+     * the bytes.
      */
     suspend fun checkSwap(
         bytes: ByteArray,
@@ -298,16 +395,19 @@ object TransactionGuard {
         outputMint: String,
         amount: Long,
     ): Verdict = guarded {
-        if (order.inputMint != inputMint) return@guarded refuse("order input mint is not the requested one")
-        if (order.outputMint != outputMint) return@guarded refuse("order output mint is not the requested one")
-        if (order.inAmount.toLongOrNull() != amount) return@guarded refuse("order amount ${order.inAmount} is not the requested $amount")
-        if (order.taker != null && order.taker != wallet) return@guarded refuse("order was built for another taker")
+        if (order.inputMint != inputMint) return@guarded refuse("order input mint is not the requested one", Why.NOT_THIS_REQUEST)
+        if (order.outputMint != outputMint) return@guarded refuse("order output mint is not the requested one", Why.NOT_THIS_REQUEST)
+        if (order.inAmount.toLongOrNull() != amount) return@guarded refuse("order amount ${order.inAmount} is not the requested $amount", Why.WRONG_AMOUNT)
+        if (order.taker != null && order.taker != wallet) return@guarded refuse("order was built for another taker", Why.NOT_YOUR_WALLET)
+        if (order.slippageBps > MAX_SLIPPAGE_BPS) {
+            return@guarded refuse("order slippage ${order.slippageBps} bps exceeds the ceiling of $MAX_SLIPPAGE_BPS", Why.SLIPPAGE_TOO_WIDE)
+        }
 
-        val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read")
+        val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read", Why.UNREADABLE)
         val m = tx.message
         val keys = staticKeys(m)
         val signers = keys.take(m.signatureCount.toInt())
-        if (wallet !in signers) return@guarded refuse("the wallet is not a required signer")
+        if (wallet !in signers) return@guarded refuse("the wallet is not a required signer", Why.NOT_YOUR_WALLET)
         requirePrograms(m, keys, SWAP_PROGRAMS)?.let { return@guarded it }
 
         // The wallet's own accounts for each side, under either token program: USDC lives under
@@ -316,7 +416,12 @@ object TransactionGuard {
         val spendFrom = ownAccounts(wallet, inputMint)
         val payInto = ownAccounts(wallet, outputMint)
 
+        // The token accounts a swap may open: the wallet's own, for the input, the output, wrapped
+        // SOL, or a mint the order's own route plan passes through (see checkSwapCreateAta).
+        val creatable = creatableMints(order, inputMint, outputMint).associateWith { ownAccounts(wallet, it) }
+
         var jupiter = 0
+        var creates = 0
         for (ix in m.instructions) {
             val program = keys[ix.programIdIndex.toInt()]
             // An index past the static keys is an address-table account: never the wallet, which
@@ -330,10 +435,10 @@ object TransactionGuard {
                     val shape = when {
                         program == KnownPrograms.JUPITER_AGGREGATOR_V6 && head.contentEquals(ROUTE_V2) -> RouteV2Accounts
                         program == KnownPrograms.JUPITER_RFQ && head.contentEquals(RFQ_FILL) -> RfqFillAccounts
-                        else -> return@guarded refuse("Jupiter instruction ${head.toHex()} is not one whose accounts this app can read")
+                        else -> return@guarded refuse("Jupiter instruction ${head.toHex()} is not one whose accounts this app can read", Why.UNKNOWN_PROGRAM)
                     }
                     if (readU64(data, AMOUNT_OFFSET) != amount) {
-                        return@guarded refuse("Jupiter instruction amount is not the requested $amount")
+                        return@guarded refuse("Jupiter instruction amount is not the requested $amount", Why.WRONG_AMOUNT)
                     }
                     checkSwapAccounts(shape, acc, wallet, inputMint, outputMint, spendFrom, payInto)
                         ?.let { return@guarded it }
@@ -341,7 +446,7 @@ object TransactionGuard {
                 }
                 KnownPrograms.TOKEN, KnownPrograms.TOKEN_2022 -> {
                     val tag = data.firstOrNull()?.toInt()?.and(0xff)
-                        ?: return@guarded refuse("token instruction without data")
+                        ?: return@guarded refuse("token instruction without data", Why.UNREADABLE)
                     when (tag) {
                         // The delegate is account 1 of Approve [source, delegate, owner] and
                         // account 2 of ApproveChecked [source, mint, delegate, owner]. Reading slot 1
@@ -349,38 +454,40 @@ object TransactionGuard {
                         // 2026-09-26): an honest approve to the wallet itself was refused, and one
                         // naming the wallet in the mint slot passed whoever the delegate was.
                         TOKEN_APPROVE ->
-                            if (acc.getOrNull(APPROVE_DELEGATE) != wallet) return@guarded refuse("swap carries an Approve to another delegate")
+                            if (acc.getOrNull(APPROVE_DELEGATE) != wallet) return@guarded refuse("swap carries an Approve to another delegate", Why.HANDS_OVER_CONTROL)
                         TOKEN_APPROVE_CHECKED ->
-                            if (acc.getOrNull(APPROVE_CHECKED_DELEGATE) != wallet) return@guarded refuse("swap carries an ApproveChecked to another delegate")
+                            if (acc.getOrNull(APPROVE_CHECKED_DELEGATE) != wallet) return@guarded refuse("swap carries an ApproveChecked to another delegate", Why.HANDS_OVER_CONTROL)
                         TOKEN_SET_AUTHORITY -> {
                             val newAuthority = setAuthorityTarget(data)
-                            if (newAuthority != wallet) return@guarded refuse("swap carries a SetAuthority to another key")
+                            if (newAuthority != wallet) return@guarded refuse("swap carries a SetAuthority to another key", Why.HANDS_OVER_CONTROL)
                         }
                         TOKEN_CLOSE_ACCOUNT ->
-                            if (acc.getOrNull(1) != wallet) return@guarded refuse("swap closes an account into another key")
+                            if (acc.getOrNull(1) != wallet) return@guarded refuse("swap closes an account into another key", Why.HANDS_OVER_CONTROL)
                         TOKEN_SYNC_NATIVE -> Unit
                         TOKEN_TRANSFER, TOKEN_TRANSFER_CHECKED, TOKEN_BURN, TOKEN_BURN_CHECKED ->
-                            return@guarded refuse("swap carries a top-level token transfer or burn")
-                        else -> return@guarded refuse("swap carries token instruction $tag")
+                            return@guarded refuse("swap carries a top-level token transfer or burn", Why.WRONG_RECIPIENT)
+                        else -> return@guarded refuse("swap carries token instruction $tag", Why.UNKNOWN_PROGRAM)
                     }
                 }
                 KnownPrograms.ASSOCIATED_TOKEN -> {
-                    val kind = data.firstOrNull()?.toInt() ?: 0
-                    if (kind != 0 && kind != 1) return@guarded refuse("swap carries an associated-token instruction that is not a create")
-                    if (acc.getOrNull(2) != wallet) return@guarded refuse("swap creates a token account for another owner")
+                    checkSwapCreateAta(acc, data, wallet, feePayer = keys.first(), creatable)?.let { return@guarded it }
+                    creates++
+                    if (creates > MAX_SWAP_ACCOUNT_CREATES) {
+                        return@guarded refuse("swap opens $creates token accounts, more than $MAX_SWAP_ACCOUNT_CREATES", Why.STRANGE_TOKEN_ACCOUNT)
+                    }
                 }
                 KnownPrograms.SYSTEM -> checkSwapSystem(acc, data, wallet)?.let { return@guarded it }
                 KnownPrograms.COMPUTE_BUDGET -> Unit
-                else -> return@guarded refuse("program $program is not allowed in a swap")
+                else -> return@guarded refuse("program $program is not allowed in a swap", Why.UNKNOWN_PROGRAM)
             }
         }
-        if (jupiter == 0) return@guarded refuse("swap carries no Jupiter instruction")
-        if (jupiter > 1) return@guarded refuse("swap carries $jupiter Jupiter instructions, not exactly one")
+        if (jupiter == 0) return@guarded refuse("swap carries no Jupiter instruction", Why.NOT_THIS_REQUEST)
+        if (jupiter > 1) return@guarded refuse("swap carries $jupiter Jupiter instructions, not exactly one", Why.NOT_THIS_REQUEST)
 
         if (keys.first() == wallet) {
-            val priority = priorityFeeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed")
+            val priority = priorityFeeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed", Why.UNREADABLE)
             if (priority > order.prioritizationFeeLamports) {
-                return@guarded refuse("priority fee $priority exceeds the order's ${order.prioritizationFeeLamports}")
+                return@guarded refuse("priority fee $priority exceeds the order's ${order.prioritizationFeeLamports}", Why.COSTS_MORE_THAN_SHOWN)
             }
         }
         Verdict.Allow
@@ -436,17 +543,17 @@ object TransactionGuard {
         spendFrom: Set<String>,
         payInto: Set<String>,
     ): Verdict? {
-        if (acc.getOrNull(slots.authority) != wallet) return refuse("the swap is not authorised by the wallet")
-        val source = acc.getOrNull(slots.source) ?: return refuse("the account spent from is not one this app can read")
-        if (source !in spendFrom) return refuse("the swap spends from an account that is not the wallet's own for the input mint")
-        val destination = acc.getOrNull(slots.destination) ?: return refuse("the account paid into is not one this app can read")
-        if (destination !in payInto) return refuse("the swap pays into an account that is not the wallet's own for the output mint")
-        acc.getOrNull(slots.inputMint)?.let { if (it != inputMint) return refuse("the swap instruction names another input mint") }
-        acc.getOrNull(slots.outputMint)?.let { if (it != outputMint) return refuse("the swap instruction names another output mint") }
+        if (acc.getOrNull(slots.authority) != wallet) return refuse("the swap is not authorised by the wallet", Why.NOT_YOUR_WALLET)
+        val source = acc.getOrNull(slots.source) ?: return refuse("the account spent from is not one this app can read", Why.UNREADABLE)
+        if (source !in spendFrom) return refuse("the swap spends from an account that is not the wallet's own for the input mint", Why.NOT_YOUR_WALLET)
+        val destination = acc.getOrNull(slots.destination) ?: return refuse("the account paid into is not one this app can read", Why.UNREADABLE)
+        if (destination !in payInto) return refuse("the swap pays into an account that is not the wallet's own for the output mint", Why.WRONG_RECIPIENT)
+        acc.getOrNull(slots.inputMint)?.let { if (it != inputMint) return refuse("the swap instruction names another input mint", Why.NOT_THIS_REQUEST) }
+        acc.getOrNull(slots.outputMint)?.let { if (it != outputMint) return refuse("the swap instruction names another output mint", Why.NOT_THIS_REQUEST) }
         slots.optionalDestination?.let { at ->
             val extra = acc.getOrNull(at)
             if (extra != KnownPrograms.JUPITER_AGGREGATOR_V6 && extra !in payInto) {
-                return refuse("the swap names a second destination that is not the wallet's own")
+                return refuse("the swap names a second destination that is not the wallet's own", Why.WRONG_RECIPIENT)
             }
         }
         return null
@@ -468,30 +575,41 @@ object TransactionGuard {
         val shownFloor = SwapFloor.shownRaw(order)
         return when (slots) {
             RouteV2Accounts -> {
-                if (data.size < ROUTE_V2_ARGS_END) return refuse("route_v2 data is too short to read its output terms")
+                if (data.size < ROUTE_V2_ARGS_END) return refuse("route_v2 data is too short to read its output terms", Why.UNREADABLE)
                 val quotedOut = readU64(data, ROUTE_V2_QUOTED_OUT)
                 val slippage = readU16(data, ROUTE_V2_SLIPPAGE)
+                val platformFee = readU16(data, ROUTE_V2_PLATFORM_FEE)
+                val positiveSlippage = readU16(data, ROUTE_V2_POSITIVE_SLIPPAGE)
                 when {
-                    quotedOut < 0L -> refuse("route_v2 quoted output is not a readable amount")
-                    slippage > 10_000 -> refuse("route_v2 slippage $slippage bps is not a readable slippage")
+                    quotedOut < 0L -> refuse("route_v2 quoted output is not a readable amount", Why.UNREADABLE)
+                    slippage > 10_000 -> refuse("route_v2 slippage $slippage bps is not a readable slippage", Why.UNREADABLE)
                     slippage > order.slippageBps ->
-                        refuse("route_v2 slippage $slippage bps exceeds the order's ${order.slippageBps} bps")
+                        refuse("route_v2 slippage $slippage bps exceeds the order's ${order.slippageBps} bps", Why.SLIPPAGE_TOO_WIDE)
+                    slippage > MAX_SLIPPAGE_BPS ->
+                        refuse("route_v2 slippage $slippage bps exceeds the ceiling of $MAX_SLIPPAGE_BPS", Why.SLIPPAGE_TOO_WIDE)
+                    platformFee > order.feeBps ->
+                        refuse("route_v2 platform fee $platformFee bps exceeds the order's ${order.feeBps} bps", Why.COSTS_MORE_THAN_SHOWN)
+                    positiveSlippage > 10_000 ->
+                        refuse("route_v2 positive slippage share $positiveSlippage bps is not a readable share", Why.UNREADABLE)
                     SwapFloor.of(quotedOut, slippage) < shownFloor ->
-                        refuse("route_v2 minimum output ${SwapFloor.of(quotedOut, slippage)} is below the displayed floor $shownFloor")
+                        refuse(
+                            "route_v2 minimum output ${SwapFloor.of(quotedOut, slippage)} is below the displayed floor $shownFloor",
+                            Why.COSTS_MORE_THAN_SHOWN,
+                        )
                     else -> null
                 }
             }
             RfqFillAccounts -> {
-                if (data.size < RFQ_FILL_ARGS_END) return refuse("fill data is too short to read its output amount")
+                if (data.size < RFQ_FILL_ARGS_END) return refuse("fill data is too short to read its output amount", Why.UNREADABLE)
                 val output = readU64(data, RFQ_FILL_OUTPUT)
                 when {
-                    output < 0L -> refuse("fill output is not a readable amount")
-                    output < order.outAmountRaw -> refuse("fill output $output is below the displayed ${order.outAmountRaw}")
-                    output < shownFloor -> refuse("fill output $output is below the displayed floor $shownFloor")
+                    output < 0L -> refuse("fill output is not a readable amount", Why.UNREADABLE)
+                    output < order.outAmountRaw -> refuse("fill output $output is below the displayed ${order.outAmountRaw}", Why.COSTS_MORE_THAN_SHOWN)
+                    output < shownFloor -> refuse("fill output $output is below the displayed floor $shownFloor", Why.COSTS_MORE_THAN_SHOWN)
                     else -> null
                 }
             }
-            else -> refuse("the swap instruction's output terms are not ones this app can read")
+            else -> refuse("the swap instruction's output terms are not ones this app can read", Why.UNKNOWN_PROGRAM)
         }
     }
 
@@ -515,18 +633,87 @@ object TransactionGuard {
      *   durable one that someone holding the signed bytes could land at any later time.
      */
     private fun checkSwapSystem(acc: List<String?>, data: ByteArray, wallet: String): Verdict? {
-        if (data.size < 4) return refuse("swap carries a System instruction without a tag")
+        if (data.size < 4) return refuse("swap carries a System instruction without a tag", Why.UNREADABLE)
         val tag = readU32(data, 0)
         if (wallet in acc) {
-            if (tag != SYSTEM_TRANSFER.toLong()) return refuse("swap carries System instruction $tag naming the wallet")
+            if (tag != SYSTEM_TRANSFER.toLong()) return refuse("swap carries System instruction $tag naming the wallet", Why.UNKNOWN_PROGRAM)
             val lamports = systemTransferLamports(acc.map { it.orEmpty() }, data)
-                ?: return refuse("swap System transfer naming the wallet is malformed")
-            if (acc[0] != wallet) return refuse("swap System transfer names the wallet, but not as the source")
-            if (lamports != 0L) return refuse("swap moves lamports out of the wallet")
+                ?: return refuse("swap System transfer naming the wallet is malformed", Why.UNREADABLE)
+            if (acc[0] != wallet) return refuse("swap System transfer names the wallet, but not as the source", Why.NOT_THIS_REQUEST)
+            if (lamports != 0L) return refuse("swap moves lamports out of the wallet", Why.COSTS_MORE_THAN_SHOWN)
             return null
         }
-        if (tag !in SWAP_SYSTEM_TAGS_WITHOUT_WALLET) return refuse("swap carries System instruction $tag")
+        if (tag !in SWAP_SYSTEM_TAGS_WITHOUT_WALLET) return refuse("swap carries System instruction $tag", Why.UNKNOWN_PROGRAM)
         return null
+    }
+
+    /**
+     * An associated-token create in a swap (judges' review, 2026-09-27). It used to be checked by
+     * its owner alone, so a create for the wallet of some other mint, funded from the wallet,
+     * passed. Now, on the accounts [funder, account, owner, mint, system, token program]:
+     *
+     * - a Create (no data) or a CreateIdempotent (`[1]`), nothing longer, and six accounts;
+     * - the owner is the wallet;
+     * - the account is the wallet's own associated account, under either token program, for one
+     *   of [creatable]: the input mint, the output mint, wrapped SOL, or a mint the order's own
+     *   route plan names as a hop. That pins the mint even where the mint slot comes from an
+     *   address table, as it does on every real Metis order: the associated-token program itself
+     *   refuses an account not derived from its owner and mint. The task asked for the input and
+     *   output alone; the real default Swap to USDC order (TSLAx, then a pool token, then SOL,
+     *   then USDC) opens the wallet's own wrapped-SOL account, which it closes back to the wallet,
+     *   and the wallet's own account for the pool token its route plan names, so those two
+     *   rules would refuse a real swap. Either way the account belongs to the wallet, and its
+     *   rent is bounded by the cap below;
+     * - a mint slot that is a static key names that same mint, and the program slots, where
+     *   static, name the System program and a token program;
+     * - the funder is the wallet or the transaction's fee payer. The task named the wallet
+     *   alone, and the real gasless order is funded by Jupiter's gas payer at account 0, whose
+     *   lamports are not the wallet's; any other funder is refused.
+     *
+     * The count is capped at [MAX_SWAP_ACCOUNT_CREATES] by the caller. This holds on a gasless
+     * order as well: nothing here depends on who pays the fee.
+     */
+    private fun checkSwapCreateAta(
+        acc: List<String?>,
+        data: ByteArray,
+        wallet: String,
+        feePayer: String,
+        creatable: Map<String, Set<String>>,
+    ): Verdict? {
+        val kind = if (data.isEmpty()) 0 else data[0].toInt()
+        if (data.size > 1 || (kind != 0 && kind != 1)) {
+            return refuse("swap carries an associated-token instruction that is not a create", Why.STRANGE_TOKEN_ACCOUNT)
+        }
+        if (acc.size != 6) return refuse("swap associated-token create is malformed", Why.STRANGE_TOKEN_ACCOUNT)
+        val funder = acc[0]
+        if (funder != wallet && funder != feePayer) {
+            return refuse("swap token account creation is funded by neither the wallet nor the fee payer", Why.STRANGE_TOKEN_ACCOUNT)
+        }
+        if (acc[2] != wallet) return refuse("swap creates a token account for another owner", Why.STRANGE_TOKEN_ACCOUNT)
+        val account = acc[1] ?: return refuse("swap creates a token account this app cannot read", Why.STRANGE_TOKEN_ACCOUNT)
+        val mints = creatable.filterValues { account in it }.keys
+        if (mints.isEmpty()) {
+            return refuse("swap creates a token account for a mint that is neither side of the swap nor a hop of its route", Why.STRANGE_TOKEN_ACCOUNT)
+        }
+        acc[3]?.let { if (it !in mints) return refuse("swap creates a token account for another mint", Why.STRANGE_TOKEN_ACCOUNT) }
+        acc[4]?.let { if (it != KnownPrograms.SYSTEM) return refuse("swap token account create names the wrong programs", Why.STRANGE_TOKEN_ACCOUNT) }
+        acc[5]?.let {
+            if (it != KnownPrograms.TOKEN && it != KnownPrograms.TOKEN_2022) {
+                return refuse("swap token account create names the wrong programs", Why.STRANGE_TOKEN_ACCOUNT)
+            }
+        }
+        return null
+    }
+
+    /** The mints a swap may open the wallet's own token account for: see [checkSwapCreateAta]. */
+    private fun creatableMints(order: SwapOrder, inputMint: String, outputMint: String): Set<String> = buildSet {
+        add(inputMint)
+        add(outputMint)
+        add(KnownMints.WSOL)
+        for (step in order.routePlan) {
+            step.swapInfo?.inputMint?.let(::add)
+            step.swapInfo?.outputMint?.let(::add)
+        }
     }
 
     /** [owner]'s associated token accounts for [mint], under the classic and the Token-2022 program. */
@@ -612,17 +799,17 @@ object TransactionGuard {
 
     /** A server-built transaction: the wallet pays and is the only signer, and nothing is looked up. */
     private fun requireServerBuiltShape(m: Message, keys: List<String>, wallet: String): Verdict? {
-        if (keys.first() != wallet) return refuse("the fee payer is not the connected wallet")
-        if (m.signatureCount.toInt() != 1) return refuse("a server-built transaction must need only the wallet's signature")
+        if (keys.first() != wallet) return refuse("the fee payer is not the connected wallet", Why.NOT_YOUR_WALLET)
+        if (m.signatureCount.toInt() != 1) return refuse("a server-built transaction must need only the wallet's signature", Why.NOT_YOUR_WALLET)
         if ((m as? VersionedMessage)?.addressTableLookups.orEmpty().isNotEmpty()) {
-            return refuse("a server-built transaction must not hide accounts in an address table")
+            return refuse("a server-built transaction must not hide accounts in an address table", Why.UNREADABLE)
         }
         return null
     }
 
     private fun requirePrograms(m: Message, keys: List<String>, allowed: Set<String>): Verdict? {
         val unknown = m.instructions.map { keys[it.programIdIndex.toInt()] }.firstOrNull { it !in allowed }
-        return unknown?.let { refuse("program $it is not on the allowlist") }
+        return unknown?.let { refuse("program $it is not on the allowlist", Why.UNKNOWN_PROGRAM) }
     }
 
     private class TokenTransfer(
@@ -668,14 +855,14 @@ object TransactionGuard {
         mint: String,
     ): Verdict? {
         val kind = if (data.isEmpty()) 0 else data[0].toInt()
-        if (data.size > 1 || (kind != 0 && kind != 1)) return refuse("associated-token instruction is not a create")
-        if (acc.size != 6) return refuse("associated-token create is malformed")
+        if (data.size > 1 || (kind != 0 && kind != 1)) return refuse("associated-token instruction is not a create", Why.STRANGE_TOKEN_ACCOUNT)
+        if (acc.size != 6) return refuse("associated-token create is malformed", Why.STRANGE_TOKEN_ACCOUNT)
         val (funder, account, owner, createdMint, system, tokenProgram) = acc
-        if (funder != wallet) return refuse("token account creation is not funded by the wallet")
-        if (owner !in allowedOwners) return refuse("token account is created for an owner this pass does not involve")
-        if (createdMint != mint) return refuse("token account is created for another mint")
-        if (system != KnownPrograms.SYSTEM || tokenProgram != KnownPrograms.TOKEN) return refuse("token account create names the wrong programs")
-        if (account != ata(owner, mint, KnownPrograms.TOKEN)) return refuse("token account is not the owner's associated account")
+        if (funder != wallet) return refuse("token account creation is not funded by the wallet", Why.STRANGE_TOKEN_ACCOUNT)
+        if (owner !in allowedOwners) return refuse("token account is created for an owner this pass does not involve", Why.STRANGE_TOKEN_ACCOUNT)
+        if (createdMint != mint) return refuse("token account is created for another mint", Why.STRANGE_TOKEN_ACCOUNT)
+        if (system != KnownPrograms.SYSTEM || tokenProgram != KnownPrograms.TOKEN) return refuse("token account create names the wrong programs", Why.STRANGE_TOKEN_ACCOUNT)
+        if (account != ata(owner, mint, KnownPrograms.TOKEN)) return refuse("token account is not the owner's associated account", Why.STRANGE_TOKEN_ACCOUNT)
         return null
     }
 
@@ -732,7 +919,7 @@ object TransactionGuard {
 
     // ---- Small helpers ----------------------------------------------------------------------
 
-    private fun refuse(reason: String) = Verdict.Refuse(reason)
+    private fun refuse(reason: String, why: Why = Why.NOT_THIS_REQUEST) = Verdict.Refuse(reason, why)
 
     private suspend inline fun guarded(crossinline block: suspend () -> Verdict): Verdict =
         try {
@@ -740,7 +927,7 @@ object TransactionGuard {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            refuse("transaction could not be read: ${e::class.simpleName}")
+            refuse("transaction could not be read: ${e::class.simpleName}", Why.UNREADABLE)
         }
 
     private fun readU16(b: ByteArray, at: Int): Int {
