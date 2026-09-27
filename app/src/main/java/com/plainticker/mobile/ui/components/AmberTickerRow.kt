@@ -97,8 +97,8 @@ import com.plainticker.mobile.ui.theme.AmberType
  * - **Meta line.** The widest realistic [figure] this row draws across every screen that calls it
  *   is a worded one, `next_up_weight` ("38,406.2 SKR", 12 characters, [VoteScreen]'s own vote
  *   weight), 113.22dp; less the 8dp gap, [context] gets **214.78dp** in that worst case. The
- *   longest real [context], `list_row_meta_join`'s own worst join ("Pool $2.7k, too thin · 2 d
- *   old", 30 characters) measures 176.34dp: a 38.44dp margin, and at 1.3x scale against the far more
+ *   longest real [context], `list_row_meta_join`'s own worst join ("Depth $2.7k, too thin · 2 d
+ *   old", 31 characters) measures 186.90dp: a 27.88dp margin, and at 1.3x scale against the far more
  *   common bare-figure case ("100", the composite score this exact row draws) it still clears one
  *   line, 250.18dp of text against a 284.97dp budget — [context]'s `maxLines = 2` stays a backstop
  *   for a case this arithmetic says should not occur, not the thing making the row correct.
@@ -147,11 +147,11 @@ import com.plainticker.mobile.ui.theme.AmberType
  *   and tracking clauses `list_row_meta_join`s together; action = "Unwatch", the widest label this
  *   row draws, 60.648dp at 1.0x, rendered width 76.648dp). Content width with the action present:
  *   336 − 76.648 = 259.352dp, all of it context's own budget since there is no figure to share it
- *   with. The realistic join ("Reports 22 Oct · Pool $2.7k, too thin", 37 characters) measures
- *   230.468dp: a 28.88dp margin at 1.0x, but at 1.3x (the action's own label growing to 78.842dp,
- *   the budget shrinking to 241.158dp) that same clause grows to 299.61dp and no longer clears one
- *   line. The pathological join ("Not in the analysis list · Pool $99.9k, too thin", 48
- *   characters, 289.044dp) does not clear the 1.0x budget either. Both wrap to a second line rather
+ *   with. The realistic join ("Reports 22 Oct · Depth $2.7k, too thin", 38 characters) measures
+ *   241.024dp: a 18.33dp margin at 1.0x, but at 1.3x (the action's own label growing to 78.842dp,
+ *   the budget shrinking to 241.158dp) that same clause grows to 313.33dp and no longer clears one
+ *   line. The pathological join ("Not in the analysis list · Depth $99.9k, too thin", 49
+ *   characters, 299.6dp) does not clear the 1.0x budget either. Both wrap to a second line rather
  *   than clipping — [context] keeps `maxLines = 2` and `TextOverflow.Ellipsis`, the same resolution
  *   the 54-character company outlier above accepts, and even the pathological join grown to 1.3x
  *   (396.69dp) fits inside two lines' own combined capacity (2 × 241.158 = 482.32dp) with room to

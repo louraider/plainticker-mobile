@@ -89,7 +89,7 @@
     <string name="list_heading_no_sector">No sector</string>
     <!-- The row meta halves and the source banners below are shared with the Portfolio -->
     <string name="list_row_meta_premium">%1$s vs NYSE close</string>
-    <string name="list_row_meta_thin">Pool %1$s, too thin</string>
+    <string name="list_row_meta_thin">Depth %1$s, too thin</string>
     <string name="list_row_meta_pool_unknown">Depth not reported</string>
     <string name="list_row_meta_join">%1$s · %2$s</string>
     <string name="list_search_empty">No xStock matches \'%1$s\'</string>
@@ -266,7 +266,7 @@
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
     <string name="detail_swap_out_button">Swap %1$s to USDC</string>
     <string name="detail_cost_line">est. all-in cost %1$s · depth %2$s</string>
-    <string name="detail_liquidity_line">Pool %1$s behind this price</string>
+    <string name="detail_liquidity_line">Depth %1$s behind this price</string>
     <string name="detail_analysis_pending">Analysis not yet available</string>
     <string name="detail_analysis_pending_action">Watch to be notified</string>
     <string name="detail_analysis_incomplete">Analysis incomplete for this filer</string>

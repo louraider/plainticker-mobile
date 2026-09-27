@@ -236,13 +236,13 @@ class AmberTickerRowTest {
      * clause is three characters longer. Its width at context 14/400 is now 215.852dp (was
      * 192.444dp); the budget test below takes the new width.
      *
-     * Updated for device QA of 1.3.16: the thin-pool clause reads "Pool $2.7k, too thin", two
-     * characters shorter, so the clause is now 199.752dp and every budget below only gains margin.
+     * Updated for device QA of 1.3.16: the thin-pool clause reads "Depth $2.7k, too thin", one
+     * character shorter, so the clause is now 210.308dp and every budget below only gains margin.
      */
     @Test
     fun `the real worst-case meta clause is exactly what the meta line's own budget sizes against`() {
-        val longestMeta = "Pool $2.7k, too thin · 2 days old"
-        assertTrue(longestMeta.length == 33)
+        val longestMeta = "Depth $2.7k, too thin · 2 days old"
+        assertTrue(longestMeta.length == 34)
     }
 
     // ---- Proof by arithmetic: the real budget this anatomy gives company and context -------------
@@ -459,9 +459,9 @@ class AmberTickerRowTest {
         // and nothing to share it with.
 
         // watchlist_row_reports joined with list_row_meta_premium's own worst premium clause
-        // (list_row_meta_join), at context's 14sp/400: "Reports 22 Oct · Pool $2.7k, too thin"
+        // (list_row_meta_join), at context's 14sp/400: "Reports 22 Oct · Depth $2.7k, too thin"
         // (246.568dp as "$2.7k behind, too thin" before device QA of 1.3.16).
-        val realisticJoinWidthDp = 230.468
+        val realisticJoinWidthDp = 241.024
         assertTrue(
             "the realistic join ($realisticJoinWidthDp dp) must clear the 1.0x budget " +
                 "($metaContentBudgetDp dp) with Unwatch present",
@@ -481,10 +481,10 @@ class AmberTickerRowTest {
         )
 
         // watchlist_row_unserved joined with the same worst premium clause, at a wider pool
-        // figure: "Not in the analysis list · Pool $99.9k, too thin" (305.144dp in the old
+        // figure: "Not in the analysis list · Depth $99.9k, too thin" (305.144dp in the old
         // wording). Recorded, not fixed, the same resolution the 54-character company outlier
         // above accepts: it does not clear the 1.0x budget either.
-        val pathologicalJoinWidthDp = 289.044
+        val pathologicalJoinWidthDp = 299.6
         assertFalse(pathologicalJoinWidthDp <= metaContentBudgetDp)
 
         // The backstop actually backstops: two lines' own combined capacity at 1.3x comfortably

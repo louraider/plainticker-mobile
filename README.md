@@ -64,7 +64,7 @@ price. PlainTicker gives them three things that screen does not.
   of them is a forecast.
 - **What the price is worth.** The token price against the NYSE close. It is drawn only where
   Jupiter reports at least $4,000 of depth behind the price. Below that floor the app states the
-  depth instead ("Pool $34, too thin") and draws no premium. The rule lives in one function,
+  depth instead ("Depth $34, too thin") and draws no premium. The rule lives in one function,
   `data/jupiter/TrackingQuality.kt`, which every screen reads.
 
 **The daily habit** is Today and the digest. Today opens on the market's state in your own time
