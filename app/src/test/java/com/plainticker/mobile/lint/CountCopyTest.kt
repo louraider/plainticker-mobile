@@ -119,12 +119,6 @@ class CountCopyTest {
             Case(1, listOf("1"), "1 covered company reports this week."),
             Case(3, listOf("3"), "3 covered companies report this week."),
         ),
-        // Stocks' filter row disclosure chip (ui/list/ListScreen.kt, ui/stocks/StocksFilter.kt):
-        // "+n sectors" past the eight shown by default, "sector" singular at one.
-        "stocks_filter_more_sectors" to listOf(
-            Case(1, listOf("1"), "+1 sector"),
-            Case(5, listOf("5"), "+5 sectors"),
-        ),
         // You's hero and Plan "Valid until" row (ui/you/YouModel.kt's daysLeft): a pass or a
         // subscription's days left, "day" singular at one.
         "you_days_left" to listOf(

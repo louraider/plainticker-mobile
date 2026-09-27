@@ -313,7 +313,10 @@ class AmberTickerRowTest {
         // the row's two-line ceiling.
         val longestMetaWidthDp = 215.852
         val widestStocksFigureDp = 95.724 // "$12,345.67", a price-only row, figureRow 18/600 tnum.
-        val scoreFigureDp = 85.842 // "score 100", an analyzed row, figureRow 18/600 tnum.
+        // "100 of 100", an analyzed row since the judges' round 2 (was "score 100", 85.842dp),
+        // figureRow 18/600 tnum, fontTools against bricolage_grotesque.ttf, 2026-09-27.
+        val scoreFigureDp = 92.538
+        assertTrue("the scaled row figure must stay under the price figure", scoreFigureDp < widestStocksFigureDp)
         val stocksBudgetDp = contentWidthDp - maxOf(widestStocksFigureDp, scoreFigureDp) - gapDp
         assertEquals(232.276, stocksBudgetDp, 0.01)
         assertTrue(
