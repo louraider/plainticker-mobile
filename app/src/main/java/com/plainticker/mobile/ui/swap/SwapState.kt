@@ -180,7 +180,13 @@ sealed interface SwapState {
         /** The fill against the estimate, signed: positive when the swap beat its quote. Null when the answer did not report the fill. */
         val fillDeltaPct: Double? get() = fill.deltaPctAgainst(quote)
 
-        /** All-in cost actually paid, the quote's cost corrected by the fill; null when either is unknown. */
+        /** The route's cost paid, the quote's route cost corrected by the fill; null when either is unknown. */
+        val routeCostPaidPct: Double? get() = fill.routeCostPaidPct(quote)
+
+        /**
+         * All-in cost paid: the route's cost paid plus the SOL the wallet paid at the SOL price.
+         * Null without a SOL price, and the sheet then says "Route cost" rather than claim all-in.
+         */
         val allInCostPaidPct: Double? get() = fill.allInCostPaidPct(quote)
     }
 
@@ -358,6 +364,9 @@ data class SolCost(
 ) {
     val totalLamports: Long get() = signatureFeeLamports + rentFeeLamports + prioritizationFeeLamports
 
+    /** The network's own charge: the signature fee and the priority fee, never refunded. */
+    val networkFeeLamports: Long get() = signatureFeeLamports + prioritizationFeeLamports
+
     /** Lamports the wallet is short of [lamports]; zero when it can pay. */
     fun missingFrom(lamports: Long): Long = (totalLamports - lamports).coerceAtLeast(0L)
 
@@ -380,12 +389,12 @@ data class SwapQuote(
     /** otherAmountThreshold: the least the swap may deliver before it reverts. */
     val worstCaseOutRaw: Long,
     /**
-     * All-in cost in percent, or null when the order priced neither side in dollars. It is read
-     * from inUsdValue against outUsdValue, and an order carrying neither leaves it unknown:
+     * The route's cost in percent, or null when the order priced neither side in dollars. It is
+     * read from inUsdValue against outUsdValue, and an order carrying neither leaves it unknown:
      * zero would read as a swap that cost nothing, which is the one thing this figure must
-     * never say by accident.
+     * never say by accident. It is not all-in: see [allInCostPct].
      */
-    val allInCostPct: Double?,
+    val routeCostPct: Double?,
     val slippageBps: Int,
     /** The router that quoted it, as a name: "metis" reads "Metis". */
     val route: String,
@@ -396,8 +405,47 @@ data class SwapQuote(
     val transaction: String?,
     /** RFQ quotes only. A Metis order carries no expireAt at all, so it has no countdown. */
     val expireAtEpochSec: Long?,
+    /** Jupiter's dollar value of what goes in, the base the percentages are taken of. */
+    val inUsdValue: Double? = null,
+    /**
+     * The SOL this wallet itself pays, by payer: on a gasless order the fees whose named payer is
+     * someone else (Jupiter's gas payer, the maker) are not the wallet's, and Jupiter takes them
+     * back in its fee instead, which the route cost already counts. Null means [solCost].
+     */
+    val walletSol: SolCost? = null,
+    /**
+     * USD per SOL from Jupiter's price, read after the quote and before the wallet, or null when
+     * it did not come back. Without it the SOL costs cannot be priced and the sheet says "Route
+     * cost", never "All-in cost" (judges' review, 2026-09-27).
+     */
+    val solUsd: Double? = null,
 ) {
     val hasExpiry: Boolean get() = expireAtEpochSec != null
+
+    /** The SOL the wallet pays: [walletSol] where the order named payers, else every one of [solCost]. */
+    val paidSol: SolCost get() = walletSol ?: solCost
+
+    private val usablePrice: Double? get() = solUsd?.takeIf { it.isFinite() && it > 0.0 }
+
+    /** [paidSol] in dollars, or null without a SOL price. */
+    val solCostUsd: Double? get() = usablePrice?.let { paidSol.totalLamports / LAMPORTS_PER_SOL * it }
+
+    /** The part of [solCostUsd] that is token account rent, which comes back if the account is closed. */
+    val rentUsd: Double? get() = usablePrice?.let { paidSol.rentFeeLamports / LAMPORTS_PER_SOL * it }
+
+    /**
+     * All-in cost in percent (judges' review, 2026-09-27): the route's cost plus the network fee,
+     * the priority fee and the token account rent this wallet pays, priced at [solUsd], as a share
+     * of what goes in. Null when any part is unknown, so the sheet never calls a figure all-in
+     * that leaves the SOL out.
+     */
+    val allInCostPct: Double?
+        get() {
+            val route = routeCostPct ?: return null
+            val sol = solCostUsd ?: return null
+            val base = inUsdValue?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+            return route + sol / base * 100.0
+        }
 
     /** Seconds left, or null when the quote has no expiry. Absence is never "expired". */
     fun secondsLeft(nowEpochSec: Long): Long? = expireAtEpochSec?.let { it - nowEpochSec }
@@ -410,7 +458,7 @@ data class SwapQuote(
             // One computation for the sheet and for TransactionGuard, which holds the route's
             // own bytes to this same floor before the wallet opens.
             worstCaseOutRaw = SwapFloor.shownRaw(order),
-            allInCostPct = order.allInCostPct.takeIf { order.inUsdValue > 0.0 && order.outUsdValue > 0.0 },
+            routeCostPct = order.routeCostPct.takeIf { order.inUsdValue > 0.0 && order.outUsdValue > 0.0 },
             slippageBps = order.slippageBps,
             route = routeName(order.router),
             swapType = order.swapType,
@@ -422,7 +470,28 @@ data class SwapQuote(
             ),
             transaction = order.transaction?.takeIf { order.isSignable },
             expireAtEpochSec = order.expireAt?.takeIf { order.hasExpiry },
+            inUsdValue = order.inUsdValue.takeIf { it > 0.0 },
+            walletSol = walletPaid(order),
         )
+
+        /**
+         * The SOL fees this wallet pays. On an order that is not gasless the taker pays all three,
+         * which every real one confirms. On a gasless one each fee counts only when its named
+         * payer is the taker: the real gasless Metis order names Jupiter's gas payer for all three,
+         * and the RFQ order the maker for the fees and the taker for the rent.
+         */
+        private fun walletPaid(order: SwapOrder): SolCost? {
+            if (!order.gasless) return null
+            val taker = order.taker ?: return null
+            fun paid(lamports: Long, payer: String?) = if (payer == null || payer == taker) lamports else 0L
+            return SolCost(
+                signatureFeeLamports = paid(order.signatureFeeLamports, order.signatureFeePayer),
+                rentFeeLamports = paid(order.rentFeeLamports, order.rentFeePayer),
+                prioritizationFeeLamports = paid(order.prioritizationFeeLamports, order.prioritizationFeePayer),
+            )
+        }
+
+        private const val LAMPORTS_PER_SOL = 1_000_000_000.0
 
         /** A router id is a name on the wire and a name on the screen: "metis" reads "Metis". */
         private fun routeName(router: String): String =
@@ -456,19 +525,30 @@ data class SwapFill(
     }
 
     /**
-     * All-in cost actually paid. The quote priced both sides in dollars; this fill delivered a
-     * different quantity of the same token at the same price, so the cost paid is the quoted cost
-     * corrected by that ratio. Exact-in means the input is what was asked for, and the executed
-     * input is used as well when it is reported.
+     * The route's cost actually paid. The quote priced both sides in dollars; this fill delivered
+     * a different quantity of the same token at the same price, so the cost paid is the quoted
+     * cost corrected by that ratio. Exact-in means the input is what was asked for, and the
+     * executed input is used as well when it is reported.
      */
-    fun allInCostPaidPct(quote: SwapQuote): Double? {
-        val quoted = quote.allInCostPct ?: return null
+    fun routeCostPaidPct(quote: SwapQuote): Double? {
+        val quoted = quote.routeCostPct ?: return null
         val out = outAmountRaw ?: return null
         if (quote.outAmountRaw <= 0L || quote.inAmountRaw <= 0L || inAmountRaw <= 0L) return quoted
         val outRatio = out.toDouble() / quote.outAmountRaw.toDouble()
         val inRatio = inAmountRaw.toDouble() / quote.inAmountRaw.toDouble()
         if (outRatio <= 0.0 || inRatio <= 0.0) return quoted
         return 100.0 - (100.0 - quoted) * (outRatio / inRatio)
+    }
+
+    /**
+     * All-in cost actually paid: [routeCostPaidPct] plus the SOL the wallet paid, at the SOL
+     * price read for the quote, as a share of what went in. Null without that price.
+     */
+    fun allInCostPaidPct(quote: SwapQuote): Double? {
+        val route = routeCostPaidPct(quote) ?: return null
+        val sol = quote.solCostUsd ?: return null
+        val base = quote.inUsdValue?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+        return route + sol / base * 100.0
     }
 }
 

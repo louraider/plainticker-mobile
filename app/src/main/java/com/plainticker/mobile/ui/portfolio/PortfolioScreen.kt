@@ -644,7 +644,7 @@ private fun sampleReceipt(
     outputSymbol = symbol,
     outputAmountRaw = receivedRaw,
     outputDecimals = 8,
-    allInCostPct = cost,
+    routeCostPct = cost,
     route = "Metis",
     landedAtMillis = landedAtMillis,
 )

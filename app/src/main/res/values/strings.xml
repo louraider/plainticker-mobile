@@ -289,7 +289,6 @@
     <string name="swap_balance">Balance %1$s %2$s</string>
     <string name="swap_you_receive">You receive</string>
     <string name="swap_all_in_cost">All-in cost</string>
-    <string name="swap_route">Route %1$s</string>
     <string name="swap_button">Swap %1$s to %2$s</string>
     <string name="swap_signs_in">Signs in Seed Vault Wallet. Not investment advice.</string>
     <string name="swap_cost_at_tap">The cost is quoted when you tap Swap, not before.</string>
@@ -322,7 +321,7 @@
     <string name="swap_amount_above_balance">More than the %1$s in this wallet</string>
     <string name="swap_worst_case">At least %1$s %2$s after slippage</string>
     <string name="swap_sol_label">SOL needed</string>
-    <string name="swap_sol_sub_rent">Fee, priority, and %1$s for the token account</string>
+    <string name="swap_sol_sub_rent">Fee, priority, and a %1$s deposit for the token account, returned if it is closed</string>
     <string name="swap_sol_sub_no_rent">Fee and priority, the token account exists</string>
     <string name="swap_sol_short">Short %1$s SOL, this wallet has %2$s</string>
     <string name="swap_back_to_amount">Back to the amount</string>
@@ -352,6 +351,18 @@
     <string name="swap_no_balance">No %1$s in this wallet</string>
     <string name="swap_account_frozen">The %1$s account in this wallet is frozen by its issuer, so it cannot be swapped</string>
     <string name="swap_amount_below_unit">Smaller than the least %1$s that can be sent</string>
+
+    <!-- The cost, judges' review 2026-09-27. "All-in" only when the SOL the wallet pays (signature,
+         priority, token account rent) is priced in; without a SOL price the figure is the route's
+         alone and says so. The rent is a deposit that comes back if the account is closed. -->
+    <string name="swap_route_cost">Route cost</string>
+    <string name="swap_all_in_sub">Route %1$s. Includes %2$s in SOL fees and account deposit</string>
+    <string name="swap_route_cost_sub">Route %1$s. SOL fees and deposit are on the SOL line, not in this figure</string>
+    <string name="receipt_route_cost_paid">Route cost paid</string>
+    <string name="receipt_sol_paid">SOL paid</string>
+    <string name="receipt_sol_paid_rent">Fee, priority, and a %1$s deposit, returned if the account is closed</string>
+    <string name="receipt_sol_paid_no_rent">Fee and priority</string>
+    <string name="portfolio_swap_route_cost">route cost %1$s</string>
 
     <!-- Result: the finished attempt's own moment, above everything else on the sheet -->
     <string name="result_landed">Swap landed</string>

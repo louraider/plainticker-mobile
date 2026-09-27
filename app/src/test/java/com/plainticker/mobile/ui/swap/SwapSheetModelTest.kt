@@ -4,6 +4,7 @@ import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.ShippedCopy
 import com.plainticker.mobile.ui.words
 import org.junit.Assert.assertEquals
@@ -35,7 +36,7 @@ class SwapSheetModelTest {
         inAmountRaw = 5_000_000L,
         outAmountRaw = 1_360_437L,
         worstCaseOutRaw = 1_346_933L,
-        allInCostPct = 0.586,
+        routeCostPct = 0.586,
         slippageBps = 100,
         route = "Metis",
         swapType = "aggregator",
@@ -233,9 +234,10 @@ class SwapSheetModelTest {
         assertEquals(2, receive.span)
         assertEquals(SheetCellSize.Headline, receive.size)
 
-        val cost = cell(content, R.string.swap_all_in_cost)
+        // No SOL price in this quote, so the figure is the route's and is called that.
+        val cost = cell(content, R.string.swap_route_cost)
         assertEquals("0.59%", raw(cost.value))
-        assertEquals(R.string.swap_route, id(cost.sub))
+        assertEquals(R.string.swap_route_cost_sub, id(cost.sub))
         assertEquals(listOf("Metis"), args(cost.sub))
 
         val sol = cell(content, R.string.swap_sol_label)
@@ -243,6 +245,47 @@ class SwapSheetModelTest {
         assertEquals(R.string.swap_sol_sub_rent, id(sol.sub))
         assertEquals(listOf("0.00148844"), args(sol.sub))
         assertEquals(3, content.cells.size)
+    }
+
+    /**
+     * Judges' review, 2026-09-27: "All-in cost" excluded the SOL. With a SOL price it now adds the
+     * signature fee, the priority fee and the rent this wallet pays, and names the SOL share.
+     */
+    @Test
+    fun `with a SOL price the cost is all-in, the SOL share named under it`() {
+        val priced = quote.copy(inUsdValue = 5.0, solUsd = 200.0)
+        val content = SwapState.AwaitingWallet(leg, funds, amount(), priced, requote = false, timing = timing).shown()
+        val cost = cell(content, R.string.swap_all_in_cost)
+        // 0.586 percent route, plus 1,494,890 lamports at 200 dollars (0.298978) over 5 dollars in.
+        assertEquals(0.586 + 0.298978 / 5.0 * 100.0, priced.allInCostPct!!, 1e-9)
+        assertEquals("6.57%", raw(cost.value))
+        assertEquals(R.string.swap_all_in_sub, id(cost.sub))
+        assertEquals(listOf("Metis", "$0.2990"), args(cost.sub))
+        assertEquals("the rent within it is named apart", 0.297688, priced.rentUsd!!, 1e-9)
+        assertTrue("no Route cost cell beside it", content.cells.none { id(it.label) == R.string.swap_route_cost })
+    }
+
+    @Test
+    fun `a gasless order counts only the SOL the wallet itself pays`() {
+        val order = com.plainticker.mobile.data.jupiter.SwapOrder(
+            requestId = "r",
+            gasless = true,
+            taker = "taker",
+            inUsdValue = 5.0,
+            outUsdValue = 4.97,
+            signatureFeeLamports = 10_000L,
+            signatureFeePayer = "maker",
+            prioritizationFeeLamports = 4_245L,
+            prioritizationFeePayer = "maker",
+            rentFeeLamports = 1_488_440L,
+            rentFeePayer = "taker",
+        )
+        val q = SwapQuote.from(order).copy(solUsd = 200.0)
+        assertEquals(SolCost(0L, 1_488_440L, 0L), q.paidSol)
+        assertEquals(1_488_440L / 1e9 * 200.0, q.solCostUsd!!, 1e-9)
+        // Not gasless: the taker pays all three, whatever the payer fields say.
+        val paying = SwapQuote.from(order.copy(gasless = false))
+        assertEquals(paying.solCost, paying.paidSol)
     }
 
     @Test
@@ -380,11 +423,12 @@ class SwapSheetModelTest {
     @Test
     fun `the receipt states the fill against the quote, the cost paid, the signature and the slot`() {
         val content = landed().shown()
-        assertEquals(4, content.cells.size)
+        assertEquals(5, content.cells.size)
 
         assertEquals(listOf("5", "USDC"), args(cell(content, R.string.receipt_paid).value))
 
-        val cost = cell(content, R.string.receipt_cost_paid)
+        // No SOL price with this quote: the route's cost paid, named as such.
+        val cost = cell(content, R.string.receipt_route_cost_paid)
         assertEquals("the quote's 0.586 percent corrected by the fill", "0.55%", raw(cost.value))
         assertEquals(R.string.receipt_cost_sub, id(cost.sub))
         assertEquals("quoted cost, then how the fill beat it", listOf("0.59%", "+0.04%"), args(cost.sub))
@@ -397,6 +441,23 @@ class SwapSheetModelTest {
 
         assertEquals("445,912,340", raw(cell(content, R.string.receipt_slot).value))
         assertNull("only the signature is a handle", cell(content, R.string.receipt_slot).copies)
+
+        // What the wallet paid in SOL, the deposit named as coming back.
+        val sol = cell(content, R.string.receipt_sol_paid)
+        assertEquals("0.00149489", raw(sol.value))
+        assertEquals(R.string.receipt_sol_paid_rent, id(sol.sub))
+        assertEquals(listOf("0.00148844"), args(sol.sub))
+    }
+
+    @Test
+    fun `with a SOL price the receipt states the all-in cost paid, quote against fill in the same measure`() {
+        val priced = quote.copy(inUsdValue = 5.0, solUsd = 200.0)
+        val content = SwapState.Landed(leg, priced, fill, requoted = false, timing = timing).shown()
+        val cost = cell(content, R.string.receipt_cost_paid)
+        val solShare = 0.298978 / 5.0 * 100.0
+        assertEquals(fill.routeCostPaidPct(priced)!! + solShare, fill.allInCostPaidPct(priced)!!, 1e-9)
+        assertEquals(Fmt.percent(fill.allInCostPaidPct(priced)!!, signed = false), raw(cost.value))
+        assertEquals(listOf(Fmt.percent(priced.allInCostPct!!, signed = false), "+0.04%"), args(cost.sub))
     }
 
     @Test
@@ -407,7 +468,7 @@ class SwapSheetModelTest {
             R.string.value_missing,
             id(content.receipt?.amount),
         )
-        val cost = cell(content, R.string.receipt_cost_paid)
+        val cost = cell(content, R.string.receipt_route_cost_paid)
         assertEquals(R.string.value_missing, id(cost.value))
         assertNull("there is no fill to compare the quote against", cost.sub)
     }
@@ -415,11 +476,11 @@ class SwapSheetModelTest {
     @Test
     fun `a quote that priced neither side in dollars leaves the cost unknown, not free`() {
         val content = SwapState.AwaitingWallet(
-            leg, funds, amount(), quote.copy(allInCostPct = null), requote = false, timing = timing,
+            leg, funds, amount(), quote.copy(routeCostPct = null), requote = false, timing = timing,
         ).shown()
-        val cost = cell(content, R.string.swap_all_in_cost)
+        val cost = cell(content, R.string.swap_route_cost)
         assertEquals("zero percent would read as a swap that cost nothing", R.string.value_missing, id(cost.value))
-        assertEquals("the route still names itself", R.string.swap_route, id(cost.sub))
+        assertEquals("the route still names itself", R.string.swap_route_cost_sub, id(cost.sub))
     }
 
     @Test

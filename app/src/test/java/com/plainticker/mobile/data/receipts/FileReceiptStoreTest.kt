@@ -30,7 +30,7 @@ class FileReceiptStoreTest {
         outputSymbol = "TSLAx",
         outputAmountRaw = outputAmountRaw,
         outputDecimals = 8,
-        allInCostPct = 0.586,
+        routeCostPct = 0.586,
         route = "Metis",
         landedAtMillis = landedAtMillis,
         slot = 367_000_000L,
@@ -55,9 +55,28 @@ class FileReceiptStoreTest {
         assertEquals(6, row.inputDecimals)
         assertEquals(1_366_141L, row.outputAmountRaw)
         assertEquals(8, row.outputDecimals)
-        assertEquals(0.586, row.allInCostPct!!, 1e-9)
+        assertEquals(0.586, row.routeCostPct!!, 1e-9)
         assertEquals("Metis", row.route)
         assertEquals(367_000_000L, row.slot)
+    }
+
+    /**
+     * The route's cost is stored under its old key, `allInCostPct`, so a receipt written before
+     * 2026-09-27 still reads, now as what it always was: the route's cost, not all-in.
+     */
+    @Test
+    fun `the route cost keeps its stored key, and the SOL fields round-trip`() {
+        val store = FileReceiptStore(file())
+        store.record(receipt("sig-one").copy(solCostUsd = 0.3, rentUsd = 0.2977, inputUsd = 5.0))
+        val text = file().readText()
+        assertTrue(text, "\"allInCostPct\":0.586" in text)
+        assertFalse(text, "routeCostPct" in text)
+        val row = FileReceiptStore(file()).receipts.value.single()
+        assertEquals(0.3, row.solCostUsd!!, 1e-9)
+        assertEquals(0.2977, row.rentUsd!!, 1e-9)
+        assertEquals(0.586 + 6.0, row.allInCostPct!!, 1e-9)
+        // An old receipt, without the SOL fields, has a route cost and no all-in figure.
+        assertEquals(null, receipt("old").allInCostPct)
     }
 
     @Test

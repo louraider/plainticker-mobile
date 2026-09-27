@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.math.BigDecimal
 import java.util.Base64
 
@@ -346,7 +347,7 @@ class SwapViewModel(
                 return fail(leg, funds, input, quoteFailure ?: SwapFailure.QUOTE_UNAVAILABLE, null, requote, timing)
             }
 
-            val quote = SwapQuote.from(order)
+            var quote = SwapQuote.from(order)
             // Decoded here rather than inside the wallet round-trip: bytes this app cannot read
             // are this app's problem, and failing in the middle of the call would spend an
             // approval and then blame the wallet for a payload it was never handed.
@@ -378,8 +379,13 @@ class SwapViewModel(
             // meant. Jupiter's value of the order it built must match the typed quantity at the
             // price the app shows, within SwapTrust.VALUE_BOUND. Swap to USDC only: the other
             // direction spends USDC, whose decimals are pinned in SwapLeg.USDC.
+            // One Price v3 call for both the value check (Swap to USDC) and the SOL price the
+            // all-in cost needs (judges' review, 2026-09-27). Bounded: a slow or refused price
+            // costs the all-in figure, never the swap, and the sheet then says "Route cost".
+            val priced = pricesOf(if (leg.intoToken) listOf(KnownMints.WSOL) else listOf(leg.input.mint, KnownMints.WSOL))
+            quote = quote.copy(solUsd = priced[KnownMints.WSOL])
             if (!leg.intoToken) {
-                val price = priceOf(leg.input.mint)
+                val price = priced[leg.input.mint]
                 when (val value = SwapTrust.checkValue(leg.input.ui(input.raw), price, order.inUsdValue)) {
                     is SwapTrust.ValueVerdict.Consistent -> Unit
                     is SwapTrust.ValueVerdict.Mismatch -> {
@@ -687,14 +693,20 @@ class SwapViewModel(
         }
     }
 
-    /** The price the app shows for [mint], or null when there is none to check against. */
-    private suspend fun priceOf(mint: String): Double? = try {
-        prices.prices(listOf(mint))[mint]?.usdPrice
+    /**
+     * The prices the app shows for [mints], in one call, or without the ones that did not come
+     * back. Bounded by [PRICE_TIMEOUT_MS] so a backed-off price never holds the wallet shut.
+     */
+    private suspend fun pricesOf(mints: List<String>): Map<String, Double> = try {
+        withTimeoutOrNull(PRICE_TIMEOUT_MS) { prices.prices(mints) }
+            ?.mapNotNull { (mint, entry) -> entry.usdPrice.takeIf { it.isFinite() && it > 0.0 }?.let { mint to it } }
+            ?.toMap()
+            ?: emptyMap<String, Double>().also { debugLog.raw("price: no answer within $PRICE_TIMEOUT_MS ms") }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         debugLog.raw("price: ${e::class.simpleName}: ${e.message}")
-        null
+        emptyMap()
     }
 
     private fun receiptOf(leg: SwapLeg, quote: SwapQuote, fill: SwapFill, nowMillis: Long): SwapReceipt =
@@ -708,7 +720,10 @@ class SwapViewModel(
             outputSymbol = leg.output.symbol,
             outputAmountRaw = fill.outAmountRaw,
             outputDecimals = leg.output.decimals,
-            allInCostPct = fill.allInCostPaidPct(quote),
+            routeCostPct = fill.routeCostPaidPct(quote),
+            solCostUsd = quote.solCostUsd,
+            rentUsd = quote.rentUsd,
+            inputUsd = quote.inUsdValue,
             route = quote.route,
             landedAtMillis = nowMillis,
             slot = fill.slot,
@@ -735,6 +750,9 @@ class SwapViewModel(
     private companion object {
         /** One beat between two reads that asked for a slot the node had not reached yet. */
         const val FRESH_READ_RETRY_MS = 1_000L
+
+        /** The longest the price read before the wallet may take; past it the sheet says "Route cost". */
+        const val PRICE_TIMEOUT_MS = 2_500L
 
         /** Jupiter's program error for a route that ended below its slippage bound. */
         const val CODE_SLIPPAGE = 6001

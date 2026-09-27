@@ -133,7 +133,7 @@ object GallerySamples {
         inAmountRaw = 5_000_000L,
         outAmountRaw = 1_360_437L,
         worstCaseOutRaw = 1_346_933L,
-        allInCostPct = 0.586,
+        routeCostPct = 0.586,
         slippageBps = 100,
         route = "Metis",
         swapType = "aggregator",
