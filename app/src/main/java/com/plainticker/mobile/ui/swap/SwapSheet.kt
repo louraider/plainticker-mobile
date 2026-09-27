@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
+import com.plainticker.mobile.ui.rememberExplorerOpener
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSheet
@@ -224,6 +225,12 @@ internal fun ColumnScope.SwapSheetBody(
             )
         }
     }
+
+    // What this phone checked in the bytes, while the wallet is open (2026-09-27).
+    content.checked?.let { Sentence(it, AmberType.context, colors.textSecondary, NoticeTop) }
+    // The receipt's way to check it on the chain, under the signature and the slot.
+    val explorerLabel = content.explorerLabel
+    content.explorerUrl?.let { url -> if (explorerLabel != null) ExplorerLink(url, explorerLabel, colors) }
 
     Column(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),
@@ -462,6 +469,19 @@ private fun CostSkeleton() {
     }
 }
 
+/** "View on Solscan" under the receipt's cells: the landed transaction on a public explorer. */
+@Composable
+private fun ExplorerLink(url: String, label: Copy, colors: AmberColors) {
+    val open = rememberExplorerOpener()
+    TextAction(
+        label = label.text(),
+        onClick = { open(url) },
+        color = colors.actionText,
+        contentPadding = FlipPadding,
+        modifier = Modifier.padding(start = Side, top = NoticeTop),
+    )
+}
+
 /** One line of the sheet, in the style and colour its slot fixes. */
 @Composable
 private fun Sentence(text: Copy, style: TextStyle, color: Color, top: Dp) {
@@ -604,7 +624,7 @@ private val PreviewQuote = SwapQuote(
     inAmountRaw = 5_000_000L,
     outAmountRaw = 1_360_437L,
     worstCaseOutRaw = 1_346_933L,
-    allInCostPct = 0.586,
+    routeCostPct = 0.586,
     slippageBps = 100,
     route = "Metis",
     swapType = "aggregator",

@@ -48,6 +48,8 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.defaultAmberColors
+import com.plainticker.mobile.ui.SolscanAction
+import com.plainticker.mobile.ui.rememberShareText
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
@@ -71,6 +73,11 @@ data class VoteActions(
     val onConfirm: () -> Unit,
     val onRetry: () -> Unit,
     val onClose: () -> Unit,
+    /**
+     * Where the landed vote's plain sentence goes. Null, every host's default, is the system share
+     * sheet ([com.plainticker.mobile.ui.shareText]); a preview or a test hands its own.
+     */
+    val onShare: ((String) -> Unit)? = null,
 )
 
 @Composable
@@ -160,24 +167,35 @@ internal fun ColumnScope.VoteSheetBody(
         Sentence(it.text(), AmberType.meta, colors.textTertiary(AmberSurface.HIGH), DisclosureTop)
     }
 
+    // The landed vote on a public explorer, right above Share (judges' review, 2026-09-27), the
+    // way the pass receipt places its own. Flush with the text column: the action has no start
+    // inset of its own.
+    content.signature?.let {
+        SolscanAction(signature = it, color = colors.actionText, modifier = Modifier.padding(start = Side))
+    }
+
     Column(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),
         verticalArrangement = Arrangement.spacedBy(ActionGap),
     ) {
+        val share = content.shareText?.text()
+        val systemShare = rememberShareText()
+        val onShare = actions.onShare ?: systemShare
         content.primary?.let {
-            AmberPrimaryAction(label = it.label.text(), onClick = actions.of(it.kind))
+            AmberPrimaryAction(label = it.label.text(), onClick = actions.of(it.kind, share, onShare))
         }
         content.secondary?.let {
-            AmberSecondaryAction(label = it.label.text(), onClick = actions.of(it.kind))
+            AmberSecondaryAction(label = it.label.text(), onClick = actions.of(it.kind, share, onShare))
         }
     }
 }
 
 /** The machine's method for a button the model already chose. The sheet decides nothing here. */
-private fun VoteActions.of(kind: VoteActionKind): () -> Unit = when (kind) {
+private fun VoteActions.of(kind: VoteActionKind, share: String?, onShare: (String) -> Unit): () -> Unit = when (kind) {
     VoteActionKind.Confirm -> onConfirm
     VoteActionKind.Retry -> onRetry
     VoteActionKind.Close -> onClose
+    VoteActionKind.Share -> ({ share?.let(onShare) })
 }
 
 @Composable
@@ -263,10 +281,10 @@ private val CellHeight = 84.dp
 private val AmberSheetTitle: TextStyle = AmberType.sectionHead
 
 /**
- * The measured stake of the wallet the SKR read was proved with on 2026-09-13: 31,209.870777 SKR
- * of principal, which is exactly what the forwarder returned through its 8-byte slice.
+ * An example stake for the preview: 38,406.150222 SKR
+ * of principal, wide enough to exercise the widest figure the sheet draws.
  */
-private const val PreviewStakeRaw = 31_209_870_777L
+private const val PreviewStakeRaw = 38_406_150_222L
 
 /** The public demo wallet. The founder's own address appears in no file in this repository. */
 private const val PreviewCollector = "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ"

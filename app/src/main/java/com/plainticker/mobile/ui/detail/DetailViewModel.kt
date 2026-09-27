@@ -295,7 +295,7 @@ class DetailViewModel(
         _state.update {
             it.copy(
                 chain = if (reading != null && facts != null) {
-                    Piece.Ready(ChainRead(facts, reading.slot, reading.readAtMillis))
+                    Piece.Ready(ChainRead(facts, reading.slot, reading.readAtMillis, reading.rpcAgeSeconds))
                 } else {
                     Piece.Failed
                 },

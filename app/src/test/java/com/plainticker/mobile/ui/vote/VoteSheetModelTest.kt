@@ -4,6 +4,7 @@ import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteSummary
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.ShippedCopy
+import com.plainticker.mobile.wallet.TransactionGuard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -26,8 +27,8 @@ class VoteSheetModelTest {
 
     private val signature = "4xQm7gZ1LdPqR8vWnJb3sT6yUeK2cHaX9fNmD5oVtHe"
 
-    /** 31,209.870777 SKR, the principal the production forwarder returned on 2026-09-13. */
-    private val measuredStake = 31_209_870_777L
+    /** 38,406.150222 SKR, the principal the production forwarder returned on 2026-09-13. */
+    private val measuredStake = 38_406_150_222L
 
     private val build = VoteBuild(
         transaction = "UkVEQUNURUQ=",
@@ -73,7 +74,7 @@ class VoteSheetModelTest {
 
         val weight = content.cells[0]
         assertEquals("Staked SKR this vote carries", ShippedCopy.render(weight.label))
-        assertEquals("31,209.870777", ShippedCopy.render(weight.value))
+        assertEquals("38,406.150222", ShippedCopy.render(weight.value))
         assertEquals("the weight is the headline figure, so it takes the whole row", 2, weight.span)
 
         val fee = content.cells[1]
@@ -116,11 +117,12 @@ class VoteSheetModelTest {
     }
 
     @Test
-    fun `the vote states that it is gameable by a large stake, where a voter reads it before acting`() {
+    fun `the vote states how stake decides today and the planned change, where a voter reads it before acting`() {
         val disclosure = render(sheetOf(ready()).disclosure)
         assertEquals(
-            "A vote weighted by stake is decided by the largest stake. One wallet staking more " +
-                "than the rest outweighs them all, and nothing here corrects for that.",
+            "Today the largest stake decides: one wallet staking more than the rest outweighs them " +
+                "all. The planned next change is one Seeker, one voice, checked through the Seeker " +
+                "Genesis Token.",
             disclosure,
         )
 
@@ -168,14 +170,30 @@ class VoteSheetModelTest {
 
         val cells = content.cells
         assertEquals("Staked SKR behind NFLXx", ShippedCopy.render(cells[0].label))
-        assertEquals("31,209.870777", ShippedCopy.render(cells[0].value))
+        assertEquals("38,406.150222", ShippedCopy.render(cells[0].value))
         assertEquals("Signature", ShippedCopy.render(cells[1].label))
         assertEquals("4xQm…VtHe", ShippedCopy.render(cells[1].value))
         assertEquals("the fragment is what is shown, the signature is what is copied", signature, cells[1].copies)
 
-        assertNull("a landed vote has nothing left to do", content.primary)
+        assertEquals("a landed vote offers to share it, and nothing that sends another", VoteActionKind.Share, content.primary?.kind)
+        assertEquals("Share", render(content.primary?.label))
         assertEquals(VoteActionKind.Close, content.secondary?.kind)
-        assertTrue(render(content.notice)!!.contains("anyone can count it"))
+        assertEquals("The vote is on the chain. Counted within about 20 minutes.", render(content.notice))
+    }
+
+    /**
+     * Judges' review, 2026-09-27: a vote this phone refused read "The server did not build this
+     * vote". The server did build it; the sentence now says who refused and why.
+     */
+    @Test
+    fun `a guard refusal says this phone refused it, with the plain reason`() {
+        val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.GUARD_REFUSED, TransactionGuard.Why.WRONG_RECIPIENT))
+        assertEquals(
+            "This phone refused the transaction before your wallet saw it: it pays somewhere other than the destination shown. Nothing was signed or sent.",
+            render(content.notice),
+        )
+        assertEquals(VoteActionKind.Retry, content.primary?.kind)
+        assertNotEquals(render(content.notice), render(sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.UNAVAILABLE)).notice))
     }
 
     // ---- Every state ------------------------------------------------------------------------------------
@@ -240,10 +258,10 @@ class VoteSheetModelTest {
     @Test
     fun `the weight appears as soon as it is bounded, and stays through the signing`() {
         val building = sheetOf(VoteState.Building("NFLX", "NFLXx", collector, measuredStake))
-        assertEquals("31,209.870777", ShippedCopy.render(building.cells.single().value))
+        assertEquals("38,406.150222", ShippedCopy.render(building.cells.single().value))
 
         val signing = sheetOf(VoteState.Signing("NFLX", "NFLXx", collector, measuredStake, build))
-        assertEquals("31,209.870777", ShippedCopy.render(signing.cells.first().value))
+        assertEquals("38,406.150222", ShippedCopy.render(signing.cells.first().value))
         assertNotNull("a wallet that is open still says what it is open for", render(signing.phase))
     }
 
@@ -302,7 +320,7 @@ class VoteSheetModelTest {
         val signing = VoteState.Signing("NFLX", "NFLXx", collector, measuredStake, counted)
         assertEquals("123,456", ShippedCopy.render(sheetOf(signing).cells[0].value))
         // A server that sent no figure leaves the app's own bounded read on the screen.
-        assertEquals("31,209.870777", ShippedCopy.render(sheetOf(ready()).cells[0].value))
+        assertEquals("38,406.150222", ShippedCopy.render(sheetOf(ready()).cells[0].value))
     }
 
     @Test
@@ -332,7 +350,7 @@ class VoteSheetModelTest {
         // Everything else about the step is what it was: the same three figures, the same button,
         // and the weakness still stated where a person is about to act on it.
         assertEquals(3, content.cells.size)
-        assertEquals("31,209.870777", ShippedCopy.render(content.cells[0].value))
+        assertEquals("38,406.150222", ShippedCopy.render(content.cells[0].value))
         assertEquals(VoteActionKind.Confirm, content.primary?.kind)
         assertEquals("Vote to cover next", render(content.primary?.label))
         assertNotNull(content.disclosure)
@@ -343,5 +361,23 @@ class VoteSheetModelTest {
         val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.RATE_LIMITED))
         assertTrue(render(content.notice)!!.contains("Try again shortly."))
         assertEquals(VoteActionKind.Retry, content.primary?.kind)
+    }
+
+    @Test
+    fun `the share line is the plain sentence and the public transaction, nothing else`() {
+        val shared = render(sheetOf(landed()).shareText)
+        assertEquals(
+            "I voted for NFLX to be analyzed next on PlainTicker. https://solscan.io/tx/$signature",
+            shared,
+        )
+        val others = allStates.filter { it !is VoteState.Landed }.map { sheetOf(it) }
+        assertTrue("only a landed vote has anything to share", others.all { it.shareText == null && it.primary?.kind != VoteActionKind.Share })
+    }
+
+    @Test
+    fun `a landed vote carries its signature for View on Solscan, and nothing before it does`() {
+        assertEquals(signature, sheetOf(landed()).signature)
+        val others = allStates.filter { it !is VoteState.Landed }.map { sheetOf(it) }
+        assertTrue("only a landed vote links to the explorer", others.all { it.signature == null })
     }
 }

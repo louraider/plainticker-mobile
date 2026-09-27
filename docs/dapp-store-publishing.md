@@ -58,10 +58,11 @@ This is what makes Mobile Wallet Adapter able to tell a person that the app aski
 1. Choose the publisher wallet and back it up.
    - The portal requires a browser-extension wallet: "Connect a Solana wallet via a browser extension wallet (e.g Phantom, Solflare, Backpack), which will be your publisher wallet." (https://docs.solanamobile.com/dapp-store/submit-new-app)
    - Use a dedicated wallet owned by the team, not a personal daily-use wallet. Store the seed phrase in at least two secure places. Warning from the same page: "Do not lose access to it or you will not be able to make new submissions of this app."
-   - For CLI-driven updates later you also need "A signer keypair file (Solana CLI keypair)" (https://docs.solanamobile.com/dapp-store/publishing-cli). Generate or export it now and store it with the same care:
+   - For CLI-driven updates later you also need "A signer keypair file (Solana CLI keypair)" (https://docs.solanamobile.com/dapp-store/publishing-cli). Generate or export it now and store it with the same care, **outside this repository**. The repository is public: a keypair file inside the checkout is one `git add .` away from being published for good, because history keeps what a later commit deletes. `.gitignore` refuses `/secrets/`, `*keypair*.json`, `*.jks`, `*.p12` and `.env*` as a backstop, not as the plan.
      ```bash
-     solana-keygen new --outfile ./secrets/dapp-store-publisher.json --no-bip39-passphrase
-     solana-keygen pubkey ./secrets/dapp-store-publisher.json
+     mkdir -p ~/.config/solana
+     solana-keygen new --outfile ~/.config/solana/dapp-store-publisher.json --no-bip39-passphrase
+     solana-keygen pubkey ~/.config/solana/dapp-store-publisher.json
      ```
      Whether this must be the same key as the connected browser wallet is not stated on the CLI page (see Open questions). Safest assumption: import the same seed into the browser wallet so one key signs everything.
 
@@ -91,10 +92,10 @@ This is what makes Mobile Wallet Adapter able to tell a person that the app aski
    - If you also ship on Google Play: "You cannot use the same signing key for both Google Play and the dApp Store." The dApp Store needs "a release APK file signed with a new, unique signing key (different from Google Play)". (https://docs.solanamobile.com/dapp-store/publishing-from-google-play)
    - Format: signed APK, not AAB. "Ensure you are submitting a release build of your app that is signed. Debug builds will not be accepted" (https://docs.solanamobile.com/dapp-publishing/prepare).
      ```bash
-     keytool -genkeypair -v -keystore ./secrets/dappstore-release.keystore -alias dappstore -keyalg RSA -keysize 2048 -validity 10000
+     keytool -genkeypair -v -keystore ~/keystores/dappstore-release.keystore -alias dappstore -keyalg RSA -keysize 2048 -validity 10000
      ./gradlew assembleRelease
      ```
-   - Back up the keystore and passwords with the wallet seed.
+   - Keep the keystore outside the repository (this project's is `~/keystores/plainticker-release.jks`, see `docs/release-signing.md`) and back it up, with its passwords, beside the wallet seed.
 
 ### Week 2 to submission (content and build)
 
@@ -146,12 +147,12 @@ This is what makes Mobile Wallet Adapter able to tell a person that the app aski
       ```bash
       npm install -g @solana-mobile/dapp-store-cli
       # create a key at https://publish.solanamobile.com/dashboard/settings/api-keys
-      export DAPP_STORE_API_KEY=<your-api-key>
+      read -rs DAPP_STORE_API_KEY; export DAPP_STORE_API_KEY   # prompts, so the key never reaches shell history
       dapp-store --apk-file ./app/build/outputs/apk/release/app-release.apk \
-        --keypair ./secrets/dapp-store-publisher.json \
+        --keypair ~/.config/solana/dapp-store-publisher.json \
         --whats-new "Bug fixes and performance improvements"
       # or, from a hosted APK:
-      dapp-store --apk-url https://example.com/app-release.apk --keypair ./secrets/dapp-store-publisher.json --whats-new "..."
+      dapp-store --apk-url https://example.com/app-release.apk --keypair ~/.config/solana/dapp-store-publisher.json --whats-new "..."
       # CI: printf '%s' "$DAPP_STORE_API_KEY" | dapp-store --apk-file ... --keypair ... --whats-new "..."
       ```
       Documented flags are only `--apk-file`, `--apk-url`, `--keypair` (required), `--whats-new`. No RPC URL, build-tools path, storage or priority-fee flags exist in the current docs; "the backend handles Solana submissions".
@@ -163,7 +164,7 @@ The old `config.yaml` (https://github.com/solana-mobile/dapp-publishing/blob/mai
 
 ## Listing copy (refreshed 2026-09-27)
 
-The copy the portal form asks for, rewritten on 2026-09-27 against build 1.3.13. The 18 September
+The copy the portal form asks for, rewritten on 2026-09-27 for build 1.3.16 (checked against 1.3.13). The 18 September
 version predated the live vote, Pro, sign-in, Today and the light theme, and held the vote
 paragraph back because the vote was not live; it is live now, so the paragraph is in. Nothing below
 names a feature that is not in the build being submitted, which is both the honest position and the
@@ -177,8 +178,8 @@ nature, or purpose of any dApp". The figures match the one number set in
 | --- | --- | --- |
 | App name | **Not published** (checked listing-page-guidelines, submit-new-app, legacy `config.yaml`) | Written to 30 characters, the one text length the guidelines do publish. Assumption. |
 | Short description | **30 characters**, published: "Short description cannot exceed 30 characters." | listing-page-guidelines |
-| Long description | **No published limit**; "a well-written, concise overview" | Written to 2,774 characters, under Google Play's 4,000-character long description, the conservative neighbour. Assumption. |
-| What's new | **Not published.** The field is required and no length is given | Written to 417 characters, under Google Play's 500-character release notes. Assumption. |
+| Long description | **No published limit**; "a well-written, concise overview" | Written to 2,755 characters, under Google Play's 4,000-character long description, the conservative neighbour. Assumption. |
+| What's new | **Not published.** The field is required and no length is given | Written to 430 characters, under Google Play's 500-character release notes. Assumption. |
 | Category | **Not published**; "Expect a dropdown in the portal form" | listing-page-guidelines, submit-new-app and the legacy `config.yaml`, all checked |
 | Tags | **Not recorded by this document at all.** No tag field is published anywhere checked | If the form has one, the candidates are below; if it has none, nothing is lost |
 | Age rating | **Not published** | Answer the questionnaire from the build (below) |
@@ -220,24 +221,24 @@ The swap, when you want one. Jupiter routes it; Mobile Wallet Adapter and the Se
 
 Staked SKR decides what is analysed next. Most tokenized stocks have no analysis yet. Each week you can vote for one with a transaction weighted by the SKR you have staked, and the winner is analysed. A vote weighted by stake is decided by the largest stake, and the app says so where you cast it.
 
-Pro opens every figure on every covered stock: 12 USDC for 30 days, paid from your wallet, or 7,500 SKR staked. AAPL is open to everyone in full. Sign in with Google or a Solana wallet; the account and Pro are shared with plainticker.com.
+Pro opens every figure on every covered stock: 12 USDC for 30 days, paid from your wallet, or 7,500 SKR staked. AAPL is open to everyone in full. Sign in with Google; the account and Pro are shared with plainticker.com.
 
 xStocks are tokenized tracker instruments issued by a third party, Backed Finance, and are not available to US persons. The app asks for that self-certification on its first screen. PlainTicker is not a broker, offers no securities and takes custody of nothing. Not investment advice.
 
 Analysis by PlainTicker. Token catalog and proof of reserves by xStocks. Prices and routing by Jupiter. Filings from SEC EDGAR. Not affiliated with any of them.
 ```
 
-2,774 characters. The headings inside it are sentences rather than styled headers, because the
+2,755 characters. The headings inside it are sentences rather than styled headers, because the
 portal's rendering of this field is not published and a listing that depends on markdown surviving
 can break on somebody else's release.
 
 ### What's new, first release
 
 ```
-First release on the dApp Store. Five tabs: Today, with the NYSE state, your watched stocks and upcoming reports; Stocks, where each page reads reserves and issuer controls live from the Token-2022 mint beside the SEC-filings classification; Vote, where staked SKR chooses the next stock to be analysed; Portfolio, with Swap to USDC; and You, with Pro, promo codes and Google or wallet sign-in. Dark and light themes.
+First release on the dApp Store. Five tabs: Today, with the NYSE state, your watched stocks and upcoming reports; Stocks, where each page reads reserves and issuer controls live from the Token-2022 mint beside the SEC-filings classification; Vote, where staked SKR chooses the next stock to be analysed; Portfolio, with Swap to USDC; and You, with Pro, promo codes, Google sign-in and the wallet connection. Dark and light themes.
 ```
 
-417 characters. It describes the build rather than thanking anybody. On later releases this
+430 characters. It describes the build rather than thanking anybody. On later releases this
 field names only what changed.
 
 ### Category, tags, age rating

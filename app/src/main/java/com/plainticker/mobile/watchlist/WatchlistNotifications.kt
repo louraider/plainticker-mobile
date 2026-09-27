@@ -17,7 +17,7 @@ import com.plainticker.mobile.ui.home.HomeTab
 
 /**
  * The one notification this app sends: the daily digest, on one channel, with the monochrome brand
- * glyph, opening the Watchlist.
+ * glyph, opening what its title names (a stock, Vote, or Today).
  *
  * Three things it deliberately does not do. It does not ask for anything: the permission is
  * requested once, at the moment the first ticker is watched, and this class only ever reads the
@@ -26,11 +26,10 @@ import com.plainticker.mobile.ui.home.HomeTab
  * a refused permission, a blocked channel or a system that declines the post all mean the digest
  * stays on the screen, which it does anyway, and the worker finishes normally.
  *
- * The text this class ever receives is [com.plainticker.mobile.watchlist.Digest.headline]'s own
- * shorter reading, one to two short sentences (task digest-stickiness), in a big-text style so a
- * two-line reading still shows whole in the shade; the screen under You draws the fuller paragraph
- * instead, every clause the notification kept to one. The title is the heading the screen draws
- * above the Panel, so a person who taps through recognizes where they have landed.
+ * What it posts is [com.plainticker.mobile.watchlist.Digest.notice] (judges' round 2): the most
+ * useful line of the day as the title ("AAPLx reports tomorrow", "JEF, which you voted for, is now
+ * analysed"), never a generic "Daily digest", and up to two more lines as the body, in a big-text
+ * style so they show whole in the shade. The screen under You draws the full paragraph.
  */
 class WatchlistNotifications(context: Context) : DigestNotifier {
 
@@ -54,7 +53,7 @@ class WatchlistNotifications(context: Context) : DigestNotifier {
 
     // Checked by [enabled] just above, which lint cannot see through.
     @SuppressLint("MissingPermission")
-    override fun post(text: String) {
+    override fun post(notice: DigestNotice) {
         if (!enabled()) return
         val manager = NotificationManagerCompat.from(app)
         manager.createNotificationChannel(
@@ -63,12 +62,14 @@ class WatchlistNotifications(context: Context) : DigestNotifier {
                 .setDescription(app.getString(R.string.notification_channel_watchlist_description))
                 .build(),
         )
-        val notification = NotificationCompat.Builder(app, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(app, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_plainticker)
-            .setContentTitle(app.getString(R.string.notification_digest_title))
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(openWatchlist())
+            .setContentTitle(notice.title)
+        if (notice.body.isNotBlank()) {
+            builder.setContentText(notice.body).setStyle(NotificationCompat.BigTextStyle().bigText(notice.body))
+        }
+        val notification = builder
+            .setContentIntent(open(notice))
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
             .build()
@@ -78,13 +79,18 @@ class WatchlistNotifications(context: Context) : DigestNotifier {
     }
 
     /**
-     * Opens the screen the notification is about, which is the whole of plan section 13 Pass 3's
-     * rule for the return: a notification deep-links to exactly what it named.
+     * Opens what the notification's title named, which is the whole of plan section 13 Pass 3's
+     * rule for the return: a notification deep-links to exactly what it named. A stock opens its
+     * page (over Today, so back lands where the digest lives), a round opens Vote, anything else
+     * opens Today.
      */
-    private fun openWatchlist(): PendingIntent {
+    private fun open(notice: DigestNotice): PendingIntent {
+        // HomeTab ordinals, never AmberDestination ones: HomeScreen translates them (HomeTabDestinationTest).
+        val tab = if (notice.opensVote) HomeTab.VOTE.ordinal else HomeTab.WATCHLIST.ordinal
         val intent = Intent(app, MainActivity::class.java)
             .setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra(MainActivity.EXTRA_TAB, HomeTab.WATCHLIST.ordinal)
+            .putExtra(MainActivity.EXTRA_TAB, tab)
+        notice.ticker?.let { intent.putExtra(MainActivity.EXTRA_TICKER, it) }
         return PendingIntent.getActivity(
             app,
             0,

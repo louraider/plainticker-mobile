@@ -38,7 +38,7 @@ class YouModelTest {
 
     private val free = ProUiState(entitlementLoading = false, walletConnected = true)
     private val pass = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.PASS, untilMillis = now + 26 * day, walletConnected = true)
-    private val stake = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.STAKE, walletConnected = true, stakeRaw = 31_209_870_777L)
+    private val stake = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.STAKE, walletConnected = true, stakeRaw = 38_406_150_222L)
     private val subscription = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.SUBSCRIPTION, untilMillis = now + 3 * day)
     private val promo = ProUiState(entitlementLoading = false, pro = true, source = EntitlementSource.PROMO, untilMillis = now + 30 * day, walletConnected = true)
 
@@ -235,7 +235,7 @@ class YouModelTest {
         assertEquals(R.string.you_plan_until_stake, words(rows[1].value))
         assertEquals(R.string.you_plan_extend_stake, words(rows[2].value))
         assertTrue(rows.none { it.action == PlanAction.GET_PRO || it.action == PlanAction.EXTEND })
-        assertEquals("This wallet has 31,209.870777 SKR staked.", ShippedCopy.render(rows.last().value))
+        assertEquals("This wallet has 38,406.150222 SKR staked.", ShippedCopy.render(rows.last().value))
     }
 
     @Test
@@ -330,5 +330,24 @@ class YouModelTest {
     fun `the license terms sentence names the actual license, spelled out rather than abbreviated`() {
         val terms = ShippedCopy.strings.getValue("you_license_terms")
         assertTrue(terms.contains("SIL Open Font License 1.1"))
+    }
+
+    // ---- About's links (judges' round 2) ------------------------------------------------------
+
+    @Test
+    fun `about links name plainticker's own privacy, terms and account deletion pages`() {
+        assertEquals("https://www.plainticker.com/en/privacy", AboutLinks.PRIVACY)
+        assertEquals("https://www.plainticker.com/en/terms", AboutLinks.TERMS)
+        assertEquals("https://www.plainticker.com/en/account#delete", AboutLinks.DELETE_ACCOUNT)
+        listOf(AboutLinks.PRIVACY, AboutLinks.TERMS, AboutLinks.DELETE_ACCOUNT).forEach {
+            assertTrue("$it must be https on plainticker.com", it.startsWith("https://www.plainticker.com/"))
+        }
+    }
+
+    @Test
+    fun `the wallet group's words say it signs and is not a sign-in`() {
+        assertEquals("Wallet", ShippedCopy.strings.getValue("you_heading_wallet"))
+        val short = ShippedCopy.strings.getValue("you_wallet_note_short")
+        assertTrue(short.contains("not a way to sign in"))
     }
 }

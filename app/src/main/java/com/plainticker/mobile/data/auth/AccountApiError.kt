@@ -17,12 +17,23 @@ import java.io.IOException
  * [NotSignedIn] is its own case because both callers treat it identically: the device is no longer
  * bound to a Google account, so the caller clears the local account and shows the signed-out state
  * honestly, rather than reading it as a retryable failure the way [Unavailable] is.
+ *
+ * [RekeyRequired] and [CodeRetired] (the pack's shared server contract, 2026-09-27) are 401s too,
+ * and are read BEFORE the bare-401 fallback to [NotSignedIn]: a legacy code that still needs its
+ * rekey must never clear the signed-in account, and a retired code is its own honest line.
+ * `POST /api/v1/account/signout` answers through this same mapping.
  */
 sealed class AccountApiError(val status: Int?, val code: String?, val detail: String?, message: String) :
     IOException(message) {
 
     /** 401 `not_signed_in`: this device's code is no longer bound to a Google account. */
     class NotSignedIn(status: Int?) : AccountApiError(status, CODE_NOT_SIGNED_IN, null, "account: not signed in")
+
+    /** 401 `rekey_required`: this device still carries a legacy 10-symbol code (DeviceRekeyer). */
+    class RekeyRequired(status: Int?) : AccountApiError(status, CODE_REKEY_REQUIRED, null, "account: rekey required")
+
+    /** 401 `code_retired`: the server no longer accepts this device's code anywhere. */
+    class CodeRetired(status: Int?) : AccountApiError(status, CODE_CODE_RETIRED, null, "account: code retired")
 
     /** 400 `bad_request`. */
     class BadRequest(detail: String?) :
@@ -52,13 +63,17 @@ sealed class AccountApiError(val status: Int?, val code: String?, val detail: St
         const val CODE_NOT_LINKED = "not_linked"
         const val CODE_LAST_METHOD = "last_method"
         const val CODE_RATE_LIMITED = "rate_limited"
+        const val CODE_REKEY_REQUIRED = "rekey_required"
+        const val CODE_CODE_RETIRED = "code_retired"
 
-        /** Maps a non-2xx `/account` or `/account/wallets/unlink` answer onto one of the states above. */
+        /** Maps a non-2xx `/account`, `/account/wallets/unlink` or `/account/signout` answer onto one of the states above. */
         fun fromErrorBody(status: Int, body: String?, json: Json): AccountApiError {
             val obj = body?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
             val code = (obj?.get("error") as? JsonPrimitive)?.contentOrNull
             return when (code) {
                 CODE_NOT_SIGNED_IN -> NotSignedIn(status)
+                CODE_REKEY_REQUIRED -> RekeyRequired(status)
+                CODE_CODE_RETIRED -> CodeRetired(status)
                 CODE_BAD_REQUEST -> BadRequest(code)
                 CODE_NOT_LINKED -> NotLinked(code)
                 CODE_LAST_METHOD -> LastMethod(code)

@@ -1105,7 +1105,7 @@ class ListViewModelTest {
 
     @Test
     fun `the next up strip carries the server's leaders and hides when the call fails`() = runTest {
-        val leaders = FakeNextUpRepository(Result.success(listOf(NextUpRow("TSLA", "31209870777", 3))))
+        val leaders = FakeNextUpRepository(Result.success(listOf(NextUpRow("TSLA", "38406150222", 3))))
         val vm = viewModel(nextUp = leaders)
 
         vm.state.test {
@@ -1140,7 +1140,7 @@ class ListViewModelTest {
      */
     @Test
     fun `a cancelled leaders call is not an answer, and never blanks the strip on screen`() = runTest {
-        val leaders = listOf(NextUpRow("TSLA", "31209870777", 3))
+        val leaders = listOf(NextUpRow("TSLA", "38406150222", 3))
         val nextUp = FakeNextUpRepository(Result.success(leaders))
         val vm = viewModel(nextUp = nextUp)
         advanceUntilIdle()

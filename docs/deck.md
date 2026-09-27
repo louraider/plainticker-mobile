@@ -1,6 +1,6 @@
 # PlainTicker Mobile: deck
 
-Ten slides. Written 2026-09-27 against build 1.3.13 and the number set in
+Ten slides. Written 2026-09-27 for build 1.3.16 (checked against 1.3.13) and the number set in
 `docs/submission-answers.md` ("The one number set"). The Align coach reads the deck's text, so each
 slide's text carries its point without the speaker notes, and nothing on a slide talks to the
 reader about scoring or judging.
@@ -64,7 +64,7 @@ not in a browser. Say "a classification by a fixed rule, not advice" once here, 
 > 4. **A swap:** Jupiter routes it, the Seed Vault signs it, *Swap landed*, a receipt with the
 >    cost actually paid. **Swap to USDC** for the way back.
 > 5. **Vote:** staked SKR chooses the next stock to be analysed.
-> 6. **You:** Pro, Google or wallet sign-in, one account with plainticker.com.
+> 6. **You:** Pro, Google sign-in, one account with plainticker.com. The wallet connects to sign.
 
 *Screenshots: `docs/img/01-today.png`, `docs/img/04-daily-digest.png`.*
 
@@ -88,8 +88,8 @@ a day and nothing else.
 >   Not a port, not a web wrapper.
 
 **Speaker notes.** The analysis engine predates the hackathon and is the backend. Everything on
-the phone is new: 327 commits since 10 September. The web product has no wallet, no chain read, no
-swap and no notification. The verified identity is the one line a Seeker owner reads before
+the phone is new: 327 commits since 10 September. The web product has no chain read, no swap and
+no notification. The verified identity is the one line a Seeker owner reads before
 approving: it says www.plainticker.com with a verification mark.
 
 ---
@@ -121,12 +121,15 @@ is stored raw so a one-Seeker-one-voice rule can be applied in the tally alone.
 **Slide text**
 
 > - **TransactionGuard** reads the bytes of every swap, vote and pass and compares them with what
->   the screen shows and with addresses pinned in the app. Anything else is refused.
+>   the screen shows and with addresses pinned in the app. A transaction that does more than the
+>   screen shows, or that the guard cannot parse, is refused. Swap accounts loaded from a lookup
+>   table and what Jupiter calls inside its own program are outside what it can read.
 > - Swaps: exactly one Jupiter instruction of a known layout; tokens must leave from and land in
 >   the wallet's own accounts; no authority handed to anyone else.
 > - **No keys anywhere**, no secrets in the APK. RPC goes through a read-only five-method
 >   forwarder.
-> - **What it cannot see:** Jupiter's routing inside its own program. Stated in the README.
+> - **What it cannot see:** Jupiter's routing inside its own program, and swap accounts loaded
+>   from a lookup table. Stated in the README, with what stands in for each.
 
 **Speaker notes.** The screen's figures come from JSON sent beside the bytes, so without the guard
 a compromised server could show "12 USDC to the treasury" over a transaction that drains an

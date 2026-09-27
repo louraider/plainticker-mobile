@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -36,6 +37,9 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     openTab: Int? = null,
     onTabOpened: () -> Unit = {},
+    /** A stock a notification named: opened over home once the graph is up, then consumed. */
+    openTicker: String? = null,
+    onTickerOpened: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val factory = remember(container) { appViewModelFactory(container) }
@@ -70,14 +74,26 @@ fun AppNavHost(
         }
     }
 
+    // After the tab above, so the stock opens over the tab the notification also named and back
+    // lands on it. Nothing opens before onboarding has been passed.
+    LaunchedEffect(openTicker) {
+        val ticker = openTicker ?: return@LaunchedEffect
+        onTickerOpened()
+        if (!onboarded) return@LaunchedEffect
+        navController.navigate(Routes.detail(ticker)) { launchSingleTop = true }
+    }
+
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 viewModel = viewModel(factory = factory),
-                onDone = {
+                onDone = { exit ->
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.ONBOARDING) { inclusive = true }
                     }
+                    // The worked example: a skipped pick lands on a stock page whose every figure
+                    // is open, over Today, rather than on an empty screen.
+                    exit.ticker?.let { navController.navigate(Routes.detail(it)) }
                 },
             )
         }
@@ -87,12 +103,20 @@ fun AppNavHost(
                 navArgument(Routes.ARG_TAB) { type = NavType.IntType; defaultValue = HomeTab.LIST.ordinal },
             ),
         ) { entry ->
+            // Detail's "Have a code? Get Pro" (judges' round 2) leaves this flag on the home entry
+            // it pops back to, rather than building a new home: the reader's place on Today or
+            // Stocks survives, and You opens with the code field ready.
+            val promoRequested by entry.savedStateHandle
+                .getStateFlow(Routes.KEY_OPEN_PROMO, false)
+                .collectAsStateWithLifecycle()
             HomeScreen(
                 factory = factory,
                 onOpenDetail = { ticker -> navController.navigate(Routes.detail(ticker)) },
                 onOpenGallery = if (BuildConfig.DEBUG) ({ navController.navigate(Routes.GALLERY) }) else null,
                 initialTab = entry.arguments?.getInt(Routes.ARG_TAB) ?: HomeTab.LIST.ordinal,
                 onOpenDigest = { navController.navigate(Routes.DIGEST) },
+                openPromo = promoRequested,
+                onPromoOpened = { entry.savedStateHandle[Routes.KEY_OPEN_PROMO] = false },
             )
         }
         composable(Routes.DIGEST) {
@@ -115,6 +139,22 @@ fun AppNavHost(
                     navController.navigate(Routes.home(HomeTab.PORTFOLIO.ordinal)) {
                         popUpTo(Routes.HOME_TAB) { inclusive = true }
                         launchSingleTop = true
+                    }
+                },
+                // The lock's way to Pro: back to the home entry Detail was opened from, with You's
+                // code field asked for. Detail always sits on a home entry; the fallback only
+                // covers a graph that someday opens Detail some other way.
+                onGetPro = {
+                    val home = navController.previousBackStackEntry
+                    if (home != null && home.destination.route == Routes.HOME_TAB) {
+                        home.savedStateHandle[Routes.KEY_OPEN_PROMO] = true
+                        navController.popBackStack()
+                    } else {
+                        navController.navigate(Routes.home(HomeTab.YOU.ordinal)) {
+                            popUpTo(Routes.HOME_TAB) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        navController.currentBackStackEntry?.savedStateHandle?.set(Routes.KEY_OPEN_PROMO, true)
                     }
                 },
             )

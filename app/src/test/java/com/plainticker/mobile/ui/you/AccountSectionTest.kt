@@ -24,6 +24,7 @@ class AccountSectionTest {
     private fun source(name: String): String = File(module, "src/main/java/com/plainticker/mobile/ui/you/$name").readText()
 
     private val sectionScan by lazy { KotlinScan(source("AccountSection.kt")) }
+    private val walletScan by lazy { KotlinScan(source("WalletSection.kt")) }
     private val screenScan by lazy { KotlinScan(source("YouScreen.kt")) }
 
     // ---- Placement ---------------------------------------------------------------------------
@@ -56,12 +57,14 @@ class AccountSectionTest {
         // Was "the sign-in button is never a second amber fill", pinned on an AmberSecondaryAction
         // in this file. The rule holds more strictly now: the hero is the only place You draws a
         // fill (Sign in with Google is its AmberPrimaryAction when there is no identity), and this
-        // group's Sign in, Sign out, Connect and Disconnect are all text actions.
+        // group's Sign in and Sign out, and the Wallet group's Connect and Disconnect (their own
+        // group since the judges' round 2), are all text actions.
         val code = sectionScan.code
         assertEquals("no filled action in the section", 0, code.split("AmberPrimaryAction(").size - 1)
+        assertEquals("no filled action in the wallet group", 0, walletScan.code.split("AmberPrimaryAction(").size - 1)
         assertTrue("RowAction(stringResource(R.string.you_action_sign_in), onSignIn)" in code)
-        assertTrue("RowAction(stringResource(R.string.you_action_connect), onConnect)" in code)
-        assertTrue("RowAction(stringResource(R.string.action_disconnect), onDisconnect)" in code)
+        assertTrue("RowAction(stringResource(R.string.you_action_connect), onConnect)" in walletScan.code)
+        assertTrue("RowAction(stringResource(R.string.action_disconnect), onDisconnect)" in walletScan.code)
         assertTrue("sign-in messages are drawn from the one mapping", "accountMessageRes(it)" in code)
         assertTrue("the hero is handed the message when it offers Sign in", "showMessage = heroMessage == null" in screenScan.code)
     }
@@ -69,7 +72,7 @@ class AccountSectionTest {
     @Test
     fun `sign out is a two-step inline confirm, never a one-tap loss`() {
         val code = sectionScan.code
-        val row = code.substring(code.indexOf("private fun SignedInRow("), code.indexOf("private fun WalletRow("))
+        val row = code.substring(code.indexOf("private fun SignedInRow("), code.indexOf("private const val CopiedMillis"))
         assertTrue("the first tap only asks", "RowAction(signOut, { confirming = true })" in row)
         assertTrue("the second tap signs out", "RowAction(signOut, { confirming = false; onSignOut() })" in row)
         assertTrue("Cancel folds the question away", "R.string.you_action_cancel), { confirming = false })" in row)
@@ -91,7 +94,7 @@ class AccountSectionTest {
 
     @Test
     fun `the wallet copies its full address, never the short key`() {
-        assertTrue("ClipData.newPlainText(clipLabel, wallet.address)" in sectionScan.code)
+        assertTrue("ClipData.newPlainText(clipLabel, wallet.address)" in walletScan.code)
         assertTrue("a linked wallet copies its own full address the same way", "ClipData.newPlainText(clipLabel, wallet))" in sectionScan.code)
     }
 
@@ -124,6 +127,43 @@ class AccountSectionTest {
         assertTrue("copy spelled in Kotlin: $sentences", sentences.isEmpty())
     }
 
+    // ---- The Wallet group (judges' round 2) --------------------------------------------------
+
+    @Test
+    fun `the phone's wallet connection is its own group, not a sign-in method`() {
+        assertFalse("the wallet row came back under Sign-in methods", "private fun WalletRow(" in sectionScan.code || " WalletRow(wallet" in sectionScan.code)
+        assertFalse("R.string.you_wallet_method" in sectionScan.code)
+        assertTrue("R.string.you_heading_wallet" in walletScan.code)
+        assertTrue("WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)" in walletScan.code)
+        val screen = screenScan.code
+        val body = screen.substring(screen.indexOf("internal fun YouContent("), screen.indexOf("private fun amberColors("))
+        val account = body.indexOf("AccountSection(")
+        val wallet = body.indexOf("WalletSection(")
+        assertTrue("YouContent never draws the Wallet group", wallet >= 0)
+        assertTrue("Wallet follows Sign-in methods", account in 0 until wallet)
+        assertTrue("Wallet comes before On this device", wallet < body.indexOf("DeviceGroup("))
+        assertTrue("linked wallets stay with the account", "LinkedWalletsGroup(state = signedIn, onUnlink = onUnlink, colors = colors)" in sectionScan.code)
+    }
+
+    @Test
+    fun `the wallet row's note is one short line, the full note behind Show`() {
+        val short = ShippedCopy.strings.getValue("you_wallet_note_short")
+        assertTrue("\"$short\" is longer than one line", short.length <= 70)
+        assertTrue("sub = note" in walletScan.code)
+        assertTrue("R.string.you_wallet_note_short" in walletScan.code)
+        assertTrue("the full note is behind a tap", "if (open) {" in walletScan.code)
+        assertTrue("R.string.you_wallet_note)" in walletScan.code)
+    }
+
+    @Test
+    fun `the wallet group never touches the device code and spells no copy in Kotlin`() {
+        assertFalse(".code(" in walletScan.code)
+        assertFalse("DevicePassStore" in walletScan.code)
+        val previewsAt = source("WalletSection.kt").lines().indexOfFirst { "---- Previews" in it } + 1
+        val sentences = walletScan.literals.filter { it.line < previewsAt }.map { it.text }.filter { it.length > 12 && it.contains(' ') }
+        assertTrue("copy spelled in Kotlin: $sentences", sentences.isEmpty())
+    }
+
     // ---- What it says ------------------------------------------------------------------------
 
     @Test
@@ -141,7 +181,10 @@ class AccountSectionTest {
             val text = ShippedCopy.render(Copy.Words(accountMessageRes(message)))
             assertFalse("$message: $text", '!' in text)
             assertFalse("$message is not one line: $text", '\n' in text)
-            assertTrue("$message is too long to read as one line: $text", text.length <= 90)
+            // LINK_ON_WEB's sentence was given word for word with the server contract (2026-09-27),
+            // and it has to name both the place and the step; it wraps to a second line at 95.
+            val limit = if (message == AccountMessage.LINK_ON_WEB) 95 else 90
+            assertTrue("$message is too long to read as one line: $text", text.length <= limit)
         }
     }
 
@@ -161,4 +204,64 @@ class AccountSectionTest {
     // The clipping measurements this file used to carry (the sign-in button labels and the wallet
     // key) moved to CabinetFitTest with every other one-line slot on You, re-derived for the
     // hero's own button width.
+
+    // ---- The pack's shared server contract (2026-09-27) ---------------------------------------
+
+    @Test
+    fun `link_on_web offers the web account page beside Sign in and under the hero's message`() {
+        val section = sectionScan.code
+        assertTrue("uriHandler.openUri(AccountMessage.LINK_ON_WEB_URL)" in section)
+        assertTrue("openWeb.takeIf { showMessage && accountMessageOpensWeb(state.message) }" in section)
+        val screen = screenScan.code
+        assertTrue("if (accountMessageOpensWeb(it))" in screen)
+        assertTrue("onClick = { runCatching { uriHandler.openUri(AccountMessage.LINK_ON_WEB_URL) } }" in screen)
+        assertEquals(
+            "This email already has a PlainTicker account. Sign in on plainticker.com and link Google there.",
+            ShippedCopy.strings.getValue("account_msg_link_on_web"),
+        )
+    }
+
+    @Test
+    fun `a sign-out in flight offers nothing, and the device code notice leads the group`() {
+        val section = sectionScan.code
+        assertTrue("if (state.signingOut)" in section)
+        assertTrue("R.string.account_signing_out" in section)
+        val group = section.substring(section.indexOf("AmberTickerRowGroup(colors = colors) {"))
+        assertTrue("the notice comes before the Google row", group.indexOf("deviceCodeNoticeRes(") < group.indexOf("GoogleRow("))
+        assertTrue("deviceCodeStatus = deviceCodeStatus" in screenScan.code)
+    }
+
+    @Test
+    fun `the device code notice names a way to reach a person, and never the code`() {
+        assertEquals(null, deviceCodeNoticeRes(com.plainticker.mobile.data.auth.DeviceCodeStatus.OK))
+        listOf("device_code_replaced", "device_code_retired", "promo_error_code_retired").forEach { name ->
+            assertTrue(name, "hi@plainticker.com" in ShippedCopy.strings.getValue(name))
+        }
+        assertEquals(
+            "This phone got a new, stronger code. Sign in with Google again to reconnect your account.",
+            ShippedCopy.strings.getValue("device_code_sign_in_again"),
+        )
+        assertEquals(
+            "This phone's old code could not be moved. It now has a new code. If you paid for Pro on this phone, write to hi@plainticker.com.",
+            ShippedCopy.strings.getValue("device_code_replaced"),
+        )
+        com.plainticker.mobile.data.auth.DeviceCodeStatus.entries
+            .filter { it != com.plainticker.mobile.data.auth.DeviceCodeStatus.OK }
+            .forEach { assertTrue(it.name, deviceCodeNoticeRes(it) != null) }
+    }
+
+    @Test
+    fun `a redeemed code tells a reader with no account how to keep Pro past a reinstall`() {
+        val screen = screenScan.code
+        assertTrue("promoKeepNote = account is AccountUiState.SignedOut" in screen)
+        assertTrue("sub = if (keepNote) stringResource(R.string.promo_success_keep_note) else null" in screen)
+        assertEquals("Sign in with Google to keep Pro if you reinstall.", ShippedCopy.strings.getValue("promo_success_keep_note"))
+    }
+
+    @Test
+    fun `the sign-out question no longer promises the account's Pro stays`() {
+        val text = ShippedCopy.strings.getValue("you_sign_out_confirm")
+        assertFalse("keeps that account" in text)
+        assertTrue("unlinks it from the account" in text)
+    }
 }

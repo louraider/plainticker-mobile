@@ -11,6 +11,12 @@ object KnownMints {
     /** Tesla xStock. Token-2022 with the scaledUiAmount extension; multiplier currently 1. */
     const val TSLAX = "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
 
+    /**
+     * Wrapped SOL, the native mint, classic Token program. A Metis route through SOL opens the
+     * wallet's own wrapped-SOL account and closes it back to the wallet in the same transaction.
+     */
+    const val WSOL = "So11111111111111111111111111111111111111112"
+
     /** Seeker (SKR) governance token, 6 decimals. */
     const val SKR = "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3"
 }

@@ -100,7 +100,7 @@ class PortfolioViewModelTest {
         signature: String,
         landedAtMillis: Long,
         outputAmountRaw: Long? = 1_364_000L,
-        allInCostPct: Double? = 0.09,
+        routeCostPct: Double? = 0.09,
     ) = SwapReceipt(
         signature = signature,
         inputMint = KnownMints.USDC,
@@ -111,7 +111,7 @@ class PortfolioViewModelTest {
         outputSymbol = "TSLAx",
         outputAmountRaw = outputAmountRaw,
         outputDecimals = 8,
-        allInCostPct = allInCostPct,
+        routeCostPct = routeCostPct,
         route = "Metis",
         landedAtMillis = landedAtMillis,
     )

@@ -315,21 +315,106 @@ class DetailModelTest {
     // ---- Backing and controls ------------------------------------------------------------------
 
     @Test
-    fun `the grid is five facts in the fixed order, the reserves spanning the first row`() {
+    fun `the grid is in the fixed order, reserves and chain supply spanning a row each, the delegate named last`() {
         val cells = served().trustFacts
         assertEquals(
             listOf(
                 R.string.detail_fact_por,
+                R.string.detail_fact_supply,
                 R.string.detail_fact_delegate,
                 R.string.detail_fact_pausable,
                 R.string.detail_fact_split,
                 R.string.detail_fact_hook,
+                R.string.detail_fact_delegate_address,
             ),
             cells.map { label(it.label) },
         )
-        assertEquals(2, cells.first().span)
+        assertEquals(2, cells[0].span)
+        assertEquals(2, cells[1].span)
         assertTrue("the reserves sub line carries numbers", cells.first().subMono)
-        assertTrue("the four controls each take half a row", cells.drop(1).all { it.span == 1 })
+        assertTrue("the four controls each take half a row", cells.subList(2, 6).all { it.span == 1 })
+        assertEquals(2, cells.last().span)
+    }
+
+    // ---- Chain supply and the delegate's address (judges' review, 2026-09-27) ------------------
+
+    private fun chainWithSupply(supplyRaw: Long, multiplier: Double = 1.0) = Piece.Ready(
+        ChainRead(
+            facts = mintFacts(supplyRaw = java.math.BigInteger.valueOf(supplyRaw), scaledUiAmount = scaled(multiplier)),
+            slot = 1L,
+            readAtMillis = now,
+        ),
+    )
+
+    @Test
+    fun `the issuer's circulating count matching the mint's supply reads matches chain`() {
+        // 25,924 tokens reported; 25,930 on chain is within a tenth of a percent.
+        val cell = served(chain = chainWithSupply(2_593_000_000_000L)).trustFacts
+            .first { label(it.label) == R.string.detail_fact_supply }
+        assertEquals(R.string.detail_fact_supply_matches, label(cell.value))
+        assertEquals(R.string.detail_fact_supply_sub, label(cell.sub))
+        assertEquals(listOf("25,930", "25,924"), args(cell.sub))
+        assertTrue(cell.subMono)
+    }
+
+    @Test
+    fun `a gap between chain and report is stated as a percent of the report, with both counts`() {
+        // The real TSLAx reads: 229,637.34 on chain (2026-09-12) against 196,340.26 reported (2026-09-10).
+        val cell = served(
+            chain = chainWithSupply(22_963_733_950_050L),
+            reservesPiece = Piece.Ready(reserves.copy(tokensInCirculation = 196_340.26085951860836)),
+        ).trustFacts.first { label(it.label) == R.string.detail_fact_supply }
+        assertEquals("+17.0%", raw(cell.value))
+        assertEquals(listOf("229,637.34", "196,340.26"), args(cell.sub))
+    }
+
+    @Test
+    fun `the chain's supply is scaled by the multiplier in force, never raw alone`() {
+        // A ten-for-one split: raw supply 2,592.4 tokens, shown as 25,924, which matches the report.
+        val cell = served(chain = chainWithSupply(259_240_000_000L, multiplier = 10.0)).trustFacts
+            .first { label(it.label) == R.string.detail_fact_supply }
+        assertEquals(R.string.detail_fact_supply_matches, label(cell.value))
+        assertEquals(listOf("25,924", "25,924"), args(cell.sub))
+    }
+
+    @Test
+    fun `no chain read or no report leaves the supply unknown, each with its own reason`() {
+        val unread = served(chain = Piece.Failed).trustFacts.first { label(it.label) == R.string.detail_fact_supply }
+        assertEquals(R.string.detail_value_unknown, label(unread.value))
+        assertEquals(R.string.detail_chain_unread_sub, label(unread.sub))
+        assertEquals(2, unread.span)
+        val unreported = served(reservesPiece = Piece.Absent).trustFacts.first { label(it.label) == R.string.detail_fact_supply }
+        assertEquals(R.string.detail_value_unknown, label(unreported.value))
+        assertEquals(R.string.detail_fact_supply_no_report_sub, label(unreported.sub))
+    }
+
+    @Test
+    fun `the permanent delegate is named by address, in the identifier face, copied whole on tap`() {
+        val cell = served().trustFacts.first { label(it.label) == R.string.detail_fact_delegate_address }
+        assertEquals("5aMN…FvEq", raw(cell.value))
+        assertTrue(cell.valueMono)
+        assertEquals("5aMNNLQJwAEeoemTEMkv5NVjqKwvvefRYCQ5Z67HFvEq", cell.copies)
+        assertEquals(R.string.receipt_tap_to_copy, label(cell.sub))
+        // A revoked delegate, or none, names no address: the delegate cell already says "None".
+        val revoked = served(chain = Piece.Ready(ChainRead(mintFacts(permanentDelegate = PermanentDelegate(null)), 1L, now)))
+        assertTrue(revoked.trustFacts.none { label(it.label) == R.string.detail_fact_delegate_address })
+        assertTrue(served(chain = Piece.Ready(ChainRead(mintFacts(), 1L, now))).trustFacts.none { label(it.label) == R.string.detail_fact_delegate_address })
+    }
+
+    @Test
+    fun `the live bar counts the forwarder's own age, from its X-Rpc-Age header`() {
+        // Received 2 s ago, but the forwarder had held that answer for 59 s already: a
+        // minute old, not "2 s ago", and no longer live.
+        val cached = served(
+            chain = Piece.Ready(ChainRead(mintFacts(), slot = 446_503_662L, readAtMillis = now - 2_000L, rpcAgeSeconds = 59L)),
+        ).liveLine!!
+        assertEquals(listOf("446,503,662", "1 min ago"), args(cached.meta))
+        assertFalse(cached.live)
+        val fresh = served(
+            chain = Piece.Ready(ChainRead(mintFacts(), slot = 446_503_662L, readAtMillis = now - 2_000L, rpcAgeSeconds = 3L)),
+        ).liveLine!!
+        assertEquals(listOf("446,503,662", "5 s ago"), args(fresh.meta))
+        assertTrue(fresh.live)
     }
 
     @Test
@@ -709,7 +794,8 @@ class DetailModelTest {
     @Test
     fun `not served - the trust layer stands and one line replaces the fundamentals`() {
         val state = served(analysis = AnalysisState.NotServed)
-        assertEquals(5, state.trustFacts.size)
+        // Reserves, chain supply, the four controls, and the delegate named by address.
+        assertEquals(7, state.trustFacts.size)
         assertEquals("100.7%", raw(state.trustFacts.first().value))
         assertTrue(state.tracks.isEmpty())
         assertNull(state.fScore)
@@ -789,7 +875,7 @@ class DetailModelTest {
     /** Three leaders in the server's order, heaviest first, with TSLA second. */
     private val leaders = listOf(
         NextUpRow("NFLX", "123456000000", 5),
-        NextUpRow("TSLA", "31209870777", 3),
+        NextUpRow("TSLA", "38406150222", 3),
         NextUpRow("AMD", "6719000000", 1),
     )
 
@@ -801,9 +887,9 @@ class DetailModelTest {
         val weight = line.weight as Copy.Counted
         assertEquals(R.plurals.next_up_detail_weight, weight.id)
         assertEquals("the voters select the form", 3, weight.quantity)
-        assertEquals(listOf("31,209.9", "3"), weight.args)
+        assertEquals(listOf("38,406.2", "3"), weight.args)
         assertEquals("Next up: 2 of 3, by staked SKR", ShippedCopy.render(line.rank))
-        assertEquals("31,209.9 SKR from 3 voters", ShippedCopy.render(line.weight))
+        assertEquals("38,406.2 SKR from 3 voters", ShippedCopy.render(line.weight))
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.plainticker.mobile.ui.today
 
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.jupiter.PriceEntry
 import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.rpc.SkrStakeBound
@@ -364,3 +365,56 @@ fun nextUpLede(round: VoteRound?, zone: ZoneId): Copy? {
     val millis = closesAt.toEpochMilli()
     return words(R.string.today_next_up_lede, Fmt.weekday(millis, zone), Fmt.clock(millis, zone))
 }
+
+/**
+ * An open round with nothing voted yet: "Round 3 is open. No votes yet: one vote decides it." The
+ * round's own number, never a quantity.
+ */
+fun nextUpEmpty(round: VoteRound): Copy =
+    words(R.string.today_next_up_empty, Fmt.count(round.id)) // lint-allow count: a round's number, not a quantity
+
+// ---- While New York is closed ------------------------------------------------------------------
+
+/** One covered token priced against the last NYSE close while the exchange is shut. */
+data class ClosedMover(
+    val ticker: String,
+    val symbol: String,
+    val company: String?,
+    val premiumPct: Double,
+    val poolUsd: Double,
+)
+
+/** A covered token and the quote Today's join already fetched for it, the input [closedMovers] ranks. */
+data class CoveredQuote(val ticker: String, val symbol: String, val company: String?, val price: PriceEntry?)
+
+/**
+ * The covered tokens whose onchain price sits furthest from the last NYSE close, at most [max],
+ * furthest first (the symbol breaks a tie). Only a [TrackingQuality.Tracked] reading counts: a
+ * pool under the liquidity floor, or one whose depth Jupiter did not report, prints no premium
+ * anywhere in this app and is not a mover here either. A gap under [minPoints] (the digest's own
+ * half point, inside the band a deep pool tracks within) is not a move.
+ */
+fun closedMovers(
+    quotes: List<CoveredQuote>,
+    max: Int = ClosedMoversCount,
+    minPoints: Double = com.plainticker.mobile.watchlist.MOVE_POINTS,
+): List<ClosedMover> = quotes
+    .mapNotNull { quote ->
+        val tracked = TrackingQuality.of(quote.price) as? TrackingQuality.Tracked ?: return@mapNotNull null
+        val premium = tracked.premiumPct ?: return@mapNotNull null
+        if (!premium.isFinite() || kotlin.math.abs(premium) < minPoints) return@mapNotNull null
+        ClosedMover(quote.ticker, quote.symbol, quote.company, premium, tracked.poolUsd)
+    }
+    .distinctBy { it.ticker }
+    .sortedWith(compareByDescending<ClosedMover> { kotlin.math.abs(it.premiumPct) }.thenBy { it.symbol })
+    .take(max)
+
+/** How many rows "While New York is closed" draws. */
+const val ClosedMoversCount: Int = 3
+
+/**
+ * The block draws only while the NYSE is known to be closed: an unknown venue is not a closed one,
+ * and during the session the watched rows already carry the live figure.
+ */
+fun closedMoversShown(market: MarketStatus?, movers: List<ClosedMover>): Boolean =
+    market != null && !market.regularSession && movers.isNotEmpty()

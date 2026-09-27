@@ -154,7 +154,7 @@ class PortfolioModelTest {
 
     private fun receipt(
         outputAmountRaw: Long? = 1_364_000L,
-        allInCostPct: Double? = 0.09,
+        routeCostPct: Double? = 0.09,
     ) = SwapReceipt(
         signature = "5xY1",
         inputMint = "usdc",
@@ -165,7 +165,7 @@ class PortfolioModelTest {
         outputSymbol = "TSLAx",
         outputAmountRaw = outputAmountRaw,
         outputDecimals = 8,
-        allInCostPct = allInCostPct,
+        routeCostPct = routeCostPct,
         route = "Metis",
         landedAtMillis = 1_789_045_020_000L,
     )
@@ -176,13 +176,22 @@ class PortfolioModelTest {
 
         assertEquals(Copy.Words(R.string.portfolio_row_quantity, listOf("5", "USDC")), row.paid)
         assertEquals(Copy.Words(R.string.portfolio_swap_row_received, listOf("0.01364", "TSLAx")), row.received)
-        assertEquals(Copy.Words(R.string.portfolio_swap_cost, listOf("0.09%")), row.cost)
+        // A receipt with no SOL priced in has the route's cost, and says route (judges' review, 2026-09-27).
+        assertEquals(Copy.Words(R.string.portfolio_swap_route_cost, listOf("0.09%")), row.cost)
         assertEquals(Copy.Raw("10 Sep 2026 12:57 UTC"), row.landed)
     }
 
     @Test
+    fun `a receipt that priced its SOL states the all-in cost paid`() {
+        // 0.09 percent route, plus 0.30 dollars of SOL (fees and a refundable deposit) over 5 in.
+        val priced = receipt().copy(solCostUsd = 0.30, rentUsd = 0.2977, inputUsd = 5.0)
+        assertEquals(0.09 + 6.0, priced.allInCostPct!!, 1e-9)
+        assertEquals(Copy.Words(R.string.portfolio_swap_cost, listOf("6.09%")), swapRow(priced).cost)
+    }
+
+    @Test
     fun `a fill the execute answer never reported stays unreported`() {
-        val row = swapRow(receipt(outputAmountRaw = null, allInCostPct = null))
+        val row = swapRow(receipt(outputAmountRaw = null, routeCostPct = null))
 
         assertEquals(Copy.Words(R.string.portfolio_swap_row_received_unknown, listOf("TSLAx")), row.received)
         assertEquals(Copy.Words(R.string.portfolio_swap_cost_unknown), row.cost)
@@ -277,14 +286,14 @@ class PortfolioModelTest {
      * measures in) for the full rendered sentence with `Fmt.utc`'s own worst case (21 characters,
      * every stamp is this long); `figureRow`'s 18sp/600 tnum instance for
      * [com.plainticker.mobile.ui.components.AmberTickerRowTest]'s own "the widest realistic figure
-     * this row draws across every screen," "31,209.9," which this row's own `figure` slot shares
+     * this row draws across every screen," "38,406.2," which this row's own `figure` slot shares
      * the meta line's 336dp content width with the same way every other caller of that row does.
      */
     /*
      * Re-measured 2026-09-26 (audit, item 4): "quantity not rescaled" was jargon, now "count at swap
      * time". fontTools 4.63, the same method as AmberTickerRowTest (hmtx advances, context 14/400
      * opsz 14, figureRow 18/600 opsz 18 with tnum): the new sentence is 345.814dp; the figure
-     * "31,209.9" with tnum is 73.296dp. The older constants here (340.830dp, 65.970dp) did not
+     * "38,406.2" with tnum is 73.296dp. The older constants here (340.830dp, 65.970dp) did not
      * reproduce under that method, so both are replaced with the measured ones, and the new line
      * still clears two lines at 1.3x with 15.87dp to spare.
      */
@@ -309,7 +318,7 @@ class PortfolioModelTest {
 
         val contentWidthDp = 336.0
         val gapDp = 8.0
-        val figureWidthDp = 73.296 // "31,209.9" at figureRow's 18sp/600 tnum, 1.0x.
+        val figureWidthDp = 73.296 // "38,406.2" at figureRow's 18sp/600 tnum, 1.0x.
         val contextWidthDp = 345.814 // the rendered sentence above, at context's 14sp/400, 1.0x.
 
         val budgetDp = contentWidthDp - figureWidthDp - gapDp

@@ -94,7 +94,7 @@ import com.plainticker.mobile.ui.theme.AmberType
  *   share that fate. The point this row exists to fix is the other 95.3 percent, names like
  *   "Meta Platforms, Inc." that used to clip and now do not.
  * - **Meta line.** The widest realistic [figure] this row draws across every screen that calls it
- *   is a worded one, `next_up_weight` ("31,209.9 SKR", 12 characters, [VoteScreen]'s own vote
+ *   is a worded one, `next_up_weight` ("38,406.2 SKR", 12 characters, [VoteScreen]'s own vote
  *   weight), 113.22dp; less the 8dp gap, [context] gets **214.78dp** in that worst case. The
  *   longest real [context], `list_row_meta_join`'s own worst join ("$2.7k behind, too thin · 2 d
  *   old", 32 characters) measures 192.44dp: a 22.34dp margin, and at 1.3x scale against the far more
@@ -129,7 +129,7 @@ import com.plainticker.mobile.ui.theme.AmberType
  * is 336dp less [TextAction]'s own rendered width (16dp start padding plus its label at
  * `AmberType.textAction`, Bricolage 600 opsz 14 at 14sp since 2026-09-26, when [TextAction] left
  * Outfit SemiBold; every number below was re-measured then).
- * - **Vote's leader row** (`figure` = the app's own widest figure, `next_up_weight` "31,209.9 SKR",
+ * - **Vote's leader row** (`figure` = the app's own widest figure, `next_up_weight` "38,406.2 SKR",
  *   113.220dp; `context` = `next_up_voters`, "9,999 voters" at four digits' realistic ceiling for
  *   one token's own leaderboard, 83.160dp; action = "Vote", 31.318dp at 1.0x). Content width with
  *   the action present: 336 − (16 + 31.318) = 288.682dp. Context and figure split that exactly as
@@ -368,7 +368,7 @@ private fun AmberTickerRowPreview() {
                 AmberTickerRow(
                     ticker = "AUTO.GBx",
                     company = "SPDR S&P Oil & Gas Exploration & Production ETF xStock",
-                    figure = "31,209.9 SKR",
+                    figure = "38,406.2 SKR",
                     context = "9,999 voters",
                     trailingAction = "Vote",
                     onTrailingAction = {},
@@ -377,7 +377,7 @@ private fun AmberTickerRowPreview() {
                 AmberTickerRow(
                     ticker = "TSMx",
                     company = "Taiwan Semiconductor",
-                    figure = "31,209.9 SKR",
+                    figure = "38,406.2 SKR",
                     context = "3 voters",
                     trailingAction = "Vote",
                     onTrailingAction = {},

@@ -22,16 +22,20 @@ import com.plainticker.mobile.repo.SecondSource
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
+import com.solana.mobilewalletadapter.clientlib.AdapterOperations
+import com.solana.mobilewalletadapter.clientlib.protocol.MobileWalletAdapterClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.math.BigDecimal
 import java.util.Base64
 
@@ -346,7 +350,7 @@ class SwapViewModel(
                 return fail(leg, funds, input, quoteFailure ?: SwapFailure.QUOTE_UNAVAILABLE, null, requote, timing)
             }
 
-            val quote = SwapQuote.from(order)
+            var quote = SwapQuote.from(order)
             // Decoded here rather than inside the wallet round-trip: bytes this app cannot read
             // are this app's problem, and failing in the middle of the call would spend an
             // approval and then blame the wallet for a payload it was never handed.
@@ -369,7 +373,8 @@ class SwapViewModel(
             )
             if (verdict is TransactionGuard.Verdict.Refuse) {
                 debugLog.raw("order ${quote.requestId} refused before the wallet: ${verdict.reason}")
-                return fail(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing)
+                _state.value = SwapState.Failed(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing, verdict.why)
+                return
             }
 
             // ---- The dollar value against what was typed (security audit, 2026-09-26). The guard
@@ -377,19 +382,32 @@ class SwapViewModel(
             // meant. Jupiter's value of the order it built must match the typed quantity at the
             // price the app shows, within SwapTrust.VALUE_BOUND. Swap to USDC only: the other
             // direction spends USDC, whose decimals are pinned in SwapLeg.USDC.
-            if (!leg.intoToken) {
-                val price = priceOf(leg.input.mint)
-                when (val value = SwapTrust.checkValue(leg.input.ui(input.raw), price, order.inUsdValue)) {
-                    is SwapTrust.ValueVerdict.Consistent -> Unit
-                    is SwapTrust.ValueVerdict.Mismatch -> {
-                        debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
-                        return fail(leg, funds, input, SwapFailure.VALUE_MISMATCH, quote, requote, timing)
-                    }
-                    is SwapTrust.ValueVerdict.Unchecked -> {
-                        debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
-                        return fail(leg, funds, input, SwapFailure.VALUE_UNCHECKED, quote, requote, timing)
+            //
+            // The SOL price the all-in cost needs (judges' review, 2026-09-27) is a call of its own,
+            // started here beside the value check and bounded by [PRICE_TIMEOUT_MS]: slow, refused
+            // or unpriced, it costs the all-in figure and never the swap, and the sheet then says
+            // "Route cost". The value check keeps its own call, exactly as before that change: the
+            // token's price alone, bounded only by the HTTP client's timeout, and a check that
+            // cannot be made is still a refusal (security review, 2026-09-27).
+            val solPrice = viewModelScope.async { solPriceOf() }
+            try {
+                if (!leg.intoToken) {
+                    val price = priceOf(leg.input.mint)
+                    when (val value = SwapTrust.checkValue(leg.input.ui(input.raw), price, order.inUsdValue)) {
+                        is SwapTrust.ValueVerdict.Consistent -> Unit
+                        is SwapTrust.ValueVerdict.Mismatch -> {
+                            debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
+                            return fail(leg, funds, input, SwapFailure.VALUE_MISMATCH, quote, requote, timing)
+                        }
+                        is SwapTrust.ValueVerdict.Unchecked -> {
+                            debugLog.raw("order ${quote.requestId} refused before the wallet: ${value.reason}")
+                            return fail(leg, funds, input, SwapFailure.VALUE_UNCHECKED, quote, requote, timing)
+                        }
                     }
                 }
+                quote = quote.copy(solUsd = solPrice.await())
+            } finally {
+                solPrice.cancel()
             }
 
             // ---- Dust. A quote that delivers nothing, or whose floor is nothing, is fees for no
@@ -415,10 +433,24 @@ class SwapViewModel(
             // ---- AwaitingWallet: the round-trip this product rests on.
             timing = timing.enterPhase(clock.nowMillis())
             _state.value = SwapState.AwaitingWallet(leg, funds, input, quote, requote, timing)
-            val outcome = wallet.call { it.signTransactions(arrayOf(unsigned)) }
+            // sign_transactions is optional in MWA 2.x (judges' review, 2026-09-27): the wallet's
+            // capabilities are read in the same session, after it authorized and before anything
+            // is asked of it, and a wallet that says it only signs by sending is told so plainly
+            // instead of failing the request with a generic error.
+            val outcome = wallet.call { ops ->
+                if (SwapWalletCapabilities.refusesSignOnly(readCapabilities(ops))) {
+                    null
+                } else {
+                    WalletSigned(ops.signTransactions(arrayOf(unsigned)).signedPayloads.firstOrNull())
+                }
+            }
             timing = timing.closeWallet(clock.nowMillis())
+            if (outcome is WalletOutcome.Success && outcome.value == null) {
+                debugLog.raw("wallet lists no solana:signTransactions, nothing asked of it")
+                return fail(leg, funds, input, SwapFailure.SIGN_ONLY_UNSUPPORTED, quote, requote, timing)
+            }
             val signed = when (outcome) {
-                is WalletOutcome.Success -> outcome.value.signedPayloads.firstOrNull()
+                is WalletOutcome.Success -> outcome.value?.payload
                 // The wallet itself is gone, which is not something a second tap can fix.
                 is WalletOutcome.NoWallet -> return fail(leg, funds, input, SwapFailure.NO_WALLET, quote, requote, timing)
                 is WalletOutcome.Cancelled -> null
@@ -686,13 +718,31 @@ class SwapViewModel(
         }
     }
 
-    /** The price the app shows for [mint], or null when there is none to check against. */
+    /**
+     * The price the value check reads for [mint], or null when there is none to check against:
+     * the same call, and the same bound (the HTTP client's own timeout), as before the all-in cost.
+     */
     private suspend fun priceOf(mint: String): Double? = try {
         prices.prices(listOf(mint))[mint]?.usdPrice
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         debugLog.raw("price: ${e::class.simpleName}: ${e.message}")
+        null
+    }
+
+    /**
+     * SOL's price for the all-in cost, or null: bounded by [PRICE_TIMEOUT_MS], and never a reason
+     * to stop a swap. A null makes the sheet say "Route cost".
+     */
+    private suspend fun solPriceOf(): Double? = try {
+        val answer = withTimeoutOrNull(PRICE_TIMEOUT_MS) { prices.prices(listOf(KnownMints.WSOL)) }
+        if (answer == null) debugLog.raw("price: SOL had no answer within $PRICE_TIMEOUT_MS ms")
+        answer?.get(KnownMints.WSOL)?.usdPrice?.takeIf { it.isFinite() && it > 0.0 }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        debugLog.raw("price: SOL ${e::class.simpleName}: ${e.message}")
         null
     }
 
@@ -707,13 +757,32 @@ class SwapViewModel(
             outputSymbol = leg.output.symbol,
             outputAmountRaw = fill.outAmountRaw,
             outputDecimals = leg.output.decimals,
-            allInCostPct = fill.allInCostPaidPct(quote),
+            routeCostPct = fill.routeCostPaidPct(quote),
+            solCostUsd = quote.solCostUsd,
+            rentUsd = quote.rentUsd,
+            inputUsd = quote.inUsdValue,
             route = quote.route,
             landedAtMillis = nowMillis,
             slot = fill.slot,
             inputMultiplier = (leg.input.multiplier ?: BigDecimal.ONE).toDouble(),
             outputMultiplier = (leg.output.multiplier ?: BigDecimal.ONE).toDouble(),
         )
+
+    /**
+     * The wallet's capabilities, or null when it would not say. Null is not a refusal: a wallet
+     * that cannot answer is asked to sign as before, and fails there if it must.
+     */
+    private suspend fun readCapabilities(ops: AdapterOperations): MobileWalletAdapterClient.GetCapabilitiesResult? = try {
+        ops.getCapabilities()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        debugLog.raw("getCapabilities: ${e::class.simpleName}: ${e.message}")
+        null
+    }
+
+    /** What sign_transactions handed back, so a refusal before signing can be told apart from it. */
+    private class WalletSigned(val payload: ByteArray?)
 
     private fun failOpen(leg: SwapLeg, reason: SwapFailure) {
         _state.value = SwapState.Failed(leg, funds = null, input = null, reason = reason)
@@ -734,6 +803,12 @@ class SwapViewModel(
     private companion object {
         /** One beat between two reads that asked for a slot the node had not reached yet. */
         const val FRESH_READ_RETRY_MS = 1_000L
+
+        /**
+         * The longest the SOL price read for the all-in cost may take; past it the swap goes on and
+         * the sheet says "Route cost". The value check's own price read is not bound by it.
+         */
+        const val PRICE_TIMEOUT_MS = 2_500L
 
         /** Jupiter's program error for a route that ended below its slippage bound. */
         const val CODE_SLIPPAGE = 6001

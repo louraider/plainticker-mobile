@@ -88,14 +88,16 @@ class WatchlistCheckTest {
 
         val outcome = check.run()
 
-        val text = "1 stock watched. AAPLx reports in 45 days."
+        val text = "AAPLx reports in 45 days."
         assertEquals(CheckOutcome.Produced(text), outcome)
         assertEquals(text, digests.record.value.text)
         assertEquals(day, digests.record.value.producedAtMillis)
         assertEquals(day, digests.record.value.lastCheckedAtMillis)
-        // The headline keeps the count plus the one clause here (there is only one), so it reads
-        // identically to the fuller text the screen draws; DigestTest covers where they diverge.
-        assertEquals(listOf(text), notifier.posted)
+        // One clause, so the title is that clause without its period and the body is empty;
+        // DigestTest covers the title and body splitting a longer digest.
+        assertEquals(listOf("AAPLx reports in 45 days"), notifier.posted)
+        assertEquals("", notifier.notices.single().body)
+        assertEquals("the title names AAPLx, so a tap opens it", "AAPL", notifier.notices.single().ticker)
         assertEquals(WatchedReport("AAPL", "AAPLx", LocalDate.of(2026, 10, 28)), digests.record.value.nextReport)
     }
 
@@ -193,7 +195,7 @@ class WatchlistCheckTest {
 
         assertEquals(
             CheckOutcome.Produced(
-                "1 stock watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. NVDAx reports in 66 days.",
+                "NVDAx moved from -0.04% to -0.61% against the NYSE close. NVDAx reports in 66 days.",
             ),
             check.run(),
         )
@@ -218,7 +220,7 @@ class WatchlistCheckTest {
         catalog.assets = Result.success(listOf(xStock("AAPLx", "AAPL", "mint-AAPL")))
 
         assertEquals(
-            CheckOutcome.Produced("1 stock watched. 1 covered company reports this week."),
+            CheckOutcome.Produced("1 covered company reports this week."),
             check.run(),
         )
     }
@@ -250,12 +252,12 @@ class WatchlistCheckTest {
 
         val outcome = votingCheck.run()
 
-        val full = "1 stock watched. Round 2 closes Monday. JEF, last round's winner, is now analysed."
+        val full = "JEF, last round's winner, is now analyzed. Round 2 closes Monday."
         assertEquals(CheckOutcome.Produced(full), outcome)
         assertEquals(full, digests.record.value.text)
         assertEquals(
-            "the shade gets the count and the highest-priority clause, here the vote line itself",
-            listOf("1 stock watched. Round 2 closes Monday."),
+            "the shade's title is the most useful line, here the winner, and the round follows it",
+            listOf("JEF, last round's winner, is now analyzed"),
             notifier.posted,
         )
     }
@@ -265,8 +267,84 @@ class WatchlistCheckTest {
         serves("AAPL")
         reports("AAPL", "2026-10-28")
         assertEquals(
-            CheckOutcome.Produced("1 stock watched. AAPLx reports in 45 days."),
+            CheckOutcome.Produced("AAPLx reports in 45 days."),
             check.run(),
         )
+    }
+
+    // ---- Closing the loop per voter --------------------------------------------------------------
+
+    private fun votingRound() = FakeNextUpRepository(
+        answer = Result.success(
+            NextUpAnswer.Open(
+                rows = emptyList(),
+                round = VoteRound(id = 2, opensAt = "2026-09-07T00:00:00.000Z", closesAt = "2026-09-14T00:00:00.000Z"),
+                previous = PreviousRound(id = 1, winner = "JEF", status = "closed"),
+            ),
+        ),
+    )
+
+    private fun receipt(ticker: String, round: Int?) = com.plainticker.mobile.data.receipts.VoteReceipt(
+        signature = "sig-$ticker-$round",
+        ticker = ticker,
+        symbol = "${ticker}x",
+        weightRaw = 1_000_000L,
+        landedAtMillis = day,
+        voter = "voter",
+        round = round,
+    )
+
+    @Test
+    fun `a voter's pick analysed is said personally once, watched first, and a tap opens it`() = runTest {
+        // JEF was voted for in round 1 and remembered as pending; overnight it gets analysed.
+        serves("AAPL", "JEF")
+        summaries.analyses = summaries.analyses + ("JEF" to Result.success(AnalysisPayload(ticker = "JEF")))
+        val receipts = com.plainticker.mobile.data.receipts.FakeVoteReceiptStore().apply { record(receipt("JEF", 1)) }
+        val pending = InMemoryPendingWatchStore(setOf("JEF"))
+        val votingCheck = WatchlistCheck(
+            watchlist = watchlist,
+            facts = WatchlistFacts(summaries, catalog, prices),
+            digests = digests,
+            strings = RealStrings.strings,
+            notifier = notifier,
+            clock = clock,
+            vote = VoteDigestFacts(votingRound(), summaries, receipts),
+            autoWatch = AutoWatch(watchlist, pending, summaries, catalog),
+        )
+
+        val outcome = votingCheck.run()
+
+        assertTrue("the pick is watched before the digest reads the list", "JEF" in watchlist.tickers.value)
+        assertTrue("and no longer pending", pending.tickers.isEmpty())
+        val text = (outcome as CheckOutcome.Produced).text
+        assertTrue(text, text.startsWith("JEF, which you voted for, is now analyzed."))
+        assertEquals("JEF, which you voted for, is now analyzed", notifier.notices.single().title)
+        assertEquals("JEF", notifier.notices.single().ticker)
+        assertEquals("the record keeps that it was said", "JEF", digests.record.value.announcedPick)
+
+        // The next day: nothing else changed, so the pick is not announced a second time.
+        clock.now = dayAfter
+        votingCheck.run()
+        assertEquals(1, notifier.notices.count { it.title.contains("which you voted for") })
+    }
+
+    @Test
+    fun `a winner this device never voted for is never called the reader's own`() = runTest {
+        serves("AAPL")
+        summaries.analyses = summaries.analyses + ("JEF" to Result.success(AnalysisPayload(ticker = "JEF")))
+        val receipts = com.plainticker.mobile.data.receipts.FakeVoteReceiptStore().apply { record(receipt("TSM", 1)) }
+        val votingCheck = WatchlistCheck(
+            watchlist = watchlist,
+            facts = WatchlistFacts(summaries, catalog, prices),
+            digests = digests,
+            strings = RealStrings.strings,
+            notifier = notifier,
+            clock = clock,
+            vote = VoteDigestFacts(votingRound(), summaries, receipts),
+        )
+
+        val text = (votingCheck.run() as CheckOutcome.Produced).text
+        assertTrue(text, text.startsWith("JEF, last round's winner, is now analyzed."))
+        assertNull(digests.record.value.announcedPick)
     }
 }

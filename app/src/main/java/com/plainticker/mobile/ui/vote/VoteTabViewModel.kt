@@ -6,13 +6,16 @@ import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.PreviousRound
 import com.plainticker.mobile.data.receipts.VoteReceipt
 import com.plainticker.mobile.data.receipts.VoteReceiptStore
+import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.repo.CatalogRepository
 import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.NextUpRepository
+import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.repo.SummaryRepository
 import com.plainticker.mobile.wallet.WalletSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +49,11 @@ class VoteTabViewModel(
     private val summaries: SummaryRepository,
     private val voteReceipts: VoteReceiptStore,
     private val wallet: WalletSession,
+    /**
+     * The staking read behind the top card's stake line. Null (every test written before the
+     * card existed) reads as no wallet at all: the card still draws, without a figure.
+     */
+    private val rpc: RpcRepository? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(VoteTabUiState(isLoading = true))
@@ -57,13 +65,20 @@ class VoteTabViewModel(
     private var lastPrevious: PreviousRound? = null
     private var allReceipts: List<VoteReceipt> = emptyList()
     private var everAnswered = false
+    private var stakeJob: Job? = null
+    private var stakeFor: String? = null
 
     init {
         viewModelScope.launch { voteReceipts.receipts.collect { allReceipts = it; republishVotes() } }
         // The connected wallet is the scope "Your votes" reads by (see VoteReceipt's own doc on
         // what a wallet change means for this record): a reconnect or a disconnect narrows or
         // widens the section without a manual refresh.
-        viewModelScope.launch { wallet.account.collect { republishVotes() } }
+        viewModelScope.launch {
+            wallet.account.collect { account ->
+                republishVotes()
+                readStake(account?.address)
+            }
+        }
         // refresh() itself starts the ballot's first load (it has not loaded, so its own check
         // fires), so there is one call here rather than two racing to be the first.
         refresh()
@@ -173,6 +188,33 @@ class VoteTabViewModel(
                 ballot = allBallot.matchingBallot(it.query),
                 leaders = leadersFor(lastRows, allBallot),
             )
+        }
+    }
+
+    /**
+     * The top card's stake, read once per connected wallet the same way the vote sheet reads it
+     * ([SkrStakeBound.principalOf]), so the two can never disagree. A reconnect to the same
+     * wallet does not read again; a different wallet, or none, replaces what was shown.
+     */
+    private fun readStake(address: String?) {
+        if (address == stakeFor && _state.value.stake !is TabStake.Unread) return
+        stakeFor = address
+        stakeJob?.cancel()
+        val source = rpc
+        if (address == null || source == null) {
+            _state.update { it.copy(stake = TabStake.NoWallet) }
+            return
+        }
+        _state.update { it.copy(stake = TabStake.Reading) }
+        stakeJob = viewModelScope.launch {
+            val stake = try {
+                SkrStakeBound.principalOf(source.skrStake(address))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failed: Exception) {
+                null
+            }
+            _state.update { it.copy(stake = if (stake == null) TabStake.Unread else TabStake.Read(stake)) }
         }
     }
 

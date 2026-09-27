@@ -80,8 +80,8 @@ class CountCopyTest {
             Case(3, listOf("3"), "3 voters"),
         ),
         "next_up_detail_weight" to listOf(
-            Case(1, listOf("31,209.9", "1"), "31,209.9 SKR from 1 voter"),
-            Case(3, listOf("31,209.9", "3"), "31,209.9 SKR from 3 voters"),
+            Case(1, listOf("38,406.2", "1"), "38,406.2 SKR from 1 voter"),
+            Case(3, listOf("38,406.2", "3"), "38,406.2 SKR from 3 voters"),
         ),
         "detail_fscore_of" to listOf(
             Case(1, listOf("1"), "of 1 signal"),
@@ -107,10 +107,6 @@ class CountCopyTest {
             Case(1, listOf("1"), "1 xStock, not priced by Jupiter"),
             Case(3, listOf("3"), "3 xStocks, none of them priced by Jupiter"),
         ),
-        "digest_watched" to listOf(
-            Case(1, listOf("1"), "1 stock watched."),
-            Case(4, listOf("4"), "4 stocks watched."),
-        ),
         "digest_reports_in_days" to listOf(
             Case(1, listOf("TSLAx", "1"), "TSLAx reports in 1 day."),
             Case(4, listOf("TSLAx", "4"), "TSLAx reports in 4 days."),
@@ -118,12 +114,6 @@ class CountCopyTest {
         "digest_week_reports" to listOf(
             Case(1, listOf("1"), "1 covered company reports this week."),
             Case(3, listOf("3"), "3 covered companies report this week."),
-        ),
-        // Stocks' filter row disclosure chip (ui/list/ListScreen.kt, ui/stocks/StocksFilter.kt):
-        // "+n sectors" past the eight shown by default, "sector" singular at one.
-        "stocks_filter_more_sectors" to listOf(
-            Case(1, listOf("1"), "+1 sector"),
-            Case(5, listOf("5"), "+5 sectors"),
         ),
         // You's hero and Plan "Valid until" row (ui/you/YouModel.kt's daysLeft): a pass or a
         // subscription's days left, "day" singular at one.
@@ -268,12 +258,12 @@ class CountCopyTest {
     }
 
     @Test
-    fun `the digest counts what it watched and how far off a report is`() {
+    fun `the digest counts how far off a report is, and no longer opens on what it watched`() {
         val today = LocalDate.of(2026, 9, 13)
         val one = digest(
             DigestInput(today = today, tickers = listOf(watched("TSLA", nextReport = today.plusDays(4)))),
         )
-        assertEquals("1 stock watched. TSLAx reports in 4 days.", one.text(RealStrings.strings))
+        assertEquals("TSLAx reports in 4 days.", one.text(RealStrings.strings))
 
         val many = digest(
             DigestInput(
@@ -285,7 +275,7 @@ class CountCopyTest {
                 ),
             ),
         )
-        assertEquals("3 stocks watched. TSLAx reports in 2 days.", many.text(RealStrings.strings))
+        assertEquals("TSLAx reports in 2 days.", many.text(RealStrings.strings))
     }
 
     @Test

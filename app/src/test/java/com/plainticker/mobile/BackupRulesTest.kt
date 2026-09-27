@@ -1,10 +1,12 @@
 package com.plainticker.mobile
 
 import com.plainticker.mobile.prefs.DataStoreAccountStore
+import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import com.plainticker.mobile.wallet.EncryptedFileWalletSessionStore
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Document
 import org.w3c.dom.Element
@@ -65,5 +67,29 @@ class BackupRulesTest {
             assertEquals(section, expected, excludes(element))
             assertEquals(section, 0, element.getElementsByTagName("include").length)
         }
+    }
+
+    /**
+     * The rekey (2026-09-27) added keys that are credentials too: the minted replacement code
+     * waiting for the server's confirmation. They live in the device code's own preferences file,
+     * which the rules above exclude whole; this pins that the container builds that store, and the
+     * sign-out retry flag, on exactly that file, and that the store names every key it writes.
+     */
+    @Test
+    fun `the rekey and sign-out keys live in the excluded preferences file`() {
+        val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }.canonicalFile
+        val container = File(module, "src/main/java/com/plainticker/mobile/AppContainer.kt").readText()
+        assertTrue("app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)" in container)
+        assertTrue("SharedPrefsDevicePassStore(prefs)" in container)
+        assertTrue("SharedPrefsPendingSignOutStore(prefs)" in container)
+        assertEquals(
+            setOf(
+                SharedPrefsDevicePassStore.KEY_CODE,
+                SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE,
+                SharedPrefsDevicePassStore.KEY_REKEY_NOTE,
+            ),
+            SharedPrefsDevicePassStore.ALL_KEYS,
+        )
+        assertTrue("sharedpref:${DefaultAppContainer.PREFS_NAME}.xml" in expected)
     }
 }

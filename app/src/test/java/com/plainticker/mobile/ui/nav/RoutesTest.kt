@@ -32,4 +32,11 @@ class RoutesTest {
         assertEquals("detail/AAPL", Routes.detail("  AAPL "))
         assertEquals(Routes.DETAIL, "detail/{${Routes.ARG_TICKER}}")
     }
+
+    @Test
+    fun `the promo request is a saved-state flag, never part of a route`() {
+        assertEquals("open_promo", Routes.KEY_OPEN_PROMO)
+        assertTrue(Routes.KEY_OPEN_PROMO !in Routes.HOME_TAB)
+        assertTrue(Routes.KEY_OPEN_PROMO !in Routes.DETAIL)
+    }
 }

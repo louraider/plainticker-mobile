@@ -28,6 +28,11 @@ class FakeAdapterOperations(
      * [signedPayloads]: a wallet that signs whatever it is handed, whichever order that was.
      */
     var sign: ((ByteArray) -> ByteArray)? = null,
+    /**
+     * The optional features [getCapabilities] reports, or null for a wallet that does not answer
+     * it (the call throws, as an unscripted verb does).
+     */
+    var optionalFeatures: Array<String>? = null,
 ) : AdapterOperations {
 
     /** Every batch of unsigned transactions the ViewModel asked to sign. */
@@ -69,7 +74,22 @@ class FakeAdapterOperations(
 
     override suspend fun deauthorize(authToken: String) = notScripted("deauthorize")
 
-    override suspend fun getCapabilities(): MobileWalletAdapterClient.GetCapabilitiesResult = notScripted("getCapabilities")
+    override suspend fun getCapabilities(): MobileWalletAdapterClient.GetCapabilitiesResult =
+        optionalFeatures?.let { capabilities(it) } ?: notScripted("getCapabilities")
+
+    companion object {
+        /** The library keeps this constructor private; a test wallet answers with one anyway. */
+        fun capabilities(features: Array<String>?): MobileWalletAdapterClient.GetCapabilitiesResult {
+            val ctor = MobileWalletAdapterClient.GetCapabilitiesResult::class.java.getDeclaredConstructor(
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Array<Any>::class.java,
+                Array<String>::class.java,
+            )
+            ctor.isAccessible = true
+            return ctor.newInstance(20, 20, arrayOf<Any>("legacy", 0), features)
+        }
+    }
 
     override suspend fun signMessages(
         messages: Array<ByteArray>,

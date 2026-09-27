@@ -20,6 +20,7 @@ import com.plainticker.mobile.repo.FakeRpcRepository
 import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
 import com.plainticker.mobile.wallet.ServerBuilt
+import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletAccount
 import com.plainticker.mobile.wallet.WalletOutcome
 import io.ktor.http.HttpStatusCode
@@ -70,8 +71,8 @@ class VoteViewModelTest {
     /** The transaction lib/vote/build.ts would build for [voter] and NFLX. */
     private val unsigned: String = ServerBuilt.vote(voter.address, "NFLX").base64()
 
-    /** 31,209.870777 SKR: what the production forwarder returned for a staking wallet, 2026-09-13. */
-    private val measuredStake = 31_209_870_777L
+    /** 38,406.150222 SKR: what the production forwarder returned for a staking wallet, 2026-09-13. */
+    private val measuredStake = 38_406_150_222L
 
     private val body = """{"transaction":"$unsigned","summary":""" +
         """{"ticker":"NFLX","lamports":5000,"collector":"$collector"}}"""
@@ -316,14 +317,19 @@ class VoteViewModelTest {
         // for another ticker, or send the transfer somewhere else. Neither is ever offered.
         val otherTicker = ServerBuilt.vote(voter.address, "AAPL").base64()
         val otherCollector = ServerBuilt.vote(voter.address, "NFLX", collector = "8rUvvKhaNqDVdGjBpkB4XoTBrmMPfsVZJSLQPUHzZyEC").base64()
-        for (tx in listOf(otherTicker, otherCollector)) {
+        // Judges' review, 2026-09-27: the server did build these, so the refusal is this phone's
+        // own, with its plain reason, and never "the server did not build this vote".
+        val expected = listOf(TransactionGuard.Why.NOT_THIS_REQUEST, TransactionGuard.Why.WRONG_RECIPIENT)
+        for ((tx, why) in listOf(otherTicker, otherCollector).zip(expected)) {
             val tampered = MockApi {
                 respondJson("""{"transaction":"$tx","summary":{"ticker":"NFLX","lamports":5000,"collector":"$collector"}}""")
             }
             val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64)))
             val session = wallet().apply { this.operations = operations }
 
-            assertEquals(VoteRefusal.UNAVAILABLE, refusalOf(settle(machine(tampered, session))))
+            val refused = settle(machine(tampered, session)) as VoteState.Refused
+            assertEquals(VoteRefusal.GUARD_REFUSED, refused.reason)
+            assertEquals(why, refused.why)
             assertTrue(operations.sendRequests.isEmpty())
             assertTrue(operations.signRequests.isEmpty())
         }
@@ -663,6 +669,16 @@ class VoteViewModelTest {
         )
         reached += refusalOf(
             settle(machine(MockApi { respondJson("""{"error":"Slow.","code":"rate_limited"}""", HttpStatusCode.TooManyRequests) })),
+        )
+        val otherTicker = ServerBuilt.vote(voter.address, "AAPL").base64()
+        reached += refusalOf(
+            settle(
+                machine(
+                    MockApi {
+                        respondJson("""{"transaction":"$otherTicker","summary":{"ticker":"NFLX","lamports":5000,"collector":"$collector"}}""")
+                    },
+                ),
+            ),
         )
 
         val declined = wallet()

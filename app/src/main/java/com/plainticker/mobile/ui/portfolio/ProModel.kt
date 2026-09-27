@@ -7,6 +7,8 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.pass.ProUiState
 import com.plainticker.mobile.ui.words
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 /**
  * What the Portfolio's Pro block says (task A6), decided away from the composition the way every
@@ -17,9 +19,11 @@ import com.plainticker.mobile.ui.words
  * 1. **The entitlement sentence names its source honestly.** A pass and a subscription carry a
  *    date they end; a stake does not, because it is re-evaluated continuously rather than granted
  *    once (server/vote/README.md). None of the three is ever collapsed into a bare "Pro" badge.
- * 2. **A stake is a figure, never a verdict.** Below the entitlement threshold or above it, the
- *    sentence states what this wallet has staked and stops there: it does not say whether that is
- *    enough, because that judgment belongs to the server's own resolver, not to this screen.
+ * 2. **A stake is a figure, never a verdict.** At or above the entitlement threshold the sentence
+ *    states what this wallet has staked and stops there. Below it, on a device that is not Pro
+ *    yet, it also says how much more stake opens Pro (Akshay, judges' round 2, 2026-09-27): a
+ *    distance to the server's own published threshold, [PRO_STAKE_THRESHOLD_RAW], never a word
+ *    about whether the wallet is good or bad.
  */
 fun entitlementLine(state: ProUiState): Copy = when {
     state.entitlementLoading -> words(R.string.pro_entitlement_loading)
@@ -56,7 +60,28 @@ fun stakeLine(state: ProUiState): Copy? = when {
     !state.walletConnected -> words(R.string.pro_stake_disconnected)
     state.stakeUnread -> words(R.string.pro_stake_unread)
     state.stakeRaw == null -> null
+    !state.pro && state.stakeRaw < PRO_STAKE_THRESHOLD_RAW -> stakeProgress(state.stakeRaw)
     else -> words(R.string.pro_stake_read, Fmt.tokenAmount(state.stakeRaw, SkrStakeBound.SKR_DECIMALS))
+}
+
+/**
+ * The stake that makes a wallet Pro, in SKR base units: 7,500 SKR at [SkrStakeBound.SKR_DECIMALS].
+ * The server's own `STAKE_ENTITLEMENT_THRESHOLD_SKR` (FinanceAnalyst `lib/billing/stake.ts`,
+ * `BigInt(7_500)`, "7,500 SKR or more"); ProModelTest pins the two together.
+ */
+const val PRO_STAKE_THRESHOLD_RAW: Long = 7_500_000_000L
+
+/**
+ * "3,200 SKR staked · 4,300 more opens Pro". The staked figure rounds down and the distance rounds
+ * up, both to whole SKR, so the two always add up to the threshold and the distance never promises
+ * Pro a fraction of a token early.
+ */
+private fun stakeProgress(raw: Long): Copy {
+    val staked = BigDecimal.valueOf(raw).movePointLeft(SkrStakeBound.SKR_DECIMALS).setScale(0, RoundingMode.FLOOR)
+    val missing = BigDecimal.valueOf(PRO_STAKE_THRESHOLD_RAW - raw.coerceAtLeast(0L))
+        .movePointLeft(SkrStakeBound.SKR_DECIMALS)
+        .setScale(0, RoundingMode.CEILING)
+    return words(R.string.pro_stake_progress, Fmt.tokenAmount(staked, maxDecimals = 0), Fmt.tokenAmount(missing, maxDecimals = 0))
 }
 
 /**

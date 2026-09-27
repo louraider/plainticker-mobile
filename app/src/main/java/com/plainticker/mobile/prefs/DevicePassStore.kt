@@ -31,34 +31,153 @@ import java.security.SecureRandom
  * SHA-256 goes on-chain, so the code's own entropy is the only thing between a public memo and an
  * offline preimage search; the earlier 10-symbol code (about 49.5 bits) could be swept in roughly
  * one GPU-day. Codes minted at that earlier length
- * ([SharedPrefsDevicePassStore.LEGACY_CODE_LENGTH]) are still honoured exactly as stored: a device
- * that already paid holds one, its paid pass is bound to that code's hash, and replacing it would
- * orphan the pass. So an existing code is never regenerated, lengthened or rewritten, whatever its
- * length; only a device with no code at all mints the longer one.
+ * ([SharedPrefsDevicePassStore.LEGACY_CODE_LENGTH]) are still sent exactly as stored until the
+ * server has confirmed their replacement: a device that already paid holds one, and its pass is
+ * bound to that code's hash.
+ *
+ * **Replacing a legacy code (rekey, 2026-09-27).** [DeviceCodeRekeyStore] is the one way a stored
+ * code ever changes, and only `DeviceRekeyer` drives it, against `POST /api/v1/device/rekey`,
+ * which moves every entitlement and binding of the old code onto the new one server side. The
+ * order is what keeps a paid credential from being lost:
+ * 1. [DeviceCodeRekeyStore.beginRekey] mints the 26-symbol replacement and writes it to
+ *    [SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE] with a synchronous `commit()` BEFORE any
+ *    network call, so a crash or a lost answer retries with the very same pair, which the server
+ *    answers 200 again (the rekey is idempotent for one old and new pair). The old code stays the
+ *    current code throughout.
+ * 2. Only a 200 reaches [DeviceCodeRekeyStore.completeRekey], which in ONE `commit()` makes the new
+ *    code current and removes the pending slot. The old code is not kept: the server refuses it
+ *    everywhere from then on (401 `code_retired`), so on this device it could only ever be a
+ *    second copy of a dead credential.
+ * 3. Every refusal that means the pair can never be accepted (409 `already_rekeyed`, 409
+ *    `new_code_in_use`, 401 `code_retired`, 400 `legacy_sunset`) also goes through
+ *    [DeviceCodeRekeyStore.completeRekey]: the pending code is valid on its own (only without the
+ *    old code's pass), so it becomes current and [NOTE_REPLACED][SharedPrefsDevicePassStore.NOTE_REPLACED]
+ *    is written in the same commit, for You to say where to write.
+ *
+ * A 200 moves the old code's pass and promo time but not its account binding (web PR #170), so
+ * a rekey on a signed-in phone writes [NOTE_SIGN_IN_AGAIN][SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN]
+ * in that same commit; the next successful Google sign-in clears it.
+ *
+ * All of it lives in the same preferences file as the code, which res/xml/backup_rules.xml and
+ * data_extraction_rules.xml exclude whole, so none of the new keys can reach a backup either.
  *
  * **What a wallet change does.** The code belongs to this device, not to whichever wallet
  * happens to be connected when it is minted or presented. Connecting a different wallet and
  * paying, or linking, with it signs this SAME code's hash into that wallet's own memo, so the new
- * wallet becomes bound to the one code this device has always carried; the code itself is never
- * regenerated for a wallet switch, and switching back to an earlier wallet still finds it. Only
+ * wallet becomes bound to the one code this device carries; the code itself is never regenerated
+ * for a wallet switch, and switching back to an earlier wallet still finds it. Only
  * clearing the app's data forgets it, and a forgotten code cannot be recovered, because only its
  * hash ever left the device: nothing on the server can hand it back.
  */
 interface DevicePassStore {
-    /** This device's own code, generated once and stable for the life of the install. */
+    /**
+     * This device's own code, generated once and stable for the life of the install, except for
+     * the one server-confirmed replacement of a legacy code ("Replacing a legacy code" above).
+     * Read it fresh for every call; never keep a copy.
+     */
     fun code(): String
 
     /** SHA-256 hex digest of [code], lowercase, the only form that ever leaves the device. */
     fun codeHash(): String
 }
 
-class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DevicePassStore {
+/**
+ * The rekey half of [SharedPrefsDevicePassStore] (see [DevicePassStore], "Replacing a legacy
+ * code"). Separate from [DevicePassStore] so the many readers of the code (every API, every
+ * ViewModel) cannot reach the calls that change it; only `DeviceRekeyer` holds this one.
+ *
+ * Every method does disk I/O (a synchronous `commit()` where order matters), so callers run it
+ * off the main thread.
+ */
+interface DeviceCodeRekeyStore {
+    /** The current code, exactly as [DevicePassStore.code] returns it. */
+    fun code(): String
+
+    /** Whether the current code is a [SharedPrefsDevicePassStore.LEGACY_CODE_LENGTH]-symbol one. */
+    fun isLegacy(): Boolean
+
+    /** The replacement persisted by an earlier [beginRekey] that has not been confirmed, if any. */
+    fun pendingNewCode(): String?
+
+    /**
+     * The replacement to send: the one an earlier attempt already persisted, or a freshly minted
+     * one, committed to disk before this returns. Null when the current code is not legacy, or
+     * when the write could not be committed (then nothing may be sent: a replacement the server
+     * accepted but this device forgot would orphan the pass).
+     */
+    fun beginRekey(): String?
+
+    /**
+     * The server answered for the current code and [newCode] (a 200, or a refusal that adopts the
+     * fresh code): make [newCode] current, drop the pending slot and write [note] (or remove the
+     * note, when null) in one commit. Refuses (false, nothing written) unless [newCode] is the
+     * pending one.
+     */
+    fun completeRekey(newCode: String, note: String? = null): Boolean
+
+    /** The server says the current code needs no rekey (400 `not_legacy`): forget the pending one. */
+    fun abandonRekey()
+
+    /**
+     * What You should say about the last rekey, or null: [SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN]
+     * or [SharedPrefsDevicePassStore.NOTE_REPLACED]. Survives restarts.
+     */
+    fun rekeyNote(): String?
+
+    /** Replaces the note, or removes it when [note] is null. */
+    fun setRekeyNote(note: String?)
+}
+
+class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DevicePassStore, DeviceCodeRekeyStore {
 
     @Synchronized
     override fun code(): String =
         prefs.getString(KEY_CODE, null) ?: generate().also { prefs.edit().putString(KEY_CODE, it).apply() }
 
     override fun codeHash(): String = sha256Hex(code())
+
+    @Synchronized
+    override fun isLegacy(): Boolean = code().length == LEGACY_CODE_LENGTH
+
+    @Synchronized
+    override fun pendingNewCode(): String? = prefs.getString(KEY_PENDING_NEW_CODE, null)?.takeIf(::isNewFormat)
+
+    @Synchronized
+    override fun beginRekey(): String? {
+        if (!isLegacy()) return null
+        pendingNewCode()?.let { return it }
+        val minted = generate()
+        // commit(), not apply(): the replacement must be on disk before the server can hear of it.
+        return if (prefs.edit().putString(KEY_PENDING_NEW_CODE, minted).commit()) minted else null
+    }
+
+    @Synchronized
+    override fun completeRekey(newCode: String, note: String?): Boolean {
+        if (!isNewFormat(newCode) || pendingNewCode() != newCode) return false
+        // One editor, one commit: the new code becomes current, the pending slot goes and the note
+        // is written in the same atomic file write, so no crash can leave a device with neither
+        // code, with two that disagree about which is current, or with a new code and no note.
+        val edit = prefs.edit()
+            .putString(KEY_CODE, newCode)
+            .remove(KEY_PENDING_NEW_CODE)
+        if (note != null) edit.putString(KEY_REKEY_NOTE, note) else edit.remove(KEY_REKEY_NOTE)
+        return edit.commit()
+    }
+
+    @Synchronized
+    override fun abandonRekey() {
+        prefs.edit().remove(KEY_PENDING_NEW_CODE).commit()
+    }
+
+    @Synchronized
+    override fun rekeyNote(): String? = prefs.getString(KEY_REKEY_NOTE, null)
+
+    @Synchronized
+    override fun setRekeyNote(note: String?) {
+        val edit = prefs.edit()
+        if (note != null) edit.putString(KEY_REKEY_NOTE, note) else edit.remove(KEY_REKEY_NOTE)
+        edit.commit()
+    }
 
     private fun generate(): String {
         val random = SecureRandom()
@@ -67,17 +186,36 @@ class SharedPrefsDevicePassStore(private val prefs: SharedPreferences) : DeviceP
 
     companion object {
         const val KEY_CODE = "device_pass_code"
+
+        /** The minted replacement for a legacy code, persisted before the rekey call is made. */
+        const val KEY_PENDING_NEW_CODE = "device_pass_pending_new_code"
+
+        /** What You says about the last rekey: [NOTE_SIGN_IN_AGAIN] or [NOTE_REPLACED]. */
+        const val KEY_REKEY_NOTE = "device_pass_rekey_note"
+
+        /** The rekey landed on a signed-in phone; the new code is not bound to the account. */
+        const val NOTE_SIGN_IN_AGAIN = "sign_in_again"
+
+        /** The old code could not be moved; the fresh code was adopted without its pass. */
+        const val NOTE_REPLACED = "replaced"
+
+        /** Every key this store writes: all of them live in the one preferences file backups exclude. */
+        val ALL_KEYS = setOf(KEY_CODE, KEY_PENDING_NEW_CODE, KEY_REKEY_NOTE)
+
         /** Length of every NEWLY minted code: 26 x log2(31) = 128.8 bits. */
         const val CODE_LENGTH = 26
 
         /**
-         * Length of codes minted before the 26-symbol change. Still read, sent and honoured as
-         * stored; never minted again. The server accepts both lengths.
+         * Length of codes minted before the 26-symbol change. Still read and sent as stored until
+         * the server confirms a replacement (`DeviceRekeyer`); never minted again.
          */
         const val LEGACY_CODE_LENGTH = 10
 
         /** No 0/O or 1/I: a code a person might ever have to read off one screen and type on another. */
         const val CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
+        /** A code in the current format: [CODE_LENGTH] symbols, every one from [CODE_ALPHABET]. */
+        fun isNewFormat(code: String): Boolean = code.length == CODE_LENGTH && code.all { it in CODE_ALPHABET }
 
         fun sha256Hex(text: String): String {
             val digest = MessageDigest.getInstance("SHA-256").digest(text.trim().toByteArray(Charsets.UTF_8))

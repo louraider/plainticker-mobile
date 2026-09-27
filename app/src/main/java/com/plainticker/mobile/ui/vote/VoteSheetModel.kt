@@ -6,6 +6,7 @@ import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.raw
+import com.plainticker.mobile.ui.refusal
 import com.plainticker.mobile.ui.words
 
 /**
@@ -41,6 +42,13 @@ data class VoteSheetContent(
      * A connect or a server call is cancelled by closing and costs nothing, so neither holds.
      */
     val holdsOpen: Boolean = false,
+    /**
+     * What [VoteActionKind.Share] hands the system share sheet: the plain sentence and the public
+     * transaction link, never a figure or a verdict. Null in every state but a landed vote.
+     */
+    val shareText: Copy? = null,
+    /** The landed vote's signature, for "View on Solscan". Landed only. */
+    val signature: String? = null,
 )
 
 /** The label and the mono fragment of the bar over a landed vote. */
@@ -56,7 +64,7 @@ data class VoteCell(
 
 data class VoteAction(val label: Copy, val kind: VoteActionKind)
 
-enum class VoteActionKind { Confirm, Retry, Close }
+enum class VoteActionKind { Confirm, Retry, Close, Share }
 
 /** Lamports' own on-chain precision: what the raw integer below is divided by to read as SOL. */
 private const val LAMPORT_DECIMALS = 9
@@ -120,8 +128,10 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         ),
         notice = words(R.string.vote_landed_note),
         disclosure = null,
-        primary = null,
+        primary = VoteAction(words(R.string.action_share), VoteActionKind.Share),
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),
+        shareText = words(R.string.vote_share_text, ticker, signature),
+        signature = signature,
     )
 
     is VoteState.Refused -> VoteSheetContent(
@@ -129,7 +139,7 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         phase = null,
         bar = null,
         cells = emptyList(),
-        notice = words(reason.text),
+        notice = why?.takeIf { reason == VoteRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text),
         disclosure = null,
         primary = if (reason.retryable) {
             VoteAction(words(R.string.action_retry), VoteActionKind.Retry)

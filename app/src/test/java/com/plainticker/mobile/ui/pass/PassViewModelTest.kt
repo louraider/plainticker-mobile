@@ -1,5 +1,9 @@
 package com.plainticker.mobile.ui.pass
 
+import com.plainticker.mobile.data.auth.DeviceRekeyApi
+import com.plainticker.mobile.data.auth.DeviceRekeyer
+import com.plainticker.mobile.prefs.FakePrefs
+import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import androidx.lifecycle.viewModelScope
 import app.cash.turbine.test
 import com.funkatronics.encoders.Base58
@@ -22,6 +26,7 @@ import com.plainticker.mobile.data.rpc.SkrStakeAccount
 import com.plainticker.mobile.prefs.InMemoryDevicePassStore
 import com.plainticker.mobile.data.PinnedAddresses
 import com.plainticker.mobile.wallet.ServerBuilt
+import com.plainticker.mobile.wallet.TransactionGuard
 import kotlinx.coroutines.runBlocking
 import com.plainticker.mobile.repo.FakeRpcRepository
 import com.plainticker.mobile.wallet.FakeAdapterOperations
@@ -326,15 +331,26 @@ class PassViewModelTest {
         val summary = """{"mint":"USDC","amount":12000000,"destination":"$destination","treasury":"$treasury","lamports":5000}"""
         val wrongAmount = ServerBuilt.pass(payer.address, devicePassStore.codeHash(), amount = 1_000_000_000L).base64()
         val wrongMemo = ServerBuilt.pass(payer.address, "f".repeat(64)).base64()
-        for (tx in listOf(wrongAmount, wrongMemo)) {
+        // Judges' review, 2026-09-27: the server did build these, so the refusal is this phone's
+        // own, with its plain reason, and never "the server did not build this payment".
+        val expected = listOf(TransactionGuard.Why.WRONG_AMOUNT, TransactionGuard.Why.NOT_THIS_REQUEST)
+        for ((tx, why) in listOf(wrongAmount, wrongMemo).zip(expected)) {
             val tampered = passMock(build = """{"transaction":"$tx","summary":$summary}""")
             val operations = FakeAdapterOperations(signatures = listOf(ByteArray(64)))
             val session = wallet().apply { this.operations = operations }
 
-            assertEquals(PassRefusal.UNAVAILABLE, refusalOf(settle(machine(pass = tampered, wallet = session))))
+            val refused = settle(machine(pass = tampered, wallet = session)) as PassState.Refused
+            assertEquals(PassRefusal.GUARD_REFUSED, refused.reason)
+            assertEquals(why, refused.why)
+            assertTrue(PassRefusal.GUARD_REFUSED.retryable)
             assertTrue(operations.sendRequests.isEmpty())
             assertTrue(operations.signRequests.isEmpty())
         }
+        // Above the pinned price, even with a summary that agrees with the bytes.
+        val dear = ServerBuilt.pass(payer.address, devicePassStore.codeHash(), amount = 50_000_000L).base64()
+        val dearSummary = summary.replace("12000000", "50000000")
+        val refused = settle(machine(pass = passMock(build = """{"transaction":"$dear","summary":$dearSummary}"""))) as PassState.Refused
+        assertEquals(TransactionGuard.Why.ABOVE_PASS_PRICE, refused.why)
     }
 
     @Test
@@ -617,6 +633,9 @@ class PassViewModelTest {
             Triple(429, """{"error":"bad","code":"rate_limited"}""", PromoRefusal.RATE_LIMITED),
             Triple(404, """{"error":"not_found"}""", PromoRefusal.NOT_OPEN),
             Triple(500, """{"error":"internal"}""", PromoRefusal.UNAVAILABLE),
+            // The pack's shared server contract (2026-09-27), with no rekeyer to act on them.
+            Triple(401, """{"error":"rekey_required"}""", PromoRefusal.REKEY_PENDING),
+            Triple(401, """{"error":"code_retired"}""", PromoRefusal.CODE_RETIRED),
         )
         table.forEach { (status, body, expected) ->
             val promo = mockApi { respondJson(body, HttpStatusCode.fromValue(status)) }
@@ -632,6 +651,47 @@ class PassViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+    }
+
+    @Test
+    fun `a legacy device redeems with its new code, rekeyed first through the rekeyer`() = runTest {
+        val legacy = "K7M9QRSTXY"
+        val prefs = FakePrefs().also { it.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacy).commit() }
+        val codes = SharedPrefsDevicePassStore(prefs)
+        val promo = mockApi { request ->
+            when {
+                request.url.encodedPath.endsWith(DeviceRekeyApi.PATH) -> respondJson("""{"ok":true}""")
+                request.headers[PromoApi.HEADER_CODE] == legacy ->
+                    respondJson("""{"error":"rekey_required"}""", HttpStatusCode.Unauthorized)
+                else -> respondJson("""{"pro":true,"source":"promo","until":"2026-10-19T00:00:00.000Z"}""")
+            }
+        }
+        val rekeyer = DeviceRekeyer(codes, DeviceRekeyApi(promo.client), Clock { now }, { }, mainDispatcherRule.dispatcher)
+        val vm = PassViewModel(
+            PassApi(passMock().client),
+            EntitlementApi(entitlementMock().client),
+            PromoApi(promo.client),
+            wallet(),
+            staking(0L),
+            codes,
+            FakePassReceiptStore(),
+            clock = Clock { now },
+            debugLog = PassDebugLog { },
+            ioDispatcher = mainDispatcherRule.dispatcher,
+            rekeyer = rekeyer,
+        ).also { machines += it }
+
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm.promo.test {
+            awaitItem()
+            vm.applyPromo()
+            awaitUntil { it is PromoState.Success }
+            cancelAndIgnoreRemainingEvents()
+        }
+        val redeem = promo.requests.filter { it.url.encodedPath.endsWith(PromoApi.PATH) }
+        assertEquals(listOf(codes.code()), redeem.map { it.headers[PromoApi.HEADER_CODE] })
+        assertFalse(codes.isLegacy())
     }
 
     @Test
@@ -691,10 +751,10 @@ class PassViewModelTest {
 
     @Test
     fun `a connected wallet's stake is read and bounded the same way the vote reads it`() = runTest {
-        val vm = machine(wallet = wallet(), rpc = staking(31_209_870_777L))
+        val vm = machine(wallet = wallet(), rpc = staking(38_406_150_222L))
         vm.pro.test {
             val loaded = awaitUntil { it.stakeRaw != null }
-            assertEquals(31_209_870_777L, loaded.stakeRaw)
+            assertEquals(38_406_150_222L, loaded.stakeRaw)
             assertFalse(loaded.stakeUnread)
             assertTrue(loaded.walletConnected)
             cancelAndIgnoreRemainingEvents()

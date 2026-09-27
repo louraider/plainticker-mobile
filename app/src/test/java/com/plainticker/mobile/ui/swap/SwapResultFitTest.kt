@@ -15,7 +15,7 @@ import org.junit.Test
  * substitution applied on number styles, advances summed from `hmtx` (GPOS kerning left out, which
  * only narrows these pairs, so every width here is an upper bound). The same script reproduces
  * AmberTickerRowTest's own pinned widths to the thousandth ("AUTO.GBx" 77.296dp, "Meta Platforms,
- * Inc." 129.066dp, "31,209.9 SKR" 113.220dp, "Vote" in Outfit 30.856dp), so the numbers below are
+ * Inc." 129.066dp, "38,406.2 SKR" 113.220dp, "Vote" in Outfit 30.856dp), so the numbers below are
  * measured the way that file's are. 1.3x is the flat, worse-than-real scaling that file uses: sp
  * text grows by the raw factor, dp padding does not.
  *

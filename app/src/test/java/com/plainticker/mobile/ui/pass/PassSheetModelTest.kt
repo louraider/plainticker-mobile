@@ -4,7 +4,10 @@ import com.plainticker.mobile.data.plainticker.PassBuild
 import com.plainticker.mobile.data.plainticker.PassSummary
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.ShippedCopy
+import com.plainticker.mobile.ui.refusal
+import com.plainticker.mobile.wallet.TransactionGuard
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -63,5 +66,49 @@ class PassSheetModelTest {
             "0.123457 SOL",
             render(feeCellOf(123_456_789L).value),
         )
+    }
+
+    @Test
+    fun `the destination is labelled as pinned in this app, across the whole row`() {
+        val cell = requireNotNull(PassState.Ready(payer, build(5_000L)).sheet()).cells[2]
+        assertEquals("Sent to, pinned in this app", render(cell.label))
+        assertEquals(2, cell.span)
+        assertEquals(destination, cell.copies)
+    }
+
+    /**
+     * Judges' review, 2026-09-27: a transfer this phone refused read "The server did not build this
+     * payment". The server did build it; the sentence now says who refused and why, in plain words.
+     */
+    @Test
+    fun `a guard refusal says this phone refused it, with the plain reason, and offers a retry`() {
+        val refused = requireNotNull(PassState.Refused(PassRefusal.GUARD_REFUSED, TransactionGuard.Why.WRONG_RECIPIENT).sheet())
+        assertEquals(
+            "This phone refused the transaction before your wallet saw it: it pays somewhere other than the destination shown. Nothing was signed or sent.",
+            render(refused.notice),
+        )
+        assertEquals(PassActionKind.Retry, refused.primary?.kind)
+        val price = requireNotNull(PassState.Refused(PassRefusal.GUARD_REFUSED, TransactionGuard.Why.ABOVE_PASS_PRICE).sheet())
+        assertEquals(
+            "This phone refused the transaction before your wallet saw it: it asks more than 12 USDC, the most a pass costs in this app. Nothing was signed or sent.",
+            render(price.notice),
+        )
+        // The server not answering is still its own sentence.
+        val down = requireNotNull(PassState.Refused(PassRefusal.UNAVAILABLE).sheet())
+        assertEquals("The server did not build this payment, so nothing was signed and nothing was sent.", render(down.notice))
+    }
+
+    @Test
+    fun `every plain reason has its own shipped sentence`() {
+        val sentences = TransactionGuard.Why.entries.map { ShippedCopy.render(it.refusal()) }
+        assertEquals(sentences.size, sentences.toSet().size)
+        sentences.forEach { assertTrue(it, it.startsWith("This phone refused the transaction before your wallet saw it: ")) }
+    }
+
+    @Test
+    fun `a landed payment carries its signature for View on Solscan, and nothing before it does`() {
+        val sig = "5".repeat(88)
+        assertEquals(sig, requireNotNull(PassState.Landed(sig, null).sheet()).signature)
+        assertEquals(null, requireNotNull(PassState.Ready(payer, build(5_000L)).sheet()).signature)
     }
 }

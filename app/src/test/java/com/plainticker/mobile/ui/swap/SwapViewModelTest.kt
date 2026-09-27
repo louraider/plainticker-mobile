@@ -116,6 +116,16 @@ class SwapViewModelTest {
                 TransactionGuard.ata(realTaker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022),
                 TransactionGuard.ata(seeker.address, KnownMints.TSLAX, KnownPrograms.TOKEN_2022),
             )
+            // The reverse route's wrapped-SOL account and its pool-token hop account, which the
+            // guard requires to be the wallet's own since 2026-09-27.
+            .replaceKey(
+                TransactionGuard.ata(realTaker, KnownMints.WSOL, KnownPrograms.TOKEN),
+                TransactionGuard.ata(seeker.address, KnownMints.WSOL, KnownPrograms.TOKEN),
+            )
+            .replaceKey(
+                TransactionGuard.ata(realTaker, REVERSE_HOP_MINT, KnownPrograms.TOKEN),
+                TransactionGuard.ata(seeker.address, REVERSE_HOP_MINT, KnownPrograms.TOKEN),
+            )
     }
 
     /** The golden order's own transaction line, as this file serves it. */
@@ -220,7 +230,7 @@ class SwapViewModelTest {
      * base units (0.002646 TSLAx) is 376.45 a token, so the value check passes the real order.
      */
     private fun tslaxPriced(usd: Double = TSLAX_USD) =
-        FakePriceRepository(Result.success(mapOf(KnownMints.TSLAX to price(usd))))
+        FakePriceRepository(Result.success(mapOf(KnownMints.TSLAX to price(usd), KnownMints.WSOL to price(SOL_USD))))
 
     private val logged = mutableListOf<String>()
 
@@ -492,10 +502,16 @@ class SwapViewModelTest {
             assertEquals(367_000_000L, landed.fill.slot)
             assertFalse(landed.requoted)
 
-            // The cost is the quote's, corrected by the fill: it beat the quote, so it cost less.
-            assertEquals(0.586, landed.quote.allInCostPct!!, 0.001)
-            assertTrue(landed.allInCostPaidPct!! < landed.quote.allInCostPct)
-            assertEquals(0.549, landed.allInCostPaidPct!!, 0.001)
+            // The route's cost is the quote's, corrected by the fill: it beat the quote, so it cost less.
+            assertEquals(0.586, landed.quote.routeCostPct!!, 0.001)
+            assertTrue(landed.routeCostPaidPct!! < landed.quote.routeCostPct!!)
+            assertEquals(0.549, landed.routeCostPaidPct!!, 0.001)
+            // All-in adds the SOL this wallet pays, at the SOL price read with the quote (judges'
+            // review, 2026-09-27): 5,000 + 1,450 + 1,488,440 lamports at SOL_USD, over 5 dollars in.
+            assertEquals(SOL_USD, landed.quote.solUsd!!, 0.0)
+            val solShare = 1_494_890L / 1e9 * SOL_USD / 5.0 * 100.0
+            assertEquals(0.586 + solShare, landed.quote.allInCostPct!!, 0.001)
+            assertEquals(0.549 + solShare, landed.allInCostPaidPct!!, 0.001)
 
             // The worst case is the quote's own threshold, stated beside the estimate.
             assertEquals(1_346_933L, landed.quote.worstCaseOutRaw)
@@ -521,6 +537,8 @@ class SwapViewModelTest {
             assertEquals("the receipt records the fill, never the quote", 1_360_941L, receipt.outputAmountRaw)
             assertEquals(8, receipt.outputDecimals)
             assertEquals(landed.allInCostPaidPct!!, receipt.allInCostPct!!, 1e-9)
+            assertEquals(landed.routeCostPaidPct!!, receipt.routeCostPct!!, 1e-9)
+            assertEquals(1_488_440L / 1e9 * SOL_USD, receipt.rentUsd!!, 1e-9)
             assertEquals("Metis", receipt.route)
             assertTrue(receipt.landedAtMillis >= START)
 
@@ -759,7 +777,8 @@ class SwapViewModelTest {
             golden.replace(""""outputMint": "${KnownMints.TSLAX}",""", """"outputMint": "${KnownMints.SKR}","""),
             golden.replace(transactionField, """"transaction": "$approve","""),
         )
-        for (case in cases) {
+        val reasons = listOf(TransactionGuard.Why.WRONG_AMOUNT, TransactionGuard.Why.NOT_THIS_REQUEST, TransactionGuard.Why.HANDS_OVER_CONTROL)
+        for ((case, why) in cases.zip(reasons)) {
             assertTrue("the case must differ from the golden order", case != golden)
             orderResponse = case
             val mock = jupiter()
@@ -770,6 +789,7 @@ class SwapViewModelTest {
                 submitFive(vm, this)
                 val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
                 assertEquals(SwapFailure.GUARD_REFUSED, failed.reason)
+                assertEquals("the plain reason travels with the refusal", why, failed.why)
                 assertEquals("the wallet is never opened for it", 0, wallet.callCount)
                 assertTrue(mock.executes().isEmpty())
                 cancelAndIgnoreRemainingEvents()
@@ -891,6 +911,88 @@ class SwapViewModelTest {
             val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
             assertEquals(SwapFailure.SUBMIT_UNAVAILABLE, failed.reason)
             assertTrue("nothing is recorded without a signature", receipts.writes.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Judges' review, 2026-09-27: without a SOL price the SOL costs cannot be priced, so nothing is
+     * called all-in; the route's cost stands under its own name, and the swap is not held up.
+     */
+    @Test
+    fun `without a SOL price the swap still lands, with the route cost and no all-in figure`() = runTest {
+        for (prices in listOf(FakePriceRepository(Result.success(emptyMap())), FakePriceRepository(Result.failure(java.io.IOException("down"))))) {
+            resetPerCase()
+            val mock = jupiter()
+            val wallet = wallet()
+            val vm = viewModel(mock, wallet, prices = prices)
+            vm.state.test {
+                awaitItem()
+                submitFive(vm, this)
+                val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+                assertNull(landed.quote.solUsd)
+                assertNull(landed.quote.allInCostPct)
+                assertNull(landed.allInCostPaidPct)
+                assertEquals(0.586, landed.quote.routeCostPct!!, 0.001)
+                val receipt = receipts.receipts.value.single()
+                assertNull(receipt.allInCostPct)
+                assertNull(receipt.solCostUsd)
+                assertEquals(landed.routeCostPaidPct!!, receipt.routeCostPct!!, 1e-9)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+    }
+
+    @Test
+    fun `the SOL price is asked for once, after the quote and before the wallet`() = runTest {
+        val prices = tslaxPriced()
+        val vm = viewModel(jupiter(), wallet(), prices = prices)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Landed }
+            assertEquals(listOf(listOf(KnownMints.WSOL)), prices.requested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Beeman, judges' review 2026-09-27: sign_transactions is optional in MWA 2.x. A wallet whose
+     * capabilities leave it out is told so plainly, and is never asked to sign.
+     */
+    @Test
+    fun `a wallet that only signs by sending is named, and never asked to sign`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val ops = wallet.operations as FakeAdapterOperations
+        ops.optionalFeatures = arrayOf("solana:signInWithSolana")
+        val vm = viewModel(mock, wallet)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.SIGN_ONLY_UNSUPPORTED, failed.reason)
+            assertEquals(FailureOutcome.NOTHING_SENT, failed.reason.outcome)
+            assertEquals(FailureNext.NONE, failed.reason.next)
+            assertTrue("nothing was asked of the wallet", ops.signRequests.isEmpty())
+            assertTrue(mock.executes().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a wallet that lists sign-only is asked to sign in the same session, and lands`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val ops = wallet.operations as FakeAdapterOperations
+        ops.optionalFeatures = arrayOf("solana:signTransactions")
+        val vm = viewModel(mock, wallet)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Landed }
+            assertEquals(1, ops.signRequests.size)
+            assertEquals("one wallet round-trip for both", 1, wallet.callCount)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1431,7 +1533,84 @@ class SwapViewModelTest {
             submitFive(vm, this)
             awaitUntil { it is SwapState.Landed }
             assertTrue(second.asked.isEmpty())
-            assertTrue(prices.requested.isEmpty())
+            // The token's own price is not asked for; only SOL's, for the all-in cost (2026-09-27).
+            assertEquals(listOf(listOf(KnownMints.WSOL)), prices.requested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Prices that answer at their own pace (security review, 2026-09-27): SOL's after [solDelayMs],
+     * any other mint's after [tokenDelayMs]. The SOL price is the all-in cost's alone and may never
+     * stop a swap; the token's is the value check's, bound as it always was.
+     */
+    private class PacedPrices(private val solDelayMs: Long, private val tokenDelayMs: Long = 0L) : com.plainticker.mobile.repo.PriceRepository {
+        val requested = mutableListOf<List<String>>()
+        override suspend fun prices(mints: Collection<String>): Map<String, com.plainticker.mobile.data.jupiter.PriceEntry> {
+            requested += mints.toList()
+            return if (KnownMints.WSOL in mints) {
+                kotlinx.coroutines.delay(solDelayMs)
+                mapOf(KnownMints.WSOL to price(SOL_USD))
+            } else {
+                kotlinx.coroutines.delay(tokenDelayMs)
+                mints.associateWith { price(TSLAX_USD) }
+            }
+        }
+        override suspend fun pricesFirst(mints: List<String>, limit: Int) =
+            com.plainticker.mobile.data.jupiter.PriceFetch(priced = mints.associateWith { price(if (it == KnownMints.WSOL) SOL_USD else TSLAX_USD) })
+    }
+
+    @Test
+    fun `a slow SOL price never stops Swap to USDC, which lands on the route cost after the value check`() = runTest {
+        orderResponse = reverseOrder
+        executePlan = listOf(reverseLanded to HttpStatusCode.OK)
+        val prices = PacedPrices(solDelayMs = 60_000L)
+        val wallet = wallet()
+        val vm = viewModel(jupiter(), wallet, rpc = chain(tokenRaw = 264_600L), prices = prices)
+        vm.state.test {
+            awaitItem()
+            openOutAndMax(vm, this)
+            vm.submit()
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertNull("past the bound the sheet says Route cost", landed.quote.solUsd)
+            assertNull(landed.quote.allInCostPct)
+            assertEquals(1, wallet.callCount)
+            assertTrue("the value check read the token's own price", listOf(KnownMints.TSLAX) in prices.requested)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the value check is not cut short by the SOL price's bound, as before the all-in cost`() = runTest {
+        orderResponse = reverseOrder
+        executePlan = listOf(reverseLanded to HttpStatusCode.OK)
+        // The token's price takes twice the SOL bound: the value check still waits for it and passes.
+        val prices = PacedPrices(solDelayMs = 0L, tokenDelayMs = 5_000L)
+        val wallet = wallet()
+        val vm = viewModel(jupiter(), wallet, rpc = chain(tokenRaw = 264_600L), prices = prices)
+        vm.state.test {
+            awaitItem()
+            openOutAndMax(vm, this)
+            vm.submit()
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertEquals(SOL_USD, landed.quote.solUsd!!, 0.0)
+            assertEquals(1, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a slow SOL price never stops a swap into a token either`() = runTest {
+        val prices = PacedPrices(solDelayMs = 60_000L)
+        val wallet = wallet()
+        val vm = viewModel(jupiter(), wallet, prices = prices)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertNull(landed.quote.solUsd)
+            assertEquals(1, wallet.callCount)
+            assertEquals(listOf(listOf(KnownMints.WSOL)), prices.requested)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1636,6 +1815,9 @@ class SwapViewModelTest {
 
         /** TSLAx in USD as the real 2026-09-24 reverse order priced it (see tslaxPriced). */
         const val TSLAX_USD = 376.45
+
+        /** A SOL price for the all-in cost; the tests that remove it expect "Route cost". */
+        const val SOL_USD = 200.0
         const val REQUEST_ID = "01a08b00-0000-7000-8000-00000000f00d"
 
         /** 88 characters of base58 padding, a placeholder and never a real signature. */
@@ -1647,6 +1829,9 @@ class SwapViewModelTest {
 
         /** The taker of the real 2026-09-23 order whose bytes stand in for the redacted ones. */
         const val REAL_TAKER = "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"
+
+        /** The pool token the real reverse route passes through, named in its own route plan. */
+        const val REVERSE_HOP_MINT = "BjcRmwm8e25RgjkyaFE56fc7bxRgGPw96JUkXRJFEroT"
 
         /** The taker of the real 2026-09-24 TSLAx-to-USDC order, replaced by the test wallet. */
         const val REVERSE_TAKER = "AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2"

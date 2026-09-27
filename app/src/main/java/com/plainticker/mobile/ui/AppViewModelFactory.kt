@@ -111,6 +111,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.summaryRepository,
             container.voteReceiptStore,
             container.walletSession,
+            rpc = container.rpcRepository,
         )
     }
     initializer {
@@ -123,10 +124,17 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.devicePassStore,
             container.passReceiptStore,
             container.clock,
+            rekeyer = container.deviceRekeyer,
         )
     }
     initializer {
-        OnboardingViewModel(container.onboardingStore)
+        OnboardingViewModel(
+            container.onboardingStore,
+            watchlist = container.watchlistStore,
+            summaries = container.summaryRepository,
+            catalog = container.catalogRepository,
+            snapshot = container.snapshotRepository,
+        )
     }
     initializer {
         YouViewModel(
@@ -138,6 +146,13 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         )
     }
     initializer {
-        AccountViewModel(container.googleAuthApi, container.accountApi, container.accountStore, container.devicePassStore)
+        AccountViewModel(
+            container.googleAuthApi,
+            container.accountApi,
+            container.accountStore,
+            container.devicePassStore,
+            rekeyer = container.deviceRekeyer,
+            signOutRunner = container.accountSignOut,
+        )
     }
 }

@@ -7,6 +7,9 @@ import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.jupiter.JupiterPriceApi
 import com.plainticker.mobile.data.auth.AccountApi
+import com.plainticker.mobile.data.auth.AccountSignOut
+import com.plainticker.mobile.data.auth.DeviceRekeyApi
+import com.plainticker.mobile.data.auth.DeviceRekeyer
 import com.plainticker.mobile.data.auth.GoogleAuthApi
 import com.plainticker.mobile.data.jupiter.JupiterSwapApi
 import com.plainticker.mobile.data.net.HttpClientFactory
@@ -35,6 +38,7 @@ import com.plainticker.mobile.prefs.OnboardingStore
 import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import com.plainticker.mobile.prefs.SharedPrefsNotificationPromptStore
 import com.plainticker.mobile.prefs.SharedPrefsOnboardingStore
+import com.plainticker.mobile.prefs.SharedPrefsPendingSignOutStore
 import com.plainticker.mobile.prefs.SharedPrefsWatchlistStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CachedCatalogRepository
@@ -57,7 +61,9 @@ import com.plainticker.mobile.repo.SummaryRepository
 import com.plainticker.mobile.wallet.AesGcmSessionCipher
 import com.plainticker.mobile.wallet.EncryptedFileWalletSessionStore
 import com.plainticker.mobile.wallet.MwaWalletSession
+import com.plainticker.mobile.watchlist.AutoWatch
 import com.plainticker.mobile.watchlist.DigestNotifier
+import com.plainticker.mobile.watchlist.SharedPrefsPendingWatchStore
 import com.plainticker.mobile.watchlist.DigestStore
 import com.plainticker.mobile.watchlist.DigestStrings
 import com.plainticker.mobile.watchlist.SharedPrefsDigestStore
@@ -70,6 +76,9 @@ import com.plainticker.mobile.watchlist.WorkManagerWatchlistScheduler
 import com.plainticker.mobile.wallet.WalletSessionHolder
 import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Manual dependency graph (plan D9: no Hilt). One instance per process, owned by
@@ -144,6 +153,15 @@ interface AppContainer {
     /** This device's own code for Pro entitlement (task A6): generated once, kept on the device. */
     val devicePassStore: DevicePassStore
 
+    /**
+     * Replaces a legacy 10-symbol [devicePassStore] code with a 26-symbol one through
+     * `POST /api/v1/device/rekey`, on launch and around every account call (DeviceRekeyer).
+     */
+    val deviceRekeyer: DeviceRekeyer
+
+    /** `POST /api/v1/account/signout`, with its one queued retry, process wide. */
+    val accountSignOut: AccountSignOut
+
     /** The signed-in Google account, for display only; kept apart from [devicePassStore]'s file. */
     val accountStore: AccountStore
 
@@ -164,11 +182,20 @@ interface AppContainer {
 
     /** The daily job itself, and the way to fire it now. */
     val watchlistScheduler: WatchlistScheduler
+
+    /**
+     * Watches what the reader acted on: a vote's pick (once analysed) and a swap's stock token.
+     * Follows the receipt stores from [PlainTickerApp], so neither flow that writes them changes.
+     */
+    val autoWatch: AutoWatch
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
     private val app: Context = context.applicationContext
     private val prefs by lazy { app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+
+    /** Lives as long as the process: where a queued sign-out retry waits. */
+    private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val clock: Clock = WallClock
     override val httpClient: HttpClient by lazy { HttpClientFactory.create() }
@@ -248,7 +275,27 @@ class DefaultAppContainer(context: Context) : AppContainer {
     // The same shared preferences file as the watchlist and the digest: a handful of fields, no
     // reason to pay for a second file. See DevicePassStore for what surviving process death and
     // a wallet change each mean for the code it keeps.
-    override val devicePassStore: DevicePassStore by lazy { SharedPrefsDevicePassStore(prefs) }
+    // One instance for both faces: every reader of the code and the one rekeyer that may change it
+    // share its lock. The rekey's pending code and blocked flag live in this same file, which the
+    // backup rules exclude whole.
+    private val sharedDevicePassStore: SharedPrefsDevicePassStore by lazy { SharedPrefsDevicePassStore(prefs) }
+    override val devicePassStore: DevicePassStore get() = sharedDevicePassStore
+
+    override val deviceRekeyer: DeviceRekeyer by lazy {
+        // The account store too: a rekeyed code is not bound to the account (web PR #170), so a
+        // rekey on a signed-in phone clears the account shown here.
+        DeviceRekeyer(sharedDevicePassStore, DeviceRekeyApi(httpClient), clock, account = accountStore)
+    }
+
+    override val accountSignOut: AccountSignOut by lazy {
+        AccountSignOut(
+            api = accountApi,
+            codes = devicePassStore,
+            pending = SharedPrefsPendingSignOutStore(prefs),
+            rekeyer = deviceRekeyer,
+            retryScope = processScope,
+        )
+    }
 
     // Its own DataStore file (files/datastore/account.preferences_pb), never the preferences file
     // above that keeps the device code: signing out clears this file and cannot reach the code.
@@ -291,11 +338,17 @@ class DefaultAppContainer(context: Context) : AppContainer {
             },
             notifier = digestNotifier,
             clock = clock,
-            vote = VoteDigestFacts(nextUpRepository, summaryRepository),
+            vote = VoteDigestFacts(nextUpRepository, summaryRepository, voteReceiptStore),
+            autoWatch = autoWatch,
+            readerZone = java.time.ZoneId.systemDefault(),
         )
     }
 
     override val watchlistScheduler: WatchlistScheduler by lazy { WorkManagerWatchlistScheduler(app) }
+
+    override val autoWatch: AutoWatch by lazy {
+        AutoWatch(watchlistStore, SharedPrefsPendingWatchStore(prefs), summaryRepository, catalogRepository)
+    }
 
     companion object {
         const val PREFS_NAME = "plainticker"

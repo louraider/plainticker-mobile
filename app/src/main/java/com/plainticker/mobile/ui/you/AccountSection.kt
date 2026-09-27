@@ -14,8 +14,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.auth.DeviceCodeStatus
 import com.plainticker.mobile.prefs.SignedInAccount
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
@@ -25,23 +27,21 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberDarkColors
-import com.plainticker.mobile.wallet.WalletAccount
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * You's "Sign-in methods" group (docs/google-sign-in.md; the cabinet pass, 2026-09-25, after the
- * web cabinet's own group of the same name): the Google account and the Solana wallet as two rows
- * of one group, then the wallets the server returned as linked to the Google account, if any.
+ * web cabinet's own group of the same name): the Google account, then the wallets the server
+ * returned as linked to that account, if any. The phone's own Solana wallet connection is not a
+ * sign-in method (it is a Mobile Wallet Adapter session that signs transactions), so since the
+ * judges' round 2 it is its own group, [WalletSection].
  *
  * - **Google**: the email with Sign out, or "Not signed in" with Sign in, or "Signing in". Sign
  *   out is a two-step inline confirm (the web cabinet's rule for anything that drops a link):
  *   the first tap opens a sentence and Sign out / Cancel in the same row, never a dialog.
  *   Every [AccountMessage] a sign-in can end in is drawn under this row, unless the hero is the
  *   one offering Sign in ([showMessage] false), in which case the hero draws it beside its button.
- * - **Solana wallet**: the short key with Copy and Disconnect, or "Not connected" with Connect,
- *   and the honest note of what is kept: the session token the wallet issued, encrypted on this
- *   phone so the wallet stays connected between launches, and never a key.
  * - **Linked wallets**: one row per wallet the server returned, each its own short key with Copy
  *   and Unlink; an account with none draws no row at all, rather than an empty one. Unlink is the
  *   same two-step inline confirm as Sign out ("Unlink this wallet?" with Unlink and Keep). A
@@ -55,19 +55,23 @@ import kotlinx.coroutines.launch
  * fontTools against the Outfit SemiBold file `TextAction` draws, and the wallet key in JetBrains
  * Mono, and proves each fits at 1.3x beside the space left for the key.
  *
+ * **The device code** (2026-09-27): a rekey that can never finish, or a code the server has
+ * retired, draws one caution row first ("This phone", [deviceCodeNoticeRes]), never the code.
+ * A Google sign-in refused with `link_on_web` carries its own text action to the web account
+ * page ([AccountMessage.LINK_ON_WEB_URL]), since linking happens there. A sign-out in flight
+ * reads "Signing out" and offers nothing until the server has answered.
+ *
  * No amber fill here: the hero above is the only place You draws one.
  */
 @Composable
 internal fun AccountSection(
     state: AccountUiState,
-    wallet: WalletAccount?,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onConnect: () -> Unit,
-    onDisconnect: () -> Unit,
     onUnlink: (String) -> Unit,
     colors: AmberColors,
     showMessage: Boolean = true,
+    deviceCodeStatus: DeviceCodeStatus = DeviceCodeStatus.OK,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(
@@ -76,8 +80,15 @@ internal fun AccountSection(
             colors = colors,
         )
         AmberTickerRowGroup(colors = colors) {
+            deviceCodeNoticeRes(deviceCodeStatus)?.let { notice ->
+                CabinetRow(
+                    colors = colors,
+                    value = stringResource(R.string.device_code_label),
+                    sub = stringResource(notice),
+                    subCaution = true,
+                )
+            }
             GoogleRow(state = state, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors, showMessage = showMessage)
-            WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)
             (state as? AccountUiState.SignedIn)?.let { signedIn ->
                 LinkedWalletsGroup(state = signedIn, onUnlink = onUnlink, colors = colors)
             }
@@ -94,6 +105,11 @@ private fun GoogleRow(
     showMessage: Boolean,
 ) {
     val label = stringResource(R.string.you_method_google)
+    val uriHandler = LocalUriHandler.current
+    // runCatching: a phone with no browser has nothing to open, and a tap must never crash.
+    val openWeb = RowAction(stringResource(R.string.account_action_open_web), {
+        runCatching { uriHandler.openUri(AccountMessage.LINK_ON_WEB_URL) }
+    })
     when (state) {
         AccountUiState.Restoring -> CabinetRow(colors = colors, label = label, value = stringResource(R.string.state_loading))
         is AccountUiState.SignedOut -> CabinetRow(
@@ -102,10 +118,22 @@ private fun GoogleRow(
             value = stringResource(R.string.you_identity_none),
             sub = state.message?.takeIf { showMessage }?.let { stringResource(accountMessageRes(it)) },
             subCaution = true,
-            actions = listOf(RowAction(stringResource(R.string.you_action_sign_in), onSignIn)),
+            actions = listOfNotNull(
+                RowAction(stringResource(R.string.you_action_sign_in), onSignIn),
+                openWeb.takeIf { showMessage && accountMessageOpensWeb(state.message) },
+            ),
         )
         AccountUiState.SigningIn -> CabinetRow(colors = colors, label = label, value = stringResource(R.string.account_signing_in))
-        is AccountUiState.SignedIn -> SignedInRow(state.account, label, onSignOut, colors)
+        is AccountUiState.SignedIn -> if (state.signingOut) {
+            CabinetRow(
+                colors = colors,
+                label = label,
+                value = accountIdentity(state.account).text(),
+                sub = stringResource(R.string.account_signing_out),
+            )
+        } else {
+            SignedInRow(state.account, label, onSignOut, colors)
+        }
     }
 }
 
@@ -127,47 +155,6 @@ private fun SignedInRow(account: SignedInAccount, label: String, onSignOut: () -
         } else {
             listOf(RowAction(signOut, { confirming = true }))
         },
-    )
-}
-
-@Composable
-private fun WalletRow(wallet: WalletAccount?, onConnect: () -> Unit, onDisconnect: () -> Unit, colors: AmberColors) {
-    val label = stringResource(R.string.you_wallet_method)
-    val note = stringResource(R.string.you_wallet_note)
-    if (wallet == null) {
-        CabinetRow(
-            colors = colors,
-            label = label,
-            value = stringResource(R.string.you_wallet_none),
-            sub = note,
-            actions = listOf(RowAction(stringResource(R.string.you_action_connect), onConnect)),
-        )
-        return
-    }
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-    val clipLabel = stringResource(R.string.you_copy_clip_label)
-    var copied by remember(wallet.address) { mutableStateOf(false) }
-    // "Copied" reads for two seconds, then the action is Copy again.
-    LaunchedEffect(copied) {
-        if (copied) {
-            delay(CopiedMillis)
-            copied = false
-        }
-    }
-    CabinetRow(
-        colors = colors,
-        label = label,
-        value = Fmt.shortKey(wallet.address),
-        valueKind = RowValueKind.KEY,
-        sub = note,
-        actions = listOf(
-            RowAction(stringResource(if (copied) R.string.you_action_copied else R.string.you_action_copy), {
-                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(clipLabel, wallet.address))) }
-                copied = true
-            }),
-            RowAction(stringResource(R.string.action_disconnect), onDisconnect),
-        ),
     )
 }
 
@@ -246,11 +233,8 @@ private fun AccountSignedOutPreview() {
     AmberPreviewCanvas {
         AccountSection(
             state = AccountUiState.SignedOut(AccountMessage.CANCELLED),
-            wallet = null,
             onSignIn = {},
             onSignOut = {},
-            onConnect = {},
-            onDisconnect = {},
             onUnlink = {},
             colors = AmberDarkColors,
         )
@@ -269,11 +253,8 @@ private fun AccountSignedInPreview() {
                     linkedWallets = listOf("4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"),
                 ),
             ),
-            wallet = WalletAccount(publicKey = ByteArray(32) { 7 }),
             onSignIn = {},
             onSignOut = {},
-            onConnect = {},
-            onDisconnect = {},
             onUnlink = {},
             colors = AmberDarkColors,
         )

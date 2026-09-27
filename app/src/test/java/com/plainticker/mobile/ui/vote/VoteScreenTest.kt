@@ -138,13 +138,16 @@ class VoteScreenTest {
         val state = source("ui/vote/VoteState.kt")
         val refused = state.substring(state.indexOf("data class Refused("))
             .substringBefore(") : OnTicker")
-        // The ticker it is about, what a reader calls it, and one of this app's own reasons.
-        // There is no fourth field, so there is nowhere for a server sentence to travel.
+        // The ticker it is about, what a reader calls it, one of this app's own reasons, and, for a
+        // guard refusal, the guard's own plain category (TransactionGuard.Why, an enum as well,
+        // judges' review 2026-09-27). No field is a string, so there is nowhere for a server
+        // sentence to travel.
         val fields = Regex("""val (\w+):\s*(\w+)""").findAll(refused).map { it.groupValues[1] to it.groupValues[2] }
         assertEquals(
-            listOf("ticker" to "String", "symbol" to "String", "reason" to "VoteRefusal"),
+            listOf("ticker" to "String", "symbol" to "String", "reason" to "VoteRefusal", "why" to "TransactionGuard"),
             fields.toList(),
         )
+        assertTrue("the fourth field is the guard's enum", "val why: TransactionGuard.Why?" in refused)
 
         // Every reason names a resource, so every sentence this feature shows is in strings.xml
         // and subject to CopyLintTest. The server's words go to the log and nowhere else.
@@ -252,7 +255,7 @@ class VoteScreenTest {
     // ---- The explainer is short enough that nobody scrolls past it, tightened on review -----------------
 
     @Test
-    fun `the explainer is two paragraphs and the disclosure, not three paragraphs and the disclosure`() {
+    fun `the explainer is two paragraphs, and the stake note is no longer at the top of the tab`() {
         val block = body(voteTabScreen, "private fun Explainer(")
         val ids = Regex("""R\.string\.(vote_tab_explainer_\w+)""").findAll(block).map { it.groupValues[1] }.toSet()
         assertEquals(
@@ -260,8 +263,10 @@ class VoteScreenTest {
             setOf("vote_tab_explainer_what", "vote_tab_explainer_how"),
             ids,
         )
-        // The disclosure is still said, just not counted as one of the two paragraphs above.
-        assertTrue("the gameability disclosure is not dropped, only kept out of the pitch", "vote_gameable" in block)
+        // Judges' round 2: the stake note moved to the vote sheet, at the moment of signing, as a
+        // roadmap. The tab itself no longer carries it anywhere.
+        assertFalse("the stake note is said on the sheet, not over the tab", "vote_gameable" in voteTabScreen)
+        assertTrue("it is still said where a voter signs", "R.string.vote_gameable" in source("ui/vote/VoteSheetModel.kt"))
     }
 
     // ---- A round with nothing voted on yet does not leave its heading over nothing --------------
@@ -470,5 +475,48 @@ class VoteScreenTest {
         val end = source.indexOf("\n}", start)
         assertTrue("$function never closes", end > start)
         return source.substring(start, end)
+    }
+
+    // ---- The top card (judges' round 2) -------------------------------------------------------
+
+    @Test
+    fun `the round card leads the open tab with close time, stake and the vote action, then leaders`() {
+        val open = voteTabScreen.substringAfter("else -> {")
+        val card = open.indexOf("RoundCard(")
+        val leaders = open.indexOf("R.string.vote_tab_heading_leaders")
+        val explainer = open.indexOf("Explainer()")
+        assertTrue("the card is drawn in the open branch", card >= 0)
+        assertTrue("leaders come right under the card", card < leaders)
+        assertTrue("how it works follows what a voter came for", leaders < explainer)
+
+        val body = body(voteTabScreen, "private fun RoundCard(")
+        assertTrue("the round and its local close", "RoundHeader(" in body)
+        assertTrue("the wallet's stake sentence", "stake.sentence" in body)
+        assertTrue("the one action, to the ballot", "R.string.vote_tab_pick_action" in body)
+        assertTrue("the close is in the reader's own zone, never a UTC stamp", "roundClosesLocal(" in body(voteTabScreen, "private fun RoundHeader("))
+    }
+
+    @Test
+    fun `the card's action scrolls to the ballot search, the index counted where the items are laid out`() {
+        assertTrue("ballotSearchIndex[0] = position" in voteTabScreen)
+        assertTrue("listState.animateScrollToItem(ballotSearchIndex[0])" in voteTabScreen)
+        val between = voteTabScreen.substringAfter("ballotSearchIndex[0] = position").substringBefore("BallotSearchField(query")
+        assertTrue("the index is set just before the search item", between.length < voteTabScreen.length / 2)
+        assertFalse("nothing is counted between the index and the search item", "position" in between || "item(key" !in between)
+    }
+
+    @Test
+    fun `the ops-log copy is one line, and nothing claims anyone can recount to the same result`() {
+        val strings = ShippedCopy.strings
+        assertEquals("Counted within about 20 minutes.", strings["vote_tab_your_votes_note"])
+        assertEquals("The vote is on the chain. Counted within about 20 minutes.", strings["vote_landed_note"])
+        strings.filterKeys { it.startsWith("vote_") }.forEach { (name, text) ->
+            assertFalse("$name still narrates the tally schedule", text.contains("ten minutes") || text.contains("cached"))
+            assertFalse("$name claims anyone can count the same way", text.contains("anyone can count"))
+        }
+        assertTrue(
+            "the how-it-works line says one wallet may back several stocks in a round",
+            strings.getValue("vote_tab_explainer_how").contains("several stocks in a round"),
+        )
     }
 }

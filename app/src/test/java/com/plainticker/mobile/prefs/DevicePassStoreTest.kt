@@ -1,8 +1,9 @@
 package com.plainticker.mobile.prefs
 
-import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -76,9 +77,9 @@ class DevicePassStoreTest {
     }
 
     @Test
-    fun `an existing 10-symbol code is kept exactly as stored, never replaced`() {
+    fun `an existing 10-symbol code is kept exactly as stored, and reading it never replaces it`() {
         // A paying device already holds a code minted at the earlier length; its pass is bound to
-        // that code's hash, so replacing it would orphan the pass.
+        // that code's hash, so only a server-confirmed rekey may replace it (tests below).
         val legacy = "K7M9QRSTXY"
         assertEquals(SharedPrefsDevicePassStore.LEGACY_CODE_LENGTH, legacy.length)
         val backing = FakePrefs()
@@ -112,60 +113,112 @@ class DevicePassStoreTest {
             SharedPrefsDevicePassStore.sha256Hex("abc"),
         )
     }
-}
 
-/** A plain in-memory [SharedPreferences]: no Android runtime behind the interface to stub. */
-private class FakePrefs : SharedPreferences {
-    private val map = mutableMapOf<String, Any?>()
+    // ---- Rekeying a legacy code (DeviceCodeRekeyStore) --------------------------------------
 
-    override fun getAll(): MutableMap<String, *> = map
+    private val legacy = "K7M9QRSTXY"
 
-    override fun getString(key: String?, defValue: String?): String? = map[key] as? String ?: defValue
+    private fun legacyStore(backing: FakePrefs = FakePrefs()): Pair<FakePrefs, SharedPrefsDevicePassStore> {
+        backing.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacy).commit()
+        return backing to SharedPrefsDevicePassStore(backing)
+    }
 
-    @Suppress("UNCHECKED_CAST")
-    override fun getStringSet(key: String?, defValues: MutableSet<String>?): MutableSet<String>? =
-        (map[key] as? MutableSet<String>) ?: defValues
+    @Test
+    fun `beginRekey commits a 26-symbol replacement before returning, and the legacy code stays current`() {
+        val (backing, store) = legacyStore()
+        assertTrue(store.isLegacy())
+        val pending = store.beginRekey()!!
+        assertTrue(SharedPrefsDevicePassStore.isNewFormat(pending))
+        assertEquals("the old code is still the one sent", legacy, store.code())
+        assertEquals("on disk before the server can hear of it", pending, backing.getString(SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE, null))
+    }
 
-    override fun getInt(key: String?, defValue: Int): Int = map[key] as? Int ?: defValue
-    override fun getLong(key: String?, defValue: Long): Long = map[key] as? Long ?: defValue
-    override fun getFloat(key: String?, defValue: Float): Float = map[key] as? Float ?: defValue
-    override fun getBoolean(key: String?, defValue: Boolean): Boolean = map[key] as? Boolean ?: defValue
-    override fun contains(key: String?): Boolean = map.containsKey(key)
-    override fun edit(): SharedPreferences.Editor = FakeEditor()
+    @Test
+    fun `beginRekey after a crash returns the very same replacement, never a second one`() {
+        val (backing, first) = legacyStore()
+        val pending = first.beginRekey()!!
+        // A cold start: a new instance over the same file.
+        val afterCrash = SharedPrefsDevicePassStore(backing)
+        assertEquals(pending, afterCrash.pendingNewCode())
+        assertEquals(pending, afterCrash.beginRekey())
+        assertEquals(legacy, afterCrash.code())
+    }
 
-    override fun registerOnSharedPreferenceChangeListener(
-        listener: SharedPreferences.OnSharedPreferenceChangeListener?,
-    ) = Unit
+    @Test
+    fun `beginRekey refuses to hand out a replacement it could not commit`() {
+        val (backing, store) = legacyStore()
+        backing.failCommits = true
+        assertNull(store.beginRekey())
+        assertNull(store.pendingNewCode())
+        assertEquals(legacy, store.code())
+    }
 
-    override fun unregisterOnSharedPreferenceChangeListener(
-        listener: SharedPreferences.OnSharedPreferenceChangeListener?,
-    ) = Unit
+    @Test
+    fun `beginRekey does nothing for a current-format code`() {
+        val store = SharedPrefsDevicePassStore(FakePrefs())
+        val code = store.code()
+        assertFalse(store.isLegacy())
+        assertNull(store.beginRekey())
+        assertEquals(code, store.code())
+    }
 
-    private inner class FakeEditor : SharedPreferences.Editor {
-        private val pending = mutableMapOf<String, Any?>()
-        private val removedKeys = mutableSetOf<String>()
-        private var cleared = false
+    @Test
+    fun `completeRekey swaps the code and drops the pending slot in one write`() {
+        val (backing, store) = legacyStore()
+        val pending = store.beginRekey()!!
+        val writesBefore = backing.writes.size
+        assertTrue(store.completeRekey(pending))
+        assertEquals("one atomic write", writesBefore + 1, backing.writes.size)
+        val written = backing.writes.last()
+        assertEquals(pending, written[SharedPrefsDevicePassStore.KEY_CODE])
+        assertFalse(written.containsKey(SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE))
+        assertEquals(pending, SharedPrefsDevicePassStore(backing).code())
+        assertFalse(SharedPrefsDevicePassStore(backing).isLegacy())
+        assertEquals(SharedPrefsDevicePassStore.sha256Hex(pending), store.codeHash())
+    }
 
-        override fun putString(key: String?, value: String?): SharedPreferences.Editor = also { pending[key!!] = value }
-        override fun putStringSet(key: String?, values: MutableSet<String>?): SharedPreferences.Editor =
-            also { pending[key!!] = values }
+    @Test
+    fun `completeRekey refuses any code but the pending one, and keeps the legacy code`() {
+        val (_, store) = legacyStore()
+        store.beginRekey()!!
+        assertFalse(store.completeRekey("23456789ABCDEFGHJKMNPQRSTU"))
+        assertFalse(store.completeRekey("short"))
+        assertEquals(legacy, store.code())
+    }
 
-        override fun putInt(key: String?, value: Int): SharedPreferences.Editor = also { pending[key!!] = value }
-        override fun putLong(key: String?, value: Long): SharedPreferences.Editor = also { pending[key!!] = value }
-        override fun putFloat(key: String?, value: Float): SharedPreferences.Editor = also { pending[key!!] = value }
-        override fun putBoolean(key: String?, value: Boolean): SharedPreferences.Editor = also { pending[key!!] = value }
-        override fun remove(key: String?): SharedPreferences.Editor = also { removedKeys += key!! }
-        override fun clear(): SharedPreferences.Editor = also { cleared = true }
+    @Test
+    fun `abandonRekey drops only the pending code`() {
+        val (_, store) = legacyStore()
+        store.beginRekey()!!
+        store.abandonRekey()
+        assertNull(store.pendingNewCode())
+        assertEquals(legacy, store.code())
+    }
 
-        override fun commit(): Boolean {
-            apply()
-            return true
-        }
+    @Test
+    fun `a rekey note is written in the same commit as the new code and survives a restart`() {
+        val (backing, store) = legacyStore()
+        val pending = store.beginRekey()!!
+        val writesBefore = backing.writes.size
+        assertTrue(store.completeRekey(pending, SharedPrefsDevicePassStore.NOTE_REPLACED))
+        assertEquals("one atomic write", writesBefore + 1, backing.writes.size)
+        assertEquals(SharedPrefsDevicePassStore.NOTE_REPLACED, backing.writes.last()[SharedPrefsDevicePassStore.KEY_REKEY_NOTE])
+        val cold = SharedPrefsDevicePassStore(backing)
+        assertEquals(SharedPrefsDevicePassStore.NOTE_REPLACED, cold.rekeyNote())
+        assertEquals(pending, cold.code())
+        assertNull(cold.pendingNewCode())
 
-        override fun apply() {
-            if (cleared) map.clear()
-            removedKeys.forEach { map.remove(it) }
-            map.putAll(pending)
-        }
+        cold.setRekeyNote(null)
+        assertNull(SharedPrefsDevicePassStore(backing).rekeyNote())
+    }
+
+    @Test
+    fun `every key the store writes lands in the one preferences file it was given`() {
+        // backup_rules.xml excludes that file whole (BackupRulesTest), so no key here can reach a
+        // backup: this pins that the store has no second file and no key outside ALL_KEYS.
+        val (backing, store) = legacyStore()
+        store.beginRekey()
+        store.setRekeyNote(SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN)
+        assertEquals(SharedPrefsDevicePassStore.ALL_KEYS, backing.all.keys)
     }
 }

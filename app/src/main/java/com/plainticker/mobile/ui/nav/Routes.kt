@@ -21,6 +21,13 @@ object Routes {
 
     fun home(tab: Int): String = "$HOME?$ARG_TAB=$tab"
 
+    /**
+     * A flag left on the home entry's `SavedStateHandle` (never in a route, so nothing about it is
+     * ever a URL): Detail's "Have a code? Get Pro" sets it and pops back, and home answers by
+     * opening You with the promo code field open and focused, then clears it.
+     */
+    const val KEY_OPEN_PROMO = "open_promo"
+
     /** The detail route for one underlying ticker, e.g. "detail/AAPL". */
     fun detail(ticker: String): String = "detail/${ticker.trim().uppercase()}" // lint-allow uppercase: route key
 

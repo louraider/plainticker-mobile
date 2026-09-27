@@ -6,13 +6,15 @@ plugins {
 
 // ---- Version -------------------------------------------------------------------------------
 // Driven by -PversionCode=<int> -PversionName=<string>; release.yml derives both from the git
-// tag (v1.2.3 -> versionName 1.2.3, versionCode 10203). Local builds fall back to 1 / 0.1.0.
+// tag (v1.2.3 -> versionName 1.2.3, versionCode 10203). A local build without -P falls back to
+// versionCode 1 and versionName "1.3.16-dev": the release line it was cut from, marked as not a
+// tagged build, so the You screen of a build from source does not claim to be version 0.1.0.
 val appVersionCode: Int = providers.gradleProperty("versionCode").orNull?.let { raw ->
     raw.toIntOrNull()?.takeIf { it > 0 }
         ?: throw GradleException("-PversionCode must be a positive integer, got '$raw'")
 } ?: 1
 val appVersionName: String =
-    providers.gradleProperty("versionName").orNull?.takeIf { it.isNotBlank() } ?: "0.1.0"
+    providers.gradleProperty("versionName").orNull?.takeIf { it.isNotBlank() } ?: "1.3.16-dev"
 
 // ---- Release signing -----------------------------------------------------------------------
 // Environment only: never a checked-in file, never gradle.properties or local.properties.

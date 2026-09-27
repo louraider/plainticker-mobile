@@ -13,6 +13,15 @@ import com.plainticker.mobile.data.bodyText
 import com.plainticker.mobile.data.respondJson
 import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.InMemoryDevicePassStore
+import com.plainticker.mobile.prefs.DevicePassStore
+import com.plainticker.mobile.prefs.FakePrefs
+import com.plainticker.mobile.prefs.InMemoryPendingSignOutStore
+import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
+import com.plainticker.mobile.data.auth.AccountSignOut
+import com.plainticker.mobile.data.auth.DeviceCodeStatus
+import com.plainticker.mobile.data.auth.DeviceRekeyApi
+import com.plainticker.mobile.data.auth.DeviceRekeyer
+import com.plainticker.mobile.data.auth.SignOutResult
 import com.plainticker.mobile.prefs.SignedInAccount
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.http.HttpStatusCode
@@ -143,13 +152,18 @@ class AccountViewModelTest {
         log: AccountDebugLog = RecordingLog(),
         clock: Clock = FakeClock(),
         accountApi: AccountApi = AccountApi(api.client),
+        devicePassStore: DevicePassStore = InMemoryDevicePassStore(deviceCode),
+        rekeyer: DeviceRekeyer? = null,
+        signOut: AccountSignOut? = null,
     ) = AccountViewModel(
         api = GoogleAuthApi(api.client),
         accountApi = accountApi,
         store = store,
-        devicePassStore = InMemoryDevicePassStore(deviceCode),
+        devicePassStore = devicePassStore,
         debugLog = log,
         clock = clock,
+        rekeyer = rekeyer,
+        signOutRunner = signOut,
     ).also { machines += it }
 
     // ---- Restoring ---------------------------------------------------------------------------
@@ -400,6 +414,10 @@ class AccountViewModelTest {
         Triple(503, "not_configured", AccountMessage.NOT_CONFIGURED),
         Triple(503, "jwks_unavailable", AccountMessage.JWKS_UNAVAILABLE),
         Triple(404, "not_found", AccountMessage.NOT_OPEN),
+        // The pack's shared server contract (2026-09-27).
+        Triple(409, "link_on_web", AccountMessage.LINK_ON_WEB),
+        Triple(401, "rekey_required", AccountMessage.REKEY_PENDING),
+        Triple(401, "code_retired", AccountMessage.CODE_RETIRED),
         Triple(502, "gateway", AccountMessage.UNKNOWN),
     )
 
@@ -461,20 +479,260 @@ class AccountViewModelTest {
 
     // ---- Sign-out ----------------------------------------------------------------------------
 
+    private val signedInAnn = SignedInAccount("ann@example.com", "Ann", emptyList())
+
+    /** The server's `POST /api/v1/account/signout` requests, as opposed to every other route. */
+    private fun MockApi.signOutRequests() = requests.filter { it.url.encodedPath.endsWith("/api/v1/account/signout") }
+
     @Test
-    fun `sign out forgets the stored account locally and makes no server call`() = runTest {
-        val stored = SignedInAccount("ann@example.com", "Ann", emptyList())
-        val api = mockApi { error("sign out has no server call in the contract") }
-        val store = InMemoryAccountStore(stored)
+    fun `sign out asks the server first with the device code, and only its 200 is a plain signed out`() = runTest {
+        val api = mockApi { respondJson("""{"ok":true}""") }
+        val store = InMemoryAccountStore(signedInAnn)
         val vm = machine(api = api, store = store)
         advanceUntilIdle()
         assertTrue(vm.state.value is AccountUiState.SignedIn)
 
         vm.signOut()
         advanceUntilIdle()
+        val request = api.signOutRequests().single()
+        assertEquals("POST", request.method.value)
+        assertEquals(deviceCode, request.headers["X-PT-Code"])
         assertEquals(AccountUiState.SignedOut(), vm.state.value)
         assertEquals(1, store.clears)
-        assertTrue(api.requests.isEmpty())
+    }
+
+    @Test
+    fun `while the sign-out call is in flight the row says so, keeps the account, and a second tap sends nothing`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val api = mockApi {
+            gate.await()
+            respondJson("""{"ok":true}""")
+        }
+        val store = InMemoryAccountStore(signedInAnn)
+        val vm = machine(api = api, store = store)
+        advanceUntilIdle()
+
+        vm.signOut()
+        runCurrent()
+        assertEquals(AccountUiState.SignedIn(signedInAnn, signingOut = true), vm.state.value)
+        assertEquals("nothing is forgotten before the server answers", 0, store.clears)
+        vm.signOut()
+        runCurrent()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(1, api.signOutRequests().size)
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+    }
+
+    @Test
+    fun `offline, sign out still forgets the account here, says the server has not confirmed, and queues one retry`() = runTest {
+        var offline = true
+        // Counted here: a MockEngine request whose handler throws is not kept in its history.
+        var signOutCalls = 0
+        val api = mockApi {
+            signOutCalls++
+            if (offline) throw IOException("Unable to resolve host") else respondJson("""{"ok":true}""")
+        }
+        val pending = InMemoryPendingSignOutStore()
+        val log = RecordingLog()
+        val runner = AccountSignOut(AccountApi(api.client), InMemoryDevicePassStore(deviceCode), pending, log = log, io = mainDispatcherRule.dispatcher)
+        val store = InMemoryAccountStore(signedInAnn)
+        val vm = machine(api = api, store = store, signOut = runner, log = log)
+        advanceUntilIdle()
+
+        vm.signOut()
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedOut(AccountMessage.SIGN_OUT_UNCONFIRMED), vm.state.value)
+        assertEquals(1, store.clears)
+        assertTrue("one retry is queued; log: ${log.lines}", pending.isPending())
+
+        offline = false
+        assertEquals(SignOutResult.CONFIRMED, runner.retryPending())
+        assertFalse(pending.isPending())
+        assertEquals(2, signOutCalls)
+        assertNull("nothing left to retry", runner.retryPending())
+        assertEquals(2, signOutCalls)
+    }
+
+    @Test
+    fun `a 5xx, a 404 or a rate limit on sign out are unconfirmed too, never a plain signed out`() = runTest {
+        listOf(503 to "<html>down</html>", 404 to """{"error":"not_found"}""", 429 to """{"error":"rate_limited"}""").forEach { (status, body) ->
+            val api = mockApi { respondJson(body, HttpStatusCode.fromValue(status)) }
+            val store = InMemoryAccountStore(signedInAnn)
+            val vm = machine(api = api, store = store)
+            advanceUntilIdle()
+            vm.signOut()
+            advanceUntilIdle()
+            assertEquals("$status", AccountUiState.SignedOut(AccountMessage.SIGN_OUT_UNCONFIRMED), vm.state.value)
+            assertEquals("$status", 1, store.clears)
+        }
+    }
+
+    @Test
+    fun `not_signed_in on sign out is the same fact as a 200`() = runTest {
+        val vm = machine(api = mockApi { respondJson("""{"error":"not_signed_in"}""", HttpStatusCode.Unauthorized) }, store = InMemoryAccountStore(signedInAnn))
+        advanceUntilIdle()
+        vm.signOut()
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+    }
+
+    @Test
+    fun `code_retired on sign out clears the account and You gets the retired line`() = runTest {
+        val store = InMemoryAccountStore(signedInAnn)
+        val vm = machine(api = mockApi { respondJson("""{"error":"code_retired"}""", HttpStatusCode.Unauthorized) }, store = store)
+        advanceUntilIdle()
+        vm.signOut()
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+        assertEquals(1, store.clears)
+        assertEquals(DeviceCodeStatus.RETIRED, vm.deviceCodeStatus.value)
+    }
+
+    @Test
+    fun `a new sign-in drops a queued sign-out retry first, so it can never unbind the new account`() = runTest {
+        val api = mockApi { respondJson(okBody) }
+        val pending = InMemoryPendingSignOutStore(pending = true)
+        val runner = AccountSignOut(AccountApi(api.client), InMemoryDevicePassStore(deviceCode), pending, log = { }, io = mainDispatcherRule.dispatcher)
+        val vm = machine(api = api, signOut = runner)
+        advanceUntilIdle()
+
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedIn)
+        assertFalse(pending.isPending())
+        assertNull(runner.retryPending())
+        assertTrue(api.signOutRequests().isEmpty())
+    }
+
+    @Test
+    fun `a sign-in that fails keeps the queued sign-out, which still runs later`() = runTest {
+        var signOutCalls = 0
+        val api = mockApi { request ->
+            if (request.url.encodedPath.endsWith("/account/signout")) {
+                signOutCalls++
+                respondJson("""{"ok":true}""")
+            } else {
+                respondJson("""{"error":"internal"}""", HttpStatusCode.InternalServerError)
+            }
+        }
+        val pending = InMemoryPendingSignOutStore(pending = true)
+        val runner = AccountSignOut(AccountApi(api.client), InMemoryDevicePassStore(deviceCode), pending, log = { }, io = mainDispatcherRule.dispatcher)
+        val vm = machine(api = api, signOut = runner)
+        advanceUntilIdle()
+
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedOut)
+        assertTrue("the earlier sign-out is still owed", pending.isPending())
+        assertEquals(0, signOutCalls)
+        assertEquals(SignOutResult.CONFIRMED, runner.retryPending())
+        assertEquals(1, signOutCalls)
+    }
+
+    @Test
+    fun `a rekey during refresh on a signed-in phone signs it out here and asks for Google again, and a sign-in clears the line`() = runTest {
+        val prefs = FakePrefs().also { it.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacyCode).commit() }
+        val codes = SharedPrefsDevicePassStore(prefs)
+        val api = mockApi { request ->
+            when {
+                request.url.encodedPath.endsWith("/device/rekey") -> respondJson("""{"ok":true}""")
+                // The new code is bound to nothing (web PR #170) until Google signs it in.
+                request.url.encodedPath.endsWith("/api/v1/account") ->
+                    respondJson("""{"error":"not_signed_in"}""", HttpStatusCode.Unauthorized)
+                else -> respondJson(okBody)
+            }
+        }
+        val store = InMemoryAccountStore(signedInAnn)
+        val rekeyer = DeviceRekeyer(codes, DeviceRekeyApi(api.client), FakeClock(), RecordingLog(), mainDispatcherRule.dispatcher, account = store)
+        val vm = machine(api = api, store = store, devicePassStore = codes, rekeyer = rekeyer)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertFalse(codes.isLegacy())
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+        assertNull(store.account.value)
+        assertEquals(DeviceCodeStatus.SIGN_IN_AGAIN, vm.deviceCodeStatus.value)
+        assertTrue("nothing opened Google on its own", api.requests.none { it.url.encodedPath.endsWith("/auth/google") })
+
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedIn)
+        assertEquals(DeviceCodeStatus.OK, vm.deviceCodeStatus.value)
+        assertEquals(codes.code(), api.requests.last { it.url.encodedPath.endsWith("/auth/google") }.headers["X-PT-Code"])
+    }
+
+    @Test
+    fun `sign-in code_retired also tells You the code is retired`() = runTest {
+        val vm = machine(api = mockApi { respondJson("""{"error":"code_retired"}""", HttpStatusCode.Unauthorized) })
+        advanceUntilIdle()
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedOut(AccountMessage.CODE_RETIRED), vm.state.value)
+        assertEquals(DeviceCodeStatus.RETIRED, vm.deviceCodeStatus.value)
+    }
+
+    @Test
+    fun `only link_on_web offers the web account page, and it is the one the contract names`() {
+        AccountMessage.entries.forEach { message ->
+            assertEquals(message.name, message == AccountMessage.LINK_ON_WEB, accountMessageOpensWeb(message))
+        }
+        assertFalse(accountMessageOpensWeb(null))
+        assertEquals("https://www.plainticker.com/en/account", AccountMessage.LINK_ON_WEB_URL)
+    }
+
+    // ---- The device code: rekey_required on account routes ------------------------------------
+
+    private val legacyCode = "K7M9QRSTXY"
+
+    @Test
+    fun `a 401 rekey_required on refresh keeps the cached account, never reads as signed out`() = runTest {
+        val store = InMemoryAccountStore(signedInAnn)
+        val vm = machine(api = mockApi { respondJson("""{"error":"rekey_required"}""", HttpStatusCode.Unauthorized) }, store = store)
+        advanceUntilIdle()
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedIn(signedInAnn), vm.state.value)
+        assertEquals(0, store.clears)
+    }
+
+    @Test
+    fun `a legacy device's refresh answered rekey_required rekeys once and retries once with the new code`() = runTest {
+        val prefs = FakePrefs().also { it.edit().putString(SharedPrefsDevicePassStore.KEY_CODE, legacyCode).commit() }
+        val codes = SharedPrefsDevicePassStore(prefs)
+        var rekeyCalls = 0
+        val api = mockApi { request ->
+            when {
+                request.url.encodedPath.endsWith("/device/rekey") -> {
+                    rekeyCalls++
+                    // The preflight is offline; the rekey forced by rekey_required lands.
+                    if (rekeyCalls == 1) throw IOException("offline") else respondJson("""{"ok":true}""")
+                }
+                request.headers["X-PT-Code"] == legacyCode ->
+                    respondJson("""{"error":"rekey_required"}""", HttpStatusCode.Unauthorized)
+                else -> respondJson(refreshedBody)
+            }
+        }
+        val log = RecordingLog()
+        val rekeyer = DeviceRekeyer(codes, DeviceRekeyApi(api.client), FakeClock(), log, mainDispatcherRule.dispatcher)
+        val store = InMemoryAccountStore(signedInAnn)
+        val vm = machine(api = api, store = store, devicePassStore = codes, rekeyer = rekeyer, log = log)
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        val newCode = codes.code()
+        assertTrue(SharedPrefsDevicePassStore.isNewFormat(newCode))
+        val accountCalls = api.requests.filter { it.url.encodedPath.endsWith("/api/v1/account") }
+        assertEquals(listOf(legacyCode, newCode), accountCalls.map { it.headers["X-PT-Code"] })
+        assertEquals(2, rekeyCalls)
+        assertEquals(2, (vm.state.value as AccountUiState.SignedIn).account.linkedWallets.size)
+        assertEquals(0, store.clears)
+        log.lines.forEach { line ->
+            assertFalse(legacyCode in line)
+            assertFalse(newCode in line)
+        }
     }
 
     // ---- Refreshing the account (GET /api/v1/account) -----------------------------------------

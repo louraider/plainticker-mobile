@@ -1,6 +1,5 @@
 package com.plainticker.mobile.ui.onboarding
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,6 +7,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -36,16 +37,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberBottomNav
+import com.plainticker.mobile.ui.components.AmberChip
 import com.plainticker.mobile.ui.components.AmberDestination
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
@@ -54,6 +52,7 @@ import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.InstrumentPreviews
+import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.focusOutline
@@ -65,10 +64,14 @@ import java.time.LocalDate
  * The one-time onboarding (DT11), rewritten for the app as it ships (the pre-freeze audit,
  * 2026-09-26): the first frame is the product, not a form. A picture of Today sits behind at 25
  * percent, drawn with the real Amber pieces (the top bar, a section head, ticker rows in their
- * tonal group, the five-destination bottom bar), and the panel over it carries the promise, a
- * short map of the five destinations, the self-certification and the one action. "Open Today"
- * renders disabled until the box is checked; checking writes nothing, the flag is persisted only
- * when the button is pressed, and AppNavHost then starts at home, on Today, for good.
+ * tonal group, the five-destination bottom bar), and the panel over it carries the promise, the
+ * self-certification and the one action. "Continue" renders disabled until the box is checked;
+ * checking writes nothing, the flag is persisted only when the button is pressed, and AppNavHost
+ * then starts at home, on Today, for good.
+ *
+ * Step two (judges' round 2) replaced the five-line tab map that ended on an empty Today: the
+ * reader picks stocks to watch from real analysed chips and lands on a Today that already has
+ * them, or skips to the AAPLx page, the worked example whose every figure is open.
  *
  * The version before this one described a dead app: a List to start on, four text tabs, a
  * Watchlist that sent the digest, and You "top right". Every one of those moved when the shell
@@ -80,31 +83,40 @@ import java.time.LocalDate
 @Composable
 fun OnboardingScreen(
     viewModel: OnboardingViewModel,
-    onDone: () -> Unit,
+    onDone: (OnboardingExit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.completed) {
-        if (state.completed) onDone()
+        if (state.completed) onDone(state.exit)
     }
 
     OnboardingContent(
-        checked = state.accepted,
-        enabled = state.canContinue,
+        state = state,
         onCheckedChange = viewModel::setAccepted,
         onContinue = viewModel::confirm,
+        picks = PickActions(onToggle = viewModel::togglePick, onFinish = viewModel::finish, onSkip = viewModel::skip),
         modifier = modifier,
     )
 }
 
+/** The pick step's three handlers, grouped so the content signature stays readable. */
+internal data class PickActions(
+    val onToggle: (String) -> Unit,
+    val onFinish: () -> Unit,
+    val onSkip: () -> Unit,
+)
+
+private val NoPickActions = PickActions(onToggle = {}, onFinish = {}, onSkip = {})
+
 /** The whole screen without a ViewModel, so the preview frames can drive both states. */
 @Composable
 private fun OnboardingContent(
-    checked: Boolean,
-    enabled: Boolean,
+    state: OnboardingUiState,
     onCheckedChange: (Boolean) -> Unit,
     onContinue: () -> Unit,
+    picks: PickActions,
     modifier: Modifier = Modifier,
 ) {
     val colors = defaultAmberColors()
@@ -118,13 +130,21 @@ private fun OnboardingContent(
                 .clearAndSetSemantics {}
                 .swallowTouches(),
         )
-        ConsentPanel(
-            checked = checked,
-            enabled = enabled,
-            onCheckedChange = onCheckedChange,
-            onContinue = onContinue,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+        when (state.step) {
+            OnboardingStep.CONSENT -> ConsentPanel(
+                checked = state.accepted,
+                enabled = state.canContinue,
+                onCheckedChange = onCheckedChange,
+                onContinue = onContinue,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+
+            OnboardingStep.PICK -> PickPanel(
+                state = state,
+                actions = picks,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
     }
 }
 
@@ -179,16 +199,12 @@ private fun TodayBackdrop(modifier: Modifier = Modifier) {
 /**
  * The gate: [AmberColors.surfaceHigh] with the 1dp [AmberColors.border] top edge
  * ([com.plainticker.mobile.ui.components.AmberSheetSurface] without its handle), the wordmark,
- * the headline, one sentence on what a stock page reads, the map of the five destinations, the
- * disclaimer, the self-certification and the one button. All of it Bricolage ([AmberType]); the
- * panel no longer borrows a single Outfit style.
- *
- * The map is five sentences, each opening with the destination's own bottom-bar label in weight
- * 600 ([MapLine]), so the words a reader learns here are the words under the icons they tap next.
+ * the headline, one sentence on what a stock page reads, the disclaimer, the self-certification
+ * and the one button. All of it Bricolage ([AmberType]).
  *
  * The promise scrolls, the button does not. The panel grows to at most the window height, and
  * when the copy no longer fits (a 360dp frame at font scale 1.3 needs more than a short phone
- * has) the block above scrolls inside the panel while "Open Today" stays on screen. The bottom
+ * has) the block above scrolls inside the panel while "Continue" stays on screen. The bottom
  * inset is padded outside that scroll, so the button clears the navigation bar the way every other
  * screen-ending button does (ui/components/Insets.kt).
  */
@@ -228,13 +244,6 @@ private fun ConsentPanel(
                     style = AmberType.body,
                     color = colors.textSecondary,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(BodyGap)) {
-                    MapLine(R.string.nav_today, R.string.onboarding_map_today, colors)
-                    MapLine(R.string.nav_stocks, R.string.onboarding_map_stocks, colors)
-                    MapLine(R.string.nav_vote, R.string.onboarding_map_vote, colors)
-                    MapLine(R.string.nav_portfolio, R.string.onboarding_map_portfolio, colors)
-                    MapLine(R.string.nav_you, R.string.onboarding_map_you, colors)
-                }
                 // The disclaimer is the one paragraph in primary text: it is the sentence that
                 // must land.
                 Text(
@@ -245,7 +254,7 @@ private fun ConsentPanel(
                 ConsentCheckbox(checked = checked, onCheckedChange = onCheckedChange, colors = colors)
             }
             AmberPrimaryAction(
-                label = stringResource(R.string.onboarding_continue),
+                label = stringResource(R.string.onboarding_consent_continue),
                 onClick = onContinue,
                 enabled = enabled,
                 colors = colors,
@@ -255,24 +264,69 @@ private fun ConsentPanel(
 }
 
 /**
- * One destination of the map: a sentence that opens with the destination's own bottom-bar label,
- * that label drawn in weight 600 and primary text, the rest in secondary. One wrapping [Text], so
- * there is no label column beside a sentence column to starve (DESIGN.md 5.4). If a translation
- * ever stops opening with the label, the sentence still reads whole, only without the emphasis.
+ * Step two (judges' round 2): pick stocks to watch, so onboarding ends on a Today that already has
+ * the reader's own rows, or, skipped, on the AAPLx page whose every figure is open. The chips are
+ * real analysed stocks ([onboardingPicks]), never copy. The primary action is live once one is
+ * picked; Skip is always there.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MapLine(@StringRes destination: Int, @StringRes sentence: Int, colors: AmberColors) {
-    val name = stringResource(destination)
-    val text = stringResource(sentence)
-    val styled = buildAnnotatedString {
-        if (text.startsWith(name)) {
-            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) { append(name) }
-            append(text.substring(name.length))
-        } else {
-            append(text)
+private fun PickPanel(state: OnboardingUiState, actions: PickActions, modifier: Modifier = Modifier) {
+    val colors = defaultAmberColors()
+    AmberSheetSurface(modifier = modifier, handle = false, colors = colors) {
+        Column(
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets(bottom = PanelBottomPadding)))
+                .padding(start = PanelSidePadding, end = PanelSidePadding, top = PanelTopPadding),
+            verticalArrangement = Arrangement.spacedBy(PanelGap),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(PanelGap),
+            ) {
+                Text(
+                    text = stringResource(R.string.onboarding_pick_title),
+                    style = AmberType.screenTitle,
+                    color = colors.textPrimary,
+                )
+                Text(
+                    text = stringResource(R.string.onboarding_pick_body),
+                    style = AmberType.body,
+                    color = colors.textSecondary,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(BodyGap),
+                    verticalArrangement = Arrangement.spacedBy(BodyGap),
+                ) {
+                    state.suggestions.forEach { chip ->
+                        AmberChip(
+                            label = chip.symbol,
+                            selected = chip.ticker in state.picked,
+                            onClick = { actions.onToggle(chip.ticker) },
+                            colors = colors,
+                        )
+                    }
+                }
+            }
+            AmberPrimaryAction(
+                label = stringResource(R.string.onboarding_continue),
+                onClick = actions.onFinish,
+                enabled = state.canFinish,
+                colors = colors,
+            )
+            val example = state.example
+            TextAction(
+                label = if (example != null) {
+                    stringResource(R.string.onboarding_pick_skip_example, example.symbol)
+                } else {
+                    stringResource(R.string.onboarding_pick_skip)
+                },
+                onClick = actions.onSkip,
+                color = colors.actionText,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
         }
     }
-    Text(text = styled, style = AmberType.body, color = colors.textSecondary)
 }
 
 /**
@@ -365,7 +419,7 @@ private val PreviewFrameHeight: Dp = 915.dp
 private fun OnboardingUncheckedPreview() {
     AmberPreviewCanvas {
         Box(Modifier.height(PreviewFrameHeight)) {
-            OnboardingContent(checked = false, enabled = false, onCheckedChange = {}, onContinue = {})
+            OnboardingContent(state = OnboardingUiState(), onCheckedChange = {}, onContinue = {}, picks = NoPickActions)
         }
     }
 }
@@ -375,7 +429,27 @@ private fun OnboardingUncheckedPreview() {
 private fun OnboardingCheckedPreview() {
     AmberPreviewCanvas {
         Box(Modifier.height(PreviewFrameHeight)) {
-            OnboardingContent(checked = true, enabled = true, onCheckedChange = {}, onContinue = {})
+            OnboardingContent(state = OnboardingUiState(accepted = true), onCheckedChange = {}, onContinue = {}, picks = NoPickActions)
+        }
+    }
+}
+
+@InstrumentPreviews
+@Composable
+private fun OnboardingPickPreview() {
+    AmberPreviewCanvas {
+        Box(Modifier.height(PreviewFrameHeight)) {
+            OnboardingContent(
+                state = OnboardingUiState(
+                    accepted = true,
+                    step = OnboardingStep.PICK,
+                    suggestions = listOf(PickChip("AAPL", "AAPLx"), PickChip("TSLA", "TSLAx"), PickChip("NVDA", "NVDAx")),
+                    picked = setOf("TSLA"),
+                ),
+                onCheckedChange = {},
+                onContinue = {},
+                picks = NoPickActions,
+            )
         }
     }
 }

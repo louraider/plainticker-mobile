@@ -1,12 +1,12 @@
 {
-  "name": "myapp",
+  "name": "plainticker-mobile",
   "scripts": {
     "build": "./gradlew build",
     "ci": "npm run build",
     "test": "./gradlew test"
   },
-  "description": "A minimal native Android template for building a Solana mobile app with Kotlin, Jetpack Compose, and Mobile Wallet Adapter.",
-  "displayName": "Kotlin Compose Minimal example",
+  "description": "PlainTicker Mobile: a native Android app for the Solana Seeker that reads tokenized US stocks (xStocks). Kotlin, Jetpack Compose, Mobile Wallet Adapter. These npm scripts only wrap Gradle.",
+  "displayName": "PlainTicker Mobile",
   "keywords": [
     "android",
     "jetpack-compose",
@@ -16,5 +16,5 @@
   ],
   "private": true,
   "usecase": "Mobile",
-  "version": "1.0.0"
+  "version": "1.3.16"
 }

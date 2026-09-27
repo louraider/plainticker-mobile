@@ -112,11 +112,41 @@ class ProModelTest {
     }
 
     @Test
-    fun `a stake below the entitlement threshold is stated as a figure, with no verdict word near it`() {
+    fun `a stake below the threshold on a Free device says how far it is from Pro`() {
         // 3,200 SKR: below the 7,500 SKR threshold (docs/plan-monetisation-2026-09-19.md section
-        // 1.2, lowered from 10,000 SKR). The sentence states it and stops; no word here says
-        // whether that is enough.
+        // 1.2, lowered from 10,000 SKR). Judges' round 2: the distance, never a verdict word.
         val state = ProUiState(walletConnected = true, stakeRaw = 3_200_000_000L)
+        val line = stakeLine(state) as Copy.Words
+        assertEquals(R.string.pro_stake_progress, line.id)
+        assertEquals(listOf("3,200", "4,300"), line.args)
+    }
+
+    @Test
+    fun `the threshold is the server's own 7,500 SKR, in base units`() {
+        // FinanceAnalyst lib/billing/stake.ts: STAKE_ENTITLEMENT_THRESHOLD_SKR = BigInt(7_500),
+        // and its test pins STAKE_ENTITLEMENT_THRESHOLD_RAW at 7_500_000_000.
+        assertEquals(7_500_000_000L, PRO_STAKE_THRESHOLD_RAW)
+    }
+
+    @Test
+    fun `a fractional stake rounds the figure down and the distance up, so the two add to 7,500`() {
+        val line = stakeLine(ProUiState(walletConnected = true, stakeRaw = 7_499_500_000L)) as Copy.Words
+        assertEquals(R.string.pro_stake_progress, line.id)
+        assertEquals(listOf("7,499", "1"), line.args)
+        val none = stakeLine(ProUiState(walletConnected = true, stakeRaw = 0L)) as Copy.Words
+        assertEquals(listOf("0", "7,500"), none.args)
+    }
+
+    @Test
+    fun `exactly the threshold keeps the plain figure, the server counts 7,500 or more`() {
+        val line = stakeLine(ProUiState(walletConnected = true, stakeRaw = PRO_STAKE_THRESHOLD_RAW)) as Copy.Words
+        assertEquals(R.string.pro_stake_read, line.id)
+        assertEquals(listOf("7,500"), line.args)
+    }
+
+    @Test
+    fun `a device already Pro by another source keeps the plain figure below the threshold`() {
+        val state = ProUiState(walletConnected = true, stakeRaw = 3_200_000_000L, pro = true, source = EntitlementSource.PASS)
         val line = stakeLine(state) as Copy.Words
         assertEquals(R.string.pro_stake_read, line.id)
         assertEquals(listOf("3,200"), line.args)
@@ -124,10 +154,10 @@ class ProModelTest {
 
     @Test
     fun `a stake above the threshold is stated the same honest way, with no verdict either`() {
-        val state = ProUiState(walletConnected = true, stakeRaw = 31_209_870_777L)
+        val state = ProUiState(walletConnected = true, stakeRaw = 38_406_150_222L)
         val line = stakeLine(state) as Copy.Words
         assertEquals(R.string.pro_stake_read, line.id)
-        assertEquals(listOf("31,209.870777"), line.args)
+        assertEquals(listOf("38,406.150222"), line.args)
     }
 
     // ---- A pending payment (task A6 review) --------------------------------------------------

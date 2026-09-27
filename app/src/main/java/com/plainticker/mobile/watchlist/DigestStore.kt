@@ -34,6 +34,11 @@ data class DigestRecord(
     val nextReportSymbol: String? = null,
     /** The nearest report ahead as an ISO calendar day, e.g. "2026-10-28". */
     val nextReportOn: String? = null,
+    /**
+     * The reader's own vote pick a produced digest already named personally ("JEF, which you
+     * voted for, is now analyzed"), so the next one does not say it again.
+     */
+    val announcedPick: String? = null,
 ) {
     /** The nearest report the last check found, for the Today strip on the List. */
     val nextReport: WatchedReport?

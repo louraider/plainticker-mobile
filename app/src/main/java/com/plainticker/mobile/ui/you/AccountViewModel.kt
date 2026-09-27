@@ -10,6 +10,10 @@ import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.data.auth.AccountApi
 import com.plainticker.mobile.data.auth.AccountApiError
+import com.plainticker.mobile.data.auth.AccountSignOut
+import com.plainticker.mobile.data.auth.DeviceCodeStatus
+import com.plainticker.mobile.data.auth.DeviceRekeyer
+import com.plainticker.mobile.data.auth.SignOutResult
 import com.plainticker.mobile.data.auth.GoogleAuthApi
 import com.plainticker.mobile.data.auth.GoogleAuthError
 import com.plainticker.mobile.data.auth.GoogleAuthFailure
@@ -19,6 +23,7 @@ import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.SignedInAccount
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -69,6 +74,24 @@ enum class AccountMessage {
     JWKS_UNAVAILABLE,
     NOT_OPEN,
     UNKNOWN,
+
+    /**
+     * 409 `link_on_web`: this Google account's email already belongs to a PlainTicker account made
+     * another way. Linking happens on the web ([LINK_ON_WEB_URL]), never silently here.
+     */
+    LINK_ON_WEB,
+
+    /** 401 `rekey_required` still, after the one rekey and retry: this phone's code is mid-update. */
+    REKEY_PENDING,
+
+    /** 401 `code_retired`: the server no longer accepts this phone's code, so nothing was linked. */
+    CODE_RETIRED,
+
+    /**
+     * Signed out on this phone, but `POST /api/v1/account/signout` has not answered 200 yet: one
+     * retry is queued. Never worded as if the server had already let go of the device.
+     */
+    SIGN_OUT_UNCONFIRMED,
     ;
 
     companion object {
@@ -88,7 +111,13 @@ enum class AccountMessage {
             GoogleAuthFailure.JWKS_UNAVAILABLE -> JWKS_UNAVAILABLE
             GoogleAuthFailure.NOT_OPEN -> NOT_OPEN
             GoogleAuthFailure.UNKNOWN -> UNKNOWN
+            GoogleAuthFailure.LINK_ON_WEB -> LINK_ON_WEB
+            GoogleAuthFailure.REKEY_REQUIRED -> REKEY_PENDING
+            GoogleAuthFailure.CODE_RETIRED -> CODE_RETIRED
         }
+
+        /** Where [LINK_ON_WEB] sends the reader: the web account page, which links Google there. */
+        const val LINK_ON_WEB_URL = "https://www.plainticker.com/en/account"
     }
 }
 
@@ -109,6 +138,8 @@ sealed interface AccountUiState {
         val unlinkingWallet: String? = null,
         /** The wallet whose last unlink attempt failed, and why; cleared the instant a new one starts. */
         val unlinkFailure: Pair<String, UnlinkFailure>? = null,
+        /** `POST /api/v1/account/signout` is in flight: the row says so and offers nothing meanwhile. */
+        val signingOut: Boolean = false,
     ) : AccountUiState
 }
 
@@ -163,6 +194,20 @@ enum class UnlinkFailure {
  * ([AccountUiState.SignedIn.unlinkFailure]), never surfaced as a screen-wide message; a
  * `not_linked` also re-reads the account at once, past the throttle, because it proves the cached
  * list is stale, and the row goes away if the server no longer lists it.
+ *
+ * **Signing out** ([signOut], 2026-09-27) asks `POST /api/v1/account/signout` first, through
+ * [AccountSignOut], then clears the local account whatever the answer: a 200 lands on a plain
+ * [AccountUiState.SignedOut]; a network error or any unclean answer lands on
+ * [AccountMessage.SIGN_OUT_UNCONFIRMED] with one retry queued, so the screen never claims the
+ * server forgot this device before it said so. A new [signIn] keeps that queued retry from running
+ * beside it, and drops it only when the sign-in succeeds.
+ *
+ * **The device code** (the pack's shared server contract, items 1 and 2). Every account call goes
+ * through [rekeyer] when there is one: a legacy 10-symbol code is rekeyed before the call, and a
+ * 401 `rekey_required` runs the rekey once more and retries the call once. A `rekey_required` that
+ * survives that keeps the cached account exactly as it was (it is not a sign-out); a 401
+ * `code_retired` clears it, since the server no longer knows this phone at all, and
+ * [deviceCodeStatus] carries the honest line You draws for it.
  */
 class AccountViewModel(
     private val api: GoogleAuthApi,
@@ -171,7 +216,22 @@ class AccountViewModel(
     private val devicePassStore: DevicePassStore,
     private val debugLog: AccountDebugLog = AccountDebugLog.ANDROID,
     private val clock: Clock = WallClock,
+    /** Rekeys a legacy device code around every account call; null reads the code as stored. */
+    private val rekeyer: DeviceRekeyer? = null,
+    /** The process-wide sign-out, whose queued retry outlives this screen; null builds a local one. */
+    signOutRunner: AccountSignOut? = null,
 ) : ViewModel() {
+
+    // The local fallback keeps its queue in memory and reads the code where this ViewModel always
+    // has, so it needs no dispatcher of its own.
+    private val signOutRunner: AccountSignOut =
+        signOutRunner ?: AccountSignOut(accountApi, devicePassStore, rekeyer = rekeyer, log = debugLog, io = Dispatchers.Unconfined)
+
+    /** Stands in for [DeviceRekeyer.status] when there is no [rekeyer]. */
+    private val localDeviceCodeStatus = MutableStateFlow(DeviceCodeStatus.OK)
+
+    /** What You says about this phone's own code: nothing, sign in again, a code replaced, or a retired code. */
+    val deviceCodeStatus: StateFlow<DeviceCodeStatus> = rekeyer?.status ?: localDeviceCodeStatus.asStateFlow()
 
     private val _state = MutableStateFlow<AccountUiState>(AccountUiState.Restoring)
     val state: StateFlow<AccountUiState> = _state.asStateFlow()
@@ -184,6 +244,7 @@ class AccountViewModel(
     private var signInJob: Job? = null
     private var refreshJob: Job? = null
     private var unlinkJob: Job? = null
+    private var signOutJob: Job? = null
 
     /**
      * When the last [refresh] that SUCCEEDED started; null before the first one. A failure never
@@ -207,6 +268,9 @@ class AccountViewModel(
                         current is AccountUiState.SigningIn -> current
                         // Keep an unlink in flight, and a failure whose wallet is still listed; a
                         // wallet the fresh list no longer carries takes its failure line with it.
+                        // A sign-out in flight clears the store when it lands; until then the row
+                        // keeps saying it is signing out.
+                        current is AccountUiState.SignedIn && current.signingOut -> current
                         stored != null && current is AccountUiState.SignedIn -> current.copy(
                             account = stored,
                             unlinkFailure = current.unlinkFailure?.takeIf { it.first in stored.linkedWallets },
@@ -272,12 +336,20 @@ class AccountViewModel(
             debugLog.raw("sign-in: the token's nonce is not the one requested")
             return Outcome.Failed(AccountMessage.NONCE_MISMATCH)
         }
+        // A sign-out that never reached the server must not land after this sign-in and unbind it,
+        // so no retry runs while the call does; the queued one is dropped only if the sign-in
+        // succeeds. A sign-in that fails leaves it queued, still owed to the account signed out of.
         val response = try {
-            api.signIn(idToken = idToken, deviceCode = devicePassStore.code(), nonce = nonce)
+            signOutRunner.holdingForSignIn {
+                withDeviceCode({ it is GoogleAuthError && it.failure == GoogleAuthFailure.REKEY_REQUIRED }) { code ->
+                    api.signIn(idToken = idToken, deviceCode = code, nonce = nonce)
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: GoogleAuthError) {
             debugLog.raw("sign-in: server ${e.failure.name} ${e.status ?: "-"}")
+            if (e.failure == GoogleAuthFailure.CODE_RETIRED) markCodeRetired()
             return Outcome.Failed(AccountMessage.of(e.failure))
         } catch (e: IOException) {
             debugLog.raw("sign-in: network ${e::class.simpleName}")
@@ -285,6 +357,8 @@ class AccountViewModel(
         }
         val account = accountOf(response)
         store.save(account)
+        // The "sign in again" line after a rekey has done its job.
+        rekeyer?.signedInAgain()
         return Outcome.Done(account)
     }
 
@@ -315,16 +389,53 @@ class AccountViewModel(
         _state.update { if (it is AccountUiState.SignedOut) AccountUiState.SignedOut() else it }
     }
 
-    /** Forgets the account on this device. The contract defines no server call for it. */
+    /**
+     * Unbinds this device from the account (`POST /api/v1/account/signout`), then forgets the
+     * account locally whatever the answer. Only a 200 lands on a plain [AccountUiState.SignedOut];
+     * anything else lands on [AccountMessage.SIGN_OUT_UNCONFIRMED] with one retry queued in
+     * [AccountSignOut]. A second tap while one is in flight does nothing.
+     */
     fun signOut() {
+        if (signOutJob?.isActive == true) return
         signInJob?.cancel()
         refreshJob?.cancel()
         unlinkJob?.cancel()
         refreshPending = false
-        viewModelScope.launch {
+        _state.update { (it as? AccountUiState.SignedIn)?.copy(signingOut = true, unlinkingWallet = null) ?: it }
+        signOutJob = viewModelScope.launch {
+            val result = try {
+                signOutRunner.signOut()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugLog.raw("sign-out: unexpected ${e::class.simpleName}")
+                SignOutResult.QUEUED
+            }
+            if (result == SignOutResult.CODE_RETIRED) markCodeRetired()
             store.clear()
-            _state.value = AccountUiState.SignedOut()
+            _state.value = AccountUiState.SignedOut(
+                if (result == SignOutResult.QUEUED) AccountMessage.SIGN_OUT_UNCONFIRMED else null,
+            )
         }
+    }
+
+    /** [block] with this device's code: through [rekeyer] when there is one, else as stored. */
+    private suspend fun <T> withDeviceCode(isRekeyRequired: (Throwable) -> Boolean, block: suspend (String) -> T): T {
+        val r = rekeyer ?: return block(devicePassStore.code())
+        return r.withCode(isRekeyRequired, block)
+    }
+
+    /** An account route answered 401 `code_retired`: You draws the honest line for it. */
+    private fun markCodeRetired() {
+        val r = rekeyer
+        if (r != null) r.markRetired() else localDeviceCodeStatus.value = DeviceCodeStatus.RETIRED
+    }
+
+    /** The server no longer knows this phone's code: the local account goes, like a 401 `not_signed_in`. */
+    private suspend fun signOutRetired() {
+        markCodeRetired()
+        store.clear()
+        _state.value = AccountUiState.SignedOut()
     }
 
     // ---- Refreshing the account, and unlinking a wallet --------------------------------------
@@ -358,7 +469,7 @@ class AccountViewModel(
         if (refreshJob?.isActive == true) return
         refreshJob = viewModelScope.launch {
             try {
-                val response = accountApi.get(devicePassStore.code())
+                val response = withDeviceCode({ it is AccountApiError.RekeyRequired }) { code -> accountApi.get(code) }
                 lastRefreshMillis = now
                 applyAccount(response, finishesUnlink = false)
             } catch (e: CancellationException) {
@@ -366,6 +477,8 @@ class AccountViewModel(
             } catch (e: AccountApiError.NotSignedIn) {
                 store.clear()
                 _state.value = AccountUiState.SignedOut()
+            } catch (e: AccountApiError.CodeRetired) {
+                signOutRetired()
             } catch (e: AccountApiError.NotOpen) {
                 debugLog.raw("account refresh: not open yet")
             } catch (e: AccountApiError) {
@@ -415,7 +528,9 @@ class AccountViewModel(
         _state.value = current.copy(unlinkingWallet = wallet, unlinkFailure = null)
         unlinkJob = viewModelScope.launch {
             try {
-                val response = accountApi.unlinkWallet(wallet, devicePassStore.code())
+                val response = withDeviceCode({ it is AccountApiError.RekeyRequired }) { code ->
+                    accountApi.unlinkWallet(wallet, code)
+                }
                 // This answer already is the fresh account: a refresh read before it landed must
                 // not land after it and put the wallet back.
                 refreshJob?.cancel()
@@ -425,6 +540,8 @@ class AccountViewModel(
             } catch (e: AccountApiError.NotSignedIn) {
                 store.clear()
                 _state.value = AccountUiState.SignedOut()
+            } catch (e: AccountApiError.CodeRetired) {
+                signOutRetired()
             } catch (e: AccountApiError) {
                 debugLog.raw("unlink: ${e::class.simpleName}: ${e.message}")
                 failUnlink(wallet, unlinkFailureOf(e))
@@ -457,6 +574,9 @@ class AccountViewModel(
         is AccountApiError.NotOpen -> UnlinkFailure.NOT_OPEN
         is AccountApiError.Unavailable -> UnlinkFailure.UNAVAILABLE
         is AccountApiError.NotSignedIn -> UnlinkFailure.UNAVAILABLE // unreachable: caught before this branch
+        is AccountApiError.CodeRetired -> UnlinkFailure.UNAVAILABLE // unreachable: caught before this branch
+        // Still refused after the one rekey and retry: the code is mid-update, try again shortly.
+        is AccountApiError.RekeyRequired -> UnlinkFailure.UNAVAILABLE
     }
 
     companion object {

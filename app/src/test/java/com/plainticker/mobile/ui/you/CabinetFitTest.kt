@@ -74,6 +74,9 @@ class CabinetFitTest {
         // method): "Unlink" 43.008 at 1.0x, "Keep" 34.398 at 1.0x.
         "Unlink" to (43.008 to 55.910),
         "Keep" to (34.398 to 44.717),
+        // link_on_web (the pack's shared server contract, 2026-09-27), fontTools 4.63 against the
+        // same bundled file and instance, the method reproducing "Copy" and "Unlink" above exactly.
+        "Open plainticker.com" to (143.346 to 186.350),
     )
 
     /** The wallet's short key, nine monospace characters, JetBrains Mono Regular 15sp. */
@@ -111,6 +114,7 @@ class CabinetFitTest {
         "you_action_show", "you_action_hide", "action_read_license", "action_hide_license",
         "promo_action_have_code", "promo_action_apply",
         "account_action_unlink", "you_action_keep",
+        "account_action_open_web",
     )
 
     @Test
@@ -134,6 +138,7 @@ class CabinetFitTest {
         listOf(
             listOf("Copied", "Disconnect"), listOf("Copy", "Disconnect"), listOf("Sign out", "Cancel"),
             listOf("Apply", "Cancel"), listOf("Copy", "Unlink"), listOf("Copied", "Unlink"), listOf("Unlink", "Keep"),
+            listOf("Sign in", "Open plainticker.com"),
         ).forEach { pair ->
             val total = pair.sumOf { width(textActionWidths, it, it).second + textActionInsetDp }
             assertTrue("$pair need $total dp at 1.3x, past the row's $rowContentDp dp", total <= rowContentDp)
