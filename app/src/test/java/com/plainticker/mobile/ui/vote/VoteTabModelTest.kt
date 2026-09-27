@@ -255,7 +255,7 @@ class VoteTabModelTest {
         assertEquals("This wallet has 38,406.2 SKR staked. That is the weight each vote from it carries.", say(TabStake.Read(38_406_150_222L)))
         assertEquals("This wallet has no staked SKR, so a vote from it carries no weight.", say(TabStake.Read(0L)))
         assertEquals(
-            "Connect a wallet with staked SKR to vote. Your stake is the weight your vote carries.",
+            "No wallet is connected right now. To vote, connect one with staked SKR: the stake is the weight each vote carries.",
             say(TabStake.NoWallet),
         )
         listOf(TabStake.Reading, TabStake.Unread, TabStake.NoWallet).forEach { state ->
@@ -271,5 +271,16 @@ class VoteTabModelTest {
         val newYork = roundClosesLocal(round, java.time.ZoneId.of("America/New_York"))!!
         assertEquals("Closes Sunday 27 Sep at 20:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(newYork))
         assertEquals(null, roundClosesLocal(round.copy(closesAt = "not-a-date"), java.time.ZoneOffset.UTC))
+    }
+
+    /**
+     * Device QA of 1.3.17: "Connect a wallet with staked SKR to vote" sat above the reader's own
+     * listed vote (the receipts stand with no wallet connected). The line now fits both states.
+     */
+    @Test
+    fun `the no-wallet line reads true above the reader's own votes as well as with none`() {
+        val line = com.plainticker.mobile.ui.ShippedCopy.strings.getValue("vote_tab_stake_no_wallet")
+        assertTrue(line.startsWith("No wallet is connected right now."))
+        assertFalse("never an order that ignores the votes listed below it", line.startsWith("Connect a wallet"))
     }
 }

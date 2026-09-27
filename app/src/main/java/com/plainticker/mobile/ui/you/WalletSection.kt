@@ -59,7 +59,10 @@ internal fun WalletSection(
         AmberSectionHead(title = stringResource(R.string.you_heading_wallet), colors = colors)
         AmberTickerRowGroup(colors = colors) {
             WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)
-            WalletNoteRow(colors = colors)
+            // "Stays connected between launches... Disconnect forgets it" describes a session this
+            // phone holds, so it is offered only while one is (device QA of 1.3.17: it sat under
+            // "Not connected").
+            if (wallet != null) WalletNoteRow(colors = colors)
         }
     }
 }

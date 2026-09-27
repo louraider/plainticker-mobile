@@ -506,7 +506,7 @@
     <!-- The top card (judges' round 2): the round's close in the reader's own time, the
          connected wallet's stake, and the one action that leads to the ballot. -->
     <string name="vote_tab_round_closes_local">Closes %1$s %2$s at %3$s your time</string>
-    <string name="vote_tab_stake_no_wallet">Connect a wallet with staked SKR to vote. Your stake is the weight your vote carries.</string>
+    <string name="vote_tab_stake_no_wallet">No wallet is connected right now. To vote, connect one with staked SKR: the stake is the weight each vote carries.</string>
     <string name="vote_tab_stake_reading">Reading what this wallet has staked.</string>
     <string name="vote_tab_stake">This wallet has %1$s SKR staked. That is the weight each vote from it carries.</string>
     <string name="vote_tab_stake_zero">This wallet has no staked SKR, so a vote from it carries no weight.</string>
@@ -542,8 +542,8 @@
     <string name="pro_entitlement_pass">This device is Pro through a pass.</string>
     <string name="pro_entitlement_pass_until">This device is Pro through a pass, until %1$s.</string>
     <string name="pro_entitlement_stake">This device is Pro through its staked SKR.</string>
-    <string name="pro_entitlement_subscription">This device is Pro through a subscription.</string>
-    <string name="pro_entitlement_subscription_until">This device is Pro through a subscription, until %1$s.</string>
+    <string name="pro_entitlement_subscription">This device is Pro through your plainticker.com account.</string>
+    <string name="pro_entitlement_subscription_until">This device is Pro through your plainticker.com account, until %1$s.</string>
     <string name="pro_entitlement_promo">This device is Pro through a promo code.</string>
     <string name="pro_entitlement_promo_until">This device is Pro through a promo code, until %1$s.</string>
     <string name="pro_entitlement_active">This device is Pro.</string>
@@ -749,7 +749,7 @@
     <string name="you_plan_source_label">Source</string>
     <string name="you_plan_source_pass">A thirty day pass, paid from a wallet</string>
     <string name="you_plan_source_stake">Staked SKR on the connected wallet</string>
-    <string name="you_plan_source_subscription">A subscription on plainticker.com</string>
+    <string name="you_plan_source_subscription">Pro on your plainticker.com account</string>
     <string name="you_plan_source_promo">A promo code</string>
     <string name="you_plan_source_unnamed">Pro on this device. The server did not name the source.</string>
     <string name="you_plan_until_label">Valid until</string>
