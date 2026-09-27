@@ -11,6 +11,7 @@ import com.plainticker.mobile.ui.raw
 import com.plainticker.mobile.ui.swap.SwapToken
 import com.plainticker.mobile.ui.words
 import java.math.BigDecimal
+import java.time.ZoneId
 
 /**
  * What the Portfolio screen says, decided away from the composition (task T11, design task DT8).
@@ -197,7 +198,7 @@ private fun trackingCopy(quality: TrackingQuality?): Copy? = when (quality) {
  * therefore claims no confirmation. An output the execute answer did not report stays unreported
  * here, rather than being filled in from the quote it was estimated at.
  */
-fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
+fun swapRow(receipt: SwapReceipt, zone: ZoneId = ZoneId.systemDefault()): SwapRow = SwapRow(
     signature = receipt.signature,
     // What the wallet showed on each side: raw scaled by the multiplier recorded at the landing,
     // so a split xStock reads as its wallet reads, not ten times smaller.
@@ -221,7 +222,9 @@ fun swapRow(receipt: SwapReceipt): SwapRow = SwapRow(
         ?.let { words(R.string.portfolio_swap_cost, Fmt.percent(it, signed = false)) }
         ?: receipt.routeCostPct?.let { words(R.string.portfolio_swap_route_cost, Fmt.percent(it, signed = false)) }
         ?: words(R.string.portfolio_swap_cost_unknown),
-    landed = raw(Fmt.utc(receipt.landedAtMillis)),
+    // The reader's own clock, like every other absolute time on the reader's screens (device QA of
+    // 1.3.18: the recent swaps were the last rows still printing UTC).
+    landed = raw(Fmt.localDateTime(receipt.landedAtMillis, zone)),
 )
 
 /**
@@ -304,16 +307,16 @@ fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
  * screen"), so it wraps to a real second line rather than clipping. `PortfolioModelTest` pins the
  * string and the arithmetic.
  */
-fun recordedRow(holding: RecordedHolding): RecordedRow = RecordedRow(
+fun recordedRow(holding: RecordedHolding, zone: ZoneId = ZoneId.systemDefault()): RecordedRow = RecordedRow(
     ticker = holding.ticker,
     symbol = holding.symbol,
     company = holding.company,
     quantity = Fmt.tokenAmount(holding.quantity),
     // Never a silently different number: a figure not scaled by today's multiplier says so.
     meta = if (holding.scaleRead) {
-        words(R.string.portfolio_recorded_meta, Fmt.utc(holding.landedAtMillis))
+        words(R.string.portfolio_recorded_meta, Fmt.localDateTime(holding.landedAtMillis, zone))
     } else {
-        words(R.string.portfolio_recorded_meta_unscaled, Fmt.utc(holding.landedAtMillis))
+        words(R.string.portfolio_recorded_meta_unscaled, Fmt.localDateTime(holding.landedAtMillis, zone))
     },
 )
 
