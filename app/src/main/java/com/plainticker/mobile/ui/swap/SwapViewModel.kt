@@ -59,7 +59,7 @@ fun interface SwapDebugLog {
 /**
  * The swap machine. Its states, and every transition between them, are [SwapState].
  *
- * Four rules live here and nowhere else.
+ * Five rules live here and nowhere else.
  *
  * 1. **The amount is refused before the network is touched.** [SwapAmount] validates the typed
  *    text against the balance this class read from the chain, so zero and over-balance never
@@ -68,13 +68,17 @@ fun interface SwapDebugLog {
  *    signatureFee, rentFee and prioritizationFee added up, never a rent constant, and a wallet
  *    that cannot pay lands in [SwapState.Shortfall] without a single approval being asked for.
  * 3. **Exactly one automatic requote.** A -1003, -2003 or -2004 from /execute means the signed
- *    bytes are dead: a fresh /order is the only way on, and fresh bytes need a fresh approval, so
- *    the requote reaches [SwapState.AwaitingWallet] with `requote = true` and the sheet says so.
- *    A second one is terminal.
+ *    bytes are dead: a fresh /order is the only way on, and fresh bytes need a fresh review and
+ *    approval, so the requote reaches [SwapState.Review] with `requote = true` and the sheet says
+ *    so. A second one is terminal.
  * 4. **An approval that comes back without a signature is not a failure.** Declined, closed, or a
  *    session that dropped: the app cannot tell them apart, and it does not have to. Nothing was
  *    signed, nothing was sent, nothing is owed, so it returns to [SwapState.Amount] with the typed
  *    amount intact and a neutral note, and the sentence claims no fault.
+ * 5. **The wallet opens only from [SwapState.Review].** After the quote, the guard, the value
+ *    check and the SOL check, the machine stops and the sheet states what the bytes spend and
+ *    cost; [continueToWallet] is the one way to the wallet, and it fetches the quote again first
+ *    when it has run out ([QUOTE_TIME_BUDGET_MS], [EXPIRY_MARGIN_SEC]).
  *
  * When the xStock is the side being spent (Swap to USDC) three more checks run, all before the
  * wallet opens, because the base units sent are computed from what the forwarder said about the
@@ -138,6 +142,14 @@ class SwapViewModel(
      * then read the lamports and the two balances the rest of the machine decides on.
      */
     fun open(token: SwapToken) = openLeg(SwapLeg.into(token))
+
+    /**
+     * "Check swap availability": USDC into a [token] Jupiter has no reference price for. The same
+     * machine; the leg carries [SwapLeg.unpriced], so a refused order reads as no route and an
+     * executable one reaches Review with the value check's limit stated (judges' review,
+     * 2026-09-27).
+     */
+    fun checkAvailability(token: SwapToken) = openLeg(SwapLeg.into(token, unpriced = true))
 
     /**
      * Opens the sheet for [token] back to USDC, "Swap to USDC": the same machine, the same
@@ -277,10 +289,36 @@ class SwapViewModel(
         openLeg(landed.leg.flipped(), minContextSlot = landed.fill.slot)
     }
 
+    /**
+     * From [SwapState.Review], the one way to the wallet. A quote that has run out is fetched
+     * again first and comes back to Review with `refreshed` set, because fresh bytes carry fresh
+     * figures and the person approves what they saw: an RFQ quote within [EXPIRY_MARGIN_SEC] of
+     * its `expireAt`, or any quote older than [QUOTE_TIME_BUDGET_MS]. A Metis order's
+     * `lastValidBlockHeight` cannot be compared offline (the app reads no block height, and adds
+     * no forwarder method to), so the time budget stands in for it.
+     */
+    fun continueToWallet() {
+        val review = _state.value as? SwapState.Review ?: return
+        job?.cancel()
+        job = viewModelScope.launch {
+            val nowMillis = clock.nowMillis()
+            val left = review.quote.secondsLeft(nowMillis / 1_000L)
+            val stale = (left != null && left < EXPIRY_MARGIN_SEC) ||
+                nowMillis - review.quotedAtMillis > QUOTE_TIME_BUDGET_MS
+            if (stale) {
+                debugLog.raw("order ${review.quote.requestId} ran out before the wallet, quoting again")
+                quoteToReview(review.leg, review.funds, review.input, review.requote, review.timing, refreshed = true)
+            } else {
+                approveAndLand(review, review.timing.enterPhase(nowMillis))
+            }
+        }
+    }
+
     /** Back to the amount step from a shortfall or a failure, with the typed amount revalidated. */
     fun edit() {
         when (val current = _state.value) {
             is SwapState.Shortfall -> _state.value = amountStep(current.leg, current.funds, current.input)
+            is SwapState.Review -> _state.value = amountStep(current.leg, current.funds, current.input)
             is SwapState.Failed -> {
                 val funds = current.funds ?: return close()
                 _state.value = amountStep(current.leg, funds, current.input)
@@ -298,12 +336,11 @@ class SwapViewModel(
 
     // ---- The attempt --------------------------------------------------------------------------
 
-    @Suppress("DEPRECATION")
     private suspend fun attempt(start: SwapState.Amount) {
         val leg = start.leg
         val input = start.input
-        var timing = SwapTiming.started(clock.nowMillis())
-        var requote = false
+        val timing = SwapTiming.started(clock.nowMillis())
+        val requote = false
 
         // ---- Swap to USDC is checked again at the tap, whatever path reached the amount step:
         // the flip from the other direction never passed the check at opening. A balance that
@@ -324,7 +361,23 @@ class SwapViewModel(
             }
         }
 
-        while (true) {
+        quoteToReview(leg, funds, input, requote, timing, refreshed = false)
+    }
+
+    /**
+     * Quoting, then every check before the wallet, ending in [SwapState.Review],
+     * [SwapState.Shortfall] or [SwapState.Failed]. Nothing here asks anything of the wallet.
+     */
+    private suspend fun quoteToReview(
+        leg: SwapLeg,
+        funds: SwapFunds,
+        input: AmountInput,
+        requote: Boolean,
+        timingIn: SwapTiming,
+        refreshed: Boolean,
+    ) {
+        var timing = timingIn
+        run {
             // ---- Quoting: GET /order, at the tap.
             timing = timing.enterPhase(clock.nowMillis())
             _state.value = SwapState.Quoting(leg, funds, input, requote, timing)
@@ -334,13 +387,28 @@ class SwapViewModel(
                 order = swapApi.order(leg.input.mint, leg.output.mint, input.raw, funds.owner)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: SwapError.InvalidOrder) {
+                // An order whose fee or rent fields are negative or overflow is refused as the
+                // guard refuses bytes that could cost more than shown (security review, 2026-09-27).
+                debugLog.raw("order refused by this app: ${e.detail ?: e.message}")
+                timing = timing.closeQuoting(clock.nowMillis())
+                _state.value = SwapState.Failed(
+                    leg, funds, input, SwapFailure.GUARD_REFUSED, null, requote, timing,
+                    TransactionGuard.Why.COSTS_MORE_THAN_SHOWN,
+                )
+                return
             } catch (e: SwapError) {
                 debugLog.raw("order refused: code=${e.code} ${e.detail ?: e.message}")
                 // A non-2xx with no structured body is a transport answer, not a verdict on the
                 // pair: a gateway page or a rate limit knows nothing about whether this pair can
-                // be quoted, so it must not be reported as though the pair were the problem.
-                quoteFailure =
-                    if (e is SwapError.Http) SwapFailure.QUOTE_UNAVAILABLE else SwapFailure.QUOTE_REFUSED
+                // be quoted, so it must not be reported as though the pair were the problem. On a
+                // token Jupiter has no reference price for, a refused order is the answer to
+                // "Check swap availability": no route right now.
+                quoteFailure = when {
+                    e is SwapError.Http -> SwapFailure.QUOTE_UNAVAILABLE
+                    leg.unpriced && leg.intoToken -> SwapFailure.NO_ROUTE
+                    else -> SwapFailure.QUOTE_REFUSED
+                }
             } catch (e: Exception) {
                 debugLog.raw("order threw ${e::class.simpleName}: ${e.message}")
                 quoteFailure = SwapFailure.QUOTE_UNAVAILABLE
@@ -357,13 +425,14 @@ class SwapViewModel(
             val unsigned = quote.transaction?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
             if (unsigned == null) {
                 debugLog.raw("order ${quote.requestId} carried no transaction this app could read")
-                return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
+                val reason = if (leg.unpriced && leg.intoToken) SwapFailure.NO_ROUTE else SwapFailure.NO_TRANSACTION
+                return fail(leg, funds, input, reason, quote, requote, timing)
             }
 
             // ---- The bytes against the request (security audit, finding 2). The sheet's figures
             // are Jupiter's JSON; what the wallet signs is the transaction. Both are read against
             // what was asked for before the wallet opens, and a mismatch is nothing to approve.
-            val verdict = TransactionGuard.checkSwap(
+            val reading = TransactionGuard.readSwap(
                 bytes = unsigned,
                 wallet = funds.owner,
                 order = order,
@@ -371,10 +440,16 @@ class SwapViewModel(
                 outputMint = leg.output.mint,
                 amount = input.raw,
             )
-            if (verdict is TransactionGuard.Verdict.Refuse) {
-                debugLog.raw("order ${quote.requestId} refused before the wallet: ${verdict.reason}")
-                _state.value = SwapState.Failed(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing, verdict.why)
-                return
+            when (reading) {
+                is TransactionGuard.SwapReading.Refused -> {
+                    val verdict = reading.refusal
+                    debugLog.raw("order ${quote.requestId} refused before the wallet: ${verdict.reason}")
+                    _state.value = SwapState.Failed(leg, funds, input, SwapFailure.GUARD_REFUSED, quote, requote, timing, verdict.why)
+                    return
+                }
+                // From here on every SOL figure is the bytes' own: fees read from the message,
+                // the deposit at its upper bound (security review, 2026-09-27).
+                is TransactionGuard.SwapReading.Allowed -> quote = quote.copy(costs = reading.costs)
             }
 
             // ---- The dollar value against what was typed (security audit, 2026-09-26). The guard
@@ -417,8 +492,9 @@ class SwapViewModel(
                 return fail(leg, funds, input, SwapFailure.QUOTE_DUST, quote, requote, timing)
             }
 
-            // ---- The SOL check. Here, on the quote's own three fields, before any approval.
-            if (!quote.solCost.isCoveredBy(funds.lamports)) {
+            // ---- The SOL check, before any approval: what the bytes can charge this wallet, the
+            // deposit at its upper bound, never the JSON's declared fields added up.
+            if (!quote.paidSol.isCoveredBy(funds.lamports)) {
                 _state.value = SwapState.Shortfall(leg, funds, input, quote, timing)
                 return
             }
@@ -430,8 +506,41 @@ class SwapViewModel(
                 return fail(leg, funds, input, SwapFailure.WALLET_CHANGED, quote, requote, timing)
             }
 
+            // ---- Review: everything the bytes do, stated, and nothing asked of the wallet yet.
+            // quotedAtMillis is the moment the quote came back, which closeQuoting recorded.
+            _state.value = SwapState.Review(
+                leg = leg,
+                funds = funds,
+                input = input,
+                quote = quote,
+                requote = requote,
+                quotedAtMillis = timing.phaseStartedAtMillis,
+                timing = timing,
+                refreshed = refreshed,
+            )
+        }
+    }
+
+    /** From an approved Review: the wallet, then /execute, and the one automatic requote. */
+    @Suppress("DEPRECATION")
+    private suspend fun approveAndLand(review: SwapState.Review, timingIn: SwapTiming) {
+        val leg = review.leg
+        val funds = review.funds
+        val input = review.input
+        val quote = review.quote
+        val requote = review.requote
+        var timing = timingIn
+        // Decoded again from the quote the guard read; it decoded there, so it decodes here.
+        val unsigned = quote.transaction?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
+            ?: return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
+        run {
+            // ---- The wallet this order was built for is still the one connected: checked again,
+            // because time passed on the Review step.
+            if (wallet.account.value?.address != funds.owner) {
+                return fail(leg, funds, input, SwapFailure.WALLET_CHANGED, quote, requote, timing)
+            }
+
             // ---- AwaitingWallet: the round-trip this product rests on.
-            timing = timing.enterPhase(clock.nowMillis())
             _state.value = SwapState.AwaitingWallet(leg, funds, input, quote, requote, timing)
             // sign_transactions is optional in MWA 2.x (judges' review, 2026-09-27): the wallet's
             // capabilities are read in the same session, after it authorized and before anything
@@ -516,9 +625,9 @@ class SwapViewModel(
             if (refusal != null) {
                 debugLog.raw("execute refused: code=${refusal.code} ${refusal.detail ?: refusal.message}")
                 if (refusal.requotable && !requote) {
-                    // The one automatic requote. Fresh order, fresh bytes, a second approval.
-                    requote = true
-                    continue
+                    // The one automatic requote. Fresh order, fresh bytes, a fresh review and a
+                    // second approval.
+                    return quoteToReview(leg, funds, input, requote = true, timingIn = timing, refreshed = false)
                 }
                 return fail(leg, funds, input, executeFailure(refusal), quote, requote, timing)
             }
@@ -803,6 +912,16 @@ class SwapViewModel(
     private companion object {
         /** One beat between two reads that asked for a slot the node had not reached yet. */
         const val FRESH_READ_RETRY_MS = 1_000L
+
+        /**
+         * How long a quote without an expiry may wait on the Review step before it is fetched
+         * again. A Metis order's blockhash lands for about 150 blocks, a minute at 400 ms a block;
+         * 45 seconds leaves the wallet round-trip room inside that.
+         */
+        const val QUOTE_TIME_BUDGET_MS = 45_000L
+
+        /** An RFQ quote this close to its `expireAt` is fetched again rather than handed on. */
+        const val EXPIRY_MARGIN_SEC = 5L
 
         /**
          * The longest the SOL price read for the all-in cost may take; past it the swap goes on and

@@ -180,6 +180,7 @@ fun DetailScreen(
             },
             onRetry = swapViewModel::retry,
             onSwapBack = swapViewModel::swapBack,
+            onContinue = swapViewModel::continueToWallet,
         ),
         holding = holding,
         onSwapOut = { swapToken?.let(swapViewModel::openOut) },
@@ -189,7 +190,13 @@ fun DetailScreen(
                 askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         },
-        onSwap = { swapToken?.let(swapViewModel::open) },
+        // A token Jupiter has no reference price for is asked about, not promised: the same
+        // machine, whose quote answers whether a route exists (judges' review, 2026-09-27).
+        onSwap = {
+            swapToken?.let { token ->
+                if (state.swapUnpriced) swapViewModel.checkAvailability(token) else swapViewModel.open(token)
+            }
+        },
         // The peek's own way to Pro, beside the honest short form rather than in place of it
         // (task A6). It used to lead to Portfolio, which neither sells Pro nor takes a code; since
         // the judges' round 2 it leads to You's Plan with the code field open.
@@ -878,7 +885,7 @@ private fun SwapBlock(
     holding: SwapHolding? = null,
     onSwapOut: (() -> Unit)? = null,
 ) {
-    val label = state.swapLabel ?: return
+    val label = state.swapButtonLabel ?: return
     val cost = state.costLine(swap.quoteOrNull?.allInCostPct)
     val colors = defaultAmberColors()
     Column(
@@ -887,13 +894,12 @@ private fun SwapBlock(
     ) {
         // The swap flow itself (its sheet, its receipt) is untouched: only this trigger button
         // is restyled, to Amber's own primary action, one of the six named components.
-        val blocked = state.swapBlockedReason
         AmberPrimaryAction(
             label = label.text(),
             onClick = onSwap,
-            enabled = state.mint != null && !swap.isBusy && blocked == null,
+            enabled = state.mint != null && !swap.isBusy,
         )
-        blocked?.let {
+        state.swapUnpricedNote?.let {
             Text(text = it.text(), style = AmberType.context, color = colors.textSecondary)
         }
         // The exit, for a wallet the chain says holds some: the same machine the other way round,

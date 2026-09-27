@@ -985,16 +985,29 @@ class DetailModelTest {
         val quoted = thin.costLine(1.2)
         assertEquals(R.string.detail_cost_line_thin, label(quoted))
         assertEquals(listOf("1.20%", "\$2"), args(quoted))
-        assertNull("a thin pool keeps the button on", thin.swapBlockedReason)
+        assertFalse("a thin pool keeps the ordinary button", thin.swapUnpriced)
     }
 
-    /** Device QA of 1.3.17: JEFx and AALx offered an active Swap though Jupiter has no price. */
+    /**
+     * Device QA of 1.3.17: JEFx and AALx, where Jupiter has no price. Judges' review, 2026-09-27: a
+     * missing reference price is not a missing route, so the button is not switched off; it asks
+     * "Check swap availability" and the quote answers, with the reason in one line under it.
+     */
     @Test
-    fun `a token Jupiter has no price for turns the swap off, with the reason in one line`() {
-        assertEquals(R.string.detail_swap_no_price, label(served(quote = Piece.Absent).swapBlockedReason))
-        assertNull("a refused quote is transient, the swap machine asks again", served(quote = Piece.Failed).swapBlockedReason)
-        assertNull("still in flight blocks nothing", served(quote = Piece.Loading).swapBlockedReason)
-        assertNull(served().swapBlockedReason)
+    fun `a token Jupiter has no price for asks whether it can be swapped, with the reason in one line`() {
+        val unpriced = served(quote = Piece.Absent)
+        assertTrue(unpriced.swapUnpriced)
+        assertEquals(R.string.detail_swap_no_price, label(unpriced.swapUnpricedNote))
+        assertEquals(R.string.detail_swap_check_availability, label(unpriced.swapButtonLabel))
+        for ((why, state) in listOf(
+            "a refused quote is transient, the swap machine asks again" to served(quote = Piece.Failed),
+            "still in flight changes nothing" to served(quote = Piece.Loading),
+            "a priced token" to served(),
+        )) {
+            assertFalse(why, state.swapUnpriced)
+            assertNull(why, state.swapUnpricedNote)
+            assertEquals(why, R.string.detail_swap_button, label(state.swapButtonLabel))
+        }
     }
 
     @Test

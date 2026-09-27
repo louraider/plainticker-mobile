@@ -5,6 +5,7 @@ import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.DeviceCodeRekeyStore
+import com.plainticker.mobile.prefs.DeviceCodeUnreadableException
 import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -40,6 +41,14 @@ enum class DeviceCodeStatus {
 
     /** An account route answered 401 `code_retired`: the server no longer accepts this code at all. */
     RETIRED,
+
+    /**
+     * This phone holds its code sealed and could not open it, and has no plain copy (security
+     * review, 2026-09-27; [com.plainticker.mobile.prefs.DevicePassStore], "Sealed at rest"). Nothing
+     * was replaced: a fresh code would orphan the pass bound to this one, and the sealed copy may
+     * open on the next launch. You says so plainly.
+     */
+    UNREADABLE,
 }
 
 /** How one [DeviceRekeyer.rekeyIfNeeded] ended. */
@@ -124,7 +133,17 @@ class DeviceRekeyer(
      * [RekeyOutcome.RETRY_LATER] without calling.
      */
     suspend fun rekeyIfNeeded(force: Boolean = false): RekeyOutcome = mutex.withLock {
-        withContext(io) { attempt(force) }
+        withContext(io) {
+            try {
+                attempt(force)
+            } catch (e: DeviceCodeUnreadableException) {
+                // The code is sealed and does not open: nothing is sent, nothing is minted, and
+                // You says so. The next attempt reads it afresh.
+                note("rekey: device code unreadable, nothing sent")
+                _status.value = DeviceCodeStatus.UNREADABLE
+                retryLater()
+            }
+        }
     }
 
     private suspend fun attempt(force: Boolean): RekeyOutcome {

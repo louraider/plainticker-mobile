@@ -100,6 +100,22 @@ data class SwapOrder(
 
     /** True when this order can be signed: it was built for a taker and carries bytes. */
     val isSignable: Boolean get() = !transaction.isNullOrBlank()
+
+    /**
+     * True when every fee and rent field is a lamport count a wallet could be charged: none
+     * negative, and their sum a Long (security review, 2026-09-27). A signed field let an order
+     * declare a priority fee of 1,000,000,000 beside a signature fee of -999,995,000, so the three
+     * summed to the 5,000 lamports the sheet showed while the transaction charged a whole SOL.
+     * [JupiterSwapApi.order] refuses an order where this is false, and
+     * [com.plainticker.mobile.wallet.TransactionGuard] refuses it again, so no screen ever adds
+     * these fields up unchecked.
+     */
+    val feeFieldsValid: Boolean
+        get() {
+            val fields = listOf(signatureFeeLamports, prioritizationFeeLamports, rentFeeLamports)
+            if (fields.any { it < 0L }) return false
+            return runCatching { fields.reduce(Math::addExact) }.isSuccess
+        }
 }
 
 @Serializable

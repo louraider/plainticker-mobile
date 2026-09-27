@@ -112,7 +112,7 @@ data class SheetReceipt(
 )
 
 /** What a button does. The sheet maps each to one [SwapViewModel] method and decides nothing. */
-enum class SheetActionKind { Submit, Edit, Close, ViewPortfolio, Retry, SwapBack }
+enum class SheetActionKind { Submit, Edit, Close, ViewPortfolio, Retry, SwapBack, Continue }
 
 /** Which of the three results a finished attempt is. Each has its own mark, colour and words. */
 enum class ResultTone {
@@ -186,9 +186,10 @@ data class SheetContent(
      */
     val extra: SheetAction? = null,
     /**
-     * What [com.plainticker.mobile.wallet.TransactionGuard] checked on this phone, stated while
-     * the wallet is open (judges' review, 2026-09-27): what the bytes spend, where they pay, and
-     * the least they accept. Only on [SwapState.AwaitingWallet], which the guard's Allow precedes.
+     * What [com.plainticker.mobile.wallet.TransactionGuard] checked on this phone (judges' review,
+     * 2026-09-27): what the bytes spend, where they pay, and the least they accept. On
+     * [SwapState.Review], before the wallet opens, and on [SwapState.AwaitingWallet] while it is
+     * open; the guard's Allow precedes both.
      */
     val checked: Copy? = null,
     /** Solscan's page for the landed transaction, drawn as "View on Solscan". Receipt only. */
@@ -269,7 +270,13 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             costNotice = CostNotice.AtTap,
             notice = amountNotice(),
             primary = SheetAction(
-                label = words(R.string.swap_button, leg.input.symbol, leg.output.symbol),
+                // A token Jupiter has no reference price for is asked about, not promised: the
+                // quote answers whether a route exists (judges' review, 2026-09-27).
+                label = if (leg.unpriced && leg.intoToken) {
+                    words(R.string.swap_check_availability)
+                } else {
+                    words(R.string.swap_button, leg.input.symbol, leg.output.symbol)
+                },
                 kind = SheetActionKind.Submit,
                 enabled = canSubmit,
             ),
@@ -295,6 +302,24 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             secondary = close,
         )
 
+        // Everything the bytes do, before the wallet opens (judges' review, 2026-09-27). One
+        // decision: continue to the wallet, or cancel with nothing signed.
+        is SwapState.Review -> base(
+            phase = SheetPhase(
+                label = words(R.string.swap_review),
+                // Only an RFQ quote carries an expiry; a Metis order counts down nothing.
+                meta = quote.secondsLeft(nowMillis / 1_000L)
+                    ?.let { words(R.string.swap_quote_valid, Fmt.seconds(it.coerceAtLeast(0L) * 1_000L)) },
+                live = false,
+                announcement = words(R.string.swap_review),
+            ),
+            cells = reviewCells(leg, quote),
+            notice = reviewNotice(),
+            primary = SheetAction(words(R.string.swap_continue_to_wallet), SheetActionKind.Continue),
+            secondary = SheetAction(words(R.string.action_cancel), SheetActionKind.Close),
+            checked = checkedLine(leg, quote),
+        )
+
         is SwapState.AwaitingWallet -> base(
             phase = running(
                 label = R.string.swap_confirm_in_wallet,
@@ -308,16 +333,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             cells = costCells(leg, quote),
             notice = if (requote) words(R.string.swap_requote_approval) else null,
             secondary = close,
-            // The guard read the bytes before the wallet opened, and required exactly these: the
-            // amount spent from the wallet's own account, the proceeds into its own account for
-            // the output, and a floor no lower than the one shown.
-            checked = words(
-                R.string.swap_guard_checked,
-                leg.input.shown(quote.inAmountRaw),
-                leg.input.symbol,
-                leg.output.symbol,
-                leg.output.shown(quote.worstCaseOutRaw),
-            ),
+            checked = checkedLine(leg, quote),
         )
 
         // No action at all: POST /execute is in flight and there is nothing to take back. The
@@ -380,6 +396,69 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             result = failedResult(),
         )
     }
+}
+
+/**
+ * The guard read the bytes before the wallet opened, and required exactly these: the amount
+ * spent from the wallet's own account, the proceeds into its own account for the output, and a
+ * floor no lower than the one shown.
+ */
+private fun checkedLine(leg: SwapLeg, quote: SwapQuote): Copy = words(
+    R.string.swap_guard_checked,
+    leg.input.shown(quote.inAmountRaw),
+    leg.input.symbol,
+    leg.output.symbol,
+    leg.output.shown(quote.worstCaseOutRaw),
+)
+
+/**
+ * The Review step's one notice, most important first: a quote fetched again because the first
+ * ran out, the automatic requote, and the limit of the value check on a token Jupiter has no
+ * reference price for.
+ */
+private fun SwapState.Review.reviewNotice(): Copy? = when {
+    refreshed -> words(R.string.swap_review_refreshed)
+    requote -> words(R.string.swap_requote_approval)
+    leg.unpriced -> words(R.string.swap_review_unpriced)
+    else -> null
+}
+
+/**
+ * The Review step's cells (judges' review, 2026-09-27): what arrives and the least that may,
+ * what is spent, the all-in cost, the network fee the bytes charge (signature and priority, both
+ * read from the message), and the deposit at its upper bound, named as a deposit that comes back.
+ */
+private fun reviewCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> {
+    val paid = quote.paidSol
+    return listOfNotNull(
+        receiveCell(leg, quote),
+        SheetCell(
+            label = words(R.string.swap_review_spend),
+            value = words(R.string.swap_amount_symbol, leg.input.shown(quote.inAmountRaw), leg.input.symbol),
+        ),
+        costCell(quote),
+        SheetCell(
+            label = words(R.string.swap_review_network_fee),
+            value = raw(Fmt.tokenAmount(paid.networkFeeLamports, LAMPORT_DECIMALS, SOL_DECIMALS)),
+            sub = if (paid.networkFeeLamports > 0L) {
+                words(
+                    R.string.swap_review_network_fee_sub,
+                    Fmt.tokenAmount(paid.signatureFeeLamports, LAMPORT_DECIMALS, SOL_DECIMALS),
+                    Fmt.tokenAmount(paid.prioritizationFeeLamports, LAMPORT_DECIMALS, SOL_DECIMALS),
+                )
+            } else {
+                words(R.string.swap_review_network_fee_none)
+            },
+            subMono = paid.networkFeeLamports > 0L,
+        ),
+        paid.rentFeeLamports.takeIf { it > 0L }?.let { rent ->
+            SheetCell(
+                label = words(R.string.swap_review_deposit),
+                value = words(R.string.swap_review_deposit_value, Fmt.tokenAmount(rent, LAMPORT_DECIMALS, SOL_DECIMALS)),
+                sub = words(R.string.swap_review_deposit_sub),
+            )
+        },
+    )
 }
 
 /**
@@ -507,41 +586,48 @@ private fun SwapState.Amount.amountNotice(): Copy? = when {
  * T10 names, which is a classic account's rent and not what this quote charges.
  */
 private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
-    SheetCell(
-        label = words(R.string.swap_you_receive),
-        value = words(
-            R.string.swap_amount_symbol,
-            leg.output.shown(quote.outAmountRaw),
-            leg.output.symbol,
-        ),
-        // otherAmountThreshold: the least this swap may deliver before it reverts, stated beside
-        // the estimate rather than hidden behind a slippage control the sheet does not have.
-        sub = words(
-            R.string.swap_worst_case,
-            leg.output.shown(quote.worstCaseOutRaw),
-            leg.output.symbol,
-        ),
-        span = 2,
-        subMono = true,
-        size = SheetCellSize.Headline,
-    ),
+    receiveCell(leg, quote),
     costCell(quote),
     SheetCell(
         label = words(R.string.swap_sol_label),
-        value = raw(Fmt.tokenAmount(quote.solCost.totalLamports, LAMPORT_DECIMALS, SOL_DECIMALS)),
+        // What this wallet can be charged: the bytes' own fees and the deposit at its upper bound
+        // once the guard has read them (security review, 2026-09-27), never the JSON summed.
+        value = raw(Fmt.tokenAmount(quote.paidSol.totalLamports, LAMPORT_DECIMALS, SOL_DECIMALS)),
         // The rent is most of it and it is charged once, for the first account of this mint, so
         // the sub says which of the two this quote is: a new account, or one that already exists.
         // The rent is a deposit held in the new account, not a fee: it comes back if the account
         // is closed, and the sub says so (judges' review, 2026-09-27).
-        sub = if (quote.solCost.rentFeeLamports > 0L) {
+        sub = if (quote.paidSol.rentFeeLamports > 0L) {
             words(
                 R.string.swap_sol_sub_rent,
-                Fmt.tokenAmount(quote.solCost.rentFeeLamports, LAMPORT_DECIMALS, SOL_DECIMALS),
+                Fmt.tokenAmount(quote.paidSol.rentFeeLamports, LAMPORT_DECIMALS, SOL_DECIMALS),
             )
         } else {
             words(R.string.swap_sol_sub_no_rent)
         },
     ),
+)
+
+/**
+ * What arrives, as the headline, with otherAmountThreshold beneath it: the least this swap may
+ * deliver before it reverts, stated beside the estimate rather than hidden behind a slippage
+ * control the sheet does not have.
+ */
+private fun receiveCell(leg: SwapLeg, quote: SwapQuote): SheetCell = SheetCell(
+    label = words(R.string.swap_you_receive),
+    value = words(
+        R.string.swap_amount_symbol,
+        leg.output.shown(quote.outAmountRaw),
+        leg.output.symbol,
+    ),
+    sub = words(
+        R.string.swap_worst_case,
+        leg.output.shown(quote.worstCaseOutRaw),
+        leg.output.symbol,
+    ),
+    span = 2,
+    subMono = true,
+    size = SheetCellSize.Headline,
 )
 
 /**
@@ -586,7 +672,12 @@ private fun SwapState.Landed.quotedAgainstFill(): Copy? {
     return words(R.string.receipt_cost_sub, Fmt.percent(quoted, signed = false), Fmt.percent(delta))
 }
 
-/** The SOL the wallet paid for this swap, with the refundable rent named, or null when it paid none. */
+/**
+ * The SOL this swap cost the wallet, with the refundable rent named, or null when it cost none.
+ * Labelled an estimate: the figures are the quote's (the fees the bytes set, the deposit at its
+ * upper bound), and the app does not read the landed transaction's own fee (judges' review,
+ * 2026-09-27; the forwarder allowlists no method that returns a transaction's meta).
+ */
 private fun SwapState.Landed.solPaidCell(): SheetCell? {
     val paid = quote.paidSol
     if (paid.totalLamports <= 0L) return null
@@ -619,7 +710,7 @@ private fun SwapState.Landed.receiptCells(): List<SheetCell> = listOfNotNull(
         sub = quotedAgainstFill(),
         subMono = true,
     ),
-    // What the wallet paid in SOL, the deposit named apart because it comes back.
+    // What the wallet was estimated to pay in SOL, the deposit named apart because it comes back.
     solPaidCell(),
     SheetCell(
         label = words(R.string.receipt_signature),

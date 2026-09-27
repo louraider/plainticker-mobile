@@ -145,7 +145,7 @@ class DetailViewModel(
     private suspend fun loadRead() {
         val api = readApi ?: return
         val read = try {
-            ReadState.Ready(api.get(ticker, devicePassStore?.code()))
+            ReadState.Ready(api.get(ticker, devicePassStore?.codeOrNull()))
         } catch (e: CancellationException) {
             throw e
         } catch (e: ReadError.Disabled) {
@@ -163,7 +163,7 @@ class DetailViewModel(
     private suspend fun loadAnalysis() {
         // The same device code the read call already presents (task A6), so an entitled wallet
         // gets the real verdict rather than the locked shape (task app-verdict).
-        val analysis = runCatching { summaries.analysis(ticker, devicePassStore?.code()) }
+        val analysis = runCatching { summaries.analysis(ticker, devicePassStore?.codeOrNull()) }
         val classified = analysis.fold(
             onSuccess = { payload -> AnalysisState.Served(payload) },
             onFailure = ::classify,

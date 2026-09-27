@@ -86,11 +86,12 @@ class DeviceRekeyerTest {
         prefs: FakePrefs = legacyPrefs(),
         clock: FakeClock = FakeClock(),
         account: AccountStore? = null,
+        cipher: com.plainticker.mobile.wallet.AesGcmSessionCipher? = null,
         handler: MockRequestHandler,
     ): Rig {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val api = MockApi(dispatcher, handler)
-        val store = SharedPrefsDevicePassStore(prefs)
+        val store = SharedPrefsDevicePassStore(prefs, cipher)
         val log = RecordingLog()
         return Rig(prefs, store, api, DeviceRekeyer(store, DeviceRekeyApi(api.client), clock, log, dispatcher, account), clock, log)
     }
@@ -104,6 +105,55 @@ class DeviceRekeyerTest {
 
     private fun Rig.assertNoCodeLogged(vararg codes: String) {
         codes.forEach { code -> log.lines.forEach { assertFalse("a code reached the log: $it", code in it) } }
+    }
+
+    // ---- The code sealed at rest (security review, 2026-09-27) --------------------------------
+
+    private val sealKey: javax.crypto.SecretKey = javax.crypto.KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+
+    private fun sealing(key: javax.crypto.SecretKey = sealKey) = com.plainticker.mobile.wallet.AesGcmSessionCipher { key }
+
+    @Test
+    fun `on a sealing store a legacy code is migrated, rekeyed, and the new code lands sealed, never plain`() = runTest {
+        val r = rig(cipher = sealing()) { respondJson("""{"ok":true}""") }
+        assertEquals(RekeyOutcome.REKEYED, r.rekeyer.rekeyIfNeeded())
+        val sent = r.api.sentNewCodes().single()
+        assertEquals(legacy, r.api.lastRequest.headers["X-PT-Code"])
+        assertEquals(sent, r.store.code())
+        assertEquals(setOf(SharedPrefsDevicePassStore.KEY_CODE_SEALED), r.prefs.all.keys)
+        assertFalse(r.prefs.all.values.any { it == sent || it == legacy })
+        assertEquals(sent, SharedPrefsDevicePassStore(r.prefs, sealing()).code())
+        r.assertNoCodeLogged(legacy, sent)
+    }
+
+    @Test
+    fun `a sealed code this phone cannot open sends nothing, mints nothing, and You says so`() = runTest {
+        val prefs = FakePrefs()
+        // Sealed under the right key; this launch's Keystore answers with another.
+        SharedPrefsDevicePassStore(prefs, sealing()).also { it.code() }
+        prefs.edit().putString(
+            SharedPrefsDevicePassStore.KEY_CODE_SEALED,
+            java.util.Base64.getEncoder().encodeToString(sealing().seal(legacy.toByteArray())),
+        ).commit()
+        prefs.writes.clear()
+        val otherKey = javax.crypto.KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val r = rig(prefs = prefs, cipher = sealing(otherKey)) { error("nothing may be sent without the code") }
+
+        assertEquals(RekeyOutcome.RETRY_LATER, r.rekeyer.rekeyIfNeeded(force = true))
+        assertEquals(DeviceCodeStatus.UNREADABLE, r.rekeyer.status.value)
+        assertTrue("no request was made", r.api.requests.isEmpty())
+        assertTrue("nothing was written: no code minted over the sealed one", prefs.writes.isEmpty())
+        assertNull(r.store.codeOrNull())
+        expectThrows<com.plainticker.mobile.prefs.DeviceCodeUnreadableException> {
+            r.rekeyer.withCode({ false }) { error("the block never runs without a code") }
+        }
+        assertTrue(r.api.requests.isEmpty())
+
+        // The right key answers again on a later launch: the same legacy code, rekeyed as usual.
+        val later = rig(prefs = prefs, cipher = sealing()) { respondJson("""{"ok":true}""") }
+        assertEquals(RekeyOutcome.REKEYED, later.rekeyer.rekeyIfNeeded(force = true))
+        assertEquals(legacy, later.api.lastRequest.headers["X-PT-Code"])
+        assertEquals(DeviceCodeStatus.OK, later.rekeyer.status.value)
     }
 
     // ---- Success -----------------------------------------------------------------------------

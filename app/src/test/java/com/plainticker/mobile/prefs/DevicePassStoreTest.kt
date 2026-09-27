@@ -219,6 +219,10 @@ class DevicePassStoreTest {
         val (backing, store) = legacyStore()
         store.beginRekey()
         store.setRekeyNote(SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN)
-        assertEquals(SharedPrefsDevicePassStore.ALL_KEYS, backing.all.keys)
+        assertTrue(SharedPrefsDevicePassStore.ALL_KEYS.containsAll(backing.all.keys))
+        assertEquals(
+            setOf(SharedPrefsDevicePassStore.KEY_CODE, SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE, SharedPrefsDevicePassStore.KEY_REKEY_NOTE),
+            backing.all.keys,
+        )
     }
 }

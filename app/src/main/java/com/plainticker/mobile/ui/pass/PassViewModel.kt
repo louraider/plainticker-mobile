@@ -196,9 +196,9 @@ class PassViewModel(
             if (!quiet) {
                 _pro.update { it.copy(entitlementLoading = true, entitlementDisabled = false, entitlementFailed = false) }
             }
-            val code = devicePassStore.code()
             try {
-                applyEntitlement(entitlementApi.get(code))
+                // Inside the try: a code this phone cannot open is a read that could not be made.
+                applyEntitlement(entitlementApi.get(devicePassStore.code()))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: EntitlementError.Disabled) {
@@ -386,8 +386,18 @@ class PassViewModel(
 
     private suspend fun build(payer: String, mint: String = PassApi.MINT_USDC, refreshed: Boolean = false) {
         _state.value = PassState.Building(payer)
+        // Read once, for the build and for the guard's memo check, and inside a refusal: a code
+        // this phone cannot open is never replaced, and a pass is never built for another one.
+        val codeHash = try {
+            devicePassStore.codeHash()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            debugLog.raw("pass/build: device code unreadable ${e::class.simpleName}")
+            return refuse(PassRefusal.UNAVAILABLE)
+        }
         val build = try {
-            passApi.build(payer, mint, devicePassStore.codeHash())
+            passApi.build(payer, mint, codeHash)
         } catch (e: CancellationException) {
             throw e
         } catch (e: PassError) {
@@ -410,7 +420,7 @@ class PassViewModel(
         val verdict = if (unsigned == null) {
             TransactionGuard.Verdict.Refuse("no transaction bytes")
         } else {
-            TransactionGuard.checkPass(unsigned, payer, build.summary, devicePassStore.codeHash())
+            TransactionGuard.checkPass(unsigned, payer, build.summary, codeHash)
         }
         if (verdict is TransactionGuard.Verdict.Refuse) {
             debugLog.raw("pass/build transaction refused before the wallet: ${verdict.reason}")

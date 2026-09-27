@@ -80,16 +80,40 @@ class BackupRulesTest {
         val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }.canonicalFile
         val container = File(module, "src/main/java/com/plainticker/mobile/AppContainer.kt").readText()
         assertTrue("app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)" in container)
-        assertTrue("SharedPrefsDevicePassStore(prefs)" in container)
+        assertTrue("SharedPrefsDevicePassStore(prefs, deviceCodeCipher)" in container)
         assertTrue("SharedPrefsPendingSignOutStore(prefs)" in container)
         assertEquals(
             setOf(
                 SharedPrefsDevicePassStore.KEY_CODE,
                 SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE,
                 SharedPrefsDevicePassStore.KEY_REKEY_NOTE,
+                SharedPrefsDevicePassStore.KEY_CODE_SEALED,
+                SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE_SEALED,
             ),
             SharedPrefsDevicePassStore.ALL_KEYS,
         )
         assertTrue("sharedpref:${DefaultAppContainer.PREFS_NAME}.xml" in expected)
+    }
+
+    /**
+     * The sealed codes (security review, 2026-09-27) live in that same excluded file, under keys
+     * of their own, sealed with a Keystore key of their own that is not the wallet session's, so
+     * neither the sealed blobs nor anything that could open them can reach a backup. Keystore keys
+     * are never backed up at all; the file they seal into is excluded whole besides.
+     */
+    @Test
+    fun `the sealed device code keys live in the excluded file, under their own Keystore key`() {
+        val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }.canonicalFile
+        val container = File(module, "src/main/java/com/plainticker/mobile/AppContainer.kt").readText()
+        assertTrue(
+            "AesGcmSessionCipher { AesGcmSessionCipher.androidKeystoreKey(SharedPrefsDevicePassStore.KEY_ALIAS) }" in container,
+        )
+        assertTrue(SharedPrefsDevicePassStore.KEY_ALIAS != com.plainticker.mobile.wallet.AesGcmSessionCipher.KEY_ALIAS)
+        assertTrue(SharedPrefsDevicePassStore.KEY_CODE_SEALED in SharedPrefsDevicePassStore.ALL_KEYS)
+        assertTrue(SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE_SEALED in SharedPrefsDevicePassStore.ALL_KEYS)
+        for (rules in listOf("res/xml/backup_rules.xml", "res/xml/data_extraction_rules.xml")) {
+            val root = parse(rules).documentElement
+            assertTrue(rules, "sharedpref:${DefaultAppContainer.PREFS_NAME}.xml" in excludes(root))
+        }
     }
 }

@@ -222,6 +222,145 @@ class SwapSheetModelTest {
         assertEquals(R.string.swap_requote_approval, id(wallet.notice))
     }
 
+    // ---- Review (judges' review, 2026-09-27) ------------------------------------------------------
+
+    /** What the guard read the golden bytes can charge, with one Token-2022 account opened by the wallet. */
+    private val costs = TransactionGuard.SwapCosts(
+        signatureFeeLamports = 5_000L,
+        priorityFeeLamports = 395L,
+        rentUpperBoundLamports = TransactionGuard.TOKEN_2022_ACCOUNT_RENT_CEILING_LAMPORTS,
+        rentDeclaredLamports = 1_488_440L,
+        walletFundedCreates = 1,
+    )
+
+    private fun review(
+        q: SwapQuote = quote.copy(costs = costs),
+        l: SwapLeg = leg,
+        requote: Boolean = false,
+        refreshed: Boolean = false,
+    ) = SwapState.Review(l, funds, amount(), q, requote, quotedAtMillis = 0L, timing = timing, refreshed = refreshed)
+
+    private fun sol(lamports: Long) = Fmt.tokenAmount(lamports, LAMPORT_DECIMALS, LAMPORT_DECIMALS)
+
+    @Test
+    fun `Review states what the bytes spend and cost, and asks one decision, continue to the wallet or cancel`() {
+        val content = review().shown()
+        assertEquals(R.string.swap_review, id(content.phase?.label))
+        assertEquals("nothing is in flight on Review", false, content.phase?.live)
+        assertNull("a Metis quote counts nothing down", content.phase?.meta)
+
+        assertEquals(SheetActionKind.Continue, content.primary?.kind)
+        assertEquals("Continue to wallet", ShippedCopy.render(requireNotNull(content.primary).label))
+        assertEquals(SheetActionKind.Close, content.secondary?.kind)
+        assertEquals("Cancel", ShippedCopy.render(requireNotNull(content.secondary).label))
+        assertNull(content.notice)
+        assertNull("Review is not a result", content.result)
+
+        // The checked line, as on the wallet step.
+        assertEquals(R.string.swap_guard_checked, id(content.checked))
+        assertEquals(listOf("5", "USDC", "TSLAx", "0.013469"), args(content.checked))
+
+        // Spend, and the least that may arrive.
+        assertEquals(listOf("5", "USDC"), args(cell(content, R.string.swap_review_spend).value))
+        val receive = cell(content, R.string.swap_you_receive)
+        assertEquals(listOf("0.013469", "TSLAx"), args(receive.sub))
+
+        // The network fee read from the bytes: 5,000 for the signature and 395 of priority.
+        val fee = cell(content, R.string.swap_review_network_fee)
+        assertEquals(sol(5_395L), raw(fee.value))
+        assertEquals(listOf(sol(5_000L), sol(395L)), args(fee.sub))
+
+        // The deposit at its upper bound, named as a deposit that comes back.
+        val deposit = cell(content, R.string.swap_review_deposit)
+        assertEquals("Up to ${sol(2_672_640L)} SOL", ShippedCopy.render(deposit.value))
+        assertEquals("A deposit for the token account, returned if the account is closed", ShippedCopy.render(requireNotNull(deposit.sub)))
+        assertTrue("no Route cost without a SOL price is still a cost cell", content.cells.any { id(it.label) == R.string.swap_route_cost })
+    }
+
+    @Test
+    fun `with a SOL price Review's all-in cost adds the bytes' fees and the deposit at its bound`() {
+        val priced = quote.copy(costs = costs, inUsdValue = 5.0, solUsd = 200.0)
+        val content = review(priced).shown()
+        val sol = (5_395L + 2_672_640L) / 1e9 * 200.0
+        assertEquals(0.586 + sol / 5.0 * 100.0, priced.allInCostPct!!, 1e-9)
+        assertEquals(raw(cell(content, R.string.swap_all_in_cost).value), Fmt.percent(priced.allInCostPct!!, signed = false))
+    }
+
+    @Test
+    fun `Review says why it is there again, most important first`() {
+        assertEquals(
+            "The first quote ran out, so this is a fresh one. Check it again before you continue.",
+            ShippedCopy.render(requireNotNull(review(refreshed = true, requote = true).shown().notice)),
+        )
+        assertEquals(R.string.swap_requote_approval, id(review(requote = true).shown().notice))
+        assertEquals(
+            "Jupiter has no reference price for this token, so the value check is limited to the quote itself.",
+            ShippedCopy.render(requireNotNull(review(l = SwapLeg.into(tslax, unpriced = true)).shown().notice)),
+        )
+    }
+
+    @Test
+    fun `an RFQ quote on Review counts its expiry down, and the clock runs for it`() {
+        val rfq = review(quote.copy(costs = costs, expireAtEpochSec = 30L))
+        val content = rfq.shown(nowMillis = 12_000L)
+        assertEquals(R.string.swap_quote_valid, id(content.phase?.meta))
+        assertEquals(listOf("18 s"), args(content.phase?.meta))
+        assertTrue(rfq.needsAClock)
+        assertFalse("a Metis quote on Review needs no clock", review().needsAClock)
+    }
+
+    @Test
+    fun `a gasless order on Review names no fee for this wallet and no deposit it does not pay`() {
+        val none = TransactionGuard.SwapCosts(0L, 0L, 0L, 0L, 0)
+        val content = review(quote.copy(costs = none, gasless = true)).shown()
+        val fee = cell(content, R.string.swap_review_network_fee)
+        assertEquals(sol(0L), raw(fee.value))
+        assertEquals(R.string.swap_review_network_fee_none, id(fee.sub))
+        assertTrue(content.cells.none { id(it.label) == R.string.swap_review_deposit })
+    }
+
+    @Test
+    fun `once the guard has read the bytes the SOL line is theirs, the deposit at its bound`() {
+        val content = SwapState.AwaitingWallet(leg, funds, amount(), quote.copy(costs = costs), requote = false, timing = timing).shown()
+        val solCell = cell(content, R.string.swap_sol_label)
+        assertEquals("the bytes' fees and the deposit bound, not the JSON's 1,494,890", sol(5_395L + 2_672_640L), raw(solCell.value))
+        assertEquals(
+            "Fee, priority, and up to ${sol(2_672_640L)} SOL deposit, returned if the account is closed",
+            ShippedCopy.render(requireNotNull(solCell.sub)),
+        )
+        // The shortfall is measured against the same figure.
+        val short = SwapState.Shortfall(leg, funds.copy(lamports = 1_000_000L), amount(), quote.copy(costs = costs), timing)
+        assertEquals(5_395L + 2_672_640L - 1_000_000L, short.missingLamports)
+    }
+
+    @Test
+    fun `an unpriced token's amount step asks whether it can be swapped`() {
+        val content = SwapState.Amount(SwapLeg.into(tslax, unpriced = true), funds, amount()).shown()
+        assertEquals("Check swap availability", ShippedCopy.render(requireNotNull(content.primary).label))
+        assertEquals(SheetActionKind.Submit, content.primary?.kind)
+        // Swap to USDC keeps its own words: the value check still refuses there without a price.
+        val out = SwapState.Amount(SwapLeg.into(tslax, unpriced = true).flipped(), funds.copy(tokenRaw = 1_360_437L), AmountInput.EMPTY).shown()
+        assertEquals(R.string.swap_button, id(out.primary?.label))
+    }
+
+    @Test
+    fun `no route for an unpriced token says so, and offers another try`() {
+        val content = SwapState.Failed(leg, funds, amount(), SwapFailure.NO_ROUTE, null, false, timing).shown()
+        assertEquals("Swap unavailable: Jupiter has no route for this token right now", ShippedCopy.render(requireNotNull(content.notice)))
+        assertEquals(SheetActionKind.Retry, content.primary?.kind)
+        assertEquals(ResultTone.Failed, content.result?.tone)
+    }
+
+    @Test
+    fun `the receipt calls the quote's SOL figures an estimate, never paid`() {
+        val content = SwapState.Landed(leg, quote.copy(inUsdValue = 5.0, solUsd = 200.0), fill, requoted = false, timing = timing).shown()
+        val solCell = cell(content, R.string.receipt_sol_paid)
+        assertEquals("Estimated network costs", ShippedCopy.render(solCell.label))
+        assertTrue(ShippedCopy.render(requireNotNull(solCell.sub)).startsWith("From the quote"))
+        assertEquals("Estimated all-in cost", ShippedCopy.render(cell(content, R.string.receipt_cost_paid).label))
+        content.cells.forEach { assertFalse("no receipt label claims SOL was paid", ShippedCopy.render(it.label).contains("paid", ignoreCase = true) && ShippedCopy.render(it.label).contains("SOL")) }
+    }
+
     // ---- The cost block --------------------------------------------------------------------------
 
     @Test

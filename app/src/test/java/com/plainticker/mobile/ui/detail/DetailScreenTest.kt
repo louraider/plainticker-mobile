@@ -227,7 +227,7 @@ class DetailScreenTest {
         assertEquals("no Instrument PrimaryButton left on the screen", 0, count("PrimaryButton("))
         assertEquals("one Swap button on the screen", 1, count("AmberPrimaryAction("))
         assertEquals("one sheet, opened by that button (T10, DT7)", 1, count("SwapSheet("))
-        assertTrue("the button does not carry the pair", "state.swapLabel" in scan.code)
+        assertTrue("the button does not carry the pair", "state.swapButtonLabel" in scan.code)
     }
 
     @Test

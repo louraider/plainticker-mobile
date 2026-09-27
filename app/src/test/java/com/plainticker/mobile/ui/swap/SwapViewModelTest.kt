@@ -32,7 +32,10 @@ import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.testAccount
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
@@ -41,6 +44,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import java.util.Base64
@@ -210,6 +214,12 @@ class SwapViewModelTest {
         mints: com.plainticker.mobile.repo.MintRepository? = null,
         secondSource: com.plainticker.mobile.repo.SecondSource = FakeSecondSource(),
         prices: com.plainticker.mobile.repo.PriceRepository = tslaxPriced(),
+        /**
+         * Taps "Continue to wallet" whenever the machine stops at Review (judges' review,
+         * 2026-09-27), so the tests written before that step still drive a whole attempt. The
+         * tests about Review itself pass false and tap it themselves.
+         */
+        autoContinue: Boolean = true,
     ) = SwapViewModel(
         swapApi = JupiterSwapApi(mock.client),
         wallet = wallet,
@@ -223,7 +233,20 @@ class SwapViewModelTest {
         mints = mints,
         secondSource = secondSource,
         prices = prices,
-    )
+    ).also { vm ->
+        if (autoContinue) {
+            continuers += CoroutineScope(mainDispatcher.dispatcher).launch {
+                vm.state.collect { if (it is SwapState.Review) vm.continueToWallet() }
+            }
+        }
+    }
+
+    private val continuers = mutableListOf<Job>()
+
+    @After
+    fun stopContinuers() {
+        continuers.forEach { it.cancel() }
+    }
 
     /**
      * TSLAx at the price Jupiter's own reverse order implies: inUsdValue 0.9960867 for 264,600
@@ -440,12 +463,16 @@ class SwapViewModelTest {
             vm.submit()
 
             val short = awaitUntil { it is SwapState.Shortfall } as SwapState.Shortfall
+            // Security review, 2026-09-27: the requirement is what the bytes can charge, not the
+            // JSON summed. One signature at 5,000 and the priority fee the compute budget sets
+            // (395; the JSON declares 1,450), plus the declared deposit, which is the upper bound
+            // here because the bytes open no account of their own.
             assertEquals(5_000L, short.need.signatureFeeLamports)
             assertEquals(1_488_440L, short.need.rentFeeLamports)
-            assertEquals(1_450L, short.need.prioritizationFeeLamports)
-            assertEquals("the requirement is the quote's three fields summed", 1_494_890L, short.need.totalLamports)
+            assertEquals(395L, short.need.prioritizationFeeLamports)
+            assertEquals(1_493_835L, short.need.totalLamports)
             assertEquals(1_000_000L, short.haveLamports)
-            assertEquals(494_890L, short.missingLamports)
+            assertEquals(493_835L, short.missingLamports)
             assertTrue(
                 "the plan's 2039280 constant is not what this quote charges",
                 short.need.rentFeeLamports != 2_039_280L,
@@ -469,7 +496,7 @@ class SwapViewModelTest {
     fun `a wallet that can pay the quote's SOL is asked to sign`() = runTest {
         val mock = jupiter()
         val wallet = wallet()
-        val vm = viewModel(mock, wallet, rpc = chain(lamports = 1_494_890L))
+        val vm = viewModel(mock, wallet, rpc = chain(lamports = 1_493_835L))
 
         vm.state.test {
             awaitItem()
@@ -507,9 +534,10 @@ class SwapViewModelTest {
             assertTrue(landed.routeCostPaidPct!! < landed.quote.routeCostPct!!)
             assertEquals(0.549, landed.routeCostPaidPct!!, 0.001)
             // All-in adds the SOL this wallet pays, at the SOL price read with the quote (judges'
-            // review, 2026-09-27): 5,000 + 1,450 + 1,488,440 lamports at SOL_USD, over 5 dollars in.
+            // review, 2026-09-27): 5,000 + 395 + 1,488,440 lamports at SOL_USD, over 5 dollars in,
+            // the fees as the bytes set them (security review, 2026-09-27).
             assertEquals(SOL_USD, landed.quote.solUsd!!, 0.0)
-            val solShare = 1_494_890L / 1e9 * SOL_USD / 5.0 * 100.0
+            val solShare = 1_493_835L / 1e9 * SOL_USD / 5.0 * 100.0
             assertEquals(0.586 + solShare, landed.quote.allInCostPct!!, 0.001)
             assertEquals(0.549 + solShare, landed.allInCostPaidPct!!, 0.001)
 
@@ -794,6 +822,297 @@ class SwapViewModelTest {
                 assertTrue(mock.executes().isEmpty())
                 cancelAndIgnoreRemainingEvents()
             }
+        }
+    }
+
+    // ---- Review: nothing is asked of the wallet before Continue (judges' review, 2026-09-27) ------
+
+    @Test
+    fun `the machine stops at Review after every check, and the wallet opens only on Continue`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, autoContinue = false)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val review = awaitUntil { it is SwapState.Review } as SwapState.Review
+            runCurrent()
+            assertTrue("Review waits: nothing is in flight", vm.state.value is SwapState.Review)
+            assertFalse(review.isBusy)
+            assertEquals("the wallet was never opened", 0, wallet.callCount)
+            assertTrue(mock.executes().isEmpty())
+            assertFalse(review.requote)
+            assertFalse(review.refreshed)
+            // The figures Review states are the bytes' own (security review, 2026-09-27).
+            val costs = review.quote.costs!!
+            assertEquals(5_000L, costs.signatureFeeLamports)
+            assertEquals("the compute budget's fee, not the JSON's 1,450", 395L, costs.priorityFeeLamports)
+            assertEquals(1_488_440L, costs.rentUpperBoundLamports)
+            assertEquals(1_488_440L, costs.rentDeclaredLamports)
+            assertEquals(0, costs.walletFundedCreates)
+
+            vm.continueToWallet()
+            awaitUntil { it is SwapState.Landed }
+            assertEquals(1, wallet.callCount)
+            assertEquals(1, mock.executes().size)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `cancel on Review asks nothing of the wallet, and edit keeps the amount`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, autoContinue = false)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Review }
+            vm.edit()
+            val back = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertEquals("5", back.input.text)
+            assertTrue(back.canSubmit)
+
+            vm.submit()
+            awaitUntil { it is SwapState.Review }
+            vm.close()
+            assertEquals(SwapState.Closed(), awaitUntil { it is SwapState.Closed })
+            runCurrent()
+            assertEquals(0, wallet.callCount)
+            assertTrue(mock.executes().isEmpty())
+            // Continue from anywhere but Review does nothing.
+            vm.continueToWallet()
+            runCurrent()
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a quote older than its budget is fetched again before the wallet, and Review says it is fresh`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, autoContinue = false)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Review }
+            now += 46_000L
+            vm.continueToWallet()
+            val fresh = awaitUntil { it is SwapState.Review && it.refreshed } as SwapState.Review
+            assertEquals("a second quote", 2, mock.orders().size)
+            assertEquals("and still nothing asked of the wallet", 0, wallet.callCount)
+            assertFalse(fresh.requote)
+
+            vm.continueToWallet()
+            awaitUntil { it is SwapState.Landed }
+            assertEquals(1, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an RFQ quote about to expire is fetched again before the wallet`() = runTest {
+        val soon = START / 1000 + 3
+        orderResponse = orderResponse.replace(""""lastValidBlockHeight":""", """"expireAt": "$soon", "lastValidBlockHeight":""")
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, autoContinue = false)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val review = awaitUntil { it is SwapState.Review } as SwapState.Review
+            assertTrue(review.quote.hasExpiry)
+            // The fresh quote carries a later expiry.
+            orderResponse = orderResponse.replace(""""expireAt": "$soon"""", """"expireAt": "${soon + 60}"""")
+            vm.continueToWallet()
+            awaitUntil { it is SwapState.Review && it.refreshed }
+            assertEquals(2, mock.orders().size)
+            assertEquals(0, wallet.callCount)
+            vm.continueToWallet()
+            awaitUntil { it is SwapState.Landed }
+            assertEquals(1, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the requote after a dead quote comes back to Review, and the second approval waits for Continue`() = runTest {
+        executePlan = listOf(refusal(SwapError.CODE_QUOTE_EXPIRED) to HttpStatusCode.OK, LANDED to HttpStatusCode.OK)
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, autoContinue = false)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Review }
+            vm.continueToWallet()
+            val again = awaitUntil { it is SwapState.Review && it.requote } as SwapState.Review
+            runCurrent()
+            assertEquals("one approval so far", 1, wallet.callCount)
+            assertEquals(2, mock.orders().size)
+            assertTrue(again.requote)
+            vm.continueToWallet()
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            assertTrue(landed.requoted)
+            assertEquals(2, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a wallet that changes while Review waits is never handed the bytes`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet, autoContinue = false)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            awaitUntil { it is SwapState.Review }
+            wallet.connectedAs(null)
+            vm.continueToWallet()
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.WALLET_CHANGED, failed.reason)
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ---- Fees and rent from the bytes (security review, 2026-09-27) -------------------------------
+
+    @Test
+    fun `an order declaring a negative fee is refused before Review, whatever its fields add up to`() = runTest {
+        // The judges' counterexample: priority 1,000,000,000, signature -999,995,000, rent 0 adds
+        // up to the 5,000 lamports a sheet would show, while the transaction could charge a SOL.
+        orderResponse = orderResponse
+            .replace(""""signatureFeeLamports": 5000""", """"signatureFeeLamports": -999995000""")
+            .replace(""""prioritizationFeeLamports": 1450""", """"prioritizationFeeLamports": 1000000000""")
+            .replace(""""rentFeeLamports": 1488440""", """"rentFeeLamports": 0""")
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.GUARD_REFUSED, failed.reason)
+            assertEquals(TransactionGuard.Why.COSTS_MORE_THAN_SHOWN, failed.why)
+            assertNull("no figure from that order is ever drawn", failed.quote)
+            assertEquals(0, wallet.callCount)
+            assertTrue(mock.executes().isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a huge declared priority fee is not what the sheet adds, and cannot pass the ceiling`() = runTest {
+        // Positive and within a Long, but past the 0.01 SOL fee ceiling: refused, not summed.
+        orderResponse = orderResponse.replace(""""prioritizationFeeLamports": 1450""", """"prioritizationFeeLamports": 1000000000""")
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.GUARD_REFUSED, failed.reason)
+            assertEquals(TransactionGuard.Why.COSTS_MORE_THAN_SHOWN, failed.why)
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ---- Unpriced tokens: check whether a route exists (judges' review, 2026-09-27) ---------------
+
+    @Test
+    fun `checking availability on an unpriced token with an executable order reaches Review, marked unpriced`() = runTest {
+        val mock = jupiter()
+        val wallet = wallet()
+        // Jupiter has no price for the token at all.
+        val unpricedPrices = FakePriceRepository(Result.success(mapOf(KnownMints.WSOL to price(SOL_USD))))
+        val vm = viewModel(mock, wallet, prices = unpricedPrices, autoContinue = false)
+
+        vm.state.test {
+            awaitItem()
+            vm.checkAvailability(tslax)
+            val amount = awaitUntil { it is SwapState.Amount } as SwapState.Amount
+            assertTrue(amount.leg.unpriced)
+            vm.amountChanged("5")
+            awaitUntil { it is SwapState.Amount && it.input.isUsable }
+            vm.submit()
+            val review = awaitUntil { it is SwapState.Review } as SwapState.Review
+            assertTrue(review.leg.unpriced)
+            assertEquals(0, wallet.callCount)
+            vm.continueToWallet()
+            awaitUntil { it is SwapState.Landed }
+            assertEquals(1, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `checking availability with no route says so, and never opens the wallet`() = runTest {
+        orderResponse = """{"error":"No routes found"}"""
+        orderStatus = HttpStatusCode.BadRequest
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            vm.checkAvailability(tslax)
+            awaitUntil { it is SwapState.Amount }
+            vm.amountChanged("5")
+            awaitUntil { it is SwapState.Amount && it.input.isUsable }
+            vm.submit()
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.NO_ROUTE, failed.reason)
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `checking availability on an order with nothing to sign says no route`() = runTest {
+        orderResponse = orderResponse.replace(transactionField, """"transaction": null,""")
+        val mock = jupiter()
+        val wallet = wallet()
+        val vm = viewModel(mock, wallet)
+
+        vm.state.test {
+            awaitItem()
+            vm.checkAvailability(tslax)
+            awaitUntil { it is SwapState.Amount }
+            vm.amountChanged("5")
+            awaitUntil { it is SwapState.Amount && it.input.isUsable }
+            vm.submit()
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.NO_ROUTE, failed.reason)
+            assertEquals(0, wallet.callCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a priced token keeps its own words for a refused order`() = runTest {
+        orderResponse = """{"error":"No routes found"}"""
+        orderStatus = HttpStatusCode.BadRequest
+        val vm = viewModel(jupiter(), wallet())
+
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.QUOTE_REFUSED, failed.reason)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 

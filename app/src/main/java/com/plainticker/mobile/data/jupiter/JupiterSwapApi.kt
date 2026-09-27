@@ -46,6 +46,7 @@ class JupiterSwapApi(
      *
      * @throws SwapError.OrderRejected when Jupiter answers with an error body
      * @throws SwapError.Http on a non-2xx without a structured body
+     * @throws SwapError.InvalidOrder when a fee or rent field is negative or the three overflow
      */
     suspend fun order(inputMint: String, outputMint: String, amount: Long, taker: String? = null): SwapOrder =
         try {
@@ -80,7 +81,11 @@ class JupiterSwapApi(
         if (!response.status.isSuccess() || obj == null || errorDetail != null) {
             throw SwapError.fromErrorBody(response.status.value, text, SwapError.Stage.ORDER, json)
         }
-        return json.decodeFromJsonElement(SwapOrder.serializer(), obj)
+        val order = json.decodeFromJsonElement(SwapOrder.serializer(), obj)
+        // A negative fee or rent, or three that overflow when added, is not an order: the sheet
+        // sums them, and a negative one hides a large one (security review, 2026-09-27).
+        if (!order.feeFieldsValid) throw SwapError.InvalidOrder("fee or rent field negative or overflowing")
+        return order
     }
 
     /**

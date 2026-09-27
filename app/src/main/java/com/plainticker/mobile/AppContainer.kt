@@ -214,7 +214,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val jupiterSwapApi: JupiterSwapApi by lazy { JupiterSwapApi(httpClient) }
     override val rpcApi: SolanaRpcApi by lazy { SolanaRpcApi(httpClient) }
 
-    override val summaryRepository: SummaryRepository by lazy { PlainTickerSummaryRepository(plainTickerApi) { devicePassStore.code() } }
+    override val summaryRepository: SummaryRepository by lazy { PlainTickerSummaryRepository(plainTickerApi) { devicePassStore.codeOrNull() } }
     override val nextUpRepository: NextUpRepository by lazy { CachedNextUpRepository(nextUpApi, clock) }
     // cacheDir, not filesDir: the catalog is a copy of something the network can always serve
     // again, so the system is welcome to reclaim it. Losing it costs one refetch.
@@ -278,7 +278,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
     // One instance for both faces: every reader of the code and the one rekeyer that may change it
     // share its lock. The rekey's pending code and blocked flag live in this same file, which the
     // backup rules exclude whole.
-    private val sharedDevicePassStore: SharedPrefsDevicePassStore by lazy { SharedPrefsDevicePassStore(prefs) }
+    // Both codes are sealed at rest with a Keystore AES-GCM key of their own (security review,
+    // 2026-09-27; DevicePassStore, "Sealed at rest"), the same cipher the wallet session uses.
+    private val deviceCodeCipher = AesGcmSessionCipher { AesGcmSessionCipher.androidKeystoreKey(SharedPrefsDevicePassStore.KEY_ALIAS) }
+    private val sharedDevicePassStore: SharedPrefsDevicePassStore by lazy { SharedPrefsDevicePassStore(prefs, deviceCodeCipher) }
     override val devicePassStore: DevicePassStore get() = sharedDevicePassStore
 
     override val deviceRekeyer: DeviceRekeyer by lazy {
