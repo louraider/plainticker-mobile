@@ -134,6 +134,15 @@ object Fmt {
     }
 
     /**
+     * The same fixed [decimals] for a [BigDecimal], a count too large or too exact for a Double to
+     * be trusted with: "72,583.60", never "72,583.6" (device QA of 1.3.18, the minted supply).
+     */
+    fun decimal(value: BigDecimal, decimals: Int = 2): String {
+        val scaled = value.setScale(decimals, RoundingMode.HALF_UP)
+        return sign(scaled) + grouped(scaled)
+    }
+
+    /**
      * A number with up to [maxDecimals] decimals, six by default, trailing zeros trimmed, for
      * captions and stated scales: "0.5" (the gauge scale), "1", "1,000.25". Token quantities have
      * the same shape and their own name, [tokenAmount].

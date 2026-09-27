@@ -189,7 +189,11 @@
     <string name="detail_gauge_pool_unknown">Jupiter priced this token but did not report how much stands behind the price, so whether it follows the NYSE close cannot be checked.</string>
     <string name="detail_live_label">Live from the mint</string>
     <string name="detail_live_meta">slot %1$s · %2$s</string>
-    <string name="detail_live_a11y">Live from the mint, updated %1$s</string>
+    <!-- Spoken by the live bar's screen reader region (device QA of 1.3.18: "updated 451,097,516"
+         read a slot as a time). The age is the live window, not a ticking count, so the region is
+         not re-announced every second. -->
+    <string name="detail_live_a11y">Live from the mint, read at slot %1$s, less than a minute ago</string>
+    <string name="detail_live_a11y_older">Read from the mint at slot %1$s, more than a minute ago</string>
     <string name="detail_live_unread_label">Mint not read</string>
     <string name="detail_live_unread_meta">Nothing below this line is read from the chain</string>
     <string name="detail_price_absent">Jupiter has no price for this token yet</string>
@@ -277,13 +281,13 @@
     <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close.</string>
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
     <string name="detail_swap_out_button">Swap %1$s to USDC</string>
-    <string name="detail_cost_line">est. all-in cost %1$s · depth %2$s</string>
+    <string name="detail_cost_line">Est. all-in cost %1$s · depth %2$s</string>
     <string name="detail_liquidity_line">Depth %1$s behind this price</string>
     <!-- Below the liquidity floor, in the lists' own words (list_row_meta_thin), device QA of 1.3.17. -->
-    <string name="detail_cost_line_thin">est. all-in cost %1$s · depth %2$s, too thin</string>
+    <string name="detail_cost_line_thin">Est. all-in cost %1$s · depth %2$s, too thin</string>
     <!-- Jupiter answered and has no price. A missing price is not a missing route (judges' review,
          2026-09-27): the button asks the quote instead of staying off, and this says why. -->
-    <string name="detail_swap_no_price">Jupiter has no reference price for this token. A quote can still show whether it can be swapped right now.</string>
+    <string name="detail_swap_no_price">Jupiter has no reference price for this token. Connect a wallet to check whether Jupiter can route this token right now.</string>
     <string name="detail_swap_check_availability">Check swap availability</string>
     <string name="detail_analysis_pending">Analysis not yet available</string>
     <string name="detail_analysis_pending_action">Watch to be notified</string>
@@ -385,7 +389,7 @@
     <string name="receipt_sol_paid">Estimated network costs</string>
     <string name="receipt_sol_paid_rent">From the quote: fee, priority, and up to %1$s SOL deposit, returned if the account is closed</string>
     <string name="receipt_sol_paid_no_rent">From the quote: fee and priority</string>
-    <string name="portfolio_swap_route_cost">route cost %1$s</string>
+    <string name="portfolio_swap_route_cost">Route cost %1$s</string>
 
     <!-- Result: the finished attempt's own moment, above everything else on the sheet -->
     <string name="result_landed">Swap landed</string>
@@ -452,8 +456,9 @@
     <string name="portfolio_heading_recent_swaps">Recent swaps</string>
     <string name="portfolio_swap_row_received">to %1$s %2$s</string>
     <string name="portfolio_swap_row_received_unknown">to %1$s, amount not reported</string>
-    <string name="portfolio_swap_cost">est. all-in cost %1$s</string>
-    <string name="portfolio_swap_cost_unknown">est. all-in cost not reported</string>
+    <!-- Each opens its own line on a recent-swap row, so each starts with a capital (device QA of 1.3.18). -->
+    <string name="portfolio_swap_cost">Est. all-in cost %1$s</string>
+    <string name="portfolio_swap_cost_unknown">Est. all-in cost not reported</string>
     <!-- The cost, then when it landed on a line of its own (device QA of 1.3.16: joined on one
          line, "24 Sep 2026 19:17 UTC" broke before "UTC" beside the Solscan action). -->
     <string name="portfolio_swap_row_meta">%1$s\n%2$s</string>

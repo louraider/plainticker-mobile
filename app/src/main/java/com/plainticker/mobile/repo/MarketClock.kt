@@ -36,8 +36,21 @@ class MarketClock(
     private val clock: Clock,
     private val catalog: CatalogRepository,
     private val scope: CoroutineScope,
+    /**
+     * Until a catalog answers, read the exchange calendar instead of saying nothing. Stocks sets it
+     * (device QA of 1.3.18): its hours banner arrived with the live catalog seconds after the first
+     * frame and pushed the chips and the list down by its own height. The calendar is on the
+     * device, so the venue line can stand from the first frame; the status says it came from the
+     * calendar ([com.plainticker.mobile.data.xstocks.MarketSource.LOCAL_SCHEDULE]). The screen
+     * turns it off ([calendarUntilKnown]) once the catalog has settled with nothing: then nothing
+     * is known about the venue, and the old rule, no status at all, applies again.
+     */
+    localUntilKnown: Boolean = false,
     private val publish: (MarketStatus?) -> Unit,
 ) {
+    /** See the constructor's `localUntilKnown`. */
+    var calendarUntilKnown: Boolean = localUntilKnown
+
     /** The block every status is read from, and the asset to ask when it expires. */
     private var snapshot: Trading? = null
     private var refreshSymbol: String? = null
@@ -57,7 +70,7 @@ class MarketClock(
 
     /** A catalog arrived: keep its block (not a finished status) and publish a fresh reading. */
     fun setAssets(assets: List<XStockAsset>): MarketStatus? {
-        if (assets.isEmpty()) return status
+        if (assets.isEmpty()) return if (known) status else recompute()
         known = true
         snapshot = MarketHours.snapshotOf(assets)
         refreshSymbol = assets.firstOrNull { it.trading != null }?.symbol ?: assets.first().symbol
@@ -101,7 +114,10 @@ class MarketClock(
     }
 
     private fun recompute(): MarketStatus? {
-        if (!known) return null
+        if (!known) {
+            if (!calendarUntilKnown) return null.also { status = null }
+            return MarketHours.sessionAt(clock.nowMillis(), null).also { status = it }
+        }
         return MarketHours.sessionAt(clock.nowMillis(), snapshot).also { status = it }
     }
 

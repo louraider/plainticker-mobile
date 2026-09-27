@@ -16,6 +16,7 @@ import com.plainticker.mobile.ui.watchlist.watchRow
 import com.plainticker.mobile.ui.words
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
+import com.plainticker.mobile.ui.vote.hasVoted
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.DayOfWeek
@@ -365,6 +366,13 @@ fun nextUpLede(round: VoteRound?, zone: ZoneId): Copy? {
     val millis = closesAt.toEpochMilli()
     return words(R.string.today_next_up_lede, Fmt.weekday(millis, zone), Fmt.clock(millis, zone))
 }
+
+/**
+ * Whether Next up's leader is one this device already voted for in the open round: the shared
+ * rule ([com.plainticker.mobile.ui.vote.hasVoted] over [com.plainticker.mobile.ui.vote.votedTickers])
+ * every other surface that names a leader reads, so Today cannot offer what the Vote tab calls done.
+ */
+fun nextUpVoted(leader: TodayLeader, votedTickers: Set<String>): Boolean = votedTickers.hasVoted(leader.ticker)
 
 /**
  * An open round with nothing voted yet: "Round 3 is open. No votes yet: one vote decides it." The

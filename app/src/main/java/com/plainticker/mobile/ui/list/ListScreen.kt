@@ -45,7 +45,7 @@ import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberChip
-import com.plainticker.mobile.ui.components.SkeletonBar
+import com.plainticker.mobile.ui.components.SkeletonChip
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRow
@@ -53,7 +53,7 @@ import com.plainticker.mobile.ui.components.Banner
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-import com.plainticker.mobile.ui.components.SkeletonRows
+import com.plainticker.mobile.ui.components.SkeletonTickerRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.stocks.StocksFilter
 import com.plainticker.mobile.ui.stocks.matchesStocksFilter
@@ -222,6 +222,7 @@ internal fun ListContent(
                 activeFilter = activeFilter,
                 onFilterSelect = { tapped -> filterKey = if (activeFilter == tapped) null else tapped.toSaveKey() },
                 pricesPending = pricesPending,
+                cold = cold,
             )
         }
 
@@ -229,7 +230,7 @@ internal fun ListContent(
             cold -> item(key = "skeleton") {
                 Column(Modifier.fillMaxWidth()) {
                     AmberSectionHead(title = stringResource(R.string.list_heading_analyzed), colors = colors)
-                    SkeletonRows(count = SkeletonRowCount)
+                    SkeletonTickerRows(count = SkeletonRowCount, colors = colors)
                 }
             }
 
@@ -302,6 +303,9 @@ internal fun ListContent(
             // opens the same Detail an analyzed hit does. After this pass, search is the only
             // way to reach an uncovered ticker that is not one of the Next-up leaders.
             else -> {
+                // Clear of the search field's underline (device QA of 1.3.18: the first result sat
+                // on it when no chip row stood between them).
+                item(key = "search-gap") { Spacer(Modifier.height(SearchResultsGap)) }
                 itemsIndexed(state.analyzed, key = { _, row -> "a:" + row.ticker }) { index, row ->
                     AnalyzedRow(
                         row = row,
@@ -349,6 +353,11 @@ private fun StocksChrome(
     activeFilter: StocksFilter?,
     onFilterSelect: (StocksFilter) -> Unit,
     pricesPending: Boolean = false,
+    /**
+     * Nothing drawn yet: the chip row and the legend keep their places with outlines, so the rows
+     * landing do not push the list down by a chip row's height (device QA of 1.3.18).
+     */
+    cold: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth().background(colors.surfaceGround)) {
         Text(
@@ -383,9 +392,10 @@ private fun StocksChrome(
                 )
             }
         }
+        if (sectors.isEmpty() && cold) ColdFilterRow(colors = colors)
         // What the number on every analyzed row means, said once above the rows rather than
         // squeezed beside each one (judges' round 2: a bare "score 62" told a beginner nothing).
-        if (state.query.isBlank() && state.analyzed.isNotEmpty()) {
+        if (state.query.isBlank() && (state.analyzed.isNotEmpty() || cold)) {
             Text(
                 text = stringResource(R.string.list_row_score_legend),
                 style = AmberType.meta,
@@ -413,6 +423,21 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClearS
         action = if (query.isEmpty()) null else stringResource(R.string.action_clear),
         onAction = onClearSearch,
     )
+}
+
+/**
+ * The filter row's place while nothing is drawn yet: three chip outlines at the row's own height
+ * and padding, so the real chips replace them where they stand.
+ */
+@Composable
+private fun ColdFilterRow(colors: AmberColors) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ColdChipWidths.forEach { width -> SkeletonChip(width = width, colors = colors) }
+    }
 }
 
 /**
@@ -450,7 +475,7 @@ private fun StocksFilterRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (holdDeepPoolSlot && !showsDeepPoolChip(trackedCount, active)) {
-            SkeletonBar(width = DeepPoolSlotWidth, height = 32.dp, colors = colors)
+            SkeletonChip(width = DeepPoolSlotWidth, colors = colors)
         } else if (showsDeepPoolChip(trackedCount, active)) {
             AmberChip(
                 // Deep pool and Watched read as a label plus a count, not a sentence a plural has
@@ -683,26 +708,22 @@ private fun VotableAmberRow(
         modifier = modifier.background(colors.surfaceRaised),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // A voted row's quiet "Voted" is part of the row itself, pinned to its end edge, so the
+        // whole width opens Detail (device QA of 1.3.18: the tap area stopped where the word began
+        // and the "Voted" side did nothing).
         AmberTickerRow(
             ticker = ticker,
             company = company,
             figure = figure,
             context = context,
+            trailingNote = if (voted) stringResource(R.string.vote_voted_row) else null,
+            trailingActionAtEnd = voted,
             colors = colors,
             onClick = onClick,
             onClickLabel = onClickLabel,
             modifier = Modifier.weight(1f),
         )
-        if (voted) {
-            Text(
-                text = stringResource(R.string.vote_voted_row),
-                style = AmberType.context,
-                color = colors.textTertiary(AmberSurface.RAISED),
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            )
-        } else if (onVote != null) {
+        if (!voted && onVote != null) {
             TextAction(
                 label = stringResource(R.string.vote_action_row),
                 onClick = onVote,
@@ -858,6 +879,12 @@ internal val RowState.label: Int
     }
 
 private val SearchTopGap = 22.dp
+
+/** Between the search field and the first result. */
+private val SearchResultsGap = 12.dp
+
+/** The cold filter row's three outlines: about Deep pool, Watched and one sector wide. */
+private val ColdChipWidths = listOf(112.dp, 104.dp, 180.dp)
 
 /** Vertical centering for an EmptyLine's sentence; unrelated to AmberSectionHead's own rhythm. */
 private val EmptyLineGap = 30.dp

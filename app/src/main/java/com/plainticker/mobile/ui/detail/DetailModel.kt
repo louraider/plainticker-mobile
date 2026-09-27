@@ -414,6 +414,7 @@ val DetailUiState.liveLine: LiveLine?
         // forwarder's X-Rpc-Age says how long it sat in its cache (Mert, judges' review 2026-09-27).
         val observedAt = read.observedAtMillis
         val ageMillis = (nowMillis - observedAt).coerceAtLeast(0L)
+        val live = ageMillis <= LIVE_WINDOW_MILLIS
         return LiveLine(
             label = words(R.string.detail_live_label),
             meta = words(
@@ -421,8 +422,10 @@ val DetailUiState.liveLine: LiveLine?
                 slot,
                 Fmt.relativeAgo(Instant.ofEpochMilli(observedAt), Instant.ofEpochMilli(nowMillis)),
             ),
-            live = ageMillis <= LIVE_WINDOW_MILLIS,
-            announcement = words(R.string.detail_live_a11y, slot),
+            live = live,
+            // "At slot", so the number is never heard as a time, and the age as the live window
+            // rather than the ticking seconds, so the polite region speaks once per change.
+            announcement = words(if (live) R.string.detail_live_a11y else R.string.detail_live_a11y_older, slot),
         )
     }
 
@@ -486,11 +489,12 @@ private fun DetailUiState.supplyCell(): TrustFact {
     val label = words(R.string.detail_fact_supply)
     val read = chain.valueOrNull ?: return unreadCell(label).copy(span = 2)
     val onChain = read.supplyShown()
-    val value = raw(Fmt.tokenAmount(onChain, maxDecimals = 2))
+    // Fixed two decimals, so a figure ending in zero keeps it (72,583.60, not 72,583.6).
+    val value = raw(Fmt.decimal(onChain, 2))
     val reported = reserves.valueOrNull
         ?: return TrustFact(label = label, value = value, sub = words(R.string.detail_fact_supply_no_report_sub), span = 2)
     val issuer = java.math.BigDecimal.valueOf(reported.tokensInCirculation)
-    val issuerText = Fmt.tokenAmount(issuer, maxDecimals = 2)
+    val issuerText = Fmt.decimal(issuer, 2)
     if (issuer.signum() <= 0) {
         return TrustFact(label = label, value = value, sub = words(R.string.detail_fact_supply_no_report_sub), span = 2)
     }
@@ -815,6 +819,15 @@ fun DetailUiState.costLine(allInCostPct: Double?): Copy? {
 }
 
 /**
+ * The swap button steps down to the secondary (outline) style when the pool is below the
+ * liquidity floor (device QA of 1.3.18: ABBVx on $2 of depth kept the full amber button). It stays
+ * a button and stays tappable: a thin pool is a reason to look twice, not a refusal, and the
+ * "too thin" line under it ([costLine]) says why.
+ */
+val DetailUiState.swapQuiet: Boolean
+    get() = tracking is TrackingQuality.Thin
+
+/**
  * True when Jupiter answered about this token and has no reference price for it (device QA of
  * 1.3.17: JEFx and AALx). A missing price is not a missing route (judges' review, 2026-09-27), so
  * the button is not switched off: it reads "Check swap availability" and opens the same machine,
@@ -914,9 +927,15 @@ val DetailUiState.nextStepsBlock: NextStepsBlock?
         val steps = payload.nextSteps ?: return null
         val titles = steps.titlesEn?.takeIf { it.isNotEmpty() } ?: return null
         val full = payload.pro && steps.stepsEn != null
+        // What the titles are sentence-cased against: the names this ticker's own prose writes with
+        // a capital, so "Jefferies" and "Management's Discussion" keep theirs (ReadText.sentenceCase).
+        val evidence = listOfNotNull(
+            payload.narrative?.fullEn ?: payload.narrative?.excerptEn,
+            steps.stepsEn?.joinToString(" ") { it.body },
+        ).joinToString(" ")
         val items = titles.mapIndexed { index, title ->
             NextStepRow(
-                title = ReadText.normalize(title, readYear),
+                title = ReadText.sentenceCase(ReadText.normalize(title, readYear), evidence, listOfNotNull(heroCompany)),
                 detail = if (full) steps.stepsEn.getOrNull(index)?.body?.let { ReadText.normalize(it, readYear) } else null,
             )
         }

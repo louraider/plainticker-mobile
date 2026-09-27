@@ -232,6 +232,7 @@ class DetailViewModel(
         // them children of this refresh so a second refresh cancels them.
         coroutineScope {
             launch { loadQuote(mint) }
+            launch { followLatest(mint) }
             launch { loadReserves(symbol) }
             launch { loadChainThenSplit(mint, symbol) }
         }
@@ -260,9 +261,24 @@ class DetailViewModel(
             it.copy(
                 quote = entry.fold(
                     onSuccess = { priced -> if (priced != null) Piece.Ready(priced) else Piece.Absent },
-                    onFailure = { Piece.Failed },
+                    // A quote another screen already holds is still this token's price: a failed
+                    // ask does not take it off this screen.
+                    onFailure = { prices.latest.value[mint]?.let { held -> Piece.Ready(held) } ?: Piece.Failed },
                 ),
             )
+        }
+    }
+
+    /**
+     * The same quote every other screen draws (PriceRepository.latest, device QA of 1.3.18): a
+     * pull to refresh on Today or Stocks while this Detail is open, or behind it on the stack,
+     * moves this figure too, so the Detail a row opens never keeps the quote it was opened with.
+     * A child of the refresh, so a second refresh replaces it.
+     */
+    private suspend fun followLatest(mint: String) {
+        prices.latest.map { it[mint] }.distinctUntilChanged().collect { entry ->
+            if (entry == null) return@collect
+            _state.update { if (it.quote.valueOrNull == entry) it else it.copy(quote = Piece.Ready(entry)) }
         }
     }
 

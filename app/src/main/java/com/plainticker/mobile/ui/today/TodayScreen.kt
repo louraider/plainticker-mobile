@@ -59,7 +59,7 @@ import com.plainticker.mobile.ui.components.AmberSheet
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.Banner
-import com.plainticker.mobile.ui.components.SkeletonRows
+import com.plainticker.mobile.ui.components.SkeletonTickerRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.rememberMotionEnabled
@@ -68,6 +68,7 @@ import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
+import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistUiState
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
 import com.plainticker.mobile.ui.watchlist.bannerText
@@ -75,6 +76,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Today, direction A, "One line, then yours" (the founder's pick of three, 2026-09-24; the
@@ -132,8 +134,17 @@ fun TodayScreen(
     /** The digest line's "Read it": the digest screen under You. Null draws the line without it. */
     onOpenDigest: (() -> Unit)? = null,
     header: @Composable () -> Unit = {},
+    /**
+     * The home entry's own [VoteViewModel], for the one "already voted this round" rule
+     * ([VoteViewModel.votedTickers], VotedInRound.kt) Next up's row reads, like every other surface
+     * that names a vote leader (device QA of 1.3.18: AALx read "Voted" on the Vote tab and Stocks
+     * and nothing here). Null reads as nothing voted.
+     */
+    voteViewModel: VoteViewModel? = null,
 ) {
     val state by watchlistViewModel.state.collectAsStateWithLifecycle()
+    val votedFlow = remember(voteViewModel) { voteViewModel?.votedTickers ?: MutableStateFlow(emptySet<String>()) }
+    val voted by votedFlow.collectAsStateWithLifecycle()
     var hoursOpen by rememberSaveable { mutableStateOf(false) }
     val zone = remember { ZoneId.systemDefault() }
 
@@ -165,6 +176,7 @@ fun TodayScreen(
         onRunCheck = onRunCheck,
         modifier = modifier,
         header = header,
+        votedTickers = voted,
     )
 
     if (hoursOpen) {
@@ -192,6 +204,8 @@ internal fun TodayContent(
      * launch-time quote). Asks every source again through the shared caches; null draws no pull.
      */
     onRefresh: (() -> Unit)? = null,
+    /** Tickers this device already voted for in the open round ([VoteViewModel.votedTickers]). */
+    votedTickers: Set<String> = emptySet(),
 ) {
     val colors = defaultAmberColors()
     val pullState = rememberPullToRefreshState()
@@ -226,6 +240,7 @@ internal fun TodayContent(
             onRunCheck = onRunCheck,
             colors = colors,
             header = header,
+            votedTickers = votedTickers,
         )
     }
 }
@@ -245,6 +260,7 @@ private fun TodayList(
     onRunCheck: (() -> Unit)?,
     colors: AmberColors,
     header: @Composable () -> Unit,
+    votedTickers: Set<String> = emptySet(),
 ) {
     val firstOpen = state.isEmpty
     // The reader's own calendar day, off the same nowMillis/zone every other reader-time sentence
@@ -291,7 +307,7 @@ private fun TodayList(
             item(key = "closed-movers") { TodayClosedBlock(state = state, onOpenDetail = onOpenDetail, colors = colors) }
         }
         if (!firstOpen) {
-            item(key = "next-up") { TodayNextUpBlock(state = state, zone = zone, onOpenVote = onOpenVote) }
+            item(key = "next-up") { TodayNextUpBlock(state = state, zone = zone, onOpenVote = onOpenVote, votedTickers = votedTickers) }
         }
         // Debug builds only, behind the same gate as the component gallery.
         onRunCheck?.let { run ->
@@ -368,7 +384,7 @@ private fun TodayWatchedBlock(state: WatchlistUiState, onOpenDetail: (String) ->
             colors = colors,
         )
         if (state.isCold) {
-            SkeletonRows(count = minOf(state.watched, ColdRowCap), colors = colors)
+            SkeletonTickerRows(count = minOf(state.watched, ColdRowCap), colors = colors)
         } else {
             AmberTickerRowGroup(colors = colors) {
                 state.rows.forEach { ticker ->
@@ -474,7 +490,9 @@ private fun TodayReportsBlock(
             colors = colors,
         )
         if (state.todayLoading) {
-            SkeletonRows(count = ReportsPreviewCount, colors = colors)
+            // Inside the card the rows will fill, so they replace the skeleton where it stands
+            // (device QA of 1.3.18: bare bars under the heading, then a card).
+            SkeletonTickerRows(count = ReportsPreviewCount, colors = colors)
         } else if (!empty) {
             AmberTickerRowGroup(colors = colors) {
                 thisWeek.take(ReportsPreviewCount).forEach { row ->
@@ -547,7 +565,12 @@ private fun TodayClosedBlock(state: WatchlistUiState, onOpenDetail: (String) -> 
  * leader, where there is nothing true to say.
  */
 @Composable
-private fun TodayNextUpBlock(state: WatchlistUiState, zone: ZoneId, onOpenVote: (() -> Unit)?) {
+private fun TodayNextUpBlock(
+    state: WatchlistUiState,
+    zone: ZoneId,
+    onOpenVote: (() -> Unit)?,
+    votedTickers: Set<String> = emptySet(),
+) {
     val leader = state.nextUpLeader
     val round = state.voteRound
     if (leader == null && round == null) return
@@ -564,6 +587,9 @@ private fun TodayNextUpBlock(state: WatchlistUiState, zone: ZoneId, onOpenVote: 
                     company = leader.company,
                     figure = leader.weight.text(),
                     context = leader.votersContext.text(),
+                    // The shared round rule, the same quiet word the Vote tab and Stocks draw.
+                    trailingNote = if (nextUpVoted(leader, votedTickers)) stringResource(R.string.vote_voted_row) else null,
+                    trailingActionAtEnd = true,
                     onClick = onOpenVote,
                     onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
                 )

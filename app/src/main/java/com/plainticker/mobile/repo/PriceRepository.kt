@@ -4,6 +4,10 @@ import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.data.jupiter.JupiterPriceApi
 import com.plainticker.mobile.data.jupiter.PriceEntry
 import com.plainticker.mobile.data.jupiter.PriceFetch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -25,9 +29,29 @@ interface PriceRepository {
      */
     suspend fun pricesFirst(mints: List<String>, limit: Int = NO_LIMIT): PriceFetch
 
+    /**
+     * The newest quote this app holds for each mint, whichever screen asked for it: the one price
+     * source Today, Stocks and Detail all observe (device QA of 1.3.18).
+     *
+     * **Why a flow and not only the cache.** Each screen used to copy the quotes it fetched into
+     * its own rows and keep them there. Today's pull to refresh read METAx at +0.10% while Stocks
+     * and Detail kept the +0.30% they had copied earlier; a Stocks refresh then left Today on the
+     * older figure. The cache was shared, the copies were not. Every fetch now lands here as well,
+     * and every screen redraws the mints it shows from it, so one refresh anywhere moves every
+     * screen at once and no screen keeps a private stale copy.
+     *
+     * A mint Jupiter answered about without a price is taken out; a mint whose request never landed
+     * keeps what it had. The default is a flow that never moves, for a test double that does not
+     * care.
+     */
+    val latest: StateFlow<Map<String, PriceEntry>> get() = NO_QUOTES
+
     companion object {
         /** Price every mint given, with no leading window. */
         const val NO_LIMIT = -1
+
+        /** A [latest] that never holds anything. */
+        val NO_QUOTES: StateFlow<Map<String, PriceEntry>> = MutableStateFlow<Map<String, PriceEntry>>(emptyMap()).asStateFlow()
     }
 }
 
@@ -60,6 +84,9 @@ class CachedPriceRepository(
 
     private val mutex = Mutex()
     private val cache = HashMap<String, Cached>()
+    private val _latest = MutableStateFlow<Map<String, PriceEntry>>(emptyMap())
+
+    override val latest: StateFlow<Map<String, PriceEntry>> = _latest.asStateFlow()
 
     override suspend fun prices(mints: Collection<String>): Map<String, PriceEntry> {
         val fetch = pricesFirst(mints.toList(), PriceRepository.NO_LIMIT)
@@ -89,6 +116,11 @@ class CachedPriceRepository(
                     if (mint in fetched.unfetched) continue
                     cache[mint] = Cached(fetched.priced[mint], at)
                 }
+            }
+            // Every screen observes this: what one screen fetched, all of them draw.
+            val answeredWithoutPrice = missing.toSet() - fetched.unfetched - fetched.priced.keys
+            if (fetched.priced.isNotEmpty() || answeredWithoutPrice.isNotEmpty()) {
+                _latest.update { current -> (current - answeredWithoutPrice) + fetched.priced }
             }
         }
 

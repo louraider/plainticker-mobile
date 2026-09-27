@@ -379,9 +379,9 @@ class DetailModelTest {
         // 25,924 tokens reported; 25,930 on chain is within a tenth of a percent.
         val cell = served(chain = chainWithSupply(2_593_000_000_000L)).trustFacts
             .first { label(it.label) == R.string.detail_fact_supply }
-        assertEquals("25,930", raw(cell.value))
+        assertEquals("25,930.00", raw(cell.value))
         assertEquals(R.string.detail_fact_supply_matches, label(cell.sub))
-        assertEquals(listOf("25,924"), args(cell.sub))
+        assertEquals(listOf("25,924.00"), args(cell.sub))
         assertTrue(cell.subMono)
     }
 
@@ -406,9 +406,9 @@ class DetailModelTest {
         // A ten-for-one split: raw supply 2,592.4 tokens, shown as 25,924, which matches the report.
         val cell = served(chain = chainWithSupply(259_240_000_000L, multiplier = 10.0)).trustFacts
             .first { label(it.label) == R.string.detail_fact_supply }
-        assertEquals("25,924", raw(cell.value))
+        assertEquals("25,924.00", raw(cell.value))
         assertEquals(R.string.detail_fact_supply_matches, label(cell.sub))
-        assertEquals(listOf("25,924"), args(cell.sub))
+        assertEquals(listOf("25,924.00"), args(cell.sub))
     }
 
     @Test
@@ -971,6 +971,38 @@ class DetailModelTest {
         val quoted = state.costLine(0.09)
         assertEquals(R.string.detail_cost_line, label(quoted))
         assertEquals(listOf("0.09%", "\$1.3M"), args(quoted))
+    }
+
+    /**
+     * Device QA of 1.3.18: ABBVx on $2 of depth kept the full amber Swap. Below the floor the button
+     * steps down to the outline style and stays a button; above it, the amber one stands.
+     */
+    @Test
+    fun `a pool below the floor quiets the swap button, a deep one keeps the primary`() {
+        val thin = served(quote = Piece.Ready(PriceEntry(usdPrice = 266.03, liquidity = 2.6, stockData = StockData(price = 264.34))))
+        assertTrue(thin.swapQuiet)
+        assertNotNull("still labelled, so still a button", thin.swapButtonLabel)
+        assertFalse(served().swapQuiet)
+        assertFalse("no price is not a thin pool", served(quote = Piece.Absent).swapQuiet)
+    }
+
+    @Test
+    fun `the minted figure keeps two decimals, trailing zero included`() {
+        // 72,583.60 tokens on chain: "72,583.6" dropped the zero (device QA of 1.3.18).
+        val cell = served(chain = chainWithSupply(7_258_360_000_000L)).trustFacts
+            .first { label(it.label) == R.string.detail_fact_supply }
+        assertEquals("72,583.60", raw(cell.value))
+    }
+
+    @Test
+    fun `the live bar is spoken as a slot, with an age that does not tick`() {
+        val live = served().liveLine!!
+        assertEquals(R.string.detail_live_a11y, label(live.announcement))
+        val stale = served(
+            chain = Piece.Ready(ChainRead(mintFacts(), slot = 446_503_662L, readAtMillis = now - LIVE_WINDOW_MILLIS - 1)),
+        ).liveLine!!
+        assertEquals(R.string.detail_live_a11y_older, label(stale.announcement))
+        assertEquals(listOf("446,503,662"), args(stale.announcement))
     }
 
     /**

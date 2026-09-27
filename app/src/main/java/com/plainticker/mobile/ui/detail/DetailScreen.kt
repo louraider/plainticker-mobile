@@ -894,11 +894,17 @@ private fun SwapBlock(
     ) {
         // The swap flow itself (its sheet, its receipt) is untouched: only this trigger button
         // is restyled, to Amber's own primary action, one of the six named components.
-        AmberPrimaryAction(
-            label = label.text(),
-            onClick = onSwap,
-            enabled = state.mint != null && !swap.isBusy,
-        )
+        val enabled = state.mint != null && !swap.isBusy
+        if (enabled && state.swapQuiet) {
+            // A pool below the floor: still a button, one step quieter, with "too thin" under it.
+            AmberSecondaryAction(label = label.text(), onClick = onSwap)
+        } else {
+            AmberPrimaryAction(
+                label = label.text(),
+                onClick = onSwap,
+                enabled = enabled,
+            )
+        }
         state.swapUnpricedNote?.let {
             Text(text = it.text(), style = AmberType.context, color = colors.textSecondary)
         }

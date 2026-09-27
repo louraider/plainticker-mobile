@@ -19,6 +19,18 @@ import java.time.LocalDate
  *    left alone.
  * 2. **An ISO date** ("2026-10-23") becomes the app's own "23 Oct", with the year only when it is
  *    not [currentYear]. A string that is not a real calendar day is left as it was.
+ * 3. **References to what this app does not have** (device QA of 1.3.18): the web page numbers its
+ *    sections and draws a same-sector table; the app has neither. "(see section 06)" and "in
+ *    section 06" are dropped, and "same-sector table" reads "sector comparison".
+ *
+ * A pair of dashes is found across an abbreviation: "AbbVie Inc. beat" is one sentence, so a stop
+ * counts as a sentence end only before a capital or the end of the text (device QA of 1.3.18: the
+ * pair around "AbbVie Inc. beat estimates in 6 of 6 recent quarters" was split at "Inc." and read
+ * "quarters: and the Forward-axis"). A colon an older pass already put before a joining word
+ * ("quarters: and") is put back to a comma.
+ *
+ * [sentenceCase] is a separate pass for the step titles of "What to check next", which some
+ * answers carry in Title Case and others in sentence case.
  *
  * Pure: no Android, no clock; the caller passes the year.
  */
@@ -41,8 +53,88 @@ object ReadText {
         "especially", "including", "even", "rather", "plus",
     )
 
-    /** [text] with its punctuation dashes and ISO dates rewritten; see the class doc. */
-    fun normalize(text: String, currentYear: Int): String = dates(dashes(text), currentYear)
+    /** [text] with its punctuation dashes, ISO dates and references rewritten; see the class doc. */
+    fun normalize(text: String, currentYear: Int): String =
+        references(colonsBeforeJoins(dates(dashes(text), currentYear)))
+
+    /** A colon straight before a joining word: always a dash turned the wrong way, so a comma. */
+    private val colonBeforeJoin = Regex(":\\s+(and|but|or|nor|yet|while|though|although)\\b")
+
+    private fun colonsBeforeJoins(text: String): String = text.replace(colonBeforeJoin) { ", " + it.groupValues[1] }
+
+    /** "(see section 06)", "(section 6)", "(see the same-sector table in section 06)". */
+    private val sectionAside = Regex("\\s*\\((?:see |in )?(?:the )?[^()]*?section\\s+\\d+[^()]*\\)", RegexOption.IGNORE_CASE)
+
+    /** " in section 06", ", see section 06" inside a sentence. */
+    private val sectionClause = Regex(",?\\s+(?:in|see|from)\\s+section\\s+\\d+\\b", RegexOption.IGNORE_CASE)
+
+    /** "same-sector table": a table the web page draws beside the read and the app does not. */
+    private val sectorTable = Regex("\\b[Ss]ame[- ]sector table\\b")
+
+    private fun references(text: String): String = text
+        .replace(sectionAside, "")
+        .replace(sectionClause, "")
+        .replace(sectorTable) { if (it.value.first().isUpperCase()) "Sector comparison" else "sector comparison" }
+
+    // ---- Sentence case for step titles ---------------------------------------------------------
+
+    private val properAlways = setOf(
+        "January", "February", "March", "April", "May", "June", "July", "August", "September",
+        "October", "November", "December", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+        "Saturday", "Sunday",
+    )
+
+    /** A plain capitalised word: one capital, then lower case, with an optional possessive. */
+    private val capitalised = Regex("^([A-Z][a-z]+)(?:'s)?$")
+    private val lowerWord = Regex("^[a-z]+(?:'s)?$")
+
+    /**
+     * [title] in sentence case when it arrived in Title Case ("Compare Jefferies Against Sector Peers
+     * by ROE and Operating Margin" reads "Compare Jefferies against sector peers by ROE and operating
+     * margin"), unchanged when it is already in sentence case (device QA of 1.3.18: one answer's
+     * headings were one way and the next answer's the other).
+     *
+     * Only a plain capitalised word is lowered: an acronym (ROE, EPS), a mixed word (F-Score, 10-K),
+     * the first word, a month or weekday, a word of one of [names] (the company), and a word
+     * [evidence] writes with a capital in the middle of a sentence ("Management's Discussion") keep
+     * their capitals. A title is judged to
+     * be in Title Case when more of its longer words (four letters and up, after the first) are
+     * capitalised than not, so a sentence-case title naming a company is never lowered.
+     */
+    fun sentenceCase(title: String, evidence: String = "", names: List<String> = emptyList()): String {
+        val words = title.split(' ')
+        if (words.size < 2) return title
+        val cores = words.map { it.trim { c -> !c.isLetterOrDigit() && c != '\'' && c != '-' } }
+        val longer = cores.drop(1).filter { it.length >= 4 && it.all { c -> c.isLetter() || c == '\'' } }
+        val caps = longer.count { capitalised.matches(it) }
+        val lower = longer.count { lowerWord.matches(it) }
+        if (caps <= lower) return title
+        val keep = properNouns(evidence) + names.flatMap { it.split(' ') }.mapNotNull { capitalised.matchEntire(it.trim(',', '.'))?.groupValues?.get(1) }
+        return words.mapIndexed { index, word ->
+            val core = cores[index]
+            val stem = capitalised.matchEntire(core)?.groupValues?.get(1)
+            when {
+                index == 0 || stem == null -> word
+                stem in properAlways || stem in keep -> word
+                else -> word.replaceFirst(core, core.replaceFirstChar { it.lowercaseChar() })
+            }
+        }.joinToString(" ")
+    }
+
+    /** The capitalised words [evidence] writes in the middle of a sentence: names, not openings. */
+    private fun properNouns(evidence: String): Set<String> {
+        if (evidence.isBlank()) return emptySet()
+        val out = HashSet<String>()
+        var previous = ""
+        for (token in evidence.split(Regex("\\s+"))) {
+            val core = token.trim { c -> !c.isLetterOrDigit() && c != '\'' }
+            val stem = capitalised.matchEntire(core)?.groupValues?.get(1)
+            val opensSentence = previous.isEmpty() || previous.last() in ".!?:"
+            if (stem != null && !opensSentence) out += stem
+            if (token.isNotEmpty()) previous = token
+        }
+        return out
+    }
 
     private fun dashes(text: String): String {
         val ranged = text.replace(range, " to ")
@@ -68,8 +160,11 @@ object ReadText {
         return out.toString()
     }
 
-    /** A sentence end: a stop followed by a space or the end, so "8.6%" is not one. */
-    private val sentenceEnd = Regex("[.!?](?=\\s|$)")
+    /**
+     * A sentence end: a stop followed by a space and a capital, or by the end of the text. So
+     * "8.6%" is not one, and neither is the stop in "AbbVie Inc. beat" or "Op. margin".
+     */
+    private val sentenceEnd = Regex("[.!?](?=\\s+[A-Z]|\\s*$)")
 
     /** True when another dash sits in the same sentence as the one at [index]: the two frame an aside. */
     private fun pairedInSentence(text: String, matches: List<MatchResult>, index: Int): Boolean {

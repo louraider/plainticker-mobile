@@ -150,6 +150,31 @@ class DetailReadModelTest {
         assertEquals("When Apple reports on 28 Oct, track revenue.", step.detail)
     }
 
+    /** Device QA of 1.3.18: JEFx's step titles arrived in Title Case, ABBVx's in sentence case. */
+    @Test
+    fun `title-cased step titles read in sentence case, the names the prose uses kept`() {
+        val payload = TickerReadResponse(
+            ticker = "JEF",
+            pro = true,
+            narrative = NarrativeRead(excerptEn = "x", fullEn = "EPS growth puts Jefferies at the bottom of the Financials sector."),
+            nextSteps = NextStepsRead(
+                titlesEn = listOf(
+                    "Watch the September 2026 Earnings for ROE Recovery",
+                    "Compare Jefferies Against Sector Peers by ROE and Operating Margin",
+                ),
+                stepsEn = listOf(
+                    NextStepDetail("a", "When Jefferies reports, track ROE."),
+                    NextStepDetail("b", "In the same-sector table (see section 06), pick two peers."),
+                ),
+            ),
+        )
+        val s = DetailUiState(ticker = "JEF", read = ReadState.Ready(payload))
+        val items = s.nextStepsBlock!!.items
+        assertEquals("Watch the September 2026 earnings for ROE recovery", items[0].title)
+        assertEquals("Compare Jefferies against sector peers by ROE and operating margin", items[1].title)
+        assertEquals("In the sector comparison, pick two peers.", items[1].detail)
+    }
+
     /** `pro: true` but no full field sent yet: the excerpt still stands rather than a blank block. */
     @Test
     fun `pro true with no full field yet falls back to the excerpt, not to nothing`() {

@@ -93,4 +93,29 @@ class ListSearchScreenTest {
     fun `strings xml carries the trailing chapter's heading`() {
         assertEquals("No sector", ShippedCopy.strings["list_heading_no_sector"])
     }
+
+    // ---- Device QA of 1.3.18 --------------------------------------------------------------------
+
+    @Test
+    fun `a search result stands clear of the field's underline`() {
+        val gap = listScreen.indexOf("Spacer(Modifier.height(SearchResultsGap))")
+        val flat = listScreen.indexOf("isLast = index == state.analyzed.lastIndex && state.withoutAnalysis.isEmpty()")
+        assertTrue("the gap leads the flat search list", gap in 0 until flat)
+    }
+
+    @Test
+    fun `a voted row is one tap target, the Voted word included`() {
+        val row = body(listScreen, "private fun VotableAmberRow(")
+        assertTrue("Voted is drawn by the row itself", "trailingNote = if (voted) stringResource(R.string.vote_voted_row) else null" in row)
+        assertTrue("pinned to the end edge", "trailingActionAtEnd = voted" in row)
+        assertEquals("no second, untappable Voted beside the row", 1, row.split("R.string.vote_voted_row").size - 1)
+    }
+
+    @Test
+    fun `the cold chip slots are outlines, never filled empty boxes`() {
+        assertTrue("SkeletonChip(width = DeepPoolSlotWidth" in listScreen)
+        assertTrue("the filter row holds its place while cold", "if (sectors.isEmpty() && cold) ColdFilterRow(" in listScreen)
+        assertTrue("the cold list sits in the card its rows will fill", "SkeletonTickerRows(count = SkeletonRowCount" in listScreen)
+        assertTrue("no filled bar stands for a chip", "SkeletonBar(" !in listScreen)
+    }
 }

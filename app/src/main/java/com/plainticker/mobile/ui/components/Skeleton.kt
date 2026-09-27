@@ -13,10 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -44,13 +48,66 @@ fun SkeletonBar(
     width: Dp = 120.dp,
     height: Dp = 14.dp,
     colors: AmberColors = defaultAmberColors(),
+    /** The bar's own fill; one step up ([AmberColors.surfaceHigh]) inside a raised row. */
+    fill: Color = colors.surfaceRaised,
 ) {
     Box(
         modifier
             .size(width = width, height = height)
-            .background(colors.surfaceRaised)
+            .background(fill)
             .then(if (colors === AmberLightColors) Modifier.border(1.dp, colors.border) else Modifier),
     )
+}
+
+/**
+ * [count] placeholder rows drawn the way the rows they stand for are drawn: inside the 16dp tonal
+ * group ([AmberTickerRowGroup]), each on its own raised surface, so the loaded rows replace them in
+ * place instead of a bare column of bars turning into a card (device QA of 1.3.18, Today's "Reports
+ * next week" and the Stocks list). Announced once as "Loading".
+ */
+@Composable
+fun SkeletonTickerRows(
+    count: Int,
+    modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
+) {
+    AmberTickerRowGroup(modifier = modifier.semantics { contentDescription = "Loading" }, colors = colors) {
+        repeat(count) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.surfaceRaised)
+                    .height(64.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SkeletonBar(width = 96.dp, height = 16.dp, colors = colors, fill = colors.surfaceHigh)
+                SkeletonBar(width = 180.dp, height = 12.dp, colors = colors, fill = colors.surfaceHigh)
+            }
+        }
+    }
+}
+
+/**
+ * A chip's slot held by its outline alone (device QA of 1.3.18: the Deep pool placeholder was a
+ * filled box with nothing in it, which read as an empty chip rather than one on its way). The same
+ * 32dp height and 8dp corner [AmberChip] draws, inside the same 48dp touch row, so the real chip
+ * replaces it without moving anything. Not announced: it is not a control.
+ */
+@Composable
+fun SkeletonChip(
+    width: Dp,
+    modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
+) {
+    Box(modifier.height(48.dp).width(width), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .border(1.dp, colors.border, RoundedCornerShape(8.dp)),
+        )
+    }
 }
 
 /** [count] placeholder list rows at 64dp with dividers; announced once as "Loading". */

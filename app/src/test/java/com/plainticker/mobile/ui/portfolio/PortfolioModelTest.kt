@@ -172,13 +172,24 @@ class PortfolioModelTest {
 
     @Test
     fun `a swap row is what was paid, what came back, the cost paid and when`() {
-        val row = swapRow(receipt())
+        val row = swapRow(receipt(), java.time.ZoneOffset.UTC)
 
         assertEquals(Copy.Words(R.string.portfolio_row_quantity, listOf("5", "USDC")), row.paid)
         assertEquals(Copy.Words(R.string.portfolio_swap_row_received, listOf("0.01364", "TSLAx")), row.received)
         // A receipt with no SOL priced in has the route's cost, and says route (judges' review, 2026-09-27).
         assertEquals(Copy.Words(R.string.portfolio_swap_route_cost, listOf("0.09%")), row.cost)
-        assertEquals(Copy.Raw("10 Sep 2026 12:57 UTC"), row.landed)
+        assertEquals(Copy.Raw("10 Sep 2026 12:57"), row.landed)
+    }
+
+    /** Device QA of 1.3.18: the recent swaps were the last rows still printing UTC. */
+    @Test
+    fun `a swap row and a recorded holding read in the reader's own time`() {
+        val kyiv = java.time.ZoneId.of("Europe/Kyiv")
+        assertEquals(Copy.Raw("10 Sep 2026 15:57"), swapRow(receipt(), kyiv).landed)
+        val holding = recordedHoldings(listOf(receipt())).single()
+        val meta = recordedRow(holding, kyiv).meta as Copy.Words
+        assertEquals(listOf("10 Sep 2026 15:57"), meta.args)
+        assertTrue("no UTC label on a local time", meta.args.none { "UTC" in it })
     }
 
     @Test
