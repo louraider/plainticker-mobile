@@ -19,15 +19,20 @@ import io.ktor.http.HttpStatusCode
 import java.io.File
 import java.io.IOException
 import java.util.Base64
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -134,7 +139,7 @@ class AccountViewModelTest {
 
     private fun machine(
         api: MockApi = mockApi { respondJson(okBody) },
-        store: InMemoryAccountStore = InMemoryAccountStore(),
+        store: AccountStore = InMemoryAccountStore(),
         log: AccountDebugLog = RecordingLog(),
         clock: Clock = FakeClock(),
         accountApi: AccountApi = AccountApi(api.client),
@@ -583,6 +588,220 @@ class AccountViewModelTest {
             assertEquals(AccountUiState.SignedIn(stored), vm.state.value)
             assertTrue(store.saved.isEmpty())
         }
+    }
+
+    // ---- The stale linked-wallets list (v1.3.14, seen on a Seeker) -----------------------------
+    //
+    // On the device, You kept listing a wallet the server had already dropped: unlink answered
+    // 400 not_linked, and a relaunch past the throttle still showed it. The server's GET and the
+    // unlink check read the same rows, so the list was the sign-in cache, never refreshed. Cause:
+    // YouScreen's LifecycleResumeEffect calls refresh() the instant You is shown, which on a cold
+    // open is before the DataStore's first emission lands, so the state was still Restoring and
+    // refresh() returned without asking, and nothing ever asked again while You stayed up.
+
+    /** A fake key, never a real wallet: the one the server no longer lists. */
+    private val staleWallet = "StaLeWa11etFakeKey1111111111111111111111111"
+
+    /** A fake key: the one the server still lists. */
+    private val keptWallet = "KeptWa11etFakeKey11111111111111111111111111"
+
+    /**
+     * An [AccountStore] whose first read lands only when [land] is called, like the DataStore
+     * file read on Dispatchers.IO: the screen's first refresh() always runs before it.
+     */
+    private class SlowAccountStore(initial: SignedInAccount?) : AccountStore {
+        private val loaded = CompletableDeferred<Unit>()
+        private val current = MutableStateFlow(initial)
+        val saved = mutableListOf<SignedInAccount>()
+
+        override val account: Flow<SignedInAccount?> = flow {
+            loaded.await()
+            emitAll(current)
+        }
+
+        fun land() {
+            loaded.complete(Unit)
+        }
+
+        override suspend fun save(account: SignedInAccount) {
+            saved += account
+            current.value = account
+        }
+
+        override suspend fun clear() {
+            current.value = null
+        }
+    }
+
+    /** What `buildAccountResponse` answers once the wallet is gone: a real server shape, name null. */
+    private val serverWithoutStale = """
+        {"user":{"email":"ann@example.com","name":null},"linkedWallets":["$keptWallet"],"pro":false,"source":null,"until":null}
+    """.trimIndent()
+
+    /** What it answers while the wallet is still linked. */
+    private val serverWithStale = """
+        {"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":["$staleWallet","$keptWallet"],"pro":false,"source":null,"until":null}
+    """.trimIndent()
+
+    private val notLinked = """{"error":"not_linked","code":400}"""
+
+    @Test
+    fun `a refresh asked for before the stored account loads runs once it lands`() = runTest {
+        val cached = SignedInAccount("ann@example.com", "Ann", listOf(staleWallet, keptWallet))
+        val store = SlowAccountStore(cached)
+        val api = mockApi { respondJson(serverWithoutStale) }
+        val vm = machine(api = api, store = store)
+        advanceUntilIdle()
+        assertEquals("the store has not answered yet", AccountUiState.Restoring, vm.state.value)
+
+        vm.refresh() // YouScreen's LifecycleResumeEffect, on a cold open of You
+        advanceUntilIdle()
+        assertTrue("nothing to refresh until the account is known", api.requests.isEmpty())
+
+        store.land()
+        advanceUntilIdle()
+
+        assertEquals("the kept ask ran exactly once", 1, api.requests.size)
+        assertTrue(api.lastRequest.url.encodedPath.endsWith("/api/v1/account"))
+        val signedIn = vm.state.value as AccountUiState.SignedIn
+        assertEquals("the wallet the server dropped is gone", listOf(keptWallet), signedIn.account.linkedWallets)
+        assertNull("the server's null name reads as no name", signedIn.account.name)
+        assertEquals(listOf(keptWallet), store.saved.last().linkedWallets)
+    }
+
+    @Test
+    fun `a refresh asked for before a store that turns out empty calls nothing, then or later`() = runTest {
+        val store = SlowAccountStore(null)
+        val api = mockApi { respondJson(okBody) }
+        val vm = machine(api = api, store = store)
+        vm.refresh()
+        store.land()
+        advanceUntilIdle()
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue(vm.state.value is AccountUiState.SignedIn)
+        assertTrue(
+            "the dropped ask never fires a GET after a later sign-in",
+            api.requests.none { it.url.encodedPath.endsWith("/api/v1/account") },
+        )
+    }
+
+    @Test
+    fun `a failed refresh does not start the throttle, so the next resume tries again`() = runTest {
+        val stored = SignedInAccount("ann@example.com", "Ann", listOf(staleWallet, keptWallet))
+        val store = InMemoryAccountStore(stored)
+        var failing = true
+        val api = mockApi {
+            if (failing) {
+                respondJson("""{"error":"internal","code":500}""", HttpStatusCode.InternalServerError)
+            } else {
+                respondJson(serverWithoutStale)
+            }
+        }
+        val vm = machine(api = api, store = store, clock = FakeClock(0L))
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(1, api.requests.size)
+        assertEquals("a 5xx keeps the cache", AccountUiState.SignedIn(stored), vm.state.value)
+
+        failing = false
+        vm.refresh() // the next resume, same instant: a failure never started the window
+        advanceUntilIdle()
+        assertEquals(2, api.requests.size)
+        assertEquals(listOf(keptWallet), (vm.state.value as AccountUiState.SignedIn).account.linkedWallets)
+
+        vm.refresh() // a success does start it
+        advanceUntilIdle()
+        assertEquals(2, api.requests.size)
+    }
+
+    @Test
+    fun `unlink not_linked re-reads the account past the throttle and the stale row goes away`() = runTest {
+        val cached = SignedInAccount("ann@example.com", "Ann", listOf(staleWallet, keptWallet))
+        val store = InMemoryAccountStore(cached)
+        var accountReads = 0
+        val api = mockApi { request ->
+            if (request.url.encodedPath.endsWith("/wallets/unlink")) {
+                respondJson(notLinked, HttpStatusCode.BadRequest)
+            } else {
+                // The first read (the one that started the throttle) predates the server's drop.
+                accountReads++
+                respondJson(if (accountReads == 1) serverWithStale else serverWithoutStale)
+            }
+        }
+        val vm = machine(api = api, store = store, clock = FakeClock(0L))
+        advanceUntilIdle()
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(1, accountReads)
+
+        vm.unlink(staleWallet) // well inside the thirty-second window
+        advanceUntilIdle()
+
+        assertEquals("not_linked forced a second read", 2, accountReads)
+        val signedIn = vm.state.value as AccountUiState.SignedIn
+        assertEquals(listOf(keptWallet), signedIn.account.linkedWallets)
+        assertNull("no failure line is left on a row that is gone", signedIn.unlinkFailure)
+        assertNull(signedIn.unlinkingWallet)
+        assertEquals(listOf(keptWallet), store.saved.last().linkedWallets)
+    }
+
+    @Test
+    fun `unlink not_linked keeps its line when the server still lists the wallet`() = runTest {
+        val cached = SignedInAccount("ann@example.com", "Ann", listOf(staleWallet, keptWallet))
+        val store = InMemoryAccountStore(cached)
+        val api = mockApi { request ->
+            if (request.url.encodedPath.endsWith("/wallets/unlink")) {
+                respondJson(notLinked, HttpStatusCode.BadRequest)
+            } else {
+                respondJson(serverWithStale)
+            }
+        }
+        val vm = machine(api = api, store = store)
+        advanceUntilIdle()
+
+        vm.unlink(staleWallet)
+        advanceUntilIdle()
+
+        assertEquals(1, api.requests.count { it.url.encodedPath.endsWith("/api/v1/account") })
+        val signedIn = vm.state.value as AccountUiState.SignedIn
+        assertEquals(listOf(staleWallet, keptWallet), signedIn.account.linkedWallets)
+        assertEquals(staleWallet to UnlinkFailure.NOT_LINKED, signedIn.unlinkFailure)
+    }
+
+    @Test
+    fun `a refresh that lands while an unlink is in flight keeps the row busy`() = runTest {
+        val cached = SignedInAccount("ann@example.com", "Ann", listOf(staleWallet, keptWallet))
+        val store = InMemoryAccountStore(cached)
+        val unlinkGate = CompletableDeferred<Unit>()
+        val api = mockApi { request ->
+            if (request.url.encodedPath.endsWith("/wallets/unlink")) {
+                unlinkGate.await()
+                respondJson(serverWithoutStale)
+            } else {
+                respondJson(serverWithStale)
+            }
+        }
+        val vm = machine(api = api, store = store)
+        advanceUntilIdle()
+
+        vm.unlink(staleWallet)
+        vm.refresh()
+        // runCurrent, not advanceUntilIdle: virtual time must not reach the client's own timeout
+        // while the unlink is held open.
+        runCurrent()
+        assertEquals("the refresh landed", 1, api.requests.count { it.url.encodedPath.endsWith("/api/v1/account") })
+        assertEquals(staleWallet, (vm.state.value as AccountUiState.SignedIn).unlinkingWallet)
+
+        unlinkGate.complete(Unit)
+        advanceUntilIdle()
+        val signedIn = vm.state.value as AccountUiState.SignedIn
+        assertEquals(listOf(keptWallet), signedIn.account.linkedWallets)
+        assertNull(signedIn.unlinkingWallet)
     }
 
     // ---- Unlinking a wallet (POST /api/v1/account/wallets/unlink) -----------------------------

@@ -160,7 +160,9 @@ enum class UnlinkFailure {
  * `POST /api/v1/account/wallets/unlink`. Success fires [signedIn] again, the same event a
  * finished sign-in fires, so the hero's Pro state is re-read too, in case that wallet's own stake
  * or pass was the source. Every other refusal is kept against just that one wallet
- * ([AccountUiState.SignedIn.unlinkFailure]), never surfaced as a screen-wide message.
+ * ([AccountUiState.SignedIn.unlinkFailure]), never surfaced as a screen-wide message; a
+ * `not_linked` also re-reads the account at once, past the throttle, because it proves the cached
+ * list is stale, and the row goes away if the server no longer lists it.
  */
 class AccountViewModel(
     private val api: GoogleAuthApi,
@@ -183,8 +185,19 @@ class AccountViewModel(
     private var refreshJob: Job? = null
     private var unlinkJob: Job? = null
 
-    /** Null before the first [refresh]: unset, rather than a sentinel far enough back to overflow. */
+    /**
+     * When the last [refresh] that SUCCEEDED started; null before the first one. A failure never
+     * sets it, so the next resume tries again rather than waiting out the window on a stale list.
+     */
     private var lastRefreshMillis: Long? = null
+
+    /**
+     * A [refresh] asked for while the stored account was still being read ([AccountUiState.Restoring]).
+     * The screen asks the instant You is shown, which on a cold open is always before the store's
+     * first emission lands, so the ask is kept here and run the moment the state becomes
+     * [AccountUiState.SignedIn], instead of being dropped with nothing to retry it.
+     */
+    private var refreshPending = false
 
     init {
         viewModelScope.launch {
@@ -192,10 +205,24 @@ class AccountViewModel(
                 _state.update { current ->
                     when {
                         current is AccountUiState.SigningIn -> current
+                        // Keep an unlink in flight, and a failure whose wallet is still listed; a
+                        // wallet the fresh list no longer carries takes its failure line with it.
+                        stored != null && current is AccountUiState.SignedIn -> current.copy(
+                            account = stored,
+                            unlinkFailure = current.unlinkFailure?.takeIf { it.first in stored.linkedWallets },
+                        )
                         stored != null -> AccountUiState.SignedIn(stored)
                         current is AccountUiState.SignedOut -> current
                         else -> AccountUiState.SignedOut()
                     }
+                }
+                when (_state.value) {
+                    is AccountUiState.SignedIn -> if (refreshPending) {
+                        refreshPending = false
+                        refresh()
+                    }
+                    is AccountUiState.SignedOut -> refreshPending = false
+                    else -> Unit
                 }
             }
         }
@@ -293,6 +320,7 @@ class AccountViewModel(
         signInJob?.cancel()
         refreshJob?.cancel()
         unlinkJob?.cancel()
+        refreshPending = false
         viewModelScope.launch {
             store.clear()
             _state.value = AccountUiState.SignedOut()
@@ -305,20 +333,34 @@ class AccountViewModel(
      * Re-reads the signed-in account from the server (email, name, linked wallets) and, on success,
      * fires [signedIn] so the entitlement is re-read too. A no-op with no Google account signed in,
      * while a refresh is already running, or inside [REFRESH_THROTTLE_MILLIS] of the last one that
-     * started. Offline, a 404 (not deployed yet) or a 5xx are logged and the cached account is kept
-     * exactly as it was; only [AccountApiError.NotSignedIn] clears it, because the device itself is
-     * no longer bound, the same fact [unlink] treats identically.
+     * succeeded. Asked for while the stored account is still being read, it is kept and run the
+     * moment that account lands ([refreshPending]). Offline, a 404 (not deployed yet) or a 5xx are
+     * logged (debug builds only) and the cached account is kept exactly as it was, and none of them
+     * starts the throttle, so the next resume tries again; only [AccountApiError.NotSignedIn]
+     * clears it, because the device itself is no longer bound, the same fact [unlink] treats
+     * identically.
      */
-    fun refresh() {
-        if (_state.value !is AccountUiState.SignedIn) return
+    fun refresh() = startRefresh(force = false)
+
+    /** [force] skips the throttle: a server answer has just shown the cached list to be stale. */
+    private fun startRefresh(force: Boolean) {
+        when (_state.value) {
+            is AccountUiState.SignedIn -> Unit
+            AccountUiState.Restoring -> {
+                refreshPending = true
+                return
+            }
+            else -> return
+        }
         val now = clock.nowMillis()
         val last = lastRefreshMillis
-        if (last != null && now - last < REFRESH_THROTTLE_MILLIS) return
+        if (!force && last != null && now - last < REFRESH_THROTTLE_MILLIS) return
         if (refreshJob?.isActive == true) return
-        lastRefreshMillis = now
         refreshJob = viewModelScope.launch {
             try {
-                applyAccount(accountApi.get(devicePassStore.code()))
+                val response = accountApi.get(devicePassStore.code())
+                lastRefreshMillis = now
+                applyAccount(response, finishesUnlink = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: AccountApiError.NotSignedIn) {
@@ -336,10 +378,25 @@ class AccountViewModel(
         }
     }
 
-    private suspend fun applyAccount(response: GoogleAuthResponse) {
+    /**
+     * Stores and shows the fresh account. [finishesUnlink] clears the row state an unlink left;
+     * a plain refresh keeps an unlink still in flight, and keeps a failure line only while its
+     * wallet is still listed: a wallet the server no longer lists takes its row, and its line, away.
+     */
+    private suspend fun applyAccount(response: GoogleAuthResponse, finishesUnlink: Boolean) {
         val account = accountOf(response)
         store.save(account)
-        _state.value = AccountUiState.SignedIn(account)
+        _state.update { current ->
+            val previous = current as? AccountUiState.SignedIn
+            if (finishesUnlink || previous == null) {
+                AccountUiState.SignedIn(account)
+            } else {
+                previous.copy(
+                    account = account,
+                    unlinkFailure = previous.unlinkFailure?.takeIf { it.first in account.linkedWallets },
+                )
+            }
+        }
         signedInEvents.trySend(Unit)
     }
 
@@ -358,7 +415,11 @@ class AccountViewModel(
         _state.value = current.copy(unlinkingWallet = wallet, unlinkFailure = null)
         unlinkJob = viewModelScope.launch {
             try {
-                applyAccount(accountApi.unlinkWallet(wallet, devicePassStore.code()))
+                val response = accountApi.unlinkWallet(wallet, devicePassStore.code())
+                // This answer already is the fresh account: a refresh read before it landed must
+                // not land after it and put the wallet back.
+                refreshJob?.cancel()
+                applyAccount(response, finishesUnlink = true)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: AccountApiError.NotSignedIn) {
@@ -367,6 +428,11 @@ class AccountViewModel(
             } catch (e: AccountApiError) {
                 debugLog.raw("unlink: ${e::class.simpleName}: ${e.message}")
                 failUnlink(wallet, unlinkFailureOf(e))
+                // `not_linked` means the server no longer lists this wallet for this account, so
+                // the row this device drew came from a stale cache. Re-read now, past the throttle:
+                // the row goes away if the server has dropped it, rather than sitting there with
+                // a failure line that no second tap could ever clear.
+                if (e is AccountApiError.NotLinked) startRefresh(force = true)
             } catch (e: IOException) {
                 debugLog.raw("unlink: network ${e::class.simpleName}")
                 failUnlink(wallet, UnlinkFailure.UNAVAILABLE)
