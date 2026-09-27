@@ -356,7 +356,9 @@ class CopyLintTest {
         assertEquals("Cost basis is not read from the chain.", byName["portfolio_cost_basis"])
         // The liquidity floor (DESIGN.md section 1, docs/data-map.md): the row and the gauge say
         // what the pool is worth in place of a premium nothing backs, in plain words and no flag.
-        assertEquals("%1\$s behind, too thin", byName["list_row_meta_thin"])
+        // Device QA of 1.3.16: "$17 behind, too thin" read as a sum owed; the plainer word leads.
+        assertEquals("Pool %1\$s, too thin", byName["list_row_meta_thin"])
+        assertEquals("Pool %1\$s behind this price", byName["detail_liquidity_line"])
         assertEquals("Depth not reported", byName["list_row_meta_pool_unknown"])
         assertEquals(
             "Jupiter reports %1\$s behind this price. That is too little for the token to follow the NYSE close, " +

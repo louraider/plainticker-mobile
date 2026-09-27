@@ -89,7 +89,7 @@
     <string name="list_heading_no_sector">No sector</string>
     <!-- The row meta halves and the source banners below are shared with the Portfolio -->
     <string name="list_row_meta_premium">%1$s vs NYSE close</string>
-    <string name="list_row_meta_thin">%1$s behind, too thin</string>
+    <string name="list_row_meta_thin">Pool %1$s, too thin</string>
     <string name="list_row_meta_pool_unknown">Depth not reported</string>
     <string name="list_row_meta_join">%1$s · %2$s</string>
     <string name="list_search_empty">No xStock matches \'%1$s\'</string>
@@ -266,7 +266,7 @@
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
     <string name="detail_swap_out_button">Swap %1$s to USDC</string>
     <string name="detail_cost_line">est. all-in cost %1$s · depth %2$s</string>
-    <string name="detail_liquidity_line">%1$s behind this price</string>
+    <string name="detail_liquidity_line">Pool %1$s behind this price</string>
     <string name="detail_analysis_pending">Analysis not yet available</string>
     <string name="detail_analysis_pending_action">Watch to be notified</string>
     <string name="detail_analysis_incomplete">Analysis incomplete for this filer</string>
@@ -420,7 +420,9 @@
     <string name="portfolio_swap_row_received_unknown">to %1$s, amount not reported</string>
     <string name="portfolio_swap_cost">all-in cost %1$s</string>
     <string name="portfolio_swap_cost_unknown">all-in cost not reported</string>
-    <string name="portfolio_swap_row_meta">%1$s · %2$s</string>
+    <!-- The cost, then when it landed on a line of its own (device QA of 1.3.16: joined on one
+         line, "24 Sep 2026 19:17 UTC" broke before "UTC" beside the Solscan action). -->
+    <string name="portfolio_swap_row_meta">%1$s\n%2$s</string>
     <string name="portfolio_receipts_note">The record this app kept of the swaps it made from this device.</string>
     <string name="portfolio_not_connected">Connect your wallet to see the xStocks in it.</string>
     <string name="portfolio_recorded_lede">What this app recorded when its own swaps landed. The wallet itself has not been read.</string>

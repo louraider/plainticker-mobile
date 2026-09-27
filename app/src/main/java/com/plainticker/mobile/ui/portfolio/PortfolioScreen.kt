@@ -486,6 +486,10 @@ private fun Swap(receipt: SwapReceipt, first: Boolean, last: Boolean, colors: Am
             trailingAction = explorer?.let { stringResource(R.string.action_solscan) },
             onTrailingAction = explorer?.let { url -> { open(url) } },
             colors = colors,
+            // Device QA of 1.3.16: a one-line meta let Solscan follow the text while two-line rows
+            // pushed it right, so the column of actions zigzagged; and "UTC" wrapped onto a line
+            // of its own. The cost and the time now take a line each and the action sits at the end.
+            trailingActionAtEnd = true,
             description = sentence(paid, received, cost, landed),
         )
     }

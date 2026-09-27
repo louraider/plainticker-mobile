@@ -196,7 +196,7 @@ class TodayModelTest {
     fun `a thin pool states itself instead of a figure`() {
         val row = todayWatchRow(watched(poolUsd = 2_700.0))
         assertNull("no figure off a dead pool", row.figure)
-        assertEquals("$2.7k behind, too thin", ShippedCopy.render(row.poolNote!!))
+        assertEquals("Pool $2.7k, too thin", ShippedCopy.render(row.poolNote!!))
     }
 
     @Test
