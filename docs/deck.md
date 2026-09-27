@@ -1,6 +1,6 @@
 # PlainTicker Mobile: deck
 
-Ten slides. Written 2026-09-27 for build 1.3.16 (checked against 1.3.13) and the number set in
+Ten slides. Written 2026-09-27 and checked against build 1.3.18, the next release, and the number set in
 `docs/submission-answers.md` ("The one number set"). The Align coach reads the deck's text, so each
 slide's text carries its point without the speaker notes, and nothing on a slide talks to the
 reader about scoring or judging.
@@ -30,8 +30,8 @@ buy or sell verbs.
 
 **Speaker notes.** Start from the gap, not the product. AAPLx's mint carries a permanent
 delegate: its issuer can move the token without the holder's signature. That is
-public on chain and no swap screen shows it. The same is true of the proof of reserves and of how
-thin some pools are. PlainTicker is the reading step before the swap.
+public on chain and no swap screen shows it. No swap screen shows the proof of reserves xStocks
+reports either, or how thin some pools are. PlainTicker is the reading step before the swap.
 
 ---
 
@@ -59,10 +59,10 @@ not in a browser. Say "a classification by a fixed rule, not advice" once here, 
 
 > 1. **Morning:** one digest notification on the stocks you watch.
 > 2. **Today:** the NYSE state in your own time, your watched stocks, the reports due next week.
-> 3. **A stock page:** reserves and issuer controls read live from the mint, the company against
->    its sector, the token price against the NYSE close.
+> 3. **A stock page:** issuer controls and supply read live from the mint, reserves as xStocks
+>    reports them, the company against its sector, the token price against the NYSE close.
 > 4. **A swap:** Jupiter routes it, the Seed Vault signs it, *Swap landed*, a receipt with the
->    cost actually paid. **Swap to USDC** for the way back.
+>    executed fill plus estimated network costs. **Swap to USDC** for the way back.
 > 5. **Vote:** staked SKR chooses the next stock to be analysed.
 > 6. **You:** Pro, Google sign-in, one account with plainticker.com. The wallet connects to sign.
 
@@ -79,16 +79,16 @@ a day and nothing else.
 **Slide text**
 
 > - **Mobile Wallet Adapter 2.2 and the Seed Vault** sign every swap, vote and Pro pass. The app
->   holds no key.
+>   holds no wallet key.
 > - **Verified as www.plainticker.com.** The release certificate is published in the site's
 >   `assetlinks.json`, so the wallet names the app before anything is approved.
 > - **Token-2022 read on the device.** Mint extensions and Scaled UI Amount balances, parsed in
 >   Kotlin, with the slot and its age on screen.
-> - **Native Kotlin and Jetpack Compose.** Five tabs, dark and light themes, about 1,600 unit tests.
+> - **Native Kotlin and Jetpack Compose.** Five tabs, dark and light themes, about 1,850 unit tests.
 >   Not a port, not a web wrapper.
 
 **Speaker notes.** The analysis engine predates the hackathon and is the backend. Everything on
-the phone is new: 327 commits since 10 September. The web product has no chain read, no swap and
+the phone is new: 405 commits since 10 September. The web product has no chain read, no swap and
 no notification. The verified identity is the one line a Seeker owner reads before
 approving: it says www.plainticker.com with a verification mark.
 
@@ -98,7 +98,7 @@ approving: it says www.plainticker.com with a verification mark.
 
 **Slide text**
 
-> **Coverage is the scarce thing.** 57 companies analysed, 1,124 xStocks on Solana.
+> **Coverage is the scarce thing.** 57 companies covered, 1,124 xStocks on Solana.
 >
 > Every week, Seeker owners vote for one of the 898 uncovered US xStocks. A vote is a transaction
 > with a `PT-VOTE` memo, weighted by staked SKR read on chain by the server. The winner is
@@ -107,10 +107,14 @@ approving: it says www.plainticker.com with a verification mark.
 > **Round 1 closed the loop:** JEF won, the vote landed on mainnet, and Jefferies was analysed on
 > 26 September.
 >
+> Every counted vote is public with its weight: `/api/v1/vote/rounds/{id}/ledger`.
+>
 > 7,500 SKR staked also opens Pro.
 
 **Speaker notes.** Honest numbers: round 1 had one voter, the founder's demo wallet, with 878.98
-SKR. The mechanism is proven end to end on mainnet; participation is what launch has to build. The
+SKR. The ledger publishes each vote's weight with the time and slot the server read the stake at
+tally time; standard RPC cannot re-read a past balance, so the weight is published, not
+re-derivable later. The mechanism is proven end to end on mainnet; participation is what launch has to build. The
 tab says in plain words that a stake-weighted vote is decided by the largest stake, and the weight
 is stored raw so a one-Seeker-one-voice rule can be applied in the tally alone.
 
@@ -120,14 +124,15 @@ is stored raw so a one-Seeker-one-voice rule can be applied in the tally alone.
 
 **Slide text**
 
-> - **TransactionGuard** reads the bytes of every swap, vote and pass and compares them with what
->   the screen shows and with addresses pinned in the app. A transaction that does more than the
->   screen shows, or that the guard cannot parse, is refused. Swap accounts loaded from a lookup
->   table and what Jupiter calls inside its own program are outside what it can read.
+> - **TransactionGuard** reads the top level of every swap, vote and pass and compares it with
+>   what the screen shows and with addresses pinned in the app. A transaction whose instructions
+>   do more than the screen shows, or that the guard cannot parse, is refused.
 > - Swaps: exactly one Jupiter instruction of a known layout; tokens must leave from and land in
->   the wallet's own accounts; no authority handed to anyone else.
-> - **No keys anywhere**, no secrets in the APK. RPC goes through a read-only five-method
->   forwarder.
+>   the wallet's own accounts; token accounts opened only for the wallet; slippage at most 300
+>   bps and Jupiter's platform fee at most 400 bps; no authority handed to anyone else. A pass
+>   can never exceed 12 USDC.
+> - **The app and server never hold a user's wallet signing keys.** No secrets in the APK. RPC
+>   goes through a read-only five-method forwarder.
 > - **What it cannot see:** Jupiter's routing inside its own program, and swap accounts loaded
 >   from a lookup table. Stated in the README, with what stands in for each.
 
@@ -152,14 +157,20 @@ redaction guard hashes every base58 string in the tree and the whole history aga
 > | 24 Sep | Swap, 1 USDC into TSLAx |
 > | 24 Sep | Swap to USDC, the whole position |
 >
-> 327 commits · 51 pull requests · about 1,600 unit tests · 57 companies analysed
+> 405 commits · 65 pull requests · about 1,850 unit tests · 57 companies covered
 >
-> **Users so far: the founder.** Launch is next.
+> **Usage so far is the founder's.** Round 3 runs 28 Sep to 5 Oct: [ROUND3_VOTERS] wallets have
+> voted.
+>
+> *(Placeholder for the founder: replace `[ROUND3_VOTERS]` with the count of distinct voters in
+> `GET /api/v1/vote/rounds/3/ledger` on the day the deck is exported, and say zero if it is zero.
+> Delete this line before export.)*
 
 *Screenshot: `docs/img/05-recent-swaps.png`.*
 
 **Speaker notes.** Every signature is in the README and checkable on Solscan; the demo wallet is
-public. There is no user traction yet and the slide says so. What exists is proof that each flow
+public. Rounds 1 and 2 each have one vote, both from the demo wallet. There is no
+user traction beyond that yet, and the slide says so. What exists is proof that each flow
 works on mainnet, on the device, including the reverse swap and the paid pass.
 
 ---
@@ -190,9 +201,10 @@ been paid on mainnet.
 
 > **Wedge:** Seeker owners holding xStocks.
 >
-> **Channels:**
-> 1. The Solana dApp Store: tokenized-stock research is a new category there.
-> 2. SKR stakers as the vote community: 46,436 wallets, a weekly round, a public result.
+> **Channels, planned:**
+> 1. The Solana dApp Store: first submission targeted for 1 October.
+> 2. SKR stakers as the vote community: 46,436 wallets stake SKR; each weekly round ends in a
+>    public result and a public ledger. So far each round has had one voter, the founder.
 > 3. plainticker.com: the same engine on the web, a shared account and Pro.
 >
 > **First 30 days:** listing live and a weekly round post · one-Seeker-one-voice weighting ·
@@ -215,9 +227,10 @@ publisher account and KYC are already cleared.
 > - **Ukrainian localisation** in the app; the engine already writes Ukrainian.
 > - **More coverage,** led by the vote.
 >
-> **Team:** FOUNDER_NAME, solo founder. Built PlainTicker's analysis engine before the hackathon
+> **Team:** [FOUNDER_NAME], solo founder. Built PlainTicker's analysis engine before the hackathon
 > and this app from 10 September 2026. GitHub: louraider.
 
 **Speaker notes.** Close on the loop rather than the feature list: the Seeker is where the wallet,
 the stake and the reading meet, and staked SKR decides what gets read next. Keep the team line to
-what is true and checkable.
+what is true and checkable. `[FOUNDER_NAME]` is a placeholder the founder fills in before
+export; nothing else on the slide names a person.
