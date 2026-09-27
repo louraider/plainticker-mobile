@@ -93,8 +93,12 @@ git push origin v0.1.0
 
 `v<major>.<minor>.<patch>` becomes `versionName`; `versionCode = major*10000 + minor*100 +
 patch` (`v0.1.0` -> 100, `v1.2.3` -> 10203). A `-suffix` (`v0.2.0-rc1`) is published as a
-pre-release with the same numeric code. The signed `app-release.apk` is uploaded as a workflow
-artifact and attached to the GitHub Release.
+pre-release with the same numeric code, except `-amber`, the design line every shipped build
+carries, which is a normal release marked Latest. The signed `app-release.apk` is uploaded as a
+workflow artifact and attached to the GitHub Release twice, as `plainticker-<versionName>.apk`
+and as `plainticker.apk`, so
+`https://github.com/louraider/plainticker-mobile/releases/latest/download/plainticker.apk` always
+serves the latest release.
 
 ## 6. How the build reads it
 

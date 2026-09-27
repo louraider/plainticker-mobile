@@ -136,6 +136,18 @@ class PortfolioScreenTest {
         assertTrue("the model is what asks TrackingQuality", "TrackingQuality" in modelScan.code)
     }
 
+    /**
+     * Device QA of 1.3.16: on a one-line meta Solscan followed the text while two-line rows pushed
+     * it right, and "UTC" wrapped onto a line of its own. The cost and the time take a line each,
+     * and the action is pinned to the row's end so the column lines up.
+     */
+    @Test
+    fun `recent swaps line their Solscan actions up and keep the time on one line`() {
+        val swap = body("private fun Swap(", "private fun WalletActions(")
+        assertTrue("trailingActionAtEnd = true" in swap)
+        assertEquals("%1\$s\n%2\$s", com.plainticker.mobile.ui.ShippedCopy.strings["portfolio_swap_row_meta"])
+    }
+
     @Test
     fun `the accessibility affordances Pass 6 asks for are passed`() {
         val holding = body("private fun Holding(", "private fun Swap(")

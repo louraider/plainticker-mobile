@@ -191,7 +191,8 @@ class YouModelTest {
             labels(rows),
         )
         assertEquals(R.string.you_plan_source_pass, words(rows[0].value))
-        assertEquals("26 days left.", ShippedCopy.render(rows[1].sub!!))
+        assertNull("the days left are the hero's line, never repeated in the plan", rows[1].sub)
+        assertEquals("26 days left.", ShippedCopy.render(youHero(signedIn, wallet, pass, now).lines.first()))
         assertNull("the hero already carries Extend, so the plan does not draw it twice", rows[2].action)
     }
 
@@ -216,7 +217,7 @@ class YouModelTest {
             labels(rows),
         )
         assertEquals(R.string.you_plan_source_promo, words(rows[0].value))
-        assertEquals("30 days left.", ShippedCopy.render(rows[1].sub!!))
+        assertNull("the days left are the hero's line, never repeated in the plan", rows[1].sub)
         assertEquals(R.string.you_plan_extend_promo, words(rows[2].value))
         assertNull("a promo does not renew by paying here; the plain way is another code", rows[2].action)
     }
@@ -348,6 +349,6 @@ class YouModelTest {
     fun `the wallet group's words say it signs and is not a sign-in`() {
         assertEquals("Wallet", ShippedCopy.strings.getValue("you_heading_wallet"))
         val short = ShippedCopy.strings.getValue("you_wallet_note_short")
-        assertTrue(short.contains("not a way to sign in"))
+        assertTrue(short.contains("Not a sign-in"))
     }
 }

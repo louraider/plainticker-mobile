@@ -28,6 +28,7 @@ import com.plainticker.mobile.watchlist.WatchedReport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -349,6 +350,10 @@ class ListViewModel(
     private var refreshJob: Job? = null
     private var priceJob: Job? = null
     private var bannerJob: Job? = null
+    private var repriceJob: Job? = null
+
+    /** When the last price run finished, by [clock]; null until one has. */
+    private var pricedAtMillis: Long? = null
 
     /**
      * The venue behind the hours banner, as a clock rather than a photograph: the same
@@ -380,11 +385,47 @@ class ListViewModel(
      */
     fun refresh() = load(userAsked = true)
 
-    /** Stocks came back to the foreground: recompute the venue now and at every boundary after. */
-    fun onResume() = marketClock.onResume()
+    /**
+     * Stocks came back to the foreground: recompute the venue now and at every boundary after, and
+     * keep the prices as fresh as the cache Detail reads from ([REPRICE_MS]).
+     *
+     * **Why the prices refresh while Stocks is shown** (device QA of 1.3.16). The list priced its
+     * rows once per load and never again, while Detail asks [PriceRepository] on open and gets a
+     * fresh quote once the 30 s cache has expired. Both go through the same rule
+     * ([com.plainticker.mobile.data.jupiter.TrackingQuality]) against the same NYSE close from the
+     * same Jupiter Price v3 entry, so the two figures only differed by when the token price was
+     * read: AAPLx read -0.40% on the list, from a quote minutes old, and -0.68% on Detail seconds
+     * later, from a new one. Re-pricing on the cache's own window while the list is on screen, and
+     * once on coming back to it, means a row and the Detail it opens read the same cached quote.
+     */
+    fun onResume() {
+        marketClock.onResume()
+        repriceJob?.cancel()
+        repriceJob = viewModelScope.launch {
+            while (isActive) {
+                repriceIfStale()
+                delay(REPRICE_MS)
+            }
+        }
+    }
 
-    /** Stocks left the foreground: the boundary job stops. */
-    fun onPause() = marketClock.onPause()
+    /** Stocks left the foreground: the boundary job and the re-pricing stop. */
+    fun onPause() {
+        marketClock.onPause()
+        repriceJob?.cancel()
+        repriceJob = null
+    }
+
+    /**
+     * Asks for the same mints again once the last run is older than [REPRICE_MS]. Before any run
+     * has finished there is nothing to refresh: the load's own run owns the first pricing.
+     */
+    private fun repriceIfStale() {
+        val at = pricedAtMillis ?: return
+        if (clock.nowMillis() - at < REPRICE_MS) return
+        pricedMints = null
+        schedulePrices()
+    }
 
     /**
      * Asks every source again and draws whatever comes back.
@@ -688,6 +729,7 @@ class ListViewModel(
                     } catch (failed: Exception) {
                         _state.update { it.copy(pricesUnavailable = true, pricesPartial = false) }
                     }
+                    pricedAtMillis = clock.nowMillis()
                 }
             } while (pricesQueued)
         }
@@ -836,6 +878,15 @@ class ListViewModel(
          * for about eleven of them.
          */
         const val SNAPSHOT_BANNER_GRACE_MS = 1_500L
+
+        /**
+         * How old the list's prices may get while Stocks is on screen: the price cache's own
+         * window ([com.plainticker.mobile.repo.CachedPriceRepository.TTL_MS]), so the quote a row
+         * shows is the one Detail finds in the cache when that row is opened. [PRICE_BUDGET] mints
+         * are four paced calls, about 0.13 requests per second at this cadence, a quarter of
+         * Jupiter's keyless 0.5, and nothing runs while Stocks is not in the foreground.
+         */
+        const val REPRICE_MS = com.plainticker.mobile.repo.CachedPriceRepository.TTL_MS
     }
 }
 

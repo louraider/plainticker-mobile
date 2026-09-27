@@ -74,7 +74,10 @@ data class ProUiState(
      * offered for one that might still land through the chain or the ten-minute cron.
      */
     val pendingSignature: String? = null,
-)
+) {
+    /** The server has answered for the current wallet: a plan to keep drawing while a re-read runs. */
+    val entitlementKnown: Boolean get() = !entitlementLoading && !entitlementFailed && !entitlementDisabled
+}
 
 /**
  * Pro entitlement and the pay machine, in one class (task A6).
@@ -177,11 +180,22 @@ class PassViewModel(
      * Reads this device's code and asks the server what it carries. Never costs a wallet call.
      * Cancels a refresh already in flight, so a wallet change that fires twice in quick succession
      * cannot let the first answer land after the second and show a stale source or date.
+     *
+     * **Quiet over a known answer** (device QA of 1.3.16). You re-reads the entitlement on every
+     * visit (the account refresh fires [com.plainticker.mobile.ui.you.AccountViewModel.signedIn]),
+     * and each read used to drop the hero to "Reading your plan" before Pro came back. When this
+     * device already holds an answer for the same wallet, that answer stays on screen while the
+     * read runs, and a read that fails keeps it rather than replacing a known plan with an error.
+     * The loading state is kept for the cases it is honest in: the first read, a retry after a
+     * failure, and a wallet change, which drops to loading itself (see [init]) before calling here.
      */
     fun refreshEntitlement() {
         entitlementJob?.cancel()
         entitlementJob = viewModelScope.launch {
-            _pro.update { it.copy(entitlementLoading = true, entitlementDisabled = false, entitlementFailed = false) }
+            val quiet = _pro.value.entitlementKnown
+            if (!quiet) {
+                _pro.update { it.copy(entitlementLoading = true, entitlementDisabled = false, entitlementFailed = false) }
+            }
             val code = devicePassStore.code()
             try {
                 applyEntitlement(entitlementApi.get(code))
@@ -191,7 +205,7 @@ class PassViewModel(
                 _pro.update { it.copy(entitlementLoading = false, entitlementDisabled = true) }
             } catch (e: Exception) {
                 debugLog.raw("entitlement: ${e::class.simpleName}: ${e.message}")
-                _pro.update { it.copy(entitlementLoading = false, entitlementFailed = true) }
+                if (!quiet) _pro.update { it.copy(entitlementLoading = false, entitlementFailed = true) }
             }
         }
     }

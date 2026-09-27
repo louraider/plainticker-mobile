@@ -148,7 +148,11 @@ class AccountSectionTest {
     @Test
     fun `the wallet row's note is one short line, the full note behind Show`() {
         val short = ShippedCopy.strings.getValue("you_wallet_note_short")
-        assertTrue("\"$short\" is longer than one line", short.length <= 70)
+        // Device QA of 1.3.16: the old note wrapped to two lines at 1.0x beside Connect. Its first
+        // line, "Signs swaps, votes and Pro payments." (36 characters, 250.66dp at context 14/400
+        // by fontTools against the bundled Bricolage), is the width known to fit; this one is
+        // 241.57dp. The length cap below is a guard against regrowth, not a measurement.
+        assertTrue("\"$short\" is longer than one line", short.length <= 37)
         assertTrue("sub = note" in walletScan.code)
         assertTrue("R.string.you_wallet_note_short" in walletScan.code)
         assertTrue("the full note is behind a tap", "if (open) {" in walletScan.code)

@@ -347,25 +347,30 @@ class DetailModelTest {
     )
 
     @Test
-    fun `the issuer's circulating count matching the mint's supply reads matches chain`() {
+    fun `the mint's supply is the value, and a count within tolerance says it matches xStocks`() {
         // 25,924 tokens reported; 25,930 on chain is within a tenth of a percent.
         val cell = served(chain = chainWithSupply(2_593_000_000_000L)).trustFacts
             .first { label(it.label) == R.string.detail_fact_supply }
-        assertEquals(R.string.detail_fact_supply_matches, label(cell.value))
-        assertEquals(R.string.detail_fact_supply_sub, label(cell.sub))
-        assertEquals(listOf("25,930", "25,924"), args(cell.sub))
+        assertEquals("25,930", raw(cell.value))
+        assertEquals(R.string.detail_fact_supply_matches, label(cell.sub))
+        assertEquals(listOf("25,924"), args(cell.sub))
         assertTrue(cell.subMono)
     }
 
     @Test
-    fun `a gap between chain and report is stated as a percent of the report, with both counts`() {
-        // The real TSLAx reads: 229,637.34 on chain (2026-09-12) against 196,340.26 reported (2026-09-10).
+    fun `counts that differ are stated side by side, never as a signed percent`() {
+        // The real AAPLx reads of 2026-09-27 (device QA of 1.3.16): the mint's raw supply
+        // 153,762.68436492 at multiplier 1.0032690125398187 states 154,265.34; xStocks' proof of
+        // reserves counts 38,800.68 in circulation. The row printed "+297.6%" for that.
         val cell = served(
-            chain = chainWithSupply(22_963_733_950_050L),
-            reservesPiece = Piece.Ready(reserves.copy(tokensInCirculation = 196_340.26085951860836)),
+            chain = chainWithSupply(15_376_268_436_492L, multiplier = 1.0032690125398187),
+            reservesPiece = Piece.Ready(reserves.copy(tokensInCirculation = 38_800.684325285639132)),
         ).trustFacts.first { label(it.label) == R.string.detail_fact_supply }
-        assertEquals("+17.0%", raw(cell.value))
-        assertEquals(listOf("229,637.34", "196,340.26"), args(cell.sub))
+        assertEquals("154,265.34", raw(cell.value))
+        assertEquals(R.string.detail_fact_supply_sub, label(cell.sub))
+        assertEquals(listOf("38,800.68"), args(cell.sub))
+        assertFalse("no signed gap anywhere in the cell", raw(cell.value).contains('%'))
+        assertFalse(args(cell.sub).any { it.contains('%') || it.startsWith("+") })
     }
 
     @Test
@@ -373,18 +378,19 @@ class DetailModelTest {
         // A ten-for-one split: raw supply 2,592.4 tokens, shown as 25,924, which matches the report.
         val cell = served(chain = chainWithSupply(259_240_000_000L, multiplier = 10.0)).trustFacts
             .first { label(it.label) == R.string.detail_fact_supply }
-        assertEquals(R.string.detail_fact_supply_matches, label(cell.value))
-        assertEquals(listOf("25,924", "25,924"), args(cell.sub))
+        assertEquals("25,924", raw(cell.value))
+        assertEquals(R.string.detail_fact_supply_matches, label(cell.sub))
+        assertEquals(listOf("25,924"), args(cell.sub))
     }
 
     @Test
-    fun `no chain read or no report leaves the supply unknown, each with its own reason`() {
+    fun `no chain read leaves the supply unknown, and no report still states the mint's own count`() {
         val unread = served(chain = Piece.Failed).trustFacts.first { label(it.label) == R.string.detail_fact_supply }
         assertEquals(R.string.detail_value_unknown, label(unread.value))
         assertEquals(R.string.detail_chain_unread_sub, label(unread.sub))
         assertEquals(2, unread.span)
         val unreported = served(reservesPiece = Piece.Absent).trustFacts.first { label(it.label) == R.string.detail_fact_supply }
-        assertEquals(R.string.detail_value_unknown, label(unreported.value))
+        assertTrue("the mint's count is a chain fact whether or not xStocks reports", unreported.value is Copy.Raw)
         assertEquals(R.string.detail_fact_supply_no_report_sub, label(unreported.sub))
     }
 
@@ -446,6 +452,8 @@ class DetailModelTest {
         val hook = bare.getValue(R.string.detail_fact_hook)
         assertEquals(R.string.value_none, label(hook.value))
         assertEquals(R.string.detail_fact_hook_sub, label(hook.sub))
+        // Device QA of 1.3.16: "None" is a word, drawn in the display face like its neighbours.
+        assertFalse("a state word is never set in the identifier face", hook.valueMono)
     }
 
     @Test
@@ -499,6 +507,7 @@ class DetailModelTest {
             ),
         ).trustFacts.first { label(it.label) == R.string.detail_fact_hook }
         assertEquals("JSDL…jpVi", raw(hook.value))
+        assertTrue("a program id is an on-chain identifier, set in mono", hook.valueMono)
         assertEquals(R.string.detail_fact_hook_runs_sub, label(hook.sub))
         assertFalse("a hook is a fact, not an issuer control DESIGN.md colours", hook.caution)
     }

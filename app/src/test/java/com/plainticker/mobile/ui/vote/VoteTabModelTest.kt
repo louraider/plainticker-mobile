@@ -11,6 +11,7 @@ import com.plainticker.mobile.data.xstocks.Underlying
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.ui.Copy
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -209,6 +210,20 @@ class VoteTabModelTest {
         )
         val mine = myVotesFor(receipts, VoteRound(1, "", ""), connectedVoter = alice)
         assertEquals(listOf("ASML", "NKE", "TSM"), mine.map { it.ticker })
+    }
+
+    @Test
+    fun `a ticker this wallet voted for in the open round reads as voted, others and no round do not`() {
+        val round = VoteRound(2, "", "")
+        val mine = myVotesFor(listOf(receipt("AAL", alice, round = 2)), round, connectedVoter = alice)
+        val state = VoteTabUiState(round = round, myVotes = mine)
+        assertTrue(state.votedFor("AAL"))
+        assertTrue("the ticker match ignores case", state.votedFor("aal"))
+        assertFalse(state.votedFor("TSM"))
+        assertFalse(
+            "with no open round the receipts are not scoped to one, so nothing reads as voted",
+            VoteTabUiState(round = null, myVotes = mine).votedFor("AAL"),
+        )
     }
 
     // ---- The state's own computed properties -----------------------------------------------------

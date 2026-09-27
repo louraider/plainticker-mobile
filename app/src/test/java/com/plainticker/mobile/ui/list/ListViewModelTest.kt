@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -874,6 +875,45 @@ class ListViewModelTest {
     }
 
     // ---- Prices ------------------------------------------------------------------------
+
+    /**
+     * Device QA of 1.3.16: AAPLx read -0.40% on Stocks and -0.68% on Detail seconds apart, because
+     * the list priced once per load and Detail asked for a fresh quote. While Stocks is shown the
+     * list re-prices on the price cache's own window, and stops when it leaves.
+     */
+    @Test
+    fun `while stocks is shown the prices refresh on the cache's window, and stop when it leaves`() = runTest {
+        var nowMillis = 1_789_394_400_000L
+        val prices = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4))))
+        val vm = viewModel(prices = prices, clock = Clock { nowMillis })
+        advanceUntilIdle()
+        val firstRun = prices.requested.size
+        assertTrue("the load priced the rows", firstRun > 0)
+        assertEquals(232.5, vm.state.value.analyzed.first { it.ticker == "AAPL" }.priceUsd!!, 0.0)
+
+        vm.onResume()
+        runCurrent()
+        assertEquals("a run younger than the window is not repeated", firstRun, prices.requested.size)
+
+        prices.result = Result.success(mapOf(aaplMint to price(231.0, reference = 232.4)))
+        nowMillis += ListViewModel.REPRICE_MS
+        advanceTimeBy(ListViewModel.REPRICE_MS + 1)
+        runCurrent()
+        assertTrue("the rows were priced again", prices.requested.size > firstRun)
+        assertEquals(231.0, vm.state.value.analyzed.first { it.ticker == "AAPL" }.priceUsd!!, 0.0)
+
+        vm.onPause()
+        val afterPause = prices.requested.size
+        nowMillis += 10 * ListViewModel.REPRICE_MS
+        advanceTimeBy(10 * ListViewModel.REPRICE_MS)
+        runCurrent()
+        assertEquals("nothing is priced while Stocks is away", afterPause, prices.requested.size)
+    }
+
+    @Test
+    fun `the re-pricing window is the price cache's own`() {
+        assertEquals(com.plainticker.mobile.repo.CachedPriceRepository.TTL_MS, ListViewModel.REPRICE_MS)
+    }
 
     @Test
     fun `the first screenful is priced before the rest`() = runTest {

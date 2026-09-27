@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.you
 import com.plainticker.mobile.lint.KotlinScan
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -125,6 +126,15 @@ class YouScreenTest {
     }
 
     @Test
+    fun `delete account reads in a neutral colour, not the action amber`() {
+        // Device QA of 1.3.16.
+        val about = body("private fun AboutGroup(", "private fun LicenseRow(")
+        val delete = about.substring(about.indexOf("R.string.you_about_delete_account,"), about.indexOf("R.string.you_heading_licenses"))
+        assertTrue("valueKind = RowValueKind.WORDS" in delete)
+        assertTrue("the other links keep the link colour by default", "valueKind: RowValueKind = RowValueKind.LINK" in about)
+    }
+
+    @Test
     fun `about's links open the browser, and a phone without one does not crash`() {
         val row = body("private fun AboutLinkRow(", "private fun LicenseRow(")
         assertTrue("the whole row is the tap target", "onTap = { onOpenLink(url) }" in row)
@@ -142,6 +152,22 @@ class YouScreenTest {
         val promo = body("private fun PromoRow(", "private fun PromoEditingRow(")
         assertTrue("RowAction(stringResource(R.string.promo_action_have_code), onOpen)" in promo)
         assertTrue("no dimmed colour on the action", "textSecondary" !in promo)
+    }
+
+    @Test
+    fun `the code field sits right under its label, with Apply and Cancel after it`() {
+        // Device QA of 1.3.16: as a CabinetRow the actions drew between the label and the input.
+        val row = body("private fun PromoEditingRow(", "private fun PromoField(")
+        assertOrder(
+            "PromoEditingRow",
+            row,
+            listOf("R.string.promo_field_label", "PromoField(", "it.text", "R.string.promo_action_apply", "R.string.you_action_cancel"),
+        )
+        assertFalse("no longer a CabinetRow whose action row precedes its extra slot", "CabinetRow(" in row)
+        val field = body("private fun PromoField(", "private fun DeviceGroup(")
+        assertTrue("KeyboardCapitalization.Characters" in field)
+        assertTrue("autoCorrectEnabled = false" in field)
+        assertTrue("keyboardType = KeyboardType.Ascii" in field)
     }
 
     @Test

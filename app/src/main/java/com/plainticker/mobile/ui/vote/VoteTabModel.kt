@@ -214,4 +214,12 @@ data class VoteTabUiState(
     val showsRoundFurniture: Boolean get() = !isLoading && !failed && !notOpen
 
     val searchMiss: Boolean get() = showsRoundFurniture && ballotLoaded && query.isNotBlank() && ballot.isEmpty()
+
+    /**
+     * True when this wallet's own votes for the round in progress already include [ticker], so its
+     * row draws a quiet "Voted" instead of a Vote the server would refuse (one vote per wallet per
+     * token per round). Needs an open round: with none, [myVotes] is not scoped to one.
+     */
+    fun votedFor(ticker: String): Boolean =
+        round != null && myVotes.any { it.ticker.equals(ticker, ignoreCase = true) }
 }
