@@ -7,7 +7,7 @@ signed in the Seed Vault through Mobile Wallet Adapter. Staked SKR decides which
 analysed next.
 
 Kotlin and Jetpack Compose, package `com.plainticker.mobile`, built from 10 September 2026 for
-CLOCK IN, the Solana Mobile hackathon. Version 1.3.13 on `main`.
+CLOCK IN, the Solana Mobile hackathon. Version 1.3.16 on `main`.
 
 The analysis is a classification by a fixed rule against the sector. It is not a price forecast
 and not investment advice. xStocks are tokenized tracker instruments issued by a third party and
@@ -111,8 +111,12 @@ A web page cannot do most of this. The website shares only the analysis engine.
   the app. The server runs one `getProgramAccounts` on the SKR staking program with a `memcmp` at
   byte 41 (the struct is packed), reads the principal as a u64 at byte 105, and bounds it at both
   ends.
-- A cron reads the memos every ten minutes and `GET /api/v1/vote/next-up` sums them. Anyone can
-  recount the same signatures and get the same result.
+- A cron reads the memos every ten minutes and `GET /api/v1/vote/next-up` sums them. Every vote
+  is on chain, because each one pays the collector, so anyone can list the same signatures and
+  read the same memos. The weight is the stake the server read when it counted each vote, and it
+  is stored, not re-read: a recount made later reads the stake as it stands then, which can
+  differ. The per-vote weights are not published yet, so the ballots can be checked from outside
+  and the weights cannot.
 - The ballot holds the 898 US-listed xStocks without an analysis. PlainTicker reads SEC filings, so
   the server accepts only US underlyings (916 in its universe file).
 - The sheet states the weakness before the wallet opens: a vote weighted by stake is decided by
@@ -130,8 +134,11 @@ classification locked. Pro comes from any one of these:
 - a subscription on plainticker.com, since the account is shared;
 - a promo code (You → Plan → Have a code?).
 
-Sign-in is **Google** (Credential Manager, with a nonce the app checks) or a **Solana wallet**
-through MWA. One account and one Pro plan are shared with www.plainticker.com.
+Sign-in in the app is **Google** (Credential Manager, with a server-issued nonce that both the
+server and the app check). The wallet is a Mobile Wallet Adapter connection: it signs swaps,
+votes and the pass, and it is not a sign-in. Signing in with a Solana wallet, and linking one to
+the account, happen on www.plainticker.com; the app lists the linked wallets and can unlink one.
+One account and one Pro plan are shared with www.plainticker.com.
 
 ## Architecture
 
@@ -153,7 +160,7 @@ Seeker: Kotlin 2.4, Jetpack Compose, Mobile Wallet Adapter 2.2, Ktor, WorkManage
 ```
 
 The analysis engine, its database and its cron existed before the hackathon and are the backend.
-No web UI was ported. The web product has no wallet, no chain read, no swap and no notification.
+No web UI was ported. The web product has no chain read, no swap and no notification.
 Everything in this repository was written after 10 September 2026. The server work built for the
 phone (`/summary`, `/rpc`, the vote, the pass, promo codes, Google sign-in) landed as pull
 requests in the PlainTicker repository. `server/rpc-proxy/` mirrors the forwarder's source and
@@ -199,10 +206,6 @@ contract here for audit.
 | Whether the quote is a good price | Not a safety property. The sheet shows the all-in cost before the swap, and the receipt shows what was paid. |
 | Accounts a swap loads from an address lookup table | They cannot be resolved offline. The authority and both token accounts must be static keys, and a static mint slot must name the requested mint. |
 | What the issuer can do to the token after the swap | That is the mint's permanent delegate and pause authority, which the stock page shows before the swap. |
-
-Known gap, stated: the Google sign-in endpoint does not yet require the nonce, because builds older
-than 1.3.8 do not send one. The app has sent it and checked it since 1.3.8, and the server will
-require it once those builds are gone.
 
 ## Proof on mainnet
 
