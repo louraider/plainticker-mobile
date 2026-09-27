@@ -30,6 +30,7 @@ import android.content.ClipData
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -88,6 +89,8 @@ import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.components.Track
 import com.plainticker.mobile.ui.portfolio.PRO_STAKE_THRESHOLD_RAW
 import com.plainticker.mobile.ui.swap.SwapActions
+import com.plainticker.mobile.ui.resolve
+import com.plainticker.mobile.ui.shareText as shareSystemText
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.swap.SwapSheet
 import com.plainticker.mobile.ui.swap.SwapState
@@ -224,10 +227,17 @@ internal fun DetailContent(
                 // After the scroll, so the padding is part of the scrolled content (Insets.kt).
                 .navigationBarsPadding(),
         ) {
+            // Share beside Watch (judges' round 2): one factual line off the trust card and the
+            // stock's web page, built at the tap from what this screen has read by then.
+            val context = LocalContext.current
             TopBar(
                 action = stringResource(if (state.watched) R.string.action_watching else R.string.action_watch),
                 onAction = onToggleWatch,
                 colors = colors,
+                secondaryAction = stringResource(R.string.action_share),
+                onSecondaryAction = {
+                    context.shareSystemText(state.shareText { copy -> copy.resolve(context.resources) })
+                },
             )
             state.banner?.let { Banner(text = stringResource(it.text)) }
 

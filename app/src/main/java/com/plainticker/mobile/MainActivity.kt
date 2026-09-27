@@ -58,6 +58,9 @@ class MainActivity : ComponentActivity() {
      */
     private val openTab = MutableStateFlow<Int?>(null)
 
+    /** The stock a notification named, opened over its tab once, then cleared. */
+    private val openTicker = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -69,6 +72,7 @@ class MainActivity : ComponentActivity() {
         )
 
         openTab.value = tabFrom(intent)
+        openTicker.value = tickerFrom(intent)
         val container = appContainer
         // Must be created before the Activity starts: it registers for an activity result.
         val sender = ActivityResultSender(this)
@@ -76,6 +80,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val tab by openTab.collectAsState()
+            val ticker by openTicker.collectAsState()
             val darkTheme = isSystemInDarkTheme()
             val colors = if (darkTheme) AmberDarkColors else AmberLightColors
 
@@ -98,6 +103,8 @@ class MainActivity : ComponentActivity() {
                         container = container,
                         openTab = tab,
                         onTabOpened = { openTab.value = null },
+                        openTicker = ticker,
+                        onTickerOpened = { openTicker.value = null },
                     )
                 }
             }
@@ -108,9 +115,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openTab.value = tabFrom(intent)
+        openTicker.value = tickerFrom(intent)
     }
 
     private fun tabFrom(intent: Intent?): Int? = intent?.getIntExtra(EXTRA_TAB, -1)?.takeIf { it >= 0 }
+
+    /** Only a plain ticker ever routes: letters, digits and a dot, as the detail route expects. */
+    private fun tickerFrom(intent: Intent?): String? =
+        intent?.getStringExtra(EXTRA_TICKER)?.trim()?.takeIf { TICKER.matches(it) }
 
     override fun onDestroy() {
         walletSession?.let { appContainer.walletSession.unbind(it) }
@@ -121,5 +133,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Which home tab to open on, as an ordinal of [com.plainticker.mobile.ui.home.HomeTab]. */
         const val EXTRA_TAB = "com.plainticker.mobile.extra.TAB"
+
+        /** A stock to open over the tab, the underlying ticker ("JEF"): the digest's own pick or report. */
+        const val EXTRA_TICKER = "com.plainticker.mobile.extra.TICKER"
+
+        private val TICKER = Regex("[A-Za-z0-9.]{1,12}")
     }
 }

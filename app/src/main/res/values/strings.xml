@@ -22,6 +22,16 @@
     <string name="action_watch">Watch</string>
     <string name="action_watching">Watching</string>
     <string name="action_unwatch">Unwatch</string>
+    <!-- Share on a stock page (judges' round 2): one factual line off the trust card, then the
+         stock's page on the web. Facts only, and only those the page actually read. -->
+    <string name="action_share">Share</string>
+    <string name="detail_share_line">%1$s: %2$s.</string>
+    <string name="detail_share_plain">%1$s on PlainTicker.</string>
+    <string name="detail_share_delegate">issuer can move tokens (permanent delegate)</string>
+    <string name="detail_share_no_delegate">no permanent delegate</string>
+    <string name="detail_share_reserves">reserves reported at %1$s</string>
+    <string name="detail_share_url">https://www.plainticker.com/en/%1$s</string>
+    <string name="detail_share_home_url">https://www.plainticker.com/en</string>
     <string name="action_max">Max</string>
     <string name="action_clear">Clear</string>
     <string name="action_retry">Retry</string>
@@ -57,14 +67,17 @@
          that destination's own nav_ label so the panel can set it in weight 600. The old copy
          described a List to start on, a Watchlist that sent the digest and You "top right". -->
     <string name="onboarding_body_reads">Each stock page reads the token live from Solana first, then the company against its sector, from SEC filings.</string>
-    <string name="onboarding_map_today">Today shows market hours, the stocks you watch and who reports this week.</string>
-    <string name="onboarding_map_stocks">Stocks lists every tokenized stock by sector. Search, or open one to read it.</string>
-    <string name="onboarding_map_vote">Vote lets your staked SKR choose the next stock to be analyzed.</string>
-    <string name="onboarding_map_portfolio">Portfolio reads your wallet. Swap USDC into a stock token there or on its page, and back to USDC.</string>
-    <string name="onboarding_map_you">You has your sign-in, your wallet and Pro, which opens every figure on every covered stock.</string>
     <string name="onboarding_body_disclaimer">This is not a price forecast or investment advice.</string>
     <string name="onboarding_certify">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</string>
     <string name="onboarding_continue">Open Today</string>
+    <!-- Step one ends on the consent; step two (judges' round 2) lets the reader pick stocks to
+         watch, so onboarding ends on a filled Today or on the open AAPLx example, never on an
+         empty screen. The chips are real analysed stocks, never copy. -->
+    <string name="onboarding_consent_continue">Continue</string>
+    <string name="onboarding_pick_title">Pick stocks to watch</string>
+    <string name="onboarding_pick_body">Today will show their next report dates and how closely each token follows its share. One short digest a day says what changed.</string>
+    <string name="onboarding_pick_skip_example">Skip and read %1$s</string>
+    <string name="onboarding_pick_skip">Skip</string>
 
     <!-- List -->
     <string name="list_today_stale">Checked %1$s, tap to refresh</string>
@@ -423,8 +436,8 @@
     <string name="vote_action">Vote to cover next</string>
     <string name="vote_action_row">Vote</string>
     <string name="vote_title">Vote to cover %1$s</string>
-    <string name="vote_lede">This asks for %1$s to be analyzed next. The vote is a transaction carrying a memo, so the wallet that signs it is the voter, and anyone can count the votes from the chain.</string>
-    <string name="vote_gameable">A vote weighted by stake is decided by the largest stake. One wallet staking more than the rest outweighs them all, and nothing here corrects for that.</string>
+    <string name="vote_lede">This asks for %1$s to be analyzed next. The vote is a transaction carrying a memo, so the wallet that signs it is the voter. It weighs the stake the server reads when it counts.</string>
+    <string name="vote_gameable">Today the largest stake decides: one wallet staking more than the rest outweighs them all. The planned next change is one Seeker, one voice, checked through the Seeker Genesis Token.</string>
     <string name="vote_weight_label">Staked SKR this vote carries</string>
     <string name="vote_weight_landed_label">Staked SKR behind %1$s</string>
     <string name="vote_fee_label">Signature fee</string>
@@ -432,7 +445,9 @@
     <string name="vote_collector_label">Sent to</string>
     <string name="vote_refreshed">The transaction went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the vote.</string>
     <string name="vote_landed_label">Vote sent</string>
-    <string name="vote_landed_note">The vote is on the chain. It is counted from the memos of that address, so anyone can count it the same way. It can take up to about twenty minutes to reach the leaders, because the tally runs every ten minutes and the leaders are cached for five more.</string>
+    <string name="vote_landed_note">The vote is on the chain. Counted within about 20 minutes.</string>
+    <!-- Share from the landed state: a plain sentence and the public transaction, nothing else. -->
+    <string name="vote_share_text">I voted for %1$s to be analysed next on PlainTicker. https://solscan.io/tx/%2$s</string>
 
     <!-- What is in flight, one sentence each. Reaching the first means no wallet was connected. -->
     <string name="vote_phase_connecting">No wallet is connected, so the wallet is being asked to authorize.</string>
@@ -455,7 +470,7 @@
     <!-- The Vote tab (task A2, docs/plan-monetisation-2026-09-19.md section 1.5): the explainer,
          the round header, the leaders, the wallet's own votes, the last round and the ballot. -->
     <string name="vote_tab_explainer_what">This app covers only some of the tokenized stocks on Solana, and every analysis costs money. Staked SKR decides which uncovered token is analyzed next.</string>
-    <string name="vote_tab_explainer_how">A vote is a transaction you sign, not a login. It counts once per wallet per token in a round.</string>
+    <string name="vote_tab_explainer_how">A vote is a transaction you sign, not a login. One wallet can back several stocks in a round, each once, and every vote carries the stake the server reads when it counts.</string>
     <!-- The not-open state: HTTP 404, or 503 vote_not_configured, replaces every section below
          this one with the single honest line rather than an error banner. -->
     <string name="vote_tab_not_open">Voting is not open yet.</string>
@@ -464,13 +479,21 @@
          next-up, so it carries its own banner and its own Retry (VoteTabViewModel.refresh). -->
     <string name="vote_tab_ballot_unavailable">Ballot unavailable</string>
     <string name="vote_tab_round_heading">Round</string>
-    <string name="vote_tab_round_closes">Closes %1$s</string>
+    <!-- The top card (judges' round 2): the round's close in the reader's own time, the
+         connected wallet's stake, and the one action that leads to the ballot. -->
+    <string name="vote_tab_round_closes_local">Closes %1$s %2$s at %3$s your time</string>
+    <string name="vote_tab_stake_no_wallet">Connect a wallet with staked SKR to vote. Your stake is the weight your vote carries.</string>
+    <string name="vote_tab_stake_reading">Reading what this wallet has staked.</string>
+    <string name="vote_tab_stake">This wallet has %1$s SKR staked. That is the weight each vote from it carries.</string>
+    <string name="vote_tab_stake_zero">This wallet has no staked SKR, so a vote from it carries no weight.</string>
+    <string name="vote_tab_stake_unread">The stake of this wallet did not read, so no figure is shown.</string>
+    <string name="vote_tab_pick_action">Choose a stock to vote for</string>
     <string name="vote_tab_heading_leaders">Leaders</string>
     <!-- A round present with nothing voted yet: one line under the round header, drawn only in
          that state and never in vote_tab_not_open, which is a different thing already said. -->
     <string name="vote_tab_no_votes_yet">No votes in this round yet. The first vote leads.</string>
     <string name="vote_tab_heading_your_votes">Your votes</string>
-    <string name="vote_tab_your_votes_note">A vote can take up to about twenty minutes to reach the leaders above. The tally runs every ten minutes, and the leaders are cached for five more.</string>
+    <string name="vote_tab_your_votes_note">Counted within about 20 minutes.</string>
     <string name="vote_tab_your_vote_meta">Voted %1$s</string>
     <string name="vote_tab_heading_last_round">Last round</string>
     <string name="vote_tab_last_round_pending">%1$s is being covered</string>
@@ -616,6 +639,13 @@
     <string name="action_read_it">Read it</string>
     <string name="today_next_up_title">Next up for analysis</string>
     <string name="today_next_up_lede">Chosen by staked SKR. Round closes %1$s at %2$s your time.</string>
+    <!-- An open round nobody has voted in yet: the block still draws, because this is when one vote matters most. -->
+    <string name="today_next_up_empty">Round %1$s is open. No votes yet: one vote decides it.</string>
+    <!-- While the NYSE is closed (Toly's weekend idea): the covered tokens whose onchain price sits
+         furthest from the last close, only where the pool clears the liquidity floor. -->
+    <string name="today_closed_title">While New York is closed</string>
+    <string name="today_closed_lede">The tokens furthest from the last NYSE close, only where the pool is deep enough for the price to mean something.</string>
+    <string name="today_closed_pool">Pool %1$s</string>
     <!-- The digest screen, under You. -->
     <string name="digest_screen_lede">One short check a day on the stocks you watch.</string>
     <string name="digest_produced_today">Today at %1$s</string>
@@ -635,11 +665,8 @@
     <string name="watchlist_checked">Checked %1$s.</string>
     <string name="watchlist_empty">Nothing watched yet. Watch a stock from its page to see its next report date here, and get one digest a day.</string>
 
-    <!-- The daily digest: one sentence per clause, assembled by com.plainticker.mobile.watchlist.digest -->
-    <plurals name="digest_watched">
-        <item quantity="one">%1$s stock watched.</item>
-        <item quantity="other">%1$s stocks watched.</item>
-    </plurals>
+    <!-- The daily digest: one sentence per clause, assembled by com.plainticker.mobile.watchlist.digest.
+         News first: the first sentence is also the notification's title, without its period. -->
     <string name="digest_moved">%1$s moved from %2$s to %3$s against the NYSE close.</string>
     <string name="digest_reports_today">%1$s reports today.</string>
     <string name="digest_reports_tomorrow">%1$s reports tomorrow.</string>
@@ -659,11 +686,14 @@
          quantity: it does not pluralise anything after it. -->
     <string name="digest_vote_round_closes">Round %1$s closes %2$s.</string>
     <string name="digest_vote_winner_analysed">%1$s, last round\'s winner, is now analysed.</string>
+    <!-- The reader's own pick (a vote receipt on this device names it), said once, then left out. -->
+    <string name="digest_vote_pick_analysed">%1$s, which you voted for, is now analysed.</string>
+    <!-- A round closing later on the reader's own today; %2$s is the reader's clock time. -->
+    <string name="digest_vote_round_closes_today">Round %1$s closes today at %2$s your time.</string>
 
     <!-- Notifications -->
     <string name="notification_channel_watchlist">Watchlist</string>
     <string name="notification_channel_watchlist_description">One digest a day about the stocks you watch.</string>
-    <string name="notification_digest_title">Daily digest</string>
 
     <!-- You, the account cabinet (2026-09-25, matching plainticker.com's cabinet, web PR #145):
          one hero card (who, the plan as a headline, one action), then row groups for Plan,

@@ -44,12 +44,16 @@ class InMemoryDigestStore(initial: DigestRecord = DigestRecord.NONE) : DigestSto
 }
 
 class FakeDigestNotifier(var on: Boolean = true) : DigestNotifier {
-    val posted = mutableListOf<String>()
+    /** Every notice posted, whole: title, body and where a tap goes. */
+    val notices = mutableListOf<DigestNotice>()
+
+    /** The titles, in order: what the shade would lead with. */
+    val posted: List<String> get() = notices.map { it.title }
 
     override fun enabled(): Boolean = on
 
-    override fun post(text: String) {
-        posted += text
+    override fun post(notice: DigestNotice) {
+        notices += notice
     }
 }
 
@@ -89,3 +93,11 @@ fun watchedAt(
     referencePriceUsd = 100.0,
     poolUsd = poolUsd,
 )
+
+/** The pending vote picks, in memory. */
+class InMemoryPendingWatchStore(initial: Set<String> = emptySet()) : PendingWatchStore {
+    private var current = initial
+    override val tickers: Set<String> get() = current
+    override fun add(ticker: String) { current = current + ticker }
+    override fun remove(ticker: String) { current = current - ticker }
+}

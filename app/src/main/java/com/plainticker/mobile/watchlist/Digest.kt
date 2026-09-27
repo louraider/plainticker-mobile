@@ -8,7 +8,9 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.words
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
@@ -36,30 +38,49 @@ sealed interface DigestLine {
 
     val copy: Copy
 
-    /** How many tickers the check looked at. Never news on its own: it is the opening clause. */
-    data class Watched(val count: Int) : DigestLine {
-        override val copy: Copy get() = counted(R.plurals.digest_watched, count, Fmt.count(count))
-    }
+    /**
+     * Where the notification opens when this line is its title: the stock it names ([ticker]),
+     * or the Vote tab ([opensVote]); neither means the Today screen the digest belongs to.
+     */
+    val ticker: String? get() = null
+    val opensVote: Boolean get() = false
+
+    /**
+     * The order a reader wants the news in, smallest first: the reader's own pick analysed, then a
+     * report today or tomorrow, a round closing today, a move, a report further out, last round's
+     * winner, the week's other reports, a round closing later. The first line is the notification's
+     * title and the body follows it, so the most useful sentence is always the one the shade shows.
+     */
+    val rank: Int
 
     /**
      * A tracked premium that moved against the NYSE close since the previous check. Both ends are
      * stated, because "moved" without the ends is a claim a reader cannot check.
      */
-    data class Moved(val symbol: String, val fromPct: Double, val toPct: Double) : DigestLine {
+    data class Moved(
+        val symbol: String,
+        val fromPct: Double,
+        val toPct: Double,
+        override val ticker: String = symbol,
+    ) : DigestLine {
         override val copy: Copy
             get() = words(R.string.digest_moved, symbol, Fmt.percent(fromPct), Fmt.percent(toPct))
 
         val points: Double get() = abs(toPct - fromPct)
+
+        override val rank: Int get() = 3
     }
 
     /** The nearest report ahead. [inDays] is whole days from the day the check ran. */
-    data class Reports(val symbol: String, val inDays: Long) : DigestLine {
+    data class Reports(val symbol: String, val inDays: Long, override val ticker: String = symbol) : DigestLine {
         override val copy: Copy
             get() = when (inDays) {
                 0L -> words(R.string.digest_reports_today, symbol)
                 1L -> words(R.string.digest_reports_tomorrow, symbol)
                 else -> counted(R.plurals.digest_reports_in_days, inDays.toInt(), symbol, Fmt.count(inDays))
             }
+
+        override val rank: Int get() = if (inDays <= 1L) 1 else 4
     }
 
     /**
@@ -69,6 +90,8 @@ sealed interface DigestLine {
      */
     data class WeekReports(val count: Int) : DigestLine {
         override val copy: Copy get() = counted(R.plurals.digest_week_reports, count, Fmt.count(count))
+
+        override val rank: Int get() = 6
     }
 
     /**
@@ -76,10 +99,26 @@ sealed interface DigestLine {
      * round can be open with no previous winner yet (before the first round has closed) and a
      * previous winner can still be worth naming after its own round has closed.
      */
-    data class RoundCloses(val roundId: Int, val closesOn: LocalDate) : DigestLine {
+    data class RoundCloses(
+        val roundId: Int,
+        val closesOn: LocalDate,
+        /**
+         * The close in the reader's own clock ("02:00") when the round closes later on the
+         * reader's own today; null otherwise. A round closing tonight is worth the title.
+         */
+        val todayAt: String? = null,
+    ) : DigestLine {
         override val copy: Copy
             // The round's own number, never a quantity: it does not pluralise anything after it.
-            get() = words(R.string.digest_vote_round_closes, Fmt.count(roundId), Fmt.weekday(closesOn)) // lint-allow count: a round's number, not a quantity
+            get() = if (todayAt != null) {
+                words(R.string.digest_vote_round_closes_today, Fmt.count(roundId), todayAt) // lint-allow count: a round's number, not a quantity
+            } else {
+                words(R.string.digest_vote_round_closes, Fmt.count(roundId), Fmt.weekday(closesOn)) // lint-allow count: a round's number, not a quantity
+            }
+
+        override val opensVote: Boolean get() = true
+
+        override val rank: Int get() = if (todayAt != null) 2 else 7
     }
 
     /**
@@ -88,8 +127,11 @@ sealed interface DigestLine {
      * which the live contract still sends as `closed` rather than `published`). The loop from a
      * vote to a covered stock, closing in one sentence.
      */
-    data class WinnerAnalysed(val ticker: String) : DigestLine {
-        override val copy: Copy get() = words(R.string.digest_vote_winner_analysed, ticker)
+    data class WinnerAnalysed(override val ticker: String, val yours: Boolean = false) : DigestLine {
+        override val copy: Copy
+            get() = words(if (yours) R.string.digest_vote_pick_analysed else R.string.digest_vote_winner_analysed, ticker)
+
+        override val rank: Int get() = if (yours) 0 else 5
     }
 }
 
@@ -97,7 +139,7 @@ sealed interface DigestLine {
  * The one place a digest becomes a string: resources in the app, the same table in a test.
  *
  * [quantity] is the second method because a digest counts out loud and English has to agree with
- * it: "1 stock watched." and "4 stocks watched." are one resource with two forms, and only the
+ * it: "TSLAx reports in 1 day." and "in 4 days." are one resource with two forms, and only the
  * platform knows which one a number selects.
  */
 interface DigestStrings {
@@ -138,6 +180,31 @@ data class DigestInput(
      * Null when there is no previous winner, or none this run could confirm is analysed yet.
      */
     val analysedWinner: String? = null,
+    /** The reader voted for [analysedWinner] in the round it won (a receipt on this device says so). */
+    val votedForWinner: Boolean = false,
+    /**
+     * The pick an earlier digest already announced personally. Named once, as the title, and then
+     * left out: the reader knows, and the stock is on their list by then.
+     */
+    val announcedPick: String? = null,
+    /** When the check runs, for "closes today at 02:00"; null leaves every round line dated. */
+    val nowMillis: Long? = null,
+    /** The reader's own zone, for the same sentence: a round closes tonight on the reader's clock. */
+    val readerZone: ZoneId = ZoneOffset.UTC,
+)
+
+/**
+ * The notification one produced digest posts: its most useful line as the title (no period, as
+ * a title), up to two more as the body, and where a tap goes.
+ */
+data class DigestNotice(
+    val title: String,
+    /** Blank when the title is the whole of the news. */
+    val body: String,
+    /** The stock the title names: a tap opens its page. */
+    val ticker: String? = null,
+    /** The title is about the vote round: a tap opens Vote. */
+    val opensVote: Boolean = false,
 )
 
 data class Digest(
@@ -147,27 +214,32 @@ data class Digest(
     val nextReport: WatchedReport?,
 ) {
     /**
-     * True when a line says something that is not simply the count of what is watched. A check
-     * that finds only the count says nothing at all rather than sending a notification whose
-     * whole content is that the watchlist still exists.
+     * True when there is any line at all. The count of what is watched is no longer a line (judges'
+     * round 2: a digest that opens on "1 stock watched." leads with the one thing the reader
+     * already knows), so an empty digest is exactly a day with nothing to say.
      */
-    val hasNews: Boolean get() = lines.any { it !is DigestLine.Watched }
+    val hasNews: Boolean get() = lines.isNotEmpty()
 
-    /** The digest as one paragraph, every applicable clause: what the Panel draws under You. */
+    /** The reader's own pick, when this digest names it personally: the check records it as said. */
+    val personalPick: String?
+        get() = lines.firstNotNullOfOrNull { (it as? DigestLine.WinnerAnalysed)?.takeIf { line -> line.yours }?.ticker }
+
+    /** The digest as one paragraph, news first, every applicable clause: what the digest screen draws. */
     fun text(strings: DigestStrings): String = lines.joinToString(" ") { render(it, strings) }
 
     /**
-     * The notification's own shorter reading (task digest-stickiness): a shade has room for one
-     * to two short sentences, not every clause [text] carries once moves, reports, the week's
-     * other reports and the vote can all apply at once. This keeps the count, then whichever
-     * single fact [lines] ranks highest after it, in the same fixed order [digest] already builds
-     * them in. The fuller reading, every applicable clause, is [text], which the digest screen
-     * under You draws instead.
+     * The notification: the first line (the most useful one, see [DigestLine.rank]) as its title,
+     * the next two as its body. The full paragraph stays on the digest screen. Null with nothing
+     * to say.
      */
-    fun headline(strings: DigestStrings): String {
-        val watched = lines.firstOrNull { it is DigestLine.Watched }
-        val highlight = lines.firstOrNull { it !is DigestLine.Watched }
-        return listOfNotNull(watched, highlight).joinToString(" ") { render(it, strings) }
+    fun notice(strings: DigestStrings): DigestNotice? {
+        val top = lines.firstOrNull() ?: return null
+        return DigestNotice(
+            title = render(top, strings).removeSuffix("."),
+            body = lines.drop(1).take(NOTICE_BODY_LINES).joinToString(" ") { render(it, strings) },
+            ticker = top.ticker,
+            opensVote = top.opensVote,
+        )
     }
 
     private fun render(line: DigestLine, strings: DigestStrings): String =
@@ -186,10 +258,10 @@ data class Digest(
 /**
  * What today's check has to say. Pure, total, and sorted at every step.
  *
- * The order of the sentences is fixed: how many are watched, what moved, what reports next among
- * the watched, how many covered companies report this week regardless of what is watched, then
- * the vote. It is the canvas order, and it is also the order of decreasing volatility, so the part
- * of the digest that changes daily sits where a reader's eye lands after the count.
+ * The sentences are ordered by [DigestLine.rank], news first: the reader's own pick analysed, a
+ * report today or tomorrow, a round closing today, what moved, the nearest report further out,
+ * last round's winner, the week's other reports, a round closing later. Ties keep the order they
+ * were built in (the largest move first), so the same input always reads the same way.
  */
 fun digest(input: DigestInput): Digest {
     if (input.tickers.isEmpty()) return Digest.NOTHING
@@ -199,17 +271,37 @@ fun digest(input: DigestInput): Digest {
     val report = nearestReport(tickers, input.today)
 
     val lines = ArrayList<DigestLine>()
-    lines += DigestLine.Watched(tickers.size)
     lines += moves(tickers, input.previousPremiums)
-    report?.let { lines += DigestLine.Reports(it.symbol, ChronoUnit.DAYS.between(input.today, it.on)) }
+    report?.let { lines += DigestLine.Reports(it.symbol, ChronoUnit.DAYS.between(input.today, it.on), it.ticker) }
     weekReportCount(input.coveredReportDates, input.today)
         .takeIf { it > 0 }
         ?.let { lines += DigestLine.WeekReports(it) }
     input.voteRound?.closesAtInstant()?.let { closes ->
-        lines += DigestLine.RoundCloses(input.voteRound.id, LocalDate.ofInstant(closes, ZoneOffset.UTC))
+        lines += DigestLine.RoundCloses(
+            input.voteRound.id,
+            LocalDate.ofInstant(closes, ZoneOffset.UTC),
+            todayAt = closesLaterToday(closes, input.nowMillis, input.readerZone),
+        )
     }
-    input.analysedWinner?.let { lines += DigestLine.WinnerAnalysed(it) }
-    return Digest(lines = lines, premiums = premiums, nextReport = report)
+    input.analysedWinner?.let { winner ->
+        val yours = input.votedForWinner
+        val alreadySaid = yours && input.announcedPick.equals(winner, ignoreCase = true)
+        if (!alreadySaid) lines += DigestLine.WinnerAnalysed(winner, yours = yours)
+    }
+    return Digest(lines = lines.sortedBy { it.rank }, premiums = premiums, nextReport = report)
+}
+
+/**
+ * The reader's clock time of [closes] when it falls later on the reader's own today, else null.
+ * A close that has passed, or one on another day, is not "tonight".
+ */
+private fun closesLaterToday(closes: Instant, nowMillis: Long?, zone: ZoneId): String? {
+    val now = nowMillis ?: return null
+    val closesMillis = closes.toEpochMilli()
+    if (closesMillis <= now) return null
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    if (closes.atZone(zone).toLocalDate() != today) return null
+    return Fmt.clock(closesMillis, zone)
 }
 
 /**
@@ -242,7 +334,7 @@ private fun moves(tickers: List<WatchedTicker>, previous: Map<String, Double>): 
         .mapNotNull { row ->
             val now = row.premiumPct ?: return@mapNotNull null
             val before = previous[row.ticker] ?: return@mapNotNull null
-            DigestLine.Moved(row.display, before, now).takeIf { it.points >= MOVE_POINTS }
+            DigestLine.Moved(row.display, before, now, row.ticker).takeIf { it.points >= MOVE_POINTS }
         }
         .sortedWith(compareByDescending<DigestLine.Moved> { it.points }.thenBy { it.symbol })
         .take(MAX_MOVES)
@@ -261,3 +353,6 @@ const val MOVE_POINTS: Double = 0.5
 
 /** How many moves one digest names. */
 const val MAX_MOVES: Int = 2
+
+/** How many lines follow the title in the notification's body. */
+const val NOTICE_BODY_LINES: Int = 2

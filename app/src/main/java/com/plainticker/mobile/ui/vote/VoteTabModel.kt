@@ -11,7 +11,9 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.words
 import com.plainticker.mobile.ui.list.NextUpLeader
+import com.plainticker.mobile.ui.list.skrWeight
 import java.math.BigInteger
+import java.time.ZoneId
 
 /**
  * The Vote tab (task A2, docs/plan-monetisation-2026-09-19.md section 1.5): the state and the
@@ -132,6 +134,53 @@ fun myVotesFor(receipts: List<VoteReceipt>, round: VoteRound?, connectedVoter: S
 }
 
 /**
+ * The connected wallet's own stake, the one figure the Vote tab's top card leads with (judges'
+ * round 2: the vote action and the weight it carries belong at the top, not under an explainer).
+ * Read the same way the vote sheet reads it ([com.plainticker.mobile.data.rpc.SkrStakeBound]), so
+ * the card and the sheet cannot disagree about what a vote from this wallet weighs.
+ */
+sealed interface TabStake {
+    /** No wallet is connected, so there is nothing to read. */
+    data object NoWallet : TabStake
+
+    data object Reading : TabStake
+
+    /** The principal the staking program holds for the wallet, in raw units (6 decimals). */
+    data class Read(val raw: Long) : TabStake
+
+    /** The read failed or came back outside the bound: no figure rather than a guess. */
+    data object Unread : TabStake
+}
+
+/** The card's stake sentence, one per state, never a figure the read did not produce. */
+val TabStake.sentence: Copy
+    get() = when (this) {
+        TabStake.NoWallet -> words(R.string.vote_tab_stake_no_wallet)
+        TabStake.Reading -> words(R.string.vote_tab_stake_reading)
+        TabStake.Unread -> words(R.string.vote_tab_stake_unread)
+        is TabStake.Read ->
+            if (raw <= 0L) words(R.string.vote_tab_stake_zero)
+            else words(R.string.vote_tab_stake, skrWeight(BigInteger.valueOf(raw)))
+    }
+
+/**
+ * When the round closes, in the reader's own zone and words ("Closes Monday 29 Sep at 02:00 your
+ * time"), where the header used to print a UTC stamp nobody converts in their head. Null when the
+ * server stamped no close, or one that does not parse.
+ */
+fun roundClosesLocal(round: VoteRound, zone: ZoneId): Copy? {
+    val closes = round.closesAtInstant() ?: return null
+    val millis = closes.toEpochMilli()
+    val day = closes.atZone(zone).toLocalDate()
+    return words(
+        R.string.vote_tab_round_closes_local,
+        Fmt.weekday(millis, zone),
+        Fmt.dayMonth(day),
+        Fmt.clock(millis, zone),
+    )
+}
+
+/**
  * What the tab has to show right now.
  *
  * [failed] is set only for a first fetch that failed before anything was ever answered
@@ -158,6 +207,8 @@ data class VoteTabUiState(
      * forever with nothing offering a second attempt.
      */
     val ballotFailed: Boolean = false,
+    /** The connected wallet's stake, for the top card. */
+    val stake: TabStake = TabStake.NoWallet,
 ) {
     /** The explainer is the one thing every state shows; everything below it needs this to be true. */
     val showsRoundFurniture: Boolean get() = !isLoading && !failed && !notOpen

@@ -62,6 +62,12 @@ fun TopBar(
     insets: WindowInsets = WindowInsets.statusBars,
     onTitleLongPress: (() -> Unit)? = null,
     colors: AmberColors = defaultAmberColors(),
+    /**
+     * A second text action drawn before [action] (Detail's Share, beside Watch). Only drawn
+     * with a handler; TopBarTest measures the lockup plus both at 1.3x.
+     */
+    secondaryAction: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -109,6 +115,11 @@ fun TopBar(
             )
         }
         when {
+            action != null && onAction != null && secondaryAction != null && onSecondaryAction != null ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextAction(label = secondaryAction, onClick = onSecondaryAction, color = colors.actionText)
+                    TextAction(label = action, onClick = onAction, color = colors.actionText)
+                }
             action != null && onAction != null ->
                 TextAction(label = action, onClick = onAction, color = colors.actionText)
             // A picture of the action, not the action itself: same action-text colour, no click target.

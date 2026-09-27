@@ -1,6 +1,7 @@
 package com.plainticker.mobile.watchlist
 
 import com.plainticker.mobile.data.plainticker.VoteRound
+import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.SummaryRepository
@@ -23,6 +24,8 @@ data class VoteFacts(
     val round: VoteRound? = null,
     /** The previous round's winner, or null when there is none, or none this run could confirm. */
     val analysedWinner: String? = null,
+    /** A vote receipt on this device names [analysedWinner] in the round it won (or in no stamped round). */
+    val votedForWinner: Boolean = false,
 ) {
     companion object {
         val NONE = VoteFacts()
@@ -32,6 +35,11 @@ data class VoteFacts(
 class VoteDigestFacts(
     private val nextUp: NextUpRepository,
     private val summaries: SummaryRepository,
+    /**
+     * The reader's own votes, so the digest can say "which you voted for" about the one it
+     * picked. Null (every caller before this existed) never claims a vote.
+     */
+    private val voteReceipts: VoteReceiptStore? = null,
 ) {
     suspend fun load(): VoteFacts {
         val answer = try {
@@ -52,6 +60,11 @@ class VoteDigestFacts(
                 false
             }
         }
-        return VoteFacts(round = answer.round, analysedWinner = analysed)
+        val previousId = answer.previous?.id
+        val voted = analysed != null && voteReceipts?.receipts?.value.orEmpty().any { receipt ->
+            receipt.ticker.trim().equals(analysed, ignoreCase = true) &&
+                (receipt.round == null || previousId == null || receipt.round == previousId)
+        }
+        return VoteFacts(round = answer.round, analysedWinner = analysed, votedForWinner = voted)
     }
 }

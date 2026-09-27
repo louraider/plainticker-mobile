@@ -57,7 +57,9 @@ import com.plainticker.mobile.repo.SummaryRepository
 import com.plainticker.mobile.wallet.AesGcmSessionCipher
 import com.plainticker.mobile.wallet.EncryptedFileWalletSessionStore
 import com.plainticker.mobile.wallet.MwaWalletSession
+import com.plainticker.mobile.watchlist.AutoWatch
 import com.plainticker.mobile.watchlist.DigestNotifier
+import com.plainticker.mobile.watchlist.SharedPrefsPendingWatchStore
 import com.plainticker.mobile.watchlist.DigestStore
 import com.plainticker.mobile.watchlist.DigestStrings
 import com.plainticker.mobile.watchlist.SharedPrefsDigestStore
@@ -164,6 +166,12 @@ interface AppContainer {
 
     /** The daily job itself, and the way to fire it now. */
     val watchlistScheduler: WatchlistScheduler
+
+    /**
+     * Watches what the reader acted on: a vote's pick (once analysed) and a swap's stock token.
+     * Follows the receipt stores from [PlainTickerApp], so neither flow that writes them changes.
+     */
+    val autoWatch: AutoWatch
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -291,11 +299,17 @@ class DefaultAppContainer(context: Context) : AppContainer {
             },
             notifier = digestNotifier,
             clock = clock,
-            vote = VoteDigestFacts(nextUpRepository, summaryRepository),
+            vote = VoteDigestFacts(nextUpRepository, summaryRepository, voteReceiptStore),
+            autoWatch = autoWatch,
+            readerZone = java.time.ZoneId.systemDefault(),
         )
     }
 
     override val watchlistScheduler: WatchlistScheduler by lazy { WorkManagerWatchlistScheduler(app) }
+
+    override val autoWatch: AutoWatch by lazy {
+        AutoWatch(watchlistStore, SharedPrefsPendingWatchStore(prefs), summaryRepository, catalogRepository)
+    }
 
     companion object {
         const val PREFS_NAME = "plainticker"

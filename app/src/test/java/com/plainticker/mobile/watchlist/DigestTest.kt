@@ -4,7 +4,6 @@ import com.plainticker.mobile.data.plainticker.VoteRound
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,7 +34,7 @@ class DigestTest {
 
         assertEquals(first, second)
         assertEquals(
-            "3 stocks watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.",
+            "NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.",
             first,
         )
     }
@@ -77,8 +76,8 @@ class DigestTest {
     fun `watched tickers with no report ahead and no move are not news`() {
         val rows = listOf(watched("AAPL"), watched("TSLA"))
         val result = digest(DigestInput(today, rows))
-        assertFalse("the count alone is not worth a notification", result.hasNews)
-        assertEquals(listOf(DigestLine.Watched(2)), result.lines)
+        assertFalse("the watchlist merely existing is not worth a notification", result.hasNews)
+        assertEquals(emptyList<DigestLine>(), result.lines)
     }
 
     @Test
@@ -96,17 +95,17 @@ class DigestTest {
         )
         val result = digest(DigestInput(today, rows))
         assertEquals(WatchedReport("AAPL", "AAPLx", LocalDate.of(2026, 9, 16)), result.nextReport)
-        assertEquals("3 stocks watched. AAPLx reports in 3 days.", result.text(RealStrings.strings))
+        assertEquals("AAPLx reports in 3 days.", result.text(RealStrings.strings))
     }
 
     @Test
     fun `today and tomorrow are said in words, never as a count of days`() {
         assertEquals(
-            "1 stock watched. AAPLx reports today.",
+            "AAPLx reports today.",
             text(DigestInput(today, listOf(watched("AAPL", nextReport = today)))),
         )
         assertEquals(
-            "1 stock watched. AAPLx reports tomorrow.",
+            "AAPLx reports tomorrow.",
             text(DigestInput(today, listOf(watched("AAPL", nextReport = today.plusDays(1))))),
         )
     }
@@ -132,7 +131,7 @@ class DigestTest {
     fun `a first run has no baseline, so it names no move`() {
         val rows = listOf(watchedAt("NVDA", premiumPct = -0.61, nextReport = LocalDate.of(2026, 11, 19)))
         val result = digest(DigestInput(today, rows))
-        assertEquals("1 stock watched. NVDAx reports in 67 days.", result.text(RealStrings.strings))
+        assertEquals("NVDAx reports in 67 days.", result.text(RealStrings.strings))
         assertEquals(setOf("NVDA"), result.premiums.keys)
     }
 
@@ -151,7 +150,7 @@ class DigestTest {
     @Test
     fun `a ticker with no token reads as its ticker, not as a blank`() {
         val rows = listOf(watched("AAPL", symbol = null, nextReport = today.plusDays(2)))
-        assertEquals("1 stock watched. AAPL reports in 2 days.", text(DigestInput(today, rows)))
+        assertEquals("AAPL reports in 2 days.", text(DigestInput(today, rows)))
     }
 
     @Test
@@ -167,7 +166,7 @@ class DigestTest {
         val rows = listOf(watchedAt("NVDA", premiumPct = -0.61, nextReport = today.plusDays(3)))
         val line = text(DigestInput(today, rows, mapOf("NVDA" to -0.04)))
         assertTrue("every clause ends in a period", line.endsWith("."))
-        assertEquals("three sentences, one space between them", 3, line.split(". ").size)
+        assertEquals("two sentences, one space between them", 2, line.split(". ").size)
         assertFalse("no middle dots in a digest", line.contains('\u00B7'))
         assertTrue("one line, never a paragraph break", '\n' !in line)
     }
@@ -180,7 +179,7 @@ class DigestTest {
         val dates = listOf(today.plusDays(1), today.plusDays(6), today.plusDays(9))
         val result = digest(DigestInput(today, rows, coveredReportDates = dates))
         assertEquals(
-            "1 stock watched. 2 covered companies report this week.",
+            "2 covered companies report this week.",
             result.text(RealStrings.strings),
         )
     }
@@ -189,7 +188,7 @@ class DigestTest {
     fun `a single covered company this week reads as one, not as many`() {
         val rows = listOf(watched("AAPL"))
         val result = digest(DigestInput(today, rows, coveredReportDates = listOf(today)))
-        assertEquals("1 stock watched. 1 covered company reports this week.", result.text(RealStrings.strings))
+        assertEquals("1 covered company reports this week.", result.text(RealStrings.strings))
     }
 
     @Test
@@ -213,7 +212,7 @@ class DigestTest {
         val rows = listOf(watched("AAPL"))
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
         val result = digest(DigestInput(today, rows, voteRound = round))
-        assertEquals("1 stock watched. Round 3 closes Monday.", result.text(RealStrings.strings))
+        assertEquals("Round 3 closes Monday.", result.text(RealStrings.strings))
     }
 
     @Test
@@ -222,7 +221,7 @@ class DigestTest {
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
         val result = digest(DigestInput(today, rows, voteRound = round, analysedWinner = "JEF"))
         assertEquals(
-            "1 stock watched. Round 3 closes Monday. JEF, last round's winner, is now analysed.",
+            "JEF, last round's winner, is now analysed. Round 3 closes Monday.",
             result.text(RealStrings.strings),
         )
     }
@@ -231,7 +230,7 @@ class DigestTest {
     fun `a winner named with no round in progress still gets its own sentence`() {
         val rows = listOf(watched("AAPL"))
         val result = digest(DigestInput(today, rows, analysedWinner = "JEF"))
-        assertEquals("1 stock watched. JEF, last round's winner, is now analysed.", result.text(RealStrings.strings))
+        assertEquals("JEF, last round's winner, is now analysed.", result.text(RealStrings.strings))
     }
 
     @Test
@@ -242,18 +241,22 @@ class DigestTest {
         assertFalse(result.hasNews)
     }
 
-    // ---- The notification's shorter reading -------------------------------------------------
+    // ---- The notification: the most useful line as its title ------------------------------------
 
     @Test
-    fun `a quiet day but for the vote still gets a notification worth sending`() {
+    fun `a quiet day but for the vote still gets a notification, titled with it and opening the stock`() {
         val rows = listOf(watched("AAPL"))
         val result = digest(DigestInput(today, rows, analysedWinner = "JEF"))
         assertTrue(result.hasNews)
-        assertEquals(result.text(RealStrings.strings), result.headline(RealStrings.strings))
+        val notice = result.notice(RealStrings.strings)!!
+        assertEquals("JEF, last round's winner, is now analysed", notice.title)
+        assertEquals("the title is the whole of the news", "", notice.body)
+        assertEquals("JEF", notice.ticker)
+        assertFalse(notice.opensVote)
     }
 
     @Test
-    fun `the headline keeps the count and the single highest-priority clause, never every one`() {
+    fun `the title is the most useful line and the body the next two, never every clause`() {
         val rows = listOf(watchedAt("NVDA", premiumPct = -0.61, nextReport = today.plusDays(3)))
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
         val result = digest(
@@ -265,13 +268,102 @@ class DigestTest {
             ),
         )
         val full = result.text(RealStrings.strings)
-        val headline = result.headline(RealStrings.strings)
-        assertEquals("the fuller reading carries all six clauses", 6, full.split(". ").size)
-        assertEquals(
-            "the count, then the day's biggest move, and nothing past it",
-            "1 stock watched. NVDAx moved from -0.04% to -0.61% against the NYSE close.",
-            headline,
+        assertEquals("the fuller reading carries all five clauses", 5, full.split(". ").size)
+        val notice = result.notice(RealStrings.strings)!!
+        assertEquals("NVDAx moved from -0.04% to -0.61% against the NYSE close", notice.title)
+        assertEquals("NVDAx reports in 3 days. JEF, last round's winner, is now analysed.", notice.body)
+        assertEquals("a move opens the stock that moved", "NVDA", notice.ticker)
+        assertFalse("no digest ever opens on a count of what is watched", full.contains("watched"))
+    }
+
+    @Test
+    fun `nothing to say posts nothing`() {
+        assertNull(digest(DigestInput(today, listOf(watched("AAPL")))).notice(RealStrings.strings))
+    }
+
+    @Test
+    fun `a report tomorrow outranks a move, and opens that stock`() {
+        val rows = listOf(
+            watchedAt("NVDA", premiumPct = 3.0),
+            watched("AAPL", nextReport = today.plusDays(1)),
         )
-        assertNotEquals("the two readings really do diverge here", full, headline)
+        val result = digest(DigestInput(today, rows, mapOf("NVDA" to 0.0)))
+        val notice = result.notice(RealStrings.strings)!!
+        assertEquals("AAPLx reports tomorrow", notice.title)
+        assertEquals("AAPL", notice.ticker)
+        assertEquals("NVDAx moved from +0.00% to +3.00% against the NYSE close.", notice.body)
+    }
+
+    // ---- The reader's own pick ----------------------------------------------------------------
+
+    @Test
+    fun `the reader's own pick analysed is said personally, first, and opens the stock`() {
+        val rows = listOf(watched("AAPL", nextReport = today.plusDays(1)))
+        val result = digest(DigestInput(today, rows, analysedWinner = "JEF", votedForWinner = true))
+        assertEquals(
+            "JEF, which you voted for, is now analysed. AAPLx reports tomorrow.",
+            result.text(RealStrings.strings),
+        )
+        val notice = result.notice(RealStrings.strings)!!
+        assertEquals("JEF, which you voted for, is now analysed", notice.title)
+        assertEquals("JEF", notice.ticker)
+        assertEquals("JEF", result.personalPick)
+    }
+
+    @Test
+    fun `a pick already announced personally is not said again`() {
+        val rows = listOf(watched("AAPL"))
+        val result = digest(DigestInput(today, rows, analysedWinner = "JEF", votedForWinner = true, announcedPick = "JEF"))
+        assertFalse("the reader was told, and the stock is on their list by now", result.hasNews)
+        assertNull(result.personalPick)
+    }
+
+    @Test
+    fun `a winner the reader did not vote for is named the ordinary way, never as theirs`() {
+        val rows = listOf(watched("AAPL"))
+        val result = digest(DigestInput(today, rows, analysedWinner = "JEF", votedForWinner = false))
+        assertEquals("JEF, last round's winner, is now analysed.", result.text(RealStrings.strings))
+        assertNull(result.personalPick)
+    }
+
+    // ---- A round closing tonight on the reader's clock ----------------------------------------
+
+    @Test
+    fun `a round closing later today in the reader's zone leads, with the reader's clock time, and opens Vote`() {
+        val rows = listOf(watchedAt("NVDA", premiumPct = 3.0))
+        // 20:00 in New York on Sunday 27 September is 00:00 UTC on Monday 28 September.
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
+        val now = java.time.Instant.parse("2026-09-27T20:00:00Z").toEpochMilli()
+        val result = digest(
+            DigestInput(
+                LocalDate.of(2026, 9, 27), rows, mapOf("NVDA" to 0.0),
+                voteRound = round,
+                nowMillis = now,
+                readerZone = java.time.ZoneId.of("America/New_York"),
+            ),
+        )
+        val notice = result.notice(RealStrings.strings)!!
+        assertEquals("Round 3 closes today at 20:00 your time", notice.title)
+        assertTrue(notice.opensVote)
+        assertNull(notice.ticker)
+    }
+
+    @Test
+    fun `the same round closing on another day of the reader's calendar keeps its dated line, last`() {
+        val rows = listOf(watchedAt("NVDA", premiumPct = 3.0))
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
+        val now = java.time.Instant.parse("2026-09-27T20:00:00Z").toEpochMilli()
+        val result = digest(
+            DigestInput(
+                LocalDate.of(2026, 9, 27), rows, mapOf("NVDA" to 0.0),
+                voteRound = round,
+                nowMillis = now,
+                readerZone = java.time.ZoneId.of("Europe/Berlin"),
+            ),
+        )
+        assertEquals(
+            "NVDAx moved from +0.00% to +3.00% against the NYSE close. Round 3 closes Monday.",
+            result.text(RealStrings.strings),
+        )
     }
 }

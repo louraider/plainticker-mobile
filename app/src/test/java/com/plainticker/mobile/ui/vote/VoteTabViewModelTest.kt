@@ -54,7 +54,8 @@ class VoteTabViewModelTest {
         summaries: FakeSummaryRepository = summaryWith(),
         receipts: FakeVoteReceiptStore = FakeVoteReceiptStore(),
         wallet: FakeWalletSession = FakeWalletSession(),
-    ) = VoteTabViewModel(nextUp, catalog, summaries, receipts, wallet)
+        rpc: com.plainticker.mobile.repo.FakeRpcRepository? = null,
+    ) = VoteTabViewModel(nextUp, catalog, summaries, receipts, wallet, rpc)
 
     // ---- State per section ------------------------------------------------------------------
 
@@ -297,5 +298,42 @@ class VoteTabViewModelTest {
             assertEquals(setOf("TSM", "ASML"), widened.myVotes.map { it.ticker }.toSet())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ---- The top card's stake ----------------------------------------------------------------
+
+    private fun staked(raw: Long) = com.plainticker.mobile.repo.FakeRpcRepository(
+        stake = Result.success(
+            com.plainticker.mobile.data.rpc.SkrStake(listOf(com.plainticker.mobile.data.rpc.SkrStakeAccount("s".padEnd(44, '1'), raw))),
+        ),
+    )
+
+    @Test
+    fun `no wallet connected reads no stake and says so`() = runTest {
+        val rpc = staked(5_000_000L)
+        val model = viewModel(rpc = rpc)
+        advanceUntilIdle()
+        assertEquals(TabStake.NoWallet, model.state.value.stake)
+    }
+
+    @Test
+    fun `a connected wallet's stake is read the way the vote sheet reads it`() = runTest {
+        val wallet = FakeWalletSession().apply { connectedAs(WalletAccount(ByteArray(32) { 7 }, "Seeker")) }
+        val model = viewModel(wallet = wallet, rpc = staked(31_209_870_777L))
+        advanceUntilIdle()
+        assertEquals(TabStake.Read(31_209_870_777L), model.state.value.stake)
+
+        wallet.connectedAs(null)
+        advanceUntilIdle()
+        assertEquals("a disconnect clears the figure", TabStake.NoWallet, model.state.value.stake)
+    }
+
+    @Test
+    fun `a stake read that fails shows no figure rather than a guess`() = runTest {
+        val wallet = FakeWalletSession().apply { connectedAs(WalletAccount(ByteArray(32) { 7 }, "Seeker")) }
+        val rpc = com.plainticker.mobile.repo.FakeRpcRepository(stake = Result.failure(IOException("rpc down")))
+        val model = viewModel(wallet = wallet, rpc = rpc)
+        advanceUntilIdle()
+        assertEquals(TabStake.Unread, model.state.value.stake)
     }
 }

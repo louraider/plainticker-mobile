@@ -107,10 +107,6 @@ class CountCopyTest {
             Case(1, listOf("1"), "1 xStock, not priced by Jupiter"),
             Case(3, listOf("3"), "3 xStocks, none of them priced by Jupiter"),
         ),
-        "digest_watched" to listOf(
-            Case(1, listOf("1"), "1 stock watched."),
-            Case(4, listOf("4"), "4 stocks watched."),
-        ),
         "digest_reports_in_days" to listOf(
             Case(1, listOf("TSLAx", "1"), "TSLAx reports in 1 day."),
             Case(4, listOf("TSLAx", "4"), "TSLAx reports in 4 days."),
@@ -262,12 +258,12 @@ class CountCopyTest {
     }
 
     @Test
-    fun `the digest counts what it watched and how far off a report is`() {
+    fun `the digest counts how far off a report is, and no longer opens on what it watched`() {
         val today = LocalDate.of(2026, 9, 13)
         val one = digest(
             DigestInput(today = today, tickers = listOf(watched("TSLA", nextReport = today.plusDays(4)))),
         )
-        assertEquals("1 stock watched. TSLAx reports in 4 days.", one.text(RealStrings.strings))
+        assertEquals("TSLAx reports in 4 days.", one.text(RealStrings.strings))
 
         val many = digest(
             DigestInput(
@@ -279,7 +275,7 @@ class CountCopyTest {
                 ),
             ),
         )
-        assertEquals("3 stocks watched. TSLAx reports in 2 days.", many.text(RealStrings.strings))
+        assertEquals("TSLAx reports in 2 days.", many.text(RealStrings.strings))
     }
 
     @Test

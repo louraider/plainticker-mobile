@@ -120,4 +120,28 @@ class TopBarTest {
         assertTrue("follows dark and light through the action token", "tint = colors.actionText" in source)
         assertTrue("the mark comes before the wordmark", source.indexOf("ic_brand_mark_tight") < source.indexOf("text = title"))
     }
+
+    // ---- Detail's Share beside Watch (judges' round 2) ------------------------------------------
+
+    /**
+     * "Share" is five letters to "Watching"'s eight in the same style, so "Watching"'s measured
+     * width is a safe upper bound for it. Each TextAction adds its own 16dp start padding.
+     */
+    @Test
+    fun `the lockup plus Share and Watching still clear the budget at 1_3x`() {
+        val actionPadding = 16.0
+        val used = markDp * 1.3 + gapDp + wordmarkWidthDp * 1.3 + 2 * (watchingWidthDp * 1.3 + actionPadding)
+        assertTrue("the lockup, Share and Watching must fit $contentWidthDp dp at 1.3x, used $used", used <= contentWidthDp)
+    }
+
+    @Test
+    fun `the second action draws only with a handler, before the first`() {
+        val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }
+        val source = com.plainticker.mobile.lint.KotlinScan(
+            File(module, "src/main/java/com/plainticker/mobile/ui/components/TopBar.kt").readText(),
+        ).code
+        assertTrue("secondaryAction != null && onSecondaryAction != null" in source)
+        val row = source.substringAfter("secondaryAction != null && onSecondaryAction != null ->")
+        assertTrue("Share sits before Watch", row.indexOf("label = secondaryAction") < row.indexOf("label = action"))
+    }
 }

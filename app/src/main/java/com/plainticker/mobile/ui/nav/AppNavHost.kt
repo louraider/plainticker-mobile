@@ -37,6 +37,9 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     openTab: Int? = null,
     onTabOpened: () -> Unit = {},
+    /** A stock a notification named: opened over home once the graph is up, then consumed. */
+    openTicker: String? = null,
+    onTickerOpened: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val factory = remember(container) { appViewModelFactory(container) }
@@ -71,14 +74,26 @@ fun AppNavHost(
         }
     }
 
+    // After the tab above, so the stock opens over the tab the notification also named and back
+    // lands on it. Nothing opens before onboarding has been passed.
+    LaunchedEffect(openTicker) {
+        val ticker = openTicker ?: return@LaunchedEffect
+        onTickerOpened()
+        if (!onboarded) return@LaunchedEffect
+        navController.navigate(Routes.detail(ticker)) { launchSingleTop = true }
+    }
+
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 viewModel = viewModel(factory = factory),
-                onDone = {
+                onDone = { exit ->
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.ONBOARDING) { inclusive = true }
                     }
+                    // The worked example: a skipped pick lands on a stock page whose every figure
+                    // is open, over Today, rather than on an empty screen.
+                    exit.ticker?.let { navController.navigate(Routes.detail(it)) }
                 },
             )
         }
