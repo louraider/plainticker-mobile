@@ -31,9 +31,22 @@ is the web repo's `POST /api/v1/auth/google` (PR #140, `server/auth/README.md`, 
 8. You re-reads the entitlement through `PassViewModel.refreshEntitlement()`, the same refresh the
    Wallet block uses, so a Pro bought on the web shows in the Pro cell right away.
 
-**Sign out** forgets the stored account on this phone. The contract defines no sign-out call, so
-there is none. The server keeps the device linked to the account, so the device keeps that
-account's Pro after a local sign-out until the server offers a way to unlink it.
+**Sign out** (2026-09-27) calls `POST /api/v1/account/signout` with the device code in
+`X-PT-Code`, which removes this device's binding to the account server side, then forgets the
+stored account on this phone whatever the answer. Only a 200 reads as a plain signed-out state.
+Offline, or on any unclean answer, the account is still cleared here, You says the server has not
+confirmed it yet, and one retry is queued (`AccountSignOut`: a minute later while the process
+lives, and on the next launch); a new sign-in drops that retry first. A pass or promo code bound to
+the device code itself stays with the device.
+
+**Sign-in refused with `link_on_web`** (409): the Google account's email already belongs to a
+PlainTicker account made another way. The app does not link it; You says so and offers
+plainticker.com/en/account, where Google is linked to the existing account.
+
+**Legacy device codes.** A device still carrying a 10-symbol code rekeys it to a 26-symbol one
+through `POST /api/v1/device/rekey` on launch and before any account call (`DeviceRekeyer`; the
+new code is written to disk before the call and becomes current only on the server's 200). An
+account route that answers 401 `rekey_required` gets one rekey and one retry.
 
 The ID token is never logged, never stored and never put in a URL. `AccountViewModelTest` walks
 every path with a recording log and asserts the token appears in no line, no stored field and no
