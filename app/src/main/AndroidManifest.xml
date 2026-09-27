@@ -21,7 +21,11 @@
         <!-- Portrait only (plan section 13 Pass 6): a rotation during the wallet round trip must
              never recreate the Activity, so the size changes a rotation, a fold or a multi-window
              resize can still raise are handled in place, and so is a day/night flip (the theme is
-             dark only). Compose re-reads the configuration itself. -->
+             dark only). Compose re-reads the configuration itself.
+             adjustResize (device QA of 1.3.17): the default panned the whole window up behind the
+             keyboard, which took the status-bar scrim off screen, ran text under the clock and hid
+             "No xStock matches" behind the keys. Compose now lays out above the keyboard itself
+             (HomeScreen's imePadding). -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
@@ -29,6 +33,7 @@
             android:label="@string/app_name"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.PlainTicker.Starting"
+            android:windowSoftInputMode="adjustResize"
             tools:ignore="LockedOrientationActivity,DiscouragedApi">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

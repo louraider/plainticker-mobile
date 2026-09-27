@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -161,8 +165,12 @@ fun HomeScreen(
         }
     }
 
+    // The keyboard (device QA of 1.3.17). The window no longer pans behind it (adjustResize in the
+    // manifest), so the content ends above it here, and the bar steps aside while it is up: the
+    // search field and the line under it stay in view, and the clock's scrim stays where it is.
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     Box(modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().imePadding()) {
             Box(Modifier.weight(1f)) {
                 when (selected) {
                     AmberDestination.TODAY -> {
@@ -227,7 +235,7 @@ fun HomeScreen(
                     )
                 }
             }
-            AmberBottomNav(selected = selected, onSelect = ::select, colors = colors)
+            if (!imeVisible) AmberBottomNav(selected = selected, onSelect = ::select, colors = colors)
         }
 
         // The one thing on these five screens that does not scroll, and it is not content: the
