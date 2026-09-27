@@ -15,7 +15,7 @@ are not available to US persons; the app asks for that self-certification on its
 
 ## Try it in two minutes
 
-1. **Install the signed APK:** `https://github.com/louraider/plainticker-mobile/releases/download/v1.3.15-amber/plainticker-1.3.15-amber.apk`. It is signed with the one release key that
+1. **Install the signed APK:** `https://github.com/louraider/plainticker-mobile/releases/latest/download/plainticker.apk`, which always serves the latest release. It is signed with the one release key that
    `https://www.plainticker.com/.well-known/assetlinks.json` names, so the Seed Vault Wallet shows
    the app as `www.plainticker.com`. A Seeker is the target; any Android 8+ phone with a Mobile
    Wallet Adapter wallet runs it.
@@ -64,7 +64,7 @@ price. PlainTicker gives them three things that screen does not.
   of them is a forecast.
 - **What the price is worth.** The token price against the NYSE close. It is drawn only where
   Jupiter reports at least $4,000 of depth behind the price. Below that floor the app states the
-  depth instead ("$34 behind, too thin") and draws no premium. The rule lives in one function,
+  depth instead ("Pool $34, too thin") and draws no premium. The rule lives in one function,
   `data/jupiter/TrackingQuality.kt`, which every screen reads.
 
 **The daily habit** is Today and the digest. Today opens on the market's state in your own time
@@ -83,7 +83,9 @@ A web page cannot do most of this. The website shares only the analysis engine.
 - **Mobile Wallet Adapter 2.2 and the Seed Vault.** Every signature (swap, vote, Pro pass) goes
   through MWA to the Seeker's Seed Vault Wallet. The app never holds a key and never asks for a
   seed phrase.
-- **A verified app identity.** The release certificate's SHA-256 is published in
+- **A verified app identity.** The release certificate's SHA-256,
+  `66ce92eafa2f819b9a2f6e4eeddc33ac51be46644c295a02750231b1229a49af` (the certificate that signs
+  1.3.16 and every release before it), is published in
   `https://www.plainticker.com/.well-known/assetlinks.json` and returned by Google's Digital Asset
   Links API. The wallet's connect sheet therefore names the app `www.plainticker.com` before
   anyone approves anything. A debug build uses another key and does not verify, which is the

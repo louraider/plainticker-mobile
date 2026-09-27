@@ -2,7 +2,10 @@ name: Release
 
 # Tag v<major>.<minor>.<patch>[-suffix] -> signed release APK attached to a GitHub Release.
 #   versionName = tag without the leading v      (v0.2.0 -> 0.2.0)
-#   versionCode = major*10000 + minor*100 + patch (v0.2.0 -> 200); a -suffix marks a pre-release.
+#   versionCode = major*10000 + minor*100 + patch (v0.2.0 -> 200); a -suffix marks a pre-release,
+#   except -amber, which names the shipped design line and is a normal release marked Latest.
+# The APK is attached twice: plainticker-<versionName>.apk, and plainticker.apk, the stable name
+# behind https://github.com/louraider/plainticker-mobile/releases/latest/download/plainticker.apk.
 # Signing material comes only from repository secrets (docs/release-signing.md):
 #   KEYSTORE_BASE64  KEYSTORE_PASSWORD  KEY_ALIAS  KEY_PASSWORD
 
@@ -38,9 +41,10 @@ jobs:
           {
             echo "name=${TAG#v}"
             echo "code=$code"
-            echo "prerelease=$([[ -n "$suffix" ]] && echo true || echo false)"
+            # -amber is the design line every shipped build carries, not a release candidate.
+            echo "prerelease=$([[ -n "$suffix" && "$suffix" != "-amber" ]] && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
-          echo "versionName=${TAG#v} versionCode=$code prerelease=${suffix:+yes}"
+          echo "versionName=${TAG#v} versionCode=$code suffix=${suffix:-none}"
 
       - name: Check signing secrets are present
         env:
@@ -123,9 +127,23 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Name the release assets
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/plainticker-$VERSION_NAME.apk"
+          cp app/build/outputs/apk/release/app-release.apk dist/plainticker.apk
+          ls -la dist
+
       - name: GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          files: app/build/outputs/apk/release/app-release.apk
+          files: |
+            dist/plainticker-${{ steps.version.outputs.name }}.apk
+            dist/plainticker.apk
           generate_release_notes: true
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          # A normal release becomes Latest, so /releases/latest/download/plainticker.apk follows it.
+          make_latest: ${{ steps.version.outputs.prerelease == 'true' && 'false' || 'true' }}

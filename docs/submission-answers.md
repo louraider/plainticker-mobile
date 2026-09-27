@@ -46,7 +46,7 @@ one changes, it changes everywhere.
 | DECK URL | `DECK_URL` | Source: `docs/deck.md`. The founder exports it and fills in the link. |
 | DEMO VIDEO URL | `VIDEO_URL` | Script: `docs/video-script-2026-09-27.md`. Upload the caption track with the video: the platform reads the transcript, not the picture. |
 | REPOSITORY URL | `https://github.com/louraider/plainticker-mobile` | Read access granted through the Align GitHub connection before submitting, or made public after `docs/public-flip-checklist.md`. History stays unsquashed. |
-| ANDROID APK URL | `https://github.com/louraider/plainticker-mobile/releases/download/v1.3.15-amber/plainticker-1.3.15-amber.apk` | The signed release APK of the submission build, signed with the key `assetlinks.json` names. |
+| ANDROID APK URL | `https://github.com/louraider/plainticker-mobile/releases/latest/download/plainticker.apk` | The signed release APK of the latest release, signed with the key `assetlinks.json` names. The link is stable: every release attaches its APK as `plainticker.apk` and is marked Latest. |
 
 ## HAVE YOU WON A PREVIOUS HACKATHON WITH THIS PROJECT? IF YES WHICH ONE, IF NO PUT N/A.
 
