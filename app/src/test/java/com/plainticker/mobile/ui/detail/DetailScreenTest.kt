@@ -327,4 +327,14 @@ class DetailScreenTest {
         assertTrue("%1\$s SKR" in text)
         assertTrue("a code is one of the ways in", "or a code" in text)
     }
+
+    @Test
+    fun `vote to cover next becomes a quiet Voted once this wallet voted in the open round`() {
+        // Device QA of 1.3.17: AALx's Detail offered "Vote to cover next" after the wallet had voted.
+        assertTrue("val voted by voteViewModel.votedTickers.collectAsStateWithLifecycle()" in scan.code)
+        assertTrue("votedThisRound = voted.hasVoted(state.ticker)" in scan.code)
+        val block = body("private fun VoteBlock(", "private fun NextUpBlock(")
+        val quiet = block.indexOf("R.string.vote_voted_row")
+        assertTrue("Voted is drawn before, and instead of, the action", quiet in 0 until block.indexOf("TextAction("))
+    }
 }

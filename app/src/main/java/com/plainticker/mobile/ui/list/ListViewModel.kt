@@ -41,6 +41,22 @@ import java.time.LocalDate
 /** The one word right of the composite. Never a verdict: it describes the classification. */
 enum class RowState { STRONG, FAIR, WEAK }
 
+/**
+ * Where a row's quote stands with Jupiter, so a row with no figure can say why (device QA of
+ * 1.3.17: JEFx's row sat with no gap and no depth and nothing saying Jupiter has no price for it,
+ * and a cold start drew every row bare for seconds with no sign anything was coming).
+ */
+enum class RowQuote {
+    /** Not asked yet, or the ask is still out. */
+    PENDING,
+
+    /** Jupiter answered about this mint, with a price or without one. */
+    ANSWERED,
+
+    /** The ask never landed (a refused chunk): the banner says the prices are missing. */
+    UNREACHED,
+}
+
 /** One row of the list: an analyzed xStock, or a catalog xStock PlainTicker has not classified. */
 data class ListRow(
     /** Underlying equity ticker, e.g. "AAPL". The join key to PlainTicker and the Detail route. */
@@ -83,6 +99,8 @@ data class ListRow(
      * row, which offers no vote anyway.
      */
     val votable: Boolean = true,
+    /** Where this row's quote stands with Jupiter; see [RowQuote]. */
+    val quote: RowQuote = RowQuote.PENDING,
 ) {
     /** What the row shows left: the token symbol once the catalog is known, else the ticker. */
     val display: String get() = symbol ?: ticker
@@ -217,6 +235,12 @@ data class ListUiState(
     val analysisUnavailable: Boolean = false,
     val pricesUnavailable: Boolean = false,
     val pricesPartial: Boolean = false,
+    /**
+     * True once a price run has finished, whatever it found. Until then a row with a mint and no
+     * figure is still being priced, and says so quietly, and the Deep pool chip's slot is held
+     * (device QA of 1.3.17: the chip arrived seconds in and shoved the whole chip row sideways).
+     */
+    val pricesSettled: Boolean = false,
     /** The youngest analysis on screen, set only when every analyzed row is stale. */
     val allStaleDays: Int? = null,
     /**
@@ -730,6 +754,7 @@ class ListViewModel(
                         _state.update { it.copy(pricesUnavailable = true, pricesPartial = false) }
                     }
                     pricedAtMillis = clock.nowMillis()
+                    _state.update { it.copy(pricesSettled = true) }
                 }
             } while (pricesQueued)
         }
@@ -762,8 +787,8 @@ class ListViewModel(
      */
     private fun applyPrices(fetch: PriceFetch, asked: Collection<String>) {
         val covered = asked.toHashSet()
-        allAnalyzed = allAnalyzed.map { if (it.mint in covered) it.withPrice(fetch.priced[it.mint]) else it }
-        allWithoutAnalysis = allWithoutAnalysis.map { if (it.mint in covered) it.withPrice(fetch.priced[it.mint]) else it }
+        allAnalyzed = allAnalyzed.map { if (it.mint in covered) it.withPrice(fetch) else it }
+        allWithoutAnalysis = allWithoutAnalysis.map { if (it.mint in covered) it.withPrice(fetch) else it }
         val nothingPriced = fetch.priced.isEmpty()
         _state.update {
             it.copy(
@@ -786,12 +811,15 @@ class ListViewModel(
         )
     }
 
-    private fun ListRow.withPrice(entry: PriceEntry?): ListRow =
-        copy(
+    private fun ListRow.withPrice(fetch: PriceFetch): ListRow {
+        val entry = mint?.let { fetch.priced[it] }
+        return copy(
             priceUsd = entry?.usdPrice,
             referencePriceUsd = entry?.stockData?.price,
             poolUsd = entry?.liquidity,
+            quote = if (entry == null && mint in fetch.unfetched) RowQuote.UNREACHED else RowQuote.ANSWERED,
         )
+    }
 
     /** The quote this row's mint already had, if any. A rebuilt row must not lose its price. */
     private fun ListRow.carryingPriceFrom(already: Map<String, ListRow>): ListRow {
@@ -800,6 +828,7 @@ class ListViewModel(
             priceUsd = previous.priceUsd,
             referencePriceUsd = previous.referencePriceUsd,
             poolUsd = previous.poolUsd,
+            quote = previous.quote,
         )
     }
 

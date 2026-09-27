@@ -45,6 +45,7 @@ import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberChip
+import com.plainticker.mobile.ui.components.SkeletonBar
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRow
@@ -67,6 +68,7 @@ import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberTheme
 import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.vote.VoteActions
+import com.plainticker.mobile.ui.vote.hasVoted
 import com.plainticker.mobile.ui.vote.VoteSheet
 import com.plainticker.mobile.ui.vote.VoteViewModel
 import java.time.LocalDate
@@ -122,6 +124,7 @@ fun ListScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
+    val voted by voteViewModel.votedTickers.collectAsStateWithLifecycle()
     val colors = if (isSystemInDarkTheme()) AmberDarkColors else AmberLightColors
     Box(modifier.fillMaxSize()) {
         // AmberTheme wraps only the restyled content, not VoteSheet: VoteSheet is Instrument's own
@@ -136,6 +139,7 @@ fun ListScreen(
                 onRetry = viewModel::refresh,
                 onOpenDetail = onOpenDetail,
                 onVote = { ticker, symbol -> voteViewModel.vote(ticker, symbol) },
+                votedTickers = voted,
                 header = header,
                 colors = colors,
             )
@@ -165,6 +169,11 @@ internal fun ListContent(
      * then draw exactly as they did before.
      */
     onVote: ((ticker: String, symbol: String) -> Unit)? = null,
+    /**
+     * Tickers this wallet already voted for in the open round ([VoteViewModel.votedTickers], the
+     * one rule every Vote surface reads): their rows draw a quiet "Voted" instead of Vote.
+     */
+    votedTickers: Set<String> = emptySet(),
     header: @Composable () -> Unit = {},
     colors: AmberColors = defaultAmberColors(),
 ) {
@@ -178,6 +187,9 @@ internal fun ListContent(
         state.analyzed.chapteredBySector().mapNotNull { it.sector }
     }
     val trackedCount = remember(state.analyzed) { state.analyzed.count { it.tracking is TrackingQuality.Tracked } }
+    // No price run has finished yet: rows say they are being priced and the Deep pool chip's slot
+    // is held, so the figures and the chip arrive without shoving anything (device QA of 1.3.17).
+    val pricesPending = !state.pricesSettled && !state.pricesUnavailable
 
     var filterKey by rememberSaveable { mutableStateOf<String?>(null) }
     val activeFilter = stocksFilterFromSaveKey(filterKey)
@@ -209,6 +221,7 @@ internal fun ListContent(
                 sectors = allSectors,
                 activeFilter = activeFilter,
                 onFilterSelect = { tapped -> filterKey = if (activeFilter == tapped) null else tapped.toSaveKey() },
+                pricesPending = pricesPending,
             )
         }
 
@@ -254,6 +267,7 @@ internal fun ListContent(
                     itemsIndexed(chapter.rows, key = { _, row -> "a:" + row.ticker }) { index, row ->
                         AnalyzedRow(
                             row = row,
+                            pricesPending = pricesPending,
                             modifier = groupedRowModifier(colors, isFirst = index == 0, isLast = index == chapter.rows.lastIndex),
                             colors = colors,
                             onOpenDetail = onOpenDetail,
@@ -277,6 +291,7 @@ internal fun ListContent(
                             colors = colors,
                             onOpenDetail = onOpenDetail,
                             onVote = onVote,
+                            voted = votedTickers.hasVoted(leader.ticker),
                         )
                     }
                 }
@@ -290,6 +305,7 @@ internal fun ListContent(
                 itemsIndexed(state.analyzed, key = { _, row -> "a:" + row.ticker }) { index, row ->
                     AnalyzedRow(
                         row = row,
+                        pricesPending = pricesPending,
                         modifier = groupedRowModifier(
                             colors,
                             isFirst = index == 0,
@@ -302,6 +318,7 @@ internal fun ListContent(
                 itemsIndexed(state.withoutAnalysis, key = { _, row -> "p:" + row.ticker }) { index, row ->
                     PriceOnlyRow(
                         row = row,
+                        pricesPending = pricesPending,
                         modifier = groupedRowModifier(
                             colors,
                             isFirst = index == 0 && state.analyzed.isEmpty(),
@@ -310,6 +327,7 @@ internal fun ListContent(
                         colors = colors,
                         onOpenDetail = onOpenDetail,
                         onVote = onVote,
+                        voted = votedTickers.hasVoted(row.ticker),
                     )
                 }
             }
@@ -330,6 +348,7 @@ private fun StocksChrome(
     sectors: List<String>,
     activeFilter: StocksFilter?,
     onFilterSelect: (StocksFilter) -> Unit,
+    pricesPending: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth().background(colors.surfaceGround)) {
         Text(
@@ -353,6 +372,7 @@ private fun StocksChrome(
                 active = activeFilter,
                 onSelect = onFilterSelect,
                 colors = colors,
+                holdDeepPoolSlot = pricesPending,
             )
             if (activeFilter == StocksFilter.Tracked) {
                 Text(
@@ -414,6 +434,12 @@ private fun StocksFilterRow(
     active: StocksFilter?,
     onSelect: (StocksFilter) -> Unit,
     colors: AmberColors,
+    /**
+     * Prices have not answered yet, so the deep-pool count is not known: a quiet placeholder the
+     * chip's size holds its slot, and the chip replaces it in place rather than arriving seconds
+     * later and pushing Watched and every sector sideways (device QA of 1.3.17).
+     */
+    holdDeepPoolSlot: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -423,7 +449,9 @@ private fun StocksFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (showsDeepPoolChip(trackedCount, active)) {
+        if (holdDeepPoolSlot && !showsDeepPoolChip(trackedCount, active)) {
+            SkeletonBar(width = DeepPoolSlotWidth, height = 32.dp, colors = colors)
+        } else if (showsDeepPoolChip(trackedCount, active)) {
             AmberChip(
                 // Deep pool and Watched read as a label plus a count, not a sentence a plural has
                 // to agree with ("Deep pool 22", never "22 deep pool stocks"), so the count stays a
@@ -545,7 +573,13 @@ private val RowGapHeight = 1.dp
  * own worst-case figure ("38,406.2 SKR") already proves.
  */
 @Composable
-private fun AnalyzedRow(row: ListRow, modifier: Modifier = Modifier, colors: AmberColors, onOpenDetail: (String) -> Unit) {
+private fun AnalyzedRow(
+    row: ListRow,
+    modifier: Modifier = Modifier,
+    colors: AmberColors,
+    onOpenDetail: (String) -> Unit,
+    pricesPending: Boolean = false,
+) {
     // "62 of 100", not "score 62" (judges' round 2, 2026-09-27): a bare "score" named no scale.
     // What the scale ranks against, the sector, is said once above the rows
     // (list_row_score_legend). Widest real value "100 of 100", figureRow 18sp/600 tnum: 92.538dp
@@ -559,7 +593,7 @@ private fun AnalyzedRow(row: ListRow, modifier: Modifier = Modifier, colors: Amb
         ticker = row.display,
         company = row.company,
         figure = figure,
-        context = rowMeta(row),
+        context = rowMeta(row, pricesPending),
         colors = colors,
         onClick = { onOpenDetail(row.ticker) },
         onClickLabel = stringResource(R.string.action_open_ticker, row.display),
@@ -579,17 +613,20 @@ private fun PriceOnlyRow(
     colors: AmberColors,
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
+    voted: Boolean = false,
+    pricesPending: Boolean = false,
 ) {
     VotableAmberRow(
         ticker = row.display,
         company = row.company,
         figure = row.priceUsd?.let { Fmt.price(it) },
-        context = rowMeta(row),
+        context = rowMeta(row, pricesPending),
         colors = colors,
         modifier = modifier,
         onClick = { onOpenDetail(row.ticker) },
         onClickLabel = stringResource(R.string.action_open_ticker, row.display),
         onVote = if (onVote == null || !row.votable) null else ({ onVote(row.ticker, row.display) }),
+        voted = voted && row.votable,
     )
 }
 
@@ -601,6 +638,7 @@ private fun NextUpLeaderRow(
     colors: AmberColors,
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
+    voted: Boolean = false,
 ) {
     VotableAmberRow(
         ticker = leader.display,
@@ -612,6 +650,7 @@ private fun NextUpLeaderRow(
         onClick = { onOpenDetail(leader.ticker) },
         onClickLabel = stringResource(R.string.action_open_ticker, leader.display),
         onVote = if (onVote == null) null else ({ onVote(leader.ticker, leader.display) }),
+        voted = voted,
     )
 }
 
@@ -634,6 +673,11 @@ private fun VotableAmberRow(
     onClick: () -> Unit,
     onClickLabel: String,
     onVote: (() -> Unit)?,
+    /**
+     * This wallet already voted for the row's token in the open round: a quiet "Voted" in the
+     * action's place, the same word and colour the Vote tab draws (device QA of 1.3.17).
+     */
+    voted: Boolean = false,
 ) {
     Row(
         modifier = modifier.background(colors.surfaceRaised),
@@ -649,7 +693,16 @@ private fun VotableAmberRow(
             onClickLabel = onClickLabel,
             modifier = Modifier.weight(1f),
         )
-        if (onVote != null) {
+        if (voted) {
+            Text(
+                text = stringResource(R.string.vote_voted_row),
+                style = AmberType.context,
+                color = colors.textTertiary(AmberSurface.RAISED),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        } else if (onVote != null) {
             TextAction(
                 label = stringResource(R.string.vote_action_row),
                 onClick = onVote,
@@ -713,7 +766,7 @@ private fun NextUpLabel(colors: AmberColors) {
  * age at all, and a row with neither has no meta line.
  */
 @Composable
-private fun rowMeta(row: ListRow): String? {
+private fun rowMeta(row: ListRow, pricesPending: Boolean = false): String? {
     val quote = when (val tracking = row.tracking) {
         is TrackingQuality.Tracked ->
             tracking.premiumPct?.let { stringResource(R.string.list_row_meta_premium, Fmt.percent(it)) }
@@ -723,7 +776,15 @@ private fun rowMeta(row: ListRow): String? {
 
         TrackingQuality.Untracked -> stringResource(R.string.list_row_meta_pool_unknown)
 
-        null -> null
+        // No figure: say why rather than leave the line bare (device QA of 1.3.17). Still being
+        // priced on a cold start; answered by Jupiter with no price (JEFx); a refused chunk says
+        // nothing here, because the banner already does.
+        null -> when {
+            row.mint == null -> null
+            row.priceUsd == null && row.quote == RowQuote.ANSWERED -> stringResource(R.string.list_row_meta_unpriced)
+            row.priceUsd == null && row.quote == RowQuote.PENDING && pricesPending -> stringResource(R.string.list_row_meta_pricing)
+            else -> null
+        }
     }
     val age = row.ageForMeta?.let { pluralStringResource(R.plurals.list_row_age_days, it, Fmt.count(it)) }
     return when {
@@ -945,3 +1006,6 @@ private fun ListLoadingPreview() {
         )
     }
 }
+
+/** The Deep pool chip's own width at its usual count ("Deep pool 17"), held while prices load. */
+private val DeepPoolSlotWidth = 112.dp

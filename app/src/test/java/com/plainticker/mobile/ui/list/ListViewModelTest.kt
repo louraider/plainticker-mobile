@@ -877,6 +877,37 @@ class ListViewModelTest {
     // ---- Prices ------------------------------------------------------------------------
 
     /**
+     * Device QA of 1.3.17: a cold start drew every row bare for seconds, and JEFx's row stayed bare
+     * for good with nothing saying Jupiter has no price for it. Each row now knows where its quote
+     * stands, and the screen knows when the first price run has finished.
+     */
+    @Test
+    fun `a row knows whether its quote is still out, answered without a price, or never reached`() = runTest {
+        val gate = Gate()
+        val held = HeldPriceRepository(
+            gate,
+            FakePriceRepository(
+                Result.success(mapOf(aaplMint to price(232.5, reference = 232.4))),
+                unfetched = setOf(jpmMint),
+            ),
+        )
+        val vm = viewModel(prices = held)
+        runCurrent()
+        assertFalse("no run has finished yet", vm.state.value.pricesSettled)
+        assertTrue((vm.state.value.analyzed + vm.state.value.withoutAnalysis).all { it.quote == RowQuote.PENDING })
+
+        gate.release()
+        advanceUntilIdle()
+        val rows = (vm.state.value.analyzed + vm.state.value.withoutAnalysis).associateBy { it.ticker }
+        assertTrue(vm.state.value.pricesSettled)
+        assertEquals(RowQuote.ANSWERED, rows.getValue("AAPL").quote)
+        assertEquals("answered without a price", RowQuote.ANSWERED, rows.getValue("TSLA").quote)
+        assertNull(rows.getValue("TSLA").priceUsd)
+        assertEquals(RowQuote.UNREACHED, rows.getValue("JPM").quote)
+    }
+
+
+    /**
      * Device QA of 1.3.16: AAPLx read -0.40% on Stocks and -0.68% on Detail seconds apart, because
      * the list priced once per load and Detail asked for a fresh quote. While Stocks is shown the
      * list re-prices on the price cache's own window, and stops when it leaves.

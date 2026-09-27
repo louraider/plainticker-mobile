@@ -61,7 +61,7 @@ class ListScreenTest {
     @Test
     fun `the Deep pool chip is gated on its own count`() {
         val fn = body("private fun StocksFilterRow(", "private fun groupedRowModifier(")
-        assertTrue("if (showsDeepPoolChip(trackedCount, active))" in fn)
+        assertTrue("} else if (showsDeepPoolChip(trackedCount, active)) {" in fn)
     }
 
     @Test
@@ -137,5 +137,42 @@ class ListScreenTest {
                 afterOpenParen.startsWith("colors,"),
             )
         }
+    }
+
+    // ---- Voted, the same everywhere (device QA of 1.3.17) ---------------------------------------
+
+    @Test
+    fun `a row this wallet already voted for this round says Voted instead of offering Vote`() {
+        val screen = body("fun ListScreen(", "internal fun ListContent(")
+        assertTrue("val voted by voteViewModel.votedTickers.collectAsStateWithLifecycle()" in screen)
+        assertTrue("votedTickers = voted" in screen)
+        val content = body("internal fun ListContent(", "private fun StocksChrome(")
+        assertTrue("the Next up strip reads it", "voted = votedTickers.hasVoted(leader.ticker)" in content)
+        assertTrue("a search result reads it", "voted = votedTickers.hasVoted(row.ticker)" in content)
+        val row = body("private fun VotableAmberRow(", "private fun EmptyLine(")
+        val note = row.indexOf("R.string.vote_voted_row")
+        assertTrue("the quiet word comes first, in place of the action", note in 0 until row.indexOf("TextAction("))
+        assertTrue("} else if (onVote != null) {" in row)
+    }
+
+    // ---- Cold start and unpriced rows (device QA of 1.3.17) -------------------------------------
+
+    @Test
+    fun `a row with no figure says why, and says it is being priced only until the first run settles`() {
+        val meta = body("private fun rowMeta(", "private fun StateBanner(")
+        assertTrue("row.priceUsd == null && row.quote == RowQuote.ANSWERED -> stringResource(R.string.list_row_meta_unpriced)" in meta)
+        assertTrue(
+            "row.priceUsd == null && row.quote == RowQuote.PENDING && pricesPending -> stringResource(R.string.list_row_meta_pricing)" in meta,
+        )
+        assertTrue("val pricesPending = !state.pricesSettled && !state.pricesUnavailable" in source)
+    }
+
+    @Test
+    fun `the deep pool chip's slot is held while prices load, so the chip row does not jump`() {
+        val row = body("private fun StocksFilterRow(", "private fun groupedRowModifier(")
+        val slot = row.indexOf("if (holdDeepPoolSlot && !showsDeepPoolChip(trackedCount, active)) {")
+        assertTrue("the placeholder comes first, in the chip's own slot", slot >= 0 && slot < row.indexOf("AmberChip("))
+        assertTrue("SkeletonBar(width = DeepPoolSlotWidth, height = 32.dp, colors = colors)" in row)
+        assertTrue("holdDeepPoolSlot = pricesPending" in source)
     }
 }

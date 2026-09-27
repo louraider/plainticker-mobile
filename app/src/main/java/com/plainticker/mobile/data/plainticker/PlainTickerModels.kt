@@ -247,4 +247,19 @@ data class Verdict(
     @SerialName("label_en") val labelEn: String? = null,
     val tone: Tone? = null,
     val locked: Boolean = false,
-)
+    /**
+     * v1.2: `classified` (a code is given), `unavailable` (the method gives no class, the numbers
+     * are still returned) or `locked`. Absent on an older server, which then reads as before.
+     */
+    @SerialName("class_state") val classState: String? = null,
+    /** Why a class is unavailable: `sector-model-pending` (banks, brokers, insurers) or `insufficient-data`. */
+    @SerialName("class_reason") val classReason: String? = null,
+) {
+    /** The method gives no class for this company; every caller sees it, there is nothing to unlock. */
+    val unavailable: Boolean get() = classState == CLASS_STATE_UNAVAILABLE
+
+    companion object {
+        const val CLASS_STATE_UNAVAILABLE = "unavailable"
+        const val REASON_SECTOR_MODEL_PENDING = "sector-model-pending"
+    }
+}

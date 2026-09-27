@@ -110,7 +110,7 @@ class ListFinishedScreenTest {
             "a locked row draws the shared Pro marker in that same slot, never the composite",
             "row.locked" in analyzed && "R.string.pro_locked_value" in analyzed,
         )
-        assertTrue("the row's context is its own disclosure sentence", "context = rowMeta(row)" in analyzed)
+        assertTrue("the row's context is its own disclosure sentence", "context = rowMeta(row, pricesPending)" in analyzed)
         assertFalse("no reserved state-word column on the Amber row", "reserveValueSub" in analyzed)
         assertFalse("no fixed-width state-word cell on the Amber row", "valueSubWidth" in analyzed)
     }

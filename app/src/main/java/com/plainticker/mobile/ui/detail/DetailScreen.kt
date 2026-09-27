@@ -104,6 +104,7 @@ import com.plainticker.mobile.ui.vote.VoteActions
 import com.plainticker.mobile.ui.vote.VoteSheet
 import com.plainticker.mobile.ui.vote.VoteState
 import com.plainticker.mobile.ui.vote.VoteViewModel
+import com.plainticker.mobile.ui.vote.hasVoted
 import java.math.BigInteger
 import java.time.Instant
 
@@ -138,6 +139,7 @@ fun DetailScreen(
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
     val holding by swapViewModel.holding.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
+    val voted by voteViewModel.votedTickers.collectAsStateWithLifecycle()
 
     // What the connected wallet holds of this token, read from the chain, is what decides whether
     // "Swap to USDC" is offered here. Keyed on the token, so a chain read that adds the multiplier
@@ -163,6 +165,7 @@ fun DetailScreen(
         // The vote names the token the way this screen does, so the sheet it opens says NFLXx
         // where the hero says NFLXx, and the ticker under it is the key the server joins on.
         onVote = { voteViewModel.vote(state.ticker, state.symbol ?: state.ticker) },
+        votedThisRound = voted.hasVoted(state.ticker),
         swapActions = SwapActions(
             onAmountChanged = swapViewModel::amountChanged,
             onMax = swapViewModel::useMax,
@@ -207,6 +210,11 @@ internal fun DetailContent(
     voteActions: VoteActions = NoVoteActions,
     /** Null in the previews and the gallery, where no wallet can be reached. */
     onVote: (() -> Unit)? = null,
+    /**
+     * This wallet already voted for this ticker in the open round ([VoteViewModel.votedTickers]):
+     * "Vote to cover next" becomes the same quiet "Voted" the Vote tab draws.
+     */
+    votedThisRound: Boolean = false,
     /** Null in the previews and the gallery; the lock's own way to Pro when it is not (task A6). */
     onGetPro: (() -> Unit)? = null,
     /** The connected wallet's chain-read balance of this token; null with no wallet or no read. */
@@ -269,7 +277,7 @@ internal fun DetailContent(
             NextStepsSection(state)
             state.readNotice?.let { NoticeLine(it) }
             NextUpBlock(state)
-            VoteBlock(state = state, onVote = onVote)
+            VoteBlock(state = state, onVote = onVote, voted = votedThisRound)
             SwapBlock(state = state, swap = swap, onSwap = onSwap, holding = holding, onSwapOut = onSwapOut)
             Spacer(Modifier.height(TailGap))
 
@@ -333,6 +341,17 @@ private fun VerdictSection(state: DetailUiState, onGetPro: (() -> Unit)?) {
                     style = AmberType.context,
                     color = colors.textSecondary,
                 )
+            }
+
+            is VerdictBlock.Unavailable -> {
+                // No class exists, so there is nothing to lock or to offer Pro for: the plain state and the
+                // reason, secondary, never the weight of a classification word.
+                Text(
+                    text = stringResource(R.string.detail_verdict_unavailable),
+                    style = AmberType.sectionHead,
+                    color = colors.textSecondary,
+                )
+                Text(text = block.reason.text(), style = AmberType.context, color = colors.textSecondary)
             }
 
             VerdictBlock.Locked -> {
@@ -521,7 +540,10 @@ private fun PriceBlock(state: DetailUiState) {
 
                 pending -> SkeletonBar(width = 160.dp, height = type.skeletonHeight)
 
-                // Jupiter answered and there is no price: a placeholder, never a zero.
+                // Jupiter answered and has no price: the note below says so in the figure's place.
+                row.tokenAbsent -> Unit
+
+                // No price for another reason: a placeholder, never a zero.
                 else -> Text(
                     text = stringResource(R.string.value_missing),
                     style = type.token,
@@ -530,7 +552,12 @@ private fun PriceBlock(state: DetailUiState) {
                 )
             }
             row.tokenNote?.let {
-                Text(text = it.text(), style = AmberType.context, color = colors.textSecondary)
+                // In the figure's place when there is no figure at all: the body face, not a caption.
+                Text(
+                    text = it.text(),
+                    style = if (row.tokenAbsent) AmberType.body else AmberType.context,
+                    color = colors.textSecondary,
+                )
             }
         }
         if (row.referencePrice != null || pending) {
@@ -860,11 +887,15 @@ private fun SwapBlock(
     ) {
         // The swap flow itself (its sheet, its receipt) is untouched: only this trigger button
         // is restyled, to Amber's own primary action, one of the six named components.
+        val blocked = state.swapBlockedReason
         AmberPrimaryAction(
             label = label.text(),
             onClick = onSwap,
-            enabled = state.mint != null && !swap.isBusy,
+            enabled = state.mint != null && !swap.isBusy && blocked == null,
         )
+        blocked?.let {
+            Text(text = it.text(), style = AmberType.context, color = colors.textSecondary)
+        }
         // The exit, for a wallet the chain says holds some: the same machine the other way round,
         // one step quieter than the swap in, because it is the second thing this screen offers.
         val out = state.swapOutLabel(holding)
@@ -890,11 +921,22 @@ private fun SwapBlock(
  * a second filled button under it would say the two carry the same weight. They do not.
  */
 @Composable
-private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?) {
+private fun VoteBlock(state: DetailUiState, onVote: (() -> Unit)?, voted: Boolean = false) {
     if (!state.analysisNotServed || onVote == null) return
     // A listing outside the US is outside the universe the server accepts a vote for.
     if (state.asset?.isUsUnderlying == false) return
     val colors = defaultAmberColors()
+    if (voted) {
+        // Device QA of 1.3.17: AALx's Detail still offered a vote the server would refuse (one vote
+        // per wallet per token per round). The quiet word the Vote tab and Stocks draw instead.
+        Text(
+            text = stringResource(R.string.vote_voted_row),
+            style = AmberType.context,
+            color = colors.textTertiary(AmberSurface.GROUND),
+            modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = VoteGap),
+        )
+        return
+    }
     Row(modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = VoteGap)) {
         TextAction(
             label = stringResource(R.string.vote_action),

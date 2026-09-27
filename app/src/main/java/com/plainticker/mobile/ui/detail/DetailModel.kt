@@ -9,6 +9,7 @@ import com.plainticker.mobile.ui.swap.SwapHolding
 import com.plainticker.mobile.ui.swap.SwapToken
 import java.math.BigDecimal
 import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.data.plainticker.Verdict
 import com.plainticker.mobile.data.plainticker.Axes
 import com.plainticker.mobile.data.plainticker.Axis
 import com.plainticker.mobile.data.xstocks.MarketSource
@@ -86,6 +87,12 @@ data class PriceRow(
     val referencePrice: String?,
     /** Why there is no reference price, when there is none. */
     val referenceNote: Copy?,
+    /**
+     * Jupiter answered and has no price for this token (JEFx, AALx). The screen then states that
+     * sentence in the figure's place rather than a bare placeholder dash above it (device QA of
+     * 1.3.17: a lone "-" at 40sp read as a broken page).
+     */
+    val tokenAbsent: Boolean = false,
 ) {
     /**
      * Whether the two figures may be read against one another.
@@ -258,6 +265,14 @@ sealed interface VerdictBlock {
 
     /** The server withheld the word. Nothing behind this state stands in for it. */
     data object Locked : VerdictBlock
+
+    /**
+     * The method gives no class for this company (`verdict.class_state` "unavailable"), and says
+     * why in [reason]: the web's own wording (lib/methodology/decision-copy.ts), mirrored in
+     * strings.xml. Device QA of 1.3.17: JEFx, a financial, drew no Classification block at all,
+     * which read as a broken page rather than as a sector the model does not cover yet.
+     */
+    data class Unavailable(val reason: Copy) : VerdictBlock
 }
 
 val DetailUiState.verdictBlock: VerdictBlock?
@@ -265,7 +280,17 @@ val DetailUiState.verdictBlock: VerdictBlock?
         AnalysisState.Loading -> VerdictBlock.Loading
         is AnalysisState.Served -> {
             val verdict = state.payload.verdict ?: return null
-            if (verdict.locked) {
+            if (verdict.unavailable) {
+                VerdictBlock.Unavailable(
+                    words(
+                        if (verdict.classReason == Verdict.REASON_SECTOR_MODEL_PENDING) {
+                            R.string.detail_verdict_unavailable_sector
+                        } else {
+                            R.string.detail_verdict_unavailable_data
+                        },
+                    ),
+                )
+            } else if (verdict.locked) {
                 VerdictBlock.Locked
             } else {
                 val label = verdict.labelEn?.takeIf { it.isNotBlank() } ?: return null
@@ -347,6 +372,7 @@ val DetailUiState.priceRow: PriceRow
             } else {
                 null
             },
+            tokenAbsent = price == null && quote.isAbsent,
         )
     }
 
@@ -500,9 +526,11 @@ private fun DetailUiState.reservesCell(): TrustFact {
     val label = words(R.string.detail_fact_por)
     val held = reserves.valueOrNull
     if (held == null) {
+        // Absent is xStocks not having published anything for this token (a JSON null, or its
+        // zero-for-zero placeholder): said as that, not as an Unknown that reads like a failure.
         return TrustFact(
             label = label,
-            value = words(R.string.detail_value_unknown),
+            value = words(if (reserves.isAbsent) R.string.detail_value_not_published else R.string.detail_value_unknown),
             sub = words(
                 if (reserves.isAbsent) R.string.detail_fact_por_absent_sub else R.string.detail_fact_por_failed_sub,
             ),
@@ -763,6 +791,18 @@ val DetailUiState.swapLabel: Copy?
  * has been asked for at the tap (T10). No pool and no quote means no line, never an empty one.
  */
 fun DetailUiState.costLine(allInCostPct: Double?): Copy? {
+    // Below the liquidity floor the line says "too thin", in the lists' own words and rounding
+    // (device QA of 1.3.17: ABBVx on $2 to $3 of depth read "Depth $3 behind this price" under an
+    // active Swap, with nothing saying what every list row says about the same pool).
+    val thin = tracking as? TrackingQuality.Thin
+    if (thin != null) {
+        val depth = Fmt.compactMoney(thin.poolUsd, roundDown = true)
+        return if (allInCostPct != null) {
+            words(R.string.detail_cost_line_thin, Fmt.percent(allInCostPct, signed = false), depth)
+        } else {
+            words(R.string.list_row_meta_thin, depth)
+        }
+    }
     val pool = price?.liquidity?.let { Fmt.compactMoney(it) }
     return when {
         allInCostPct != null && pool != null ->
@@ -772,6 +812,16 @@ fun DetailUiState.costLine(allInCostPct: Double?): Copy? {
         else -> null
     }
 }
+
+/**
+ * Why the swap button is off, or null when it is on. Jupiter answered about this token and has no
+ * price for it (device QA of 1.3.17: JEFx and AALx, "Jupiter does not price this token", under an
+ * active Swap): a swap cannot be quoted, so the button is disabled and says why in one line. A
+ * quote that failed (Jupiter refused, a network hiccup) is not this: that is transient, and the
+ * swap machine asks again and reports its own failure.
+ */
+val DetailUiState.swapBlockedReason: Copy?
+    get() = if (mint != null && quote.isAbsent) words(R.string.detail_swap_no_price) else null
 
 /**
  * The token this screen swaps, carrying the scaled UI multiplier Detail's own chain read found in
