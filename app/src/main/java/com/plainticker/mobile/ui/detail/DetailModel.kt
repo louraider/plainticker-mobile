@@ -17,6 +17,7 @@ import com.plainticker.mobile.data.xstocks.PriceLabel
 import com.plainticker.mobile.data.xstocks.Reserves
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.ReadText
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.list.skrWeight
 import com.plainticker.mobile.ui.raw
@@ -874,13 +875,20 @@ data class NextStepsBlock(val full: Boolean, val items: List<NextStepRow>)
  * the server's own honest short form, never a bare door (docs/plan-monetisation-2026-09-19.md,
  * task A6).
  */
+/**
+ * The year [ReadText] drops from a date in the server's prose ("23 Oct", not "23 Oct 2026"): the
+ * reader's current year, read off [DetailUiState.nowMillis] in UTC so the model stays pure.
+ */
+private val DetailUiState.readYear: Int
+    get() = Instant.ofEpochMilli(nowMillis).atZone(java.time.ZoneOffset.UTC).year
+
 val DetailUiState.readNarrative: ReadNarrativeBlock?
     get() {
         val payload = (read as? ReadState.Ready)?.payload ?: return null
         val narrative = payload.narrative ?: return null
         val full = payload.pro && narrative.fullEn != null
         val text = if (full) narrative.fullEn else narrative.excerptEn
-        return text?.let { ReadNarrativeBlock(full = full, text = raw(it)) }
+        return text?.let { ReadNarrativeBlock(full = full, text = raw(ReadText.normalize(it, readYear))) }
     }
 
 /**
@@ -895,7 +903,10 @@ val DetailUiState.nextStepsBlock: NextStepsBlock?
         val titles = steps.titlesEn?.takeIf { it.isNotEmpty() } ?: return null
         val full = payload.pro && steps.stepsEn != null
         val items = titles.mapIndexed { index, title ->
-            NextStepRow(title = title, detail = if (full) steps.stepsEn.getOrNull(index)?.body else null)
+            NextStepRow(
+                title = ReadText.normalize(title, readYear),
+                detail = if (full) steps.stepsEn.getOrNull(index)?.body?.let { ReadText.normalize(it, readYear) } else null,
+            )
         }
         return NextStepsBlock(full = full, items = items)
     }
