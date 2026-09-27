@@ -50,7 +50,7 @@ class VoteScreenTest {
     @Test
     fun `the list offers the vote on a row without analysis, and on no other row`() {
         val votable = body(listScreen, "private fun VotableAmberRow(")
-        assertTrue("the vote action is drawn only when onVote is not null", "if (onVote != null) {" in votable)
+        assertTrue("the vote action is drawn only when onVote is not null", "if (!voted && onVote != null) {" in votable)
         assertTrue("vote_action_row is the label", "R.string.vote_action_row" in votable)
 
         val priceOnly = body(listScreen, "private fun PriceOnlyRow(")

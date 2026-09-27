@@ -152,6 +152,123 @@ class ListViewModelTest {
         ),
     )
 
+    // ---- One price source, and a first draw that does not jump (device QA of 1.3.18) -------
+
+    /**
+     * A snapshot of another day's coverage: TSLA was covered then and is not in the live fixture,
+     * the shape that made the device list reorder and lose rows when live data replaced it.
+     */
+    private fun olderCoverage() = snapshot(
+        capturedOn = LocalDate.of(2026, 9, 19),
+        rows = listOf(
+            SnapshotRow(ticker = "TSLA", company = "Tesla, Inc.", composite = 90.0, tone = Tone.POSITIVE, ageDays = 3),
+            SnapshotRow(ticker = "AAPL", company = "Apple Inc.", composite = 83.8, tone = Tone.POSITIVE, ageDays = 3),
+        ),
+        assets = listOf(
+            SnapshotAsset(symbol = "AAPLx", ticker = "AAPL", name = "Apple xStock", mint = aaplMint),
+            SnapshotAsset(symbol = "TSLAx", ticker = "TSLA", name = "Tesla xStock", mint = tslaMint),
+        ),
+    )
+
+    @Test
+    fun `a quote Today or Detail fetches redraws the same row here at once`() = runTest {
+        val prices = FakePriceRepository()
+        val vm = viewModel(prices = prices)
+        advanceUntilIdle()
+        assertNull(vm.state.value.analyzed.first { it.ticker == "AAPL" }.priceUsd)
+
+        prices.published.value = mapOf(aaplMint to price(240.0, reference = 239.0))
+        advanceUntilIdle()
+
+        val aapl = vm.state.value.analyzed.first { it.ticker == "AAPL" }
+        assertEquals(240.0, aapl.priceUsd!!, 0.0)
+        assertEquals(239.0, aapl.referencePriceUsd!!, 0.0)
+        assertEquals(RowQuote.ANSWERED, aapl.quote)
+    }
+
+    @Test
+    fun `rows built after a quote landed elsewhere draw it from the first frame`() = runTest {
+        // Another screen's quote is in the shared source; this screen's own ask is still out.
+        val inner = FakePriceRepository()
+        inner.published.value = mapOf(aaplMint to price(241.0, reference = 239.0))
+        val network = Gate()
+        val vm = viewModel(
+            prices = HeldPriceRepository(Gate(), inner),
+            summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary()))),
+        )
+        network.release()
+        runCurrent()
+        assertEquals(241.0, vm.state.value.analyzed.first { it.ticker == "AAPL" }.priceUsd!!, 0.0)
+    }
+
+    @Test
+    fun `the first draw waits for the live analysis instead of drawing the snapshot and reordering it`() = runTest {
+        val seen = mutableListOf<ListUiState>()
+        val catalogGate = Gate()
+        val vm = viewModel(
+            snapshots = FakeSnapshotRepository(olderCoverage()),
+            catalog = HeldCatalogRepository(catalogGate, FakeCatalogRepository(Result.success(catalog()))),
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { seen += it } }
+        advanceUntilIdle()
+
+        // /summary answered at once: the snapshot's TSLA row never reached the screen, and the rows
+        // were drawn in the live order the first time they were drawn at all.
+        assertTrue("TSLA is only in the snapshot", seen.none { state -> state.analyzed.any { it.ticker == "TSLA" } })
+        assertEquals(listOf("AAPL"), vm.state.value.analyzed.map { it.ticker })
+        assertTrue(
+            "the snapshot line never stands over live analysis",
+            seen.none { it.banner is ListBanner.SnapshotRefreshing },
+        )
+        catalogGate.release()
+        advanceUntilIdle()
+        // The live catalog only adds what the bundled one did not name; nothing drawn moves.
+        assertEquals(listOf("AAPL", "JPM"), vm.state.value.analyzed.map { it.ticker })
+    }
+
+    @Test
+    fun `a slow analysis gets skeletons for the grace, then the snapshot with its line and no per-row age`() = runTest {
+        val network = Gate()
+        val vm = viewModel(
+            summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary()))),
+            catalog = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(catalog()))),
+            snapshots = FakeSnapshotRepository(olderCoverage()),
+        )
+        runCurrent()
+        assertTrue("skeletons while the live analysis may still land", vm.state.value.isLoading)
+        assertTrue(vm.state.value.analyzed.isEmpty())
+
+        advanceTimeBy(ListViewModel.SNAPSHOT_BANNER_GRACE_MS + 1)
+        val state = vm.state.value
+        assertFalse(state.isLoading)
+        assertEquals(listOf("TSLA", "AAPL"), state.analyzed.map { it.ticker })
+        assertTrue(state.banner is ListBanner.SnapshotRefreshing)
+        // The banner names the capture day; a row counting days from it would be a second, silent
+        // age statement (the snapshot's rows carry age_days 3).
+        assertTrue(state.analyzed.all { it.ageDays == null })
+        network.release()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `the venue line stands from the first frame, said plainly while the live hours are on their way`() = runTest {
+        val network = Gate()
+        val vm = viewModel(
+            summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary()))),
+            catalog = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(catalog(trading = null)))),
+            snapshots = FakeSnapshotRepository(bundled()),
+            clock = marketShut,
+        )
+        runCurrent()
+        assertEquals(MarketSource.LOCAL_SCHEDULE, vm.state.value.market?.source)
+        assertEquals("the calendar's closed, not yet a failure to load", ListBanner.MarketClosed, vm.state.value.banner)
+
+        // The catalog answers with no venue block at all: only now is it the calendar's guess.
+        network.release()
+        advanceUntilIdle()
+        assertEquals(ListBanner.MarketClosedLocal, vm.state.value.banner)
+    }
+
     // ---- The join ----------------------------------------------------------------------
 
     @Test
@@ -563,7 +680,7 @@ class ListViewModelTest {
     // ---- The bundled snapshot paints first -----------------------------------------------
 
     @Test
-    fun `the bundled snapshot paints before any network answer, with no price and a dated banner`() = runTest {
+    fun `the bundled snapshot paints when no network answers in time, with no price and a dated banner`() = runTest {
         val network = Gate()
         val summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary())))
         val assets = HeldCatalogRepository(network, FakeCatalogRepository(Result.success(catalog())))
@@ -585,7 +702,9 @@ class ListViewModelTest {
             assertFalse("a drawn list is not loading", painted.isLoading)
             assertTrue(painted.fromSnapshot)
             assertTrue(painted.refreshing)
-            assertNull("a line that would go again in half a second is a jump, not a warning", painted.banner)
+            // Drawn only once the grace has passed without a live answer (device QA of 1.3.18), so
+            // the reader is told at once what the list is: a capture of a named day, being replaced.
+            assertEquals(ListBanner.SnapshotRefreshing(LocalDate.of(2026, 9, 12)), painted.banner)
 
             // The snapshot obeys the same join rules as the live sources: BKNG has no xStock, so
             // it is not a row, and the composite is the percentile.
@@ -600,11 +719,6 @@ class ListViewModelTest {
             assertTrue(rows.all { it.premiumPct == null })
             assertTrue(rows.all { it.tracking == null })
 
-            // The refresh is still out once the grace has passed, so the reader is told what the
-            // list is: a capture of a named day, being replaced in place.
-            val named = awaitUntil { it.banner != null }
-            assertEquals(ListBanner.SnapshotRefreshing(LocalDate.of(2026, 9, 12)), named.banner)
-            assertEquals("and still no source has answered", 0, summaries.summaryCalls)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1526,7 +1640,9 @@ class ListViewModelTest {
         val vm = slowly(afterMillis = 5_000)
 
         advanceTimeBy(800)
-        assertTrue("the snapshot is what is drawn", vm.state.value.fromSnapshot)
+        // Inside the grace the live analysis may still land, so skeletons stand and the snapshot is
+        // held back rather than drawn and then reordered (device QA of 1.3.18).
+        assertTrue("skeletons, not the snapshot, in the first second", vm.state.value.isLoading)
         assertNull("and nothing flashed in the first second", vm.state.value.banner)
 
         advanceTimeBy(3_000)

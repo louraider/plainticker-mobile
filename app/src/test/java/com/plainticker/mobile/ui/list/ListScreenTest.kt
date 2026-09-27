@@ -152,7 +152,7 @@ class ListScreenTest {
         val row = body("private fun VotableAmberRow(", "private fun EmptyLine(")
         val note = row.indexOf("R.string.vote_voted_row")
         assertTrue("the quiet word comes first, in place of the action", note in 0 until row.indexOf("TextAction("))
-        assertTrue("} else if (onVote != null) {" in row)
+        assertTrue("if (!voted && onVote != null) {" in row)
     }
 
     // ---- Cold start and unpriced rows (device QA of 1.3.17) -------------------------------------
@@ -172,7 +172,7 @@ class ListScreenTest {
         val row = body("private fun StocksFilterRow(", "private fun groupedRowModifier(")
         val slot = row.indexOf("if (holdDeepPoolSlot && !showsDeepPoolChip(trackedCount, active)) {")
         assertTrue("the placeholder comes first, in the chip's own slot", slot >= 0 && slot < row.indexOf("AmberChip("))
-        assertTrue("SkeletonBar(width = DeepPoolSlotWidth, height = 32.dp, colors = colors)" in row)
+        assertTrue("SkeletonChip(width = DeepPoolSlotWidth, colors = colors)" in row)
         assertTrue("holdDeepPoolSlot = pricesPending" in source)
     }
 }

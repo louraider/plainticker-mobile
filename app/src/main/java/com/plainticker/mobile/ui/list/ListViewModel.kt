@@ -250,11 +250,25 @@ data class ListUiState(
      * [fromSnapshot] is. What it is not worth is a warm launch, where the Seeker measured it up
      * at 3.53 s and gone at 4.20 s, 0.70 s in which the whole list moved down by the height of a
      * banner and back (docs/data-map.md). So it waits out [ListViewModel.SNAPSHOT_BANNER_GRACE_MS]
-     * before it may be drawn, and a refresh that finishes inside that never draws it at all. The
-     * slot stays empty during the grace rather than falling through to a lower tier, because a
-     * lower tier would be a different sentence arriving and leaving in the same second.
+     * before it may be drawn, and a refresh that finishes inside that never draws it at all.
+     * During the grace the slot keeps the hours line it has held since the first frame (device QA
+     * of 1.3.18) and falls through to nothing lower, because a lower tier would be a different
+     * sentence arriving and leaving in the same second.
      */
     val snapshotBannerDue: Boolean = false,
+    /**
+     * The analysis on screen is the bundled snapshot's (the live `/summary` has not answered). Only
+     * then does a refresh raise the snapshot line: once the analysis is live and only the token
+     * catalog is still the bundled one, the rows say nothing a live catalog would change, and the
+     * line arriving and leaving would move the list twice for nothing (device QA of 1.3.18).
+     */
+    val analysisFromSnapshot: Boolean = false,
+    /**
+     * No live catalog has answered yet, so the venue comes from the exchange calendar alone. A
+     * closed exchange is then said the plain way, not as "its live hours did not load", which is not
+     * yet known to be true and is a longer line that would change height when the hours land.
+     */
+    val hoursPending: Boolean = false,
     /**
      * Where the exchange behind these rows is, or null while no catalog has been read. Every
      * tracked row measures its premium against the NYSE close, so this is what says whether that
@@ -273,8 +287,12 @@ data class ListUiState(
     val banner: ListBanner?
         get() = when {
             failed -> ListBanner.Unavailable
-            fromSnapshot && refreshing ->
-                ListBanner.SnapshotRefreshing(snapshotCapturedOn).takeIf { snapshotBannerDue }
+            fromSnapshot && refreshing && analysisFromSnapshot && snapshotBannerDue ->
+                ListBanner.SnapshotRefreshing(snapshotCapturedOn)
+
+            // The grace, or live analysis on the bundled catalog: the slot keeps the venue line it
+            // has held since the first frame, so nothing arrives and leaves under the reader.
+            fromSnapshot && refreshing -> hours
 
             fromSnapshot -> ListBanner.Snapshot(snapshotCapturedOn)
             allStaleDays != null -> ListBanner.Stale(allStaleDays)
@@ -294,7 +312,9 @@ data class ListUiState(
     private val hours: ListBanner?
         get() {
             val market = market ?: return null
-            val guessed = market.source == MarketSource.LOCAL_SCHEDULE
+            // While the live hours are still on their way the calendar is all there is, and it is
+            // not yet a failure to load them: said as the venue would say it.
+            val guessed = market.source == MarketSource.LOCAL_SCHEDULE && !hoursPending
             return when {
                 market.regularSession && guessed -> ListBanner.MarketOpenLocal
                 market.regularSession -> null
@@ -315,8 +335,10 @@ data class ListUiState(
  * **The bundled snapshot draws first.** docs/data-map.md timed a cold start at seventeen seconds
  * to the first row, nearly all of it the 4.31 MB xStocks catalog, which a row cannot do without
  * because it carries the symbol and the mint. The snapshot is that catalog and that analysis,
- * already on the device, so it is read and published before any network call is made and the
- * network then replaces it in place. Three rules keep that honest:
+ * already on the device, so it is read before any network call is made. It is drawn when the live
+ * analysis has not answered within [SNAPSHOT_BANNER_GRACE_MS] (device QA of 1.3.18: drawn at once,
+ * another day's coverage was reordered under the reader seconds later), and the network then
+ * replaces it in place. Three rules keep that honest:
  *
  * 1. A snapshot row carries no price, because the snapshot carries none. It shows its analysis
  *    and nothing where the premium goes. Prices come from Jupiter, live, or not at all.
@@ -344,7 +366,12 @@ class ListViewModel(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
-        ListUiState(isLoading = true, watched = watchlist.tickers.value.size, watchedTickers = watchlist.tickers.value),
+        ListUiState(
+            isLoading = true,
+            watched = watchlist.tickers.value.size,
+            watchedTickers = watchlist.tickers.value,
+            hoursPending = true,
+        ),
     )
     val state: StateFlow<ListUiState> = _state.asStateFlow()
 
@@ -384,9 +411,19 @@ class ListViewModel(
      * [MarketClock] Today runs, so Stocks and Today can never disagree about where the NYSE is,
      * and neither keeps showing the status the catalog cache was fetched under.
      */
-    private val marketClock = MarketClock(clock, catalog, viewModelScope) { market ->
+    private val marketClock = MarketClock(clock, catalog, viewModelScope, localUntilKnown = true) { market ->
         _state.update { it.copy(market = market) }
     }
+
+    /**
+     * True while a first load holds the bundled snapshot back for the live analysis (device QA of
+     * 1.3.18). The snapshot is a capture of another day's coverage: drawn first, it was replaced
+     * seconds later by a list in a different order with different sectors (Communication Services
+     * 11, then 5), which read as the list jumping under the reader. `/summary` answers in well under
+     * a second, so the first draw now waits for it, up to [SNAPSHOT_BANNER_GRACE_MS], and the
+     * snapshot is drawn only when it has not answered by then or has failed.
+     */
+    private var holdingSnapshot = false
     private var bannerGracePassed = false
     private var pricesQueued = false
     private var pricedMints: List<String>? = null
@@ -399,6 +436,14 @@ class ListViewModel(
                 _state.update { it.copy(watched = watched.size, nextReport = report, watchedTickers = watched) }
             }
         }
+        // The one price source every screen observes (PriceRepository.latest): a quote Today or
+        // Detail fetched redraws the same mint here at once, so no row keeps a private stale copy.
+        viewModelScope.launch {
+            prices.latest.collect(::applyLatest)
+        }
+        // The venue from the first frame, off the exchange calendar until a catalog answers, so
+        // the hours banner holds its slot instead of arriving late and pushing the list down.
+        marketClock.tick()
         load(userAsked = false)
     }
 
@@ -469,13 +514,16 @@ class ListViewModel(
         // Skeletons are for a screen with nothing on it. A retry over a drawn list keeps the list.
         val nothingDrawn = allAnalyzed.isEmpty() && allWithoutAnalysis.isEmpty()
         _state.update { it.copy(isLoading = nothingDrawn, failed = false, refreshing = true) }
+        holdingSnapshot = nothingDrawn
 
         bannerJob?.cancel()
         bannerGracePassed = false
         bannerJob = viewModelScope.launch {
             delay(SNAPSHOT_BANNER_GRACE_MS)
             bannerGracePassed = true
+            holdingSnapshot = false
             republish()
+            schedulePrices()
         }
 
         refreshJob = viewModelScope.launch {
@@ -483,7 +531,10 @@ class ListViewModel(
             // already on the device, so there is no reason for the reader to watch skeletons
             // while the catalog is paid for.
             runCatching { snapshots.listSnapshot() }.getOrNull()?.takeUnless { it.isEmpty }?.let { snapshot ->
-                snapshotRows = snapshot.rows.map { it.toSummaryRow() }
+                // No per-row age: the banner names the day the snapshot was captured, and a row
+                // saying "3 days old" beside "snapshot of 19 Sep" counted from a day the reader
+                // cannot see (device QA of 1.3.18). One age statement, the banner's.
+                snapshotRows = snapshot.rows.map { it.toSummaryRow().copy(ageDays = null) }
                 snapshotAssets = snapshot.assets.map { it.toXStockAsset() }
                 snapshotCapturedOn = snapshot.capturedOn
                 haveSnapshot = true
@@ -502,6 +553,7 @@ class ListViewModel(
                     generatedAt = it.generatedAt
                 }
                 summarySettled = true
+                holdingSnapshot = false
                 republish()
                 schedulePrices()
             }
@@ -603,6 +655,9 @@ class ListViewModel(
 
     /** Draws the screen from whatever the sources have so far. Never animates: this is a swap. */
     private fun republish() {
+        // The first draw waits for the live analysis while it may still arrive in time; the
+        // skeletons stand meanwhile, under a venue line that is already in its place.
+        if (holdingSnapshot && haveSnapshot && liveRows == null && !summarySettled) return
         val rows = liveRows ?: snapshotRows
         val assets = assetsOnScreen()
 
@@ -626,6 +681,10 @@ class ListViewModel(
         val refreshing = !(summarySettled && catalogSettled)
         val nothingOnScreen = !haveSnapshot && liveRows == null && liveAssets.isEmpty()
 
+        // A catalog that settled with nothing, and no snapshot to name the venue: nothing is known
+        // about it, so the calendar stops standing in and no hours line is raised at all.
+        if (catalogSettled && assets.isEmpty()) marketClock.calendarUntilKnown = false
+
         if (failed) {
             allAnalyzed = emptyList()
             allWithoutAnalysis = emptyList()
@@ -645,6 +704,8 @@ class ListViewModel(
                     allStaleDays = null,
                     generatedAt = null,
                     snapshotBannerDue = bannerGracePassed,
+                    analysisFromSnapshot = false,
+                    hoursPending = false,
                 )
             }
             return
@@ -685,8 +746,9 @@ class ListViewModel(
         // Prices already on screen survive the swap: a row keeps the quote Jupiter gave it when a
         // later source refines its analysis or its symbol, so the numbers never blink out.
         val priced = (allAnalyzed + allWithoutAnalysis).mapNotNull { row -> row.mint?.let { it to row } }.toMap()
-        allAnalyzed = analyzed.map { it.carryingPriceFrom(priced) }
-        allWithoutAnalysis = withoutAnalysis.map { it.carryingPriceFrom(priced) }
+        val latest = prices.latest.value
+        allAnalyzed = analyzed.map { it.carryingPriceFrom(priced).withLatest(latest) }
+        allWithoutAnalysis = withoutAnalysis.map { it.carryingPriceFrom(priced).withLatest(latest) }
 
         _state.update {
             it.copy(
@@ -705,6 +767,8 @@ class ListViewModel(
                 market = marketClock.setAssets(assets),
                 generatedAt = generatedAt,
                 snapshotBannerDue = bannerGracePassed,
+                analysisFromSnapshot = haveSnapshot && liveRows == null,
+                hoursPending = !catalogSettled && liveAssets.isEmpty(),
             )
         }
     }
@@ -798,6 +862,38 @@ class ListViewModel(
                 pricesPartial = fetch.isPartial && !nothingPriced,
             )
         }
+    }
+
+    /**
+     * A quote landed in the shared source, from this screen or any other: every row showing one of
+     * those mints takes it. Rows whose quote did not change are left as they are, and nothing is
+     * published when no row moved.
+     */
+    private fun applyLatest(latest: Map<String, PriceEntry>) {
+        if (latest.isEmpty()) return
+        val analyzed = allAnalyzed.map { it.withLatest(latest) }
+        val without = allWithoutAnalysis.map { it.withLatest(latest) }
+        if (analyzed == allAnalyzed && without == allWithoutAnalysis) return
+        allAnalyzed = analyzed
+        allWithoutAnalysis = without
+        _state.update {
+            it.copy(
+                analyzed = allAnalyzed.matching(it.query),
+                withoutAnalysis = allWithoutAnalysis.matching(it.query),
+            )
+        }
+    }
+
+    /** This row priced from the shared source when it holds the row's mint; unchanged otherwise. */
+    private fun ListRow.withLatest(latest: Map<String, PriceEntry>): ListRow {
+        val entry = mint?.let { latest[it] } ?: return this
+        val next = copy(
+            priceUsd = entry.usdPrice,
+            referencePriceUsd = entry.stockData?.price,
+            poolUsd = entry.liquidity,
+            quote = RowQuote.ANSWERED,
+        )
+        return if (next == this) this else next
     }
 
     private fun PriceFetch.mergedWith(next: PriceFetch): PriceFetch {
