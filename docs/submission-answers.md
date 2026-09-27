@@ -127,7 +127,7 @@ Where it stands today: all usage so far is the founder's own testing, and the nu
 
 ## DOES YOUR APPLICATION HAVE AN SKR INTEGRATION? IF SO, HOW?
 
-**3,803 characters.** The SKR bonus prize is judged from this field and the video.
+**3,864 characters.** The SKR bonus prize is judged from this field and the video.
 
 ```text
 Yes. Staked SKR decides which tokenized stock PlainTicker analyses next, and staked SKR can unlock Pro. The first vote round closed its loop on mainnet.
@@ -138,7 +138,7 @@ The loop, closed once. Round 1 ran 14 to 21 September. A vote for JEF was built,
 
 The vote is a transaction, not a login. POST /api/v1/vote/build returns an unsigned v0 transaction: a 0-lamport transfer to the collector 2KyWZetthwBAXji88M2Fz5ob4RPbYxCCBBKXueSoS7tJ, so every vote can be found on chain, and a memo PT-VOTE:<TICKER>. The wallet signs and sends it through Mobile Wallet Adapter. The signer is the voter by construction, so there is no session and no token, and a vote costs one signature fee. Before the wallet opens, the app decodes the transaction and refuses it unless it carries exactly that transfer to the collector pinned in the app and exactly that memo for the ticker the person chose.
 
-The weight is read on chain, never sent by the app. The server runs one getProgramAccounts on the SKR staking program (SKRskrmtL83pcL4YqLWt6iPefDqwXQWHSw9S9vz94BZ) with a memcmp at byte 41, because the struct is packed, and reads the principal as a u64 at byte 105. The value is bounded at both ends, because one account in that program decodes to more than the whole staked supply. A wallet counts once per ticker in a round, and a second vote is refused before a transaction is built, so it costs no fee. A cron reads the memos every ten minutes and GET /api/v1/vote/next-up sums them. Every vote and its memo can be found on chain; the weight is the stake the server read at tally time. GET /api/v1/vote/rounds/{id}/ledger publishes every counted vote of a round with its weight and the time and RPC slot of that stake read. Standard RPC cannot re-read a balance at a past slot, so the weight is published, not re-derivable later.
+The weight is read on chain, never sent by the app. The server runs one getProgramAccounts on the SKR staking program (SKRskrmtL83pcL4YqLWt6iPefDqwXQWHSw9S9vz94BZ) with a memcmp at byte 41, because the struct is packed, and reads the principal as a u64 at byte 105. The value is bounded at both ends, because one account in that program decodes to more than the whole staked supply. A wallet counts once per ticker in a round, and a second vote is refused before a transaction is built, so it costs no fee. A cron reads the memos every ten minutes and GET /api/v1/vote/next-up sums them. Every vote and its memo can be found on chain; the weight is the stake the server read at tally time. GET /api/v1/vote/rounds/{id}/ledger publishes every counted vote of a round with its weight and, for votes counted since the ledger shipped on 27 September, the time and RPC slot of that stake read. Standard RPC cannot re-read a balance at a past slot, so the weight is published, not re-derivable later.
 
 SKR also unlocks Pro. 7,500 SKR staked opens Pro for as long as the stake stays in place, beside a 12 USDC 30-day pass. The threshold was set against measured staker data: of 46,436 SKR stakers the median stake is about 6,719 SKR and 36.6% stake more than 10,000, so the threshold sits just above the median. The app reads the stake through the same bounded read.
 
