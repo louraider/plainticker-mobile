@@ -36,6 +36,83 @@ class ReadTextTest {
         )
     }
 
+    /**
+     * Device QA of 1.3.18, ABBVx's read: the pair around "AbbVie Inc. beat estimates in 6 of 6 recent
+     * quarters" was split at the stop in "Inc.", and the screen read "quarters: and the Forward-axis".
+     */
+    @Test
+    fun `a pair of dashes is found across an abbreviation, so ABBVx's read gets two commas`() {
+        assertEquals(
+            "Consensus has been well-calibrated, AbbVie Inc. beat estimates in 6 of 6 recent quarters, " +
+                "and the Forward-axis score of 45/100 aligns with what the realized record supports.",
+            norm(
+                "Consensus has been well-calibrated $em AbbVie Inc. beat estimates in 6 of 6 recent quarters $em " +
+                    "and the Forward-axis score of 45/100 aligns with what the realized record supports.",
+            ),
+        )
+    }
+
+    @Test
+    fun `a colon an older pass put before a joining word goes back to a comma`() {
+        // The exact text the device drew.
+        assertEquals(
+            "AbbVie Inc. beat estimates in 6 of 6 recent quarters, and the Forward-axis score of 45/100 aligns",
+            norm("AbbVie Inc. beat estimates in 6 of 6 recent quarters: and the Forward-axis score of 45/100 aligns"),
+        )
+        assertEquals("The one bright spot in valuation is P/B: at 0.9x", norm("The one bright spot in valuation is P/B: at 0.9x"))
+    }
+
+    @Test
+    fun `references to sections and tables the app does not have are rewritten`() {
+        assertEquals(
+            "From the sector comparison, pick two or three companies yourself and line them up by F-Score, ROE, and Op. margin.",
+            norm("From the same-sector table in section 06, pick two or three companies yourself and line them up by F-Score, ROE, and Op. margin."),
+        )
+        assertEquals(
+            "In the sector comparison, pick two or three companies and line them up by ROE.",
+            norm("In the same-sector table, pick two or three companies and line them up by ROE."),
+        )
+        assertEquals("Compare the margins with the median.", norm("Compare the margins (see section 06) with the median."))
+        assertEquals("Same-sector peers stay as they are.", norm("Same-sector peers stay as they are."))
+    }
+
+    @Test
+    fun `step titles in Title Case read in sentence case, names and acronyms kept`() {
+        assertEquals(
+            "Compare Jefferies against sector peers by ROE and operating margin",
+            ReadText.sentenceCase("Compare Jefferies Against Sector Peers by ROE and Operating Margin", names = listOf("Jefferies Financial Group Inc.")),
+        )
+        assertEquals(
+            "Watch the September 2026 earnings for ROE recovery",
+            ReadText.sentenceCase("Watch the September 2026 Earnings for ROE Recovery"),
+        )
+        assertEquals(
+            "Read the 10-K risk factors and management discussion on capex",
+            ReadText.sentenceCase("Read the 10-K Risk Factors and Management Discussion on Capex"),
+        )
+        assertEquals(
+            "Compare sector peers by F-Score, ROE, and operating margin",
+            ReadText.sentenceCase("Compare Sector Peers by F-Score, ROE, and Operating Margin"),
+        )
+        // A word the prose writes with a capital mid-sentence is a name and keeps it.
+        assertEquals(
+            "Read the 10-K risk factors and Management Discussion",
+            ReadText.sentenceCase(
+                "Read the 10-K Risk Factors and Management Discussion",
+                evidence = "Pull the most recent 10-K and focus on the Management's Discussion section.",
+            ),
+        )
+    }
+
+    @Test
+    fun `a title already in sentence case is left alone, names included`() {
+        listOf(
+            "Watch the October 2026 earnings report closely",
+            "Compare peers in the sector table by F-Score and operating margin",
+            "Compare Apple with its sector on margin",
+        ).forEach { assertEquals(it, ReadText.sentenceCase(it)) }
+    }
+
     @Test
     fun `a pair of dashes in one sentence frames an aside, so both become commas`() {
         assertEquals(

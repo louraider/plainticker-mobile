@@ -337,4 +337,12 @@ class DetailScreenTest {
         val quiet = block.indexOf("R.string.vote_voted_row")
         assertTrue("Voted is drawn before, and instead of, the action", quiet in 0 until block.indexOf("TextAction("))
     }
+
+    @Test
+    fun `a thin pool draws the swap as the outline button, still tappable`() {
+        val block = scan.code.substring(scan.code.indexOf("private fun SwapBlock("), scan.code.indexOf("private fun VoteBlock("))
+        assertTrue("the model decides", "enabled && state.swapQuiet" in block)
+        assertTrue("the quiet style is still a button with the same action", "AmberSecondaryAction(label = label.text(), onClick = onSwap)" in block)
+        assertTrue("the too-thin line still follows", "state.costLine(" in block)
+    }
 }
