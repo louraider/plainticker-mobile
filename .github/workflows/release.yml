@@ -6,8 +6,13 @@ name: Release
 #   except -amber, which names the shipped design line and is a normal release marked Latest.
 # The APK is attached twice: plainticker-<versionName>.apk, and plainticker.apk, the stable name
 # behind https://github.com/louraider/plainticker-mobile/releases/latest/download/plainticker.apk.
-# Signing material comes only from repository secrets (docs/release-signing.md):
+# Signing material comes only from secrets (docs/release-signing.md):
 #   KEYSTORE_BASE64  KEYSTORE_PASSWORD  KEY_ALIAS  KEY_PASSWORD
+# The job runs in the `release` environment, so those secrets can live in that protected
+# environment behind a required reviewer; a job in an environment still reads repository-level
+# secrets, so the workflow keeps working while they are repo-level too.
+# A tag only builds when its commit is already on main: a tag pushed on a side branch or an
+# unmerged commit is refused before any secret is read.
 
 on:
   push:
@@ -21,8 +26,22 @@ jobs:
     name: Signed release APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: release
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Whole history, so the ancestry check below never meets a shallow boundary.
+          fetch-depth: 0
+
+      - name: Refuse a tag whose commit is not on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::the tagged commit is not reachable from origin/main; merge it to main before tagging"
+            exit 1
+          fi
+          echo "tagged commit is on main"
 
       - name: Version from tag
         id: version

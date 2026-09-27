@@ -171,7 +171,7 @@ technical depth is scored from commits). The signed APK CI already built from `v
 finished artifact and is unaffected; a submission tag should be cut fresh from the rewritten head.
 
 **One loose end, deliberately, and it is now overdue.** A full mirror of the pre-rewrite history is
-kept at `C:\Users\dubys\AndroidStudioProjects\myapp-backup-before-rewrite.git`. Checked 2026-09-18:
+kept at `%USERPROFILE%\AndroidStudioProjects\myapp-backup-before-rewrite.git`. Checked 2026-09-18:
 still there, 32 MB, 268 commits, and it still contains the signature. The note written on
 2026-09-13 said to delete it once the rewritten repository had been used for a day and nothing was
 missing. It has now been used for five days across four worktrees, a dozen merges to `main` and two
@@ -387,6 +387,24 @@ cannot see:
 
 `#112` is in the other repository, which stays private. Only `server/rpc-proxy/` is mirrored here
 (step 10).
+
+### Pull request refs still point at the pre-rewrite history
+
+The history rewrite of step 3 replaced every branch and tag, but GitHub keeps a read-only
+`refs/pull/<n>/head` for every pull request ever opened, and a force push cannot move or delete
+those. Pull requests #1 to #16 were opened before the rewrite, so their refs still name commits
+from the old history, and anyone can fetch them from a public repository by ref.
+
+1. List them: `git ls-remote origin 'refs/pull/*/head'`.
+2. For each ref, check whether the commit it names belongs to the rewritten history (fetch the ref,
+   then `git merge-base --is-ancestor <commit> origin/main`, or look for it in `git rev-list --all`
+   of a fresh clone). A ref whose commit does not is pre-rewrite history.
+3. Run the redaction guard of step 2 against each pre-rewrite commit, or treat every ref opened
+   before the rewrite as carrying what the rewrite removed.
+4. Only GitHub Support can purge those refs and the cached views behind them: open a request
+   naming the repository and the pull request numbers, and ask for the stale refs and their cached
+   commits to be removed. Record that the request was made here, without quoting any commit hash,
+   ref value or secret, in the request or in this file.
 
 ## 15. Flip, then verify
 
