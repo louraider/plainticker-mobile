@@ -475,6 +475,11 @@
     <string name="pro_stake_disconnected">Connect a wallet to read what it has staked.</string>
     <string name="pro_stake_unread">This wallet\'s staked SKR could not be read.</string>
     <string name="pro_stake_read">This wallet has %1$s SKR staked.</string>
+    <!-- Below the stake threshold, on a device that is not Pro yet (Akshay, judges' round 2): how
+         far this wallet is from Pro by stake. %1$s is the whole SKR staked, %2$s the whole SKR
+         still missing, both formatted from ProModel's PRO_STAKE_THRESHOLD_RAW (7,500 SKR, the
+         server's STAKE_ENTITLEMENT_THRESHOLD_SKR), never typed here. -->
+    <string name="pro_stake_progress">%1$s SKR staked · %2$s more opens Pro</string>
     <!-- A landed pass signature this device has not yet seen confirmed (task A6 review): the Pay
          action is withheld while this is shown, so a second payment is never offered for the one
          the chain, or the ten-minute cron, might still be settling. -->
