@@ -3,13 +3,46 @@
 Run top to bottom before `Settings -> Change visibility -> Public`. Every command runs from
 the repo root on a clean checkout of `main`. Nothing here is optional.
 
-**Walked end to end 2026-09-18 on `6bb2a81`.** Every step below carries the date it was last
-checked and the evidence that was checked. The steps that remain open are open because they are
-the founder's, not because nobody looked. The plan (section 6) schedules the flip for 5 October.
+**Walked end to end 2026-09-27 on `3c2fab8` (`origin/main`), every ref included**, and before
+that on 2026-09-18 on `6bb2a81`. The 2026-09-27 walk is summarised in the next section; the steps
+below keep the 2026-09-18 evidence and say where it has since changed. The steps that remain open
+are open because they are the founder's, not because nobody looked. The flip was brought forward
+from 5 October: going public also unblocks GitHub Actions billing.
 
-One of them does not wait for that date: the redaction guard job now runs past its own time limit
-in CI, so `main` is red on the one job this list exists to keep green. Step 2 has the measurement
-and the two ways out.
+## Walk of 2026-09-27
+
+Scope: everything the flip publishes. 459 commits on 61 remote branches and 35 tags, 56 pull
+requests (all closed or merged, none open), 0 issues, 1 pull request comment, 0 review comments
+and 0 review bodies, 21 releases with one APK each, 314 Actions runs (41 logs read: every
+successful Release run, the latest green CI runs and the failures), the repository description.
+
+| step | result on 2026-09-27 |
+|---|---|
+| 1 denylist | Three digests, unchanged. The founder wallet's first four characters appear nowhere in any commit, PR, release note or log, and no full identifier matches a digest. |
+| 2 guard, tree | OK, 2,509,351 distinct candidates, 114 s locally. |
+| 2 guard, history | **Was failing in CI, for a reason this list had not seen.** Every History step from 2026-09-22 10:59 UTC died with `sort: write failed: /tmp/...: No space left on device` (runs `35718927166`, `35778241319`, and each one after them until billing stopped the runs), after `timeout-minutes: 20` had already landed in `1f4a533`. The old script cut every copy of every long run into windows before deduplicating; across 459 revisions that is tens of gigabytes. A local run of the old script was stopped at 1.4 GB of runs and 4 GB of sort spill and still growing. Fixed on `chore/public-ready`: runs are made unique before they are windowed, the candidate set is the same. Patched `--history`: **OK, 2,509,353 candidates, 123 s, peak temp 1.7 GB.** |
+| 2 other secrets | `git log --all -p` grep: 22 lines, all the same four families as on 2026-09-18 (this list quoting itself, two Helius documentation links, `apiKey: config.apiKey` in a code sample, the fake `?api-key=SECRET`). No JSON keypair byte array, no PEM block, no seed phrase, no `Bearer` value, no `HELIUS_*=` value, no promo code other than the placeholders `PT-XXXX-XXXX-XXXX`, `PT-0000-0000-0000` and `PT-AAAA-BBBB-CCCC`. 1,166 paths ever added; none is a keystore, `.p12`, `.pem`, `.pfx`, environment file or keypair file. |
+| 3 rewrite | Nothing new to rewrite for a secret. The pre-rewrite backup mirror is still on this machine; deleting it is still the founder's call. |
+| 5 keystore | Both commands empty. |
+| 6 `SUBMIT_SWAPS` | One `"false"` under debug, one `"true"` under release (`app/build.gradle.kts` lines 90 and 93). |
+| 7 verdict verbs | Empty over Kotlin and XML. |
+| 8 local files | Empty. `.gitignore` now also refuses `/secrets/`, `*keypair*.json` and every `.env*`, and `docs/dapp-store-publishing.md` keeps the publisher keypair under `~/.config/solana/`, never in the checkout. |
+| 9 vendored and IDE files | **Removed from the tree** on `chore/public-ready` (`.agents/`, `.claude/`, `skills-lock.json`, `.idea/`) and ignored. Nothing in CI, scripts or Gradle read them. History keeps them; nothing in them is a secret (step 9 below). |
+| 10 docs | Present. **The `server/rpc-proxy/` mirror is stale**: `#112` merged, the server's `lib/rpc/forwarder.ts` is now split with `lib/rpc/upstream.ts`, and the mirror still has the pre-split file. Refresh it after the pending `X-Rpc-Age` change lands, or the README sends an auditor to a file the server no longer has. |
+| 11 CI | Last green run on `main`: `35647502431` on `ac02884`, 2026-09-21. Then the History disk failure above (Unit tests and Shell scripts green in those runs), then from 2026-09-23 no job starts at all: "recent account payments have failed or your spending limit needs to be increased". With the guard fix and billing unblocked, re-run CI on the flip-day commit before ticking this. The four release secrets are set. |
+| 13 identity | 418 commits authored with the founder's work address, 40 with the GitHub `noreply` address, 1 by `bot <bot@example.com>`. The founder accepted this on 2026-09-18; it is unchanged. The address itself is no longer written out in this file. |
+| 14 PRs | None open. PR bodies and titles read in full: no secret, no email, no promo code, no text addressed to an automated reviewer. PR `#54`'s title and body name real people and a real company as if they were judges; the review was simulated. Edit it before the flip. |
+
+**One new finding, and it is the founder's decision.** The denylist keeps the founder's wallet
+out of the text, but the text still leads to it. Step 1's slot and swap amounts identify the
+Sep 10 spike swap on any explorer, and its signer is the founder wallet. The exact stake principal
+quoted in step 1 is also written in about twenty files, source and tests included, as the
+measured example; a `getProgramAccounts` dump of the SKR staking program finds the one stake
+account holding exactly that principal, and its owner. Both are in history from the first plan
+commit onward. Removing them from the tree alone does not help, because history stays public.
+Either accept it (the wallet is only linked, not exposed as a key), or rewrite history with
+`git filter-repo --replace-text` over those values the way step 3 did, which changes every hash
+again, or move what matters out of that wallet.
 
 ## 1. Denylist is complete
 
@@ -65,7 +98,10 @@ branches merged since carry `design/brand/*/gallery.html`, up to 3.9 MB each of 
 and every long base64 run is cut into every 32-44 character window before hashing. It is noise the
 guard is built to chew through, and it does.
 
-**The job now runs out of time, and this is the one open blocker on this list.** The "Redaction
+**Closed 2026-09-27.** The cap has been 20 minutes since `1f4a533`, and the disk failure that
+followed it is fixed on `chore/public-ready` (see the walk above). The 2026-09-18 record follows.
+
+**The job now ran out of time, and this was the one open blocker on this list.** The "Redaction
 guard" job took 4 min 34 s of its `timeout-minutes: 5` on `6bb2a81`. On the next commit, `92a8f7e`,
 it ran out: run `35394936181` was killed inside the "History" step at 5 min 17 s and the log ends
 `##[error]The operation was canceled` with `awk` terminated as an orphan process. Unit tests and
@@ -240,6 +276,15 @@ git ls-files -- .agents .claude skills-lock.json .idea | cut -d/ -f1-2 | sort -u
 | `skills-lock.json` | 1 | A source repository, a path and a hash. Nothing local in it. Keep. |
 | `.idea/` | 8 | Read file by file: no absolute path, no user name, no device serial, no token. `runConfigurations.xml` carries a list of ignored IntelliJ producers and `deploymentTargetSelector.xml` a dropdown mode. The machine-specific files (`workspace.xml`, `deviceManager.xml`, `caches/`) are ignored and untracked. Keep. |
 
+**Superseded 2026-09-27.** All four are removed from the tree on `chore/public-ready` and ignored
+from then on; decided on 2026-09-27 before the flip. History keeps them. Read again for
+that reason: the two skill trees are the MIT upstream plus its licence; `skills-lock.json` is a
+repository, a path and a hash; the `.idea/` files carry no path, name, serial or token; and
+`.agents/product-marketing.md` is the public half by its own words, though it names the private web
+repository and quotes the measured spike swap (see the walk's finding). None of it needs a rewrite.
+Removing `.claude/skills/solana-dev` also removes it from every local checkout on the next pull;
+reinstall it per machine from `solana-foundation/solana-dev-skill` if an agent still wants it.
+
 ## 10. Docs the public expects
 
 - `README.md` with the Security & threat model section and the integrator section (T15).
@@ -298,15 +343,15 @@ git log --all --format='%cn <%ce>' | sort | uniq -c
 
 | role | identity | commits |
 |---|---|---|
-| author | `louraider <i.dubyshkin@atdoc.eu>` | 290 |
+| author | `louraider <founder's work address>` | 290 |
 | author | `bot <bot@example.com>` | 1 |
-| committer | `louraider <i.dubyshkin@atdoc.eu>` | 178 |
+| committer | `louraider <founder's work address>` | 178 |
 | committer | `louraider <37688796+louraider@users.noreply.github.com>` | 112 |
 | committer | `bot <bot@example.com>` | 1 |
 
 Two things for the founder to look at, both of them decisions rather than defects:
 
-- **A real address goes public.** `i.dubyshkin@atdoc.eu` is on 290 of the 291 commits. GitHub's
+- **A real address goes public.** The founder's work address is on 290 of the 291 commits. GitHub's
   `noreply` address is on the 112 web merges, so the history already carries both. Changing it
   means another `--mirror` rewrite of every hash, which step 3 has already paid for once; doing it
   again a fortnight before the deadline costs more than the address does.
