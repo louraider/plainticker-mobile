@@ -114,11 +114,13 @@ class VoteTabModelTest {
             id = 1, winner = "JEF", weight = "878980647", voters = 1,
             closedAt = "2026-09-21T00:00:03.697Z", status = "closed",
         )
-        val display = requireNotNull(previousDisplay(previous, catalog))
+        val display = requireNotNull(previousDisplay(previous, catalog, java.time.ZoneOffset.UTC))
         assertEquals(PreviousRoundStatus.CLOSED, display.status)
         assertEquals(1, display.roundId)
         assertEquals(Copy.Words(R.string.vote_tab_last_round_closed, listOf("1", "JEFx")), display.sentence)
-        assertEquals("21 Sep 2026 00:00 UTC", display.closedAtText)
+        assertEquals("the reader's own time, here UTC", "21 Sep 2026 00:00", display.closedAtText)
+        val kyiv = requireNotNull(previousDisplay(previous, catalog, java.time.ZoneId.of("Europe/Kyiv")))
+        assertEquals("the round's close in the reader's zone, like the open round's", "21 Sep 2026 03:00", kyiv.closedAtText)
     }
 
     @Test
@@ -136,14 +138,14 @@ class VoteTabModelTest {
             id = 0, winner = "jef", weight = "18500000000", voters = 4,
             closedAt = "2026-09-15T00:00:00.000Z", status = "published",
         )
-        val display = requireNotNull(previousDisplay(previous, catalog))
+        val display = requireNotNull(previousDisplay(previous, catalog, java.time.ZoneOffset.UTC))
         assertEquals("jef", display.ticker)
         assertEquals("JEFx", display.display)
         assertEquals("Jefferies Financial Group", display.company)
         assertEquals(PreviousRoundStatus.PUBLISHED, display.status)
         assertEquals(BigInteger("18500000000"), display.weightRaw)
         assertEquals(4, display.voters)
-        assertEquals("15 Sep 2026 00:00 UTC", display.closedAtText)
+        assertEquals("15 Sep 2026 00:00", display.closedAtText)
     }
 
     @Test

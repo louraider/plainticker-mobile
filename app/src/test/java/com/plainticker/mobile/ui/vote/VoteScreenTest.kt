@@ -538,8 +538,12 @@ class VoteScreenTest {
         assertTrue("trailingNote = if (voted) stringResource(R.string.vote_voted_row) else null" in leader)
         val ballot = body(voteTabScreen, "private fun BallotRow(")
         assertTrue("the ballot row says it too", ballot.indexOf("R.string.vote_voted_row") in 0 until ballot.indexOf("TextAction("))
-        assertTrue("voted = state.votedFor(leader.ticker)" in voteTabScreen)
-        assertTrue("voted = state.votedFor(entry.ticker)" in voteTabScreen)
+        assertTrue("voted = votedFor(leader.ticker)" in voteTabScreen)
+        assertTrue("voted = votedFor(entry.ticker)" in voteTabScreen)
+        // Device QA of 1.3.17: the tab's own receipts and the shared rule Stocks and Detail read
+        // are one answer, so the three surfaces cannot disagree.
+        assertTrue("fun votedFor(ticker: String): Boolean = state.votedFor(ticker) || votedTickers.hasVoted(ticker)" in voteTabScreen)
+        assertTrue("votedTickers = voted" in voteTabScreen)
     }
 
     @Test

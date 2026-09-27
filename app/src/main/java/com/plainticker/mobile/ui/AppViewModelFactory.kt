@@ -102,6 +102,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.rpcRepository,
             container.voteReceiptStore,
             container.clock,
+            nextUp = container.nextUpRepository,
         )
     }
     initializer {

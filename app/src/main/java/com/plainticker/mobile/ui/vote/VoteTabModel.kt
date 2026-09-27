@@ -72,7 +72,11 @@ fun leadersFor(rows: List<NextUpRow>, ballot: List<BallotEntry>): List<NextUpLea
  * [PreviousRoundStatus.UNRECOGNIZED], drawn as the same neutral "Round N closed" line the live
  * `closed` status draws (see [PreviousRoundStatus.of]).
  */
-fun previousDisplay(previous: PreviousRound?, catalogByTicker: Map<String, XStockAsset>): PreviousRoundDisplay? {
+fun previousDisplay(
+    previous: PreviousRound?,
+    catalogByTicker: Map<String, XStockAsset>,
+    zone: ZoneId = ZoneId.systemDefault(),
+): PreviousRoundDisplay? {
     if (previous == null) return null
     val ticker = previous.winner?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     val status = PreviousRoundStatus.of(previous.status)
@@ -85,7 +89,7 @@ fun previousDisplay(previous: PreviousRound?, catalogByTicker: Map<String, XStoc
         status = status,
         weightRaw = previous.weightRaw(),
         voters = previous.voters,
-        closedAtText = previous.closedAtInstant()?.let { Fmt.utc(it) },
+        closedAtText = previous.closedAtInstant()?.let { Fmt.localDateTime(it.toEpochMilli(), zone) },
     )
 }
 
@@ -129,7 +133,9 @@ data class PreviousRoundDisplay(
  */
 fun myVotesFor(receipts: List<VoteReceipt>, round: VoteRound?, connectedVoter: String?): List<VoteReceipt> {
     val byVoter = if (connectedVoter == null) receipts else receipts.filter { it.voter == connectedVoter }
-    val byRound = if (round == null) byVoter else byVoter.filter { it.round == round.id }
+    // The same round rule every Vote surface reads (VotedInRound.kt): a receipt stamped with the
+    // round, or an unstamped one that landed inside the round's window.
+    val byRound = if (round == null) byVoter else byVoter.filter { it.countsIn(round) }
     return byRound.sortedByDescending { it.landedAtMillis }
 }
 

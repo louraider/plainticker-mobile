@@ -218,7 +218,10 @@ fun AmberTickerRow(
             .then(spokenAs)
             .defaultMinSize(minHeight = 64.dp)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        // Centred in the 64dp floor: a row with only its name line (a ballot row) sits level with
+        // the action beside it instead of hugging the top (device QA of 1.3.17). A two-line row
+        // is taller than the floor, so nothing moves for it.
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {
         // The name line: this row's own doc comment above has the arithmetic. Unweighted [ticker]
         // measures first (never wraps, nothing beside it can squeeze it); weight(1f, fill = false)

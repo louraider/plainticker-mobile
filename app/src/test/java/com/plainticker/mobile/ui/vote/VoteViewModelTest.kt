@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -94,6 +95,7 @@ class VoteViewModelTest {
         rpc: FakeRpcRepository = staking(measuredStake),
         clock: Clock = Clock { now },
         receipts: FakeVoteReceiptStore = FakeVoteReceiptStore(),
+        nextUp: com.plainticker.mobile.repo.NextUpRepository? = null,
     ) = VoteViewModel(
         VoteApi(mock.client),
         wallet,
@@ -104,6 +106,17 @@ class VoteViewModelTest {
         // The same test dispatcher Main is pointed at, so the receipt's write is deterministic
         // under runTest exactly the way SwapViewModelTest already keeps its own.
         ioDispatcher = mainDispatcherRule.dispatcher,
+        nextUp = nextUp,
+    )
+
+    private fun openRound(id: Int) = com.plainticker.mobile.repo.FakeNextUpRepository(
+        answer = Result.success(
+            com.plainticker.mobile.repo.NextUpAnswer.Open(
+                rows = emptyList(),
+                round = com.plainticker.mobile.data.plainticker.VoteRound(id, "2026-09-21T00:00:00Z", "2026-09-28T00:00:00Z"),
+                previous = null,
+            ),
+        ),
     )
 
     /**
@@ -613,6 +626,58 @@ class VoteViewModelTest {
         }
 
         assertNull(receipts.receipts.value.single().round)
+    }
+
+    /**
+     * Device QA of 1.3.17: a vote cast from a Stocks row or Detail (which do not know the round)
+     * recorded no round, so the Vote tab and every other surface kept offering Vote for it. The
+     * machine now stamps the open round it read itself, and [VoteViewModel.votedTickers] reads it.
+     */
+    @Test
+    fun `a vote cast from a row that does not know the round is stamped with the open round, and reads as voted`() = runTest {
+        val session = wallet().apply { operations = FakeAdapterOperations(signatures = listOf(ByteArray(64) { 9 })) }
+        val receipts = FakeVoteReceiptStore()
+        val machine = machine(wallet = session, receipts = receipts, nextUp = openRound(2))
+        advanceUntilIdle()
+
+        machine.state.test {
+            awaitItem()
+            assertTrue("nothing is voted before the vote", machine.votedTickers.value.isEmpty())
+            machine.vote("NFLX", "NFLXx")
+            awaitUntil { it is VoteState.Ready }
+            machine.confirm()
+            awaitUntil { it is VoteState.Landed }
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        advanceUntilIdle()
+        assertEquals(2, receipts.receipts.value.single().round)
+        assertEquals(setOf("NFLX"), machine.votedTickers.value)
+    }
+
+    @Test
+    fun `a ticker the server refuses as already voted reads as voted for the rest of the session`() = runTest {
+        val voted = MockApi {
+            respondJson("""{"error":"Already counted.","code":"already_voted"}""", HttpStatusCode.Conflict)
+        }
+        val machine = machine(voted, nextUp = openRound(2))
+        assertEquals(VoteRefusal.ALREADY_VOTED, refusalOf(settle(machine)))
+        advanceUntilIdle()
+        assertTrue(machine.votedTickers.value.hasVoted("NFLX"))
+    }
+
+    @Test
+    fun `with no open round nothing reads as voted, whatever the receipts say`() = runTest {
+        val receipts = FakeVoteReceiptStore()
+        receipts.record(
+            com.plainticker.mobile.data.receipts.VoteReceipt("sig", "NFLX", "NFLXx", 1L, now, voter.address, round = 2),
+        )
+        val closed = com.plainticker.mobile.repo.FakeNextUpRepository(
+            answer = Result.success(com.plainticker.mobile.repo.NextUpAnswer.NotOpen),
+        )
+        val machine = machine(receipts = receipts, nextUp = closed)
+        advanceUntilIdle()
+        assertTrue(machine.votedTickers.value.isEmpty())
     }
 
     @Test
