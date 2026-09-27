@@ -279,7 +279,7 @@ fun digest(input: DigestInput): Digest {
     input.voteRound?.closesAtInstant()?.let { closes ->
         lines += DigestLine.RoundCloses(
             input.voteRound.id,
-            LocalDate.ofInstant(closes, ZoneOffset.UTC),
+            closes.atZone(ZoneOffset.UTC).toLocalDate(),
             todayAt = closesLaterToday(closes, input.nowMillis, input.readerZone),
         )
     }

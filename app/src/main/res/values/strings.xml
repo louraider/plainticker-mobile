@@ -546,7 +546,6 @@
     <string name="pass_refreshed">The transfer went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the payment.</string>
     <string name="pass_amount_label">Amount</string>
     <string name="pass_amount">%1$s %2$s</string>
-    <string name="pass_destination_label">Sent to</string>
     <string name="pass_landed_label">Payment sent</string>
     <string name="pass_landed_note">The payment is on the chain, and this device\'s entitlement now reflects it.</string>
     <string name="pass_landed_pending_note">The payment is on the chain. Confirming it here did not finish in time, so the update will follow within about ten minutes.</string>

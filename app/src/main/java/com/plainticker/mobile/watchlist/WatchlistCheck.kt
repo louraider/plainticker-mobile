@@ -3,7 +3,6 @@ package com.plainticker.mobile.watchlist
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.prefs.WatchlistStore
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -92,7 +91,7 @@ class WatchlistCheck(
 
         val digest = digest(
             DigestInput(
-                today = LocalDate.ofInstant(Instant.ofEpochMilli(now), zone),
+                today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate(),
                 tickers = loaded.rows,
                 previousPremiums = before.premiums,
                 coveredReportDates = loaded.coveredReportDates,
