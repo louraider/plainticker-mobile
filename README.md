@@ -15,7 +15,7 @@ are not available to US persons; the app asks for that self-certification on its
 
 ## Try it in two minutes
 
-1. **Install the signed APK:** `RELEASE_APK_URL`. It is signed with the one release key that
+1. **Install the signed APK:** `https://github.com/louraider/plainticker-mobile/releases/download/v1.3.15-amber/plainticker-1.3.15-amber.apk`. It is signed with the one release key that
    `https://www.plainticker.com/.well-known/assetlinks.json` names, so the Seed Vault Wallet shows
    the app as `www.plainticker.com`. A Seeker is the target; any Android 8+ phone with a Mobile
    Wallet Adapter wallet runs it.
