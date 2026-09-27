@@ -56,6 +56,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -558,17 +559,29 @@ private fun PromoEditingRow(
     onDismiss: () -> Unit,
     colors: AmberColors,
 ) {
-    CabinetRow(
-        colors = colors,
-        value = stringResource(R.string.promo_field_label),
-        sub = error?.let { stringResource(it.text) },
-        subCaution = error != null,
-        actions = listOf(
-            RowAction(stringResource(R.string.promo_action_apply), onApply),
-            RowAction(stringResource(R.string.you_action_cancel), onDismiss),
-        ),
+    // Label, then the input right under it, then the refusal, then Apply and Cancel (device QA of
+    // 1.3.16): as a CabinetRow the two actions drew on their own row between the label and the
+    // field, so the input a reader types into sat below the buttons that act on it.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.surfaceRaised)
+            .padding(start = RowPadding, end = RowPadding, top = RowVerticalPadding),
     ) {
+        Text(text = stringResource(R.string.promo_field_label), style = AmberType.body, color = colors.textPrimary)
         PromoField(value = input, onValueChange = onInputChanged, colors = colors)
+        error?.let {
+            Text(
+                text = stringResource(it.text),
+                style = AmberType.context,
+                color = colors.stateCaution,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextAction(label = stringResource(R.string.promo_action_apply), onClick = onApply, color = colors.actionText)
+            TextAction(label = stringResource(R.string.you_action_cancel), onClick = onDismiss, color = colors.actionText)
+        }
     }
 }
 
@@ -594,9 +607,12 @@ private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: A
         onValueChange = onValueChange,
         singleLine = true,
         textStyle = style,
+        // Codes are ASCII capitals and digits: no autocorrect rewriting "PT" into a word, no
+        // suggestions strip, and the keyboard opens on capitals (device QA of 1.3.16).
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Characters,
             autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Ascii,
         ),
         cursorBrush = SolidColor(colors.actionText),
         modifier = Modifier
@@ -695,7 +711,16 @@ private fun AboutGroup(colors: AmberColors, onOpenLink: (String) -> Unit) {
             CabinetRow(colors = colors, value = stringResource(R.string.onboarding_body_disclaimer), valueKind = RowValueKind.QUIET)
             AboutLinkRow(R.string.you_about_privacy, AboutLinks.PRIVACY, onOpenLink, colors)
             AboutLinkRow(R.string.you_about_terms, AboutLinks.TERMS, onOpenLink, colors)
-            AboutLinkRow(R.string.you_about_delete_account, AboutLinks.DELETE_ACCOUNT, onOpenLink, colors, sub = R.string.you_about_delete_account_sub)
+            // Neutral, not the action amber (device QA of 1.3.16): deleting an account is a way out,
+            // not something the screen invites; the row stays one tap to the web page.
+            AboutLinkRow(
+                R.string.you_about_delete_account,
+                AboutLinks.DELETE_ACCOUNT,
+                onOpenLink,
+                colors,
+                sub = R.string.you_about_delete_account_sub,
+                valueKind = RowValueKind.WORDS,
+            )
             CabinetRow(
                 colors = colors,
                 value = stringResource(R.string.you_heading_licenses),
@@ -716,13 +741,20 @@ private fun AboutGroup(colors: AmberColors, onOpenLink: (String) -> Unit) {
 
 /** One About row that opens [url] on plainticker.com in the browser; the whole row is the tap target. */
 @Composable
-private fun AboutLinkRow(label: Int, url: String, onOpenLink: (String) -> Unit, colors: AmberColors, sub: Int? = null) {
+private fun AboutLinkRow(
+    label: Int,
+    url: String,
+    onOpenLink: (String) -> Unit,
+    colors: AmberColors,
+    sub: Int? = null,
+    valueKind: RowValueKind = RowValueKind.LINK,
+) {
     val text = stringResource(label)
     CabinetRow(
         colors = colors,
         value = text,
         sub = sub?.let { stringResource(it) },
-        valueKind = RowValueKind.LINK,
+        valueKind = valueKind,
         onTap = { onOpenLink(url) },
         tapLabel = stringResource(R.string.you_about_open_link, text),
     )

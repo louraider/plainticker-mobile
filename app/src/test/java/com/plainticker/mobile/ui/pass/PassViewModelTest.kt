@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -512,6 +513,57 @@ class PassViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
         assertEquals(2, entitlement.requests.size)
+    }
+
+    /**
+     * Device QA of 1.3.16: You re-reads the entitlement on every visit, and each read used to drop
+     * the hero to "Reading your plan" before Pro came back. Over a known plan the re-read is quiet.
+     */
+    @Test
+    fun `a re-read over a known plan never passes through loading`() = runTest {
+        var calls = 0
+        val entitlement = mockApi {
+            calls++
+            val until = if (calls == 1) "2027-05-12T00:00:00.000Z" else "2027-06-12T00:00:00.000Z"
+            respondJson("""{"pro":true,"source":"promo","until":"$until"}""")
+        }
+        val first = java.time.Instant.parse("2027-05-12T00:00:00.000Z").toEpochMilli()
+        val second = java.time.Instant.parse("2027-06-12T00:00:00.000Z").toEpochMilli()
+        val vm = machine(entitlement = entitlement)
+        vm.pro.test {
+            awaitUntil { !it.entitlementLoading && it.untilMillis == first }
+            vm.refreshEntitlement()
+            while (true) {
+                val state = awaitItem()
+                assertFalse("the known plan stays on screen while the re-read runs", state.entitlementLoading)
+                if (state.untilMillis == second) break
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a failed re-read keeps the known plan rather than replacing it with an error`() = runTest {
+        var calls = 0
+        val entitlement = mockApi {
+            calls++
+            if (calls == 1) {
+                respondJson("""{"pro":true,"source":"promo","until":"2027-05-12T00:00:00.000Z"}""")
+            } else {
+                respondHtml("<html>down</html>", HttpStatusCode.BadGateway)
+            }
+        }
+        val vm = machine(entitlement = entitlement)
+        vm.pro.test {
+            awaitUntil { !it.entitlementLoading && it.pro }
+            cancelAndIgnoreRemainingEvents()
+        }
+        vm.refreshEntitlement()
+        advanceUntilIdle()
+        assertEquals(2, entitlement.requests.size)
+        assertTrue(vm.pro.value.pro)
+        assertFalse(vm.pro.value.entitlementFailed)
+        assertFalse(vm.pro.value.entitlementLoading)
     }
 
     // ---- Promo code redemption ---------------------------------------------------------------

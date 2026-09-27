@@ -216,7 +216,7 @@ fun planRows(pro: ProUiState, heroAction: HeroAction?, nowMillis: Long): List<Pl
             rows += free.copy(action = refresh)
             rows += proRow
         }
-        else -> rows += proRows(pro, pay, refresh, nowMillis)
+        else -> rows += proRows(pro, pay, refresh)
     }
     rows += PlanRow(words(R.string.you_stake_label), stakeLine(pro) ?: words(R.string.state_loading))
     pendingPaymentLine(pro)?.let { rows += PlanRow(words(R.string.you_plan_payment_label), it) }
@@ -228,7 +228,7 @@ private fun freeRows(pay: PlanAction?): List<PlanRow> = listOf(
     PlanRow(words(R.string.you_pro_label), words(R.string.you_plan_pro_value), action = pay),
 )
 
-private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?, nowMillis: Long): List<PlanRow> {
+private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?): List<PlanRow> {
     val source = when (pro.source) {
         EntitlementSource.PASS -> R.string.you_plan_source_pass
         EntitlementSource.STAKE -> R.string.you_plan_source_stake
@@ -243,8 +243,10 @@ private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?, now
             rows += PlanRow(words(R.string.you_plan_extend_label), words(R.string.you_plan_extend_stake))
         }
         EntitlementSource.PASS, EntitlementSource.SUBSCRIPTION, EntitlementSource.PROMO -> {
+            // The days left are the hero's line under "Pro until" (heroLines), and only there:
+            // drawn here too, "227 days left." read twice on one screen (device QA of 1.3.16).
             pro.untilMillis?.let {
-                rows += PlanRow(words(R.string.you_plan_until_label), raw(Fmt.utc(it)), sub = daysLeft(it, nowMillis))
+                rows += PlanRow(words(R.string.you_plan_until_label), raw(Fmt.utc(it)))
             }
             // A promo does not renew, and it is not paid for ([planAction] offers no pay action
             // for it, so [pay] is already null here): its "How to extend" row is a plain sentence
