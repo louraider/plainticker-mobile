@@ -31,8 +31,8 @@ sealed interface CheckOutcome {
  * between them is the product:
  *
  * - **Produced.** There is news and it is not yesterday's news. The record is replaced with every
- *   applicable clause; the notification carries [Digest.headline]'s own shorter reading of the
- *   same facts, one to two sentences rather than the screen's fuller paragraph.
+ *   applicable clause; the notification carries [Digest.notice]: the most useful line as its
+ *   title and the next two as its body, rather than the screen's fuller paragraph.
  * - **Unchanged.** The digest came out identical to the last one. Sending it again would be the
  *   app telling a person something they were already told, so nothing is posted and the stored
  *   digest, timestamp included, stays as it was. This is what makes determinism load-bearing
@@ -63,11 +63,19 @@ class WatchlistCheck(
      * silence a source [facts] itself could not reach would leave behind.
      */
     private val vote: VoteDigestFacts? = null,
+    /**
+     * Watches the reader's remembered vote picks that have since been analysed, before the
+     * watched set is read, so a pick analysed overnight is already a row in today's digest.
+     */
+    private val autoWatch: AutoWatch? = null,
+    /** The reader's own zone, for "Round 3 closes today at 02:00 your time". */
+    private val readerZone: ZoneId = ZoneOffset.UTC,
 ) {
 
     suspend fun run(): CheckOutcome {
         val now = clock.nowMillis()
         val before = digests.record.value
+        autoWatch?.resolvePending()
         val watched = watchlist.tickers.value
 
         if (watched.isEmpty()) {
@@ -90,6 +98,10 @@ class WatchlistCheck(
                 coveredReportDates = loaded.coveredReportDates,
                 voteRound = voteFacts.round,
                 analysedWinner = voteFacts.analysedWinner,
+                votedForWinner = voteFacts.votedForWinner,
+                announcedPick = before.announcedPick,
+                nowMillis = now,
+                readerZone = readerZone,
             ),
         )
         val observed = before.observing(now, digest.premiums, digest.nextReport)
@@ -105,12 +117,14 @@ class WatchlistCheck(
             return CheckOutcome.Unchanged
         }
 
-        digests.save(observed.copy(text = text, producedAtMillis = now))
+        digests.save(
+            observed.copy(text = text, producedAtMillis = now, announcedPick = digest.personalPick ?: before.announcedPick),
+        )
         // Last, and never before the record is written: a notification the screen cannot show
         // something true of would be the one thing this feature is supposed to make impossible.
-        // The shade gets the short reading; the record above, and the screen that draws it, get
-        // every clause.
-        notifier.post(digest.headline(strings))
+        // The shade gets the most useful line as its title and the next two as its body; the
+        // record above, and the screen that draws it, get every clause.
+        digest.notice(strings)?.let(notifier::post)
         return CheckOutcome.Produced(text)
     }
 }

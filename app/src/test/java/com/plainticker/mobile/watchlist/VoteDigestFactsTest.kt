@@ -61,6 +61,54 @@ class VoteDigestFactsTest {
         assertNull(facts.analysedWinner)
     }
 
+    private fun receipt(ticker: String, round: Int?) = com.plainticker.mobile.data.receipts.VoteReceipt(
+        signature = "sig-$ticker-$round",
+        ticker = ticker,
+        symbol = "${ticker}x",
+        weightRaw = 1_000_000L,
+        landedAtMillis = 1L,
+        voter = "voter",
+        round = round,
+    )
+
+    private fun wonBy(winner: String) = FakeNextUpRepository(
+        answer = Result.success(
+            NextUpAnswer.Open(rows = emptyList(), round = round, previous = PreviousRound(id = 1, winner = winner, status = "closed")),
+        ),
+    )
+
+    private val jefAnalysed = FakeSummaryRepository(analyses = mapOf("JEF" to Result.success(AnalysisPayload(ticker = "JEF"))))
+
+    @Test
+    fun `a receipt for the winner in the round it won makes it the reader's own pick`() = runTest {
+        val receipts = com.plainticker.mobile.data.receipts.FakeVoteReceiptStore().apply { record(receipt("JEF", 1)) }
+        val facts = VoteDigestFacts(wonBy("JEF"), jefAnalysed, receipts).load()
+        assertEquals("JEF", facts.analysedWinner)
+        assertEquals(true, facts.votedForWinner)
+    }
+
+    @Test
+    fun `a receipt for the same ticker in a different round is not a vote for this winner`() = runTest {
+        val receipts = com.plainticker.mobile.data.receipts.FakeVoteReceiptStore().apply { record(receipt("JEF", 2)) }
+        assertEquals(false, VoteDigestFacts(wonBy("JEF"), jefAnalysed, receipts).load().votedForWinner)
+    }
+
+    @Test
+    fun `a receipt from before rounds were stamped still counts, and one for another ticker never does`() = runTest {
+        val unstamped = com.plainticker.mobile.data.receipts.FakeVoteReceiptStore().apply { record(receipt("JEF", null)) }
+        assertEquals(true, VoteDigestFacts(wonBy("JEF"), jefAnalysed, unstamped).load().votedForWinner)
+        val other = com.plainticker.mobile.data.receipts.FakeVoteReceiptStore().apply { record(receipt("TSM", 1)) }
+        assertEquals(false, VoteDigestFacts(wonBy("JEF"), jefAnalysed, other).load().votedForWinner)
+    }
+
+    @Test
+    fun `a winner not yet analysed is nobody's pick yet, voted for or not`() = runTest {
+        val receipts = com.plainticker.mobile.data.receipts.FakeVoteReceiptStore().apply { record(receipt("JEF", 1)) }
+        val facts = VoteDigestFacts(wonBy("JEF"), FakeSummaryRepository(), receipts).load()
+        assertNull(facts.analysedWinner)
+        assertEquals(false, facts.votedForWinner)
+    }
+
     @Test
     fun `voting not open at all is the same silence as a source that failed`() = runTest {
         val nextUp = FakeNextUpRepository(answer = Result.success(NextUpAnswer.NotOpen))

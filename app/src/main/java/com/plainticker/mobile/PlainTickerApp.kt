@@ -28,6 +28,13 @@ class PlainTickerApp : Application() {
         // The wallet connected before this process started, put back for display and reads. No
         // wallet opens here; the first request that needs one reauthorizes with the saved token.
         scope.launch { container.walletSession.restore() }
+
+        // Closing the loop per reader: a vote's pick and a swap's stock token are watched for
+        // them. Followed from here, not from the flows that record them, so the vote and swap
+        // machines are untouched; a pick analysed since the last run is watched at start too.
+        scope.launch { container.autoWatch.followVotes(container.voteReceiptStore.receipts) }
+        scope.launch { container.autoWatch.followSwaps(container.receiptStore.receipts) }
+        scope.launch { runCatching { container.autoWatch.resolvePending() } }
     }
 }
 

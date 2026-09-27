@@ -13,13 +13,13 @@ interface DigestNotifier {
     fun enabled(): Boolean
 
     /** Show one digest. A device that will not show it does nothing, quietly and without throwing. */
-    fun post(text: String)
+    fun post(notice: DigestNotice)
 
     /** The notifier for a build with nothing to post to, and the null object the previews use. */
     companion object {
         val NONE: DigestNotifier = object : DigestNotifier {
             override fun enabled(): Boolean = false
-            override fun post(text: String) = Unit
+            override fun post(notice: DigestNotice) = Unit
         }
     }
 }
