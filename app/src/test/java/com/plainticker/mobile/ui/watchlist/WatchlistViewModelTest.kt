@@ -631,6 +631,71 @@ class WatchlistViewModelTest {
         assertFalse("a refusal is an answer: emptying the list and watching again does not re-ask", vm.watch("TSLA"))
     }
 
+    /**
+     * Device QA of 1.3.17: Today's Watched card read METAx -0.10% while Stocks and Detail read
+     * 0.00%, and only a relaunch updated it, because Today priced once when its ViewModel was made.
+     * While Today is shown it now re-prices on the shared cache's window, and stops when it leaves.
+     */
+    @Test
+    fun `while today is shown the watched figure re-prices on the cache's window, and stops when it leaves`() = runTest {
+        serving("META")
+        var nowMillis = NOW
+        prices.result = Result.success(mapOf("mint-META" to price(usd = 747.0, reference = 747.82)))
+        val vm = WatchlistViewModel(
+            watchlist = InMemoryWatchlistStore(setOf("META")),
+            facts = WatchlistFacts(summaries, catalog, prices),
+            digests = digests,
+            notifier = notifier,
+            scheduler = scheduler,
+            clock = Clock { nowMillis },
+            summaries = summaries,
+            catalog = catalog,
+            prices = prices,
+            nextUpRepo = nextUp,
+        )
+        advanceUntilIdle()
+        assertEquals(747.0, vm.state.value.rows.single().priceUsd!!, 0.0)
+        val firstRun = prices.requested.size
+
+        vm.onResume()
+        runCurrent()
+        assertEquals("a read younger than the window is not repeated", firstRun, prices.requested.size)
+
+        prices.result = Result.success(mapOf("mint-META" to price(usd = 747.83, reference = 747.82)))
+        nowMillis += WatchlistViewModel.REPRICE_MS
+        advanceTimeBy(WatchlistViewModel.REPRICE_MS + 1)
+        runCurrent()
+        assertTrue("the figures were read again", prices.requested.size > firstRun)
+        assertEquals("the Watched row carries the fresh quote", 747.83, vm.state.value.rows.single().priceUsd!!, 0.0)
+
+        vm.onPause()
+        val paused = prices.requested.size
+        nowMillis += 10 * WatchlistViewModel.REPRICE_MS
+        advanceTimeBy(10 * WatchlistViewModel.REPRICE_MS)
+        runCurrent()
+        assertEquals("nothing is priced while Today is in the background", paused, prices.requested.size)
+    }
+
+    @Test
+    fun `pull to refresh draws the indicator until the prices answer, and a Retry never does`() = runTest {
+        serving("META")
+        prices.result = Result.success(mapOf("mint-META" to price(usd = 747.0, reference = 747.82)))
+        val vm = viewModel(setOf("META"))
+        advanceUntilIdle()
+        assertFalse(vm.state.value.refreshing)
+
+        prices.result = Result.success(mapOf("mint-META" to price(usd = 748.0, reference = 747.82)))
+        vm.refresh(userAsked = true)
+        assertTrue("the pull shows while the sources are asked", vm.state.value.refreshing)
+        advanceUntilIdle()
+        assertFalse("and clears once the prices have answered", vm.state.value.refreshing)
+        assertEquals(748.0, vm.state.value.rows.single().priceUsd!!, 0.0)
+
+        vm.refresh()
+        assertFalse("a banner Retry does not draw the pull indicator", vm.state.value.refreshing)
+        advanceUntilIdle()
+    }
+
     private companion object {
         const val NOW = 1_789_257_600_000L
     }
