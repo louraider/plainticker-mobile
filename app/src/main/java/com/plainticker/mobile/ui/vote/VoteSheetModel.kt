@@ -47,6 +47,8 @@ data class VoteSheetContent(
      * transaction link, never a figure or a verdict. Null in every state but a landed vote.
      */
     val shareText: Copy? = null,
+    /** The landed vote's signature, for "View on Solscan". Landed only. */
+    val signature: String? = null,
 )
 
 /** The label and the mono fragment of the bar over a landed vote. */
@@ -129,6 +131,7 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         primary = VoteAction(words(R.string.action_share), VoteActionKind.Share),
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),
         shareText = words(R.string.vote_share_text, ticker, signature),
+        signature = signature,
     )
 
     is VoteState.Refused -> VoteSheetContent(

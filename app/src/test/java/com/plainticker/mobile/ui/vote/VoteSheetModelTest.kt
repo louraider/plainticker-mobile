@@ -373,4 +373,11 @@ class VoteSheetModelTest {
         val others = allStates.filter { it !is VoteState.Landed }.map { sheetOf(it) }
         assertTrue("only a landed vote has anything to share", others.all { it.shareText == null && it.primary?.kind != VoteActionKind.Share })
     }
+
+    @Test
+    fun `a landed vote carries its signature for View on Solscan, and nothing before it does`() {
+        assertEquals(signature, sheetOf(landed()).signature)
+        val others = allStates.filter { it !is VoteState.Landed }.map { sheetOf(it) }
+        assertTrue("only a landed vote links to the explorer", others.all { it.signature == null })
+    }
 }

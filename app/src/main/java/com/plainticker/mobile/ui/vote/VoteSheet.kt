@@ -48,6 +48,7 @@ import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.defaultAmberColors
+import com.plainticker.mobile.ui.SolscanAction
 import com.plainticker.mobile.ui.rememberShareText
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberSurface
@@ -164,6 +165,13 @@ internal fun ColumnScope.VoteSheetBody(
     // so the contrast rule holds without the call site having to know that.
     content.disclosure?.let {
         Sentence(it.text(), AmberType.meta, colors.textTertiary(AmberSurface.HIGH), DisclosureTop)
+    }
+
+    // The landed vote on a public explorer, right above Share (judges' review, 2026-09-27), the
+    // way the pass receipt places its own. Flush with the text column: the action has no start
+    // inset of its own.
+    content.signature?.let {
+        SolscanAction(signature = it, color = colors.actionText, modifier = Modifier.padding(start = Side))
     }
 
     Column(
