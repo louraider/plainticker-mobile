@@ -800,7 +800,8 @@ class TransactionGuardTest {
     @Test
     fun `swap - the wallet's own account for the output or wrapped SOL may be created, up to two creates in all`() = runTest {
         val c = swaps[2] // taker pays, and the real order opens no account at all
-        val o = order(c.path)
+        // Declaring the rent of two accounts, paid by the taker, as the real Swap to USDC does.
+        val o = order(c.path).copy(rentFeeLamports = 2_976_880L, rentFeePayer = c.taker)
         val m = WireMessage.parseTransaction(bytesOf(o))
         val tslax = TransactionGuard.ata(c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022)
         val wsol = TransactionGuard.ata(c.taker, KnownMints.WSOL, KnownPrograms.TOKEN)
@@ -811,6 +812,58 @@ class TransactionGuardTest {
         assertAllowed(checkSwap(o, two.transaction(), c.taker))
         val three = two.plusCreate(create(c.taker, usdc, c.taker, KnownMints.USDC, KnownPrograms.TOKEN))
         assertRefused(checkSwap(o, three.transaction(), c.taker), "more than 2")
+    }
+
+    @Test
+    fun `swap - every real order declares at least the rent of each account the wallet funds`() = runTest {
+        for (c in swaps) {
+            val o = order(c.path)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val walletFunded = m.instructions.count { m.keys[it.program] == KnownPrograms.ASSOCIATED_TOKEN && m.keys[it.accounts[0]] == c.taker }
+            val declared = if ((o.rentFeePayer ?: m.keys[0]) == c.taker) o.rentFeeLamports else 0L
+            assertTrue(c.path, declared >= walletFunded * TransactionGuard.MIN_DECLARED_RENT_PER_ACCOUNT_LAMPORTS)
+            assertAllowed(checkSwap(o, bytesOf(o), c.taker))
+        }
+    }
+
+    @Test
+    fun `swap - a wallet-funded create the order's rent does not cover is refused`() = runTest {
+        val c = swaps[2] // taker pays; the real order declares no rent and opens nothing
+        val o = order(c.path)
+        assertEquals(0L, o.rentFeeLamports)
+        val m = WireMessage.parseTransaction(bytesOf(o))
+        val tslax = TransactionGuard.ata(c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022)
+        val wsol = TransactionGuard.ata(c.taker, KnownMints.WSOL, KnownPrograms.TOKEN)
+        val one = m.plusCreate(create(c.taker, tslax, c.taker, KnownMints.TSLAX, KnownPrograms.TOKEN_2022))
+        val undeclared = checkSwap(o, one.transaction(), c.taker)
+        assertRefused(undeclared, "declares 0 lamports")
+        assertWhy(undeclared, TransactionGuard.Why.COSTS_MORE_THAN_SHOWN)
+        // Rent declared, but for somebody else to pay: nothing is declared for the wallet.
+        assertRefused(checkSwap(o.copy(rentFeeLamports = 1_488_440L, rentFeePayer = attacker), one.transaction(), c.taker), "declares 0 lamports")
+        // One account declared, two opened from the wallet.
+        val oneDeclared = o.copy(rentFeeLamports = 1_488_440L, rentFeePayer = c.taker)
+        assertAllowed(checkSwap(oneDeclared, one.transaction(), c.taker))
+        val two = one.plusCreate(create(c.taker, wsol, c.taker, KnownMints.WSOL, KnownPrograms.TOKEN))
+        assertRefused(checkSwap(oneDeclared, two.transaction(), c.taker), "funds 2 token account")
+        // A create the fee payer funds costs the wallet nothing, so it needs no declared rent.
+        val gasless = swaps[0]
+        val g = order(gasless.path)
+        assertAllowed(checkSwap(g.copy(rentFeeLamports = 0L), bytesOf(g), gasless.taker))
+    }
+
+    @Test
+    fun `swap - route_v2 platform fee is capped at 400 bps even when the order says more`() = runTest {
+        assertEquals(400, TransactionGuard.MAX_PLATFORM_FEE_BPS)
+        for (c in metisSwaps) {
+            val o = order(c.path).copy(feeBps = 1_000)
+            val m = WireMessage.parseTransaction(bytesOf(o))
+            val over = checkSwap(o, m.patchJupiter(26, u16(401)).transaction(), c.taker)
+            assertRefused(over, "ceiling of 400")
+            assertWhy(over, TransactionGuard.Why.COSTS_MORE_THAN_SHOWN)
+            assertAllowed(checkSwap(o, m.patchJupiter(26, u16(400)).transaction(), c.taker))
+        }
+        // The widest real fee, the gasless order's 378, sits under it.
+        assertTrue(order(swaps[0].path).feeBps <= TransactionGuard.MAX_PLATFORM_FEE_BPS)
     }
 
     @Test

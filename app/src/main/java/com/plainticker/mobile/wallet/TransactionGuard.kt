@@ -107,6 +107,27 @@ object TransactionGuard {
      */
     const val MAX_SWAP_ACCOUNT_CREATES = 2
 
+    /**
+     * The highest platform fee `route_v2` may carry, whatever the order says (security review,
+     * 2026-09-27). The bytes are already bound to the order's own `feeBps`; this is the fixed stop
+     * above both, so a server that raised the two together still cannot take more than 4 percent.
+     * The widest real order is the gasless one at 378, where Jupiter folds the gas into the fee;
+     * every other real order carries 10.
+     */
+    const val MAX_PLATFORM_FEE_BPS = 400
+
+    /**
+     * The least rent the order must declare for each token account the wallet itself funds
+     * (security review, 2026-09-27). A create carries no lamport amount in its bytes: the
+     * associated-token program charges the funder the rent-exempt minimum of the account. Jupiter
+     * states that as `rentFeeLamports` with its `rentFeePayer`, and every real order declares
+     * 1,488,440 lamports per 165-byte account it opens (2,976,880 for the default Swap to USDC,
+     * which opens two). 1,000,000 sits a third below that, so a lower network rent still passes,
+     * and above half of it, so an order declaring one account while its bytes open two, which
+     * would make the wallet pay rent the sheet never showed, is refused.
+     */
+    const val MIN_DECLARED_RENT_PER_ACCOUNT_LAMPORTS = 1_000_000L
+
     /** A pass is paid in USDC or USDT, both classic-Token mints, named by symbol in the summary. */
     private val PASS_MINTS = mapOf("USDC" to KnownMints.USDC, "USDT" to KnownMints.USDT)
 
@@ -383,9 +404,10 @@ object TransactionGuard {
      *
      * **Token account creates, fees and slippage (judges' review, 2026-09-27).** A create must open
      * the wallet's own account for one side of the swap ([checkSwapCreateAta]), at most
-     * [MAX_SWAP_ACCOUNT_CREATES] of them; `route_v2`'s platform fee may not exceed the order's
-     * `feeBps`; and no order may allow more than [MAX_SLIPPAGE_BPS] of slippage, in the JSON or in
-     * the bytes.
+     * [MAX_SWAP_ACCOUNT_CREATES] of them, and the wallet may fund no more of them than the order's
+     * declared rent covers; `route_v2`'s platform fee may not exceed the order's `feeBps` nor
+     * [MAX_PLATFORM_FEE_BPS]; and no order may allow more than [MAX_SLIPPAGE_BPS] of slippage, in
+     * the JSON or in the bytes.
      */
     suspend fun checkSwap(
         bytes: ByteArray,
@@ -422,6 +444,7 @@ object TransactionGuard {
 
         var jupiter = 0
         var creates = 0
+        var walletFundedCreates = 0
         for (ix in m.instructions) {
             val program = keys[ix.programIdIndex.toInt()]
             // An index past the static keys is an address-table account: never the wallet, which
@@ -472,6 +495,7 @@ object TransactionGuard {
                 KnownPrograms.ASSOCIATED_TOKEN -> {
                     checkSwapCreateAta(acc, data, wallet, feePayer = keys.first(), creatable)?.let { return@guarded it }
                     creates++
+                    if (acc[0] == wallet) walletFundedCreates++
                     if (creates > MAX_SWAP_ACCOUNT_CREATES) {
                         return@guarded refuse("swap opens $creates token accounts, more than $MAX_SWAP_ACCOUNT_CREATES", Why.STRANGE_TOKEN_ACCOUNT)
                     }
@@ -483,6 +507,20 @@ object TransactionGuard {
         }
         if (jupiter == 0) return@guarded refuse("swap carries no Jupiter instruction", Why.NOT_THIS_REQUEST)
         if (jupiter > 1) return@guarded refuse("swap carries $jupiter Jupiter instructions, not exactly one", Why.NOT_THIS_REQUEST)
+
+        // The rent the wallet funds in the bytes, against the rent the order says the wallet pays,
+        // the way checkPass holds its transfer to the summary. An order that names someone else
+        // as the rent payer declares nothing for the wallet.
+        if (walletFundedCreates > 0) {
+            val declared = if ((order.rentFeePayer ?: keys.first()) == wallet) order.rentFeeLamports else 0L
+            val needed = walletFundedCreates * MIN_DECLARED_RENT_PER_ACCOUNT_LAMPORTS
+            if (declared < needed) {
+                return@guarded refuse(
+                    "the wallet funds $walletFundedCreates token account(s), but the order declares $declared lamports of rent for it",
+                    Why.COSTS_MORE_THAN_SHOWN,
+                )
+            }
+        }
 
         if (keys.first() == wallet) {
             val priority = priorityFeeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed", Why.UNREADABLE)
@@ -587,6 +625,8 @@ object TransactionGuard {
                         refuse("route_v2 slippage $slippage bps exceeds the order's ${order.slippageBps} bps", Why.SLIPPAGE_TOO_WIDE)
                     slippage > MAX_SLIPPAGE_BPS ->
                         refuse("route_v2 slippage $slippage bps exceeds the ceiling of $MAX_SLIPPAGE_BPS", Why.SLIPPAGE_TOO_WIDE)
+                    platformFee > MAX_PLATFORM_FEE_BPS ->
+                        refuse("route_v2 platform fee $platformFee bps exceeds the ceiling of $MAX_PLATFORM_FEE_BPS", Why.COSTS_MORE_THAN_SHOWN)
                     platformFee > order.feeBps ->
                         refuse("route_v2 platform fee $platformFee bps exceeds the order's ${order.feeBps} bps", Why.COSTS_MORE_THAN_SHOWN)
                     positiveSlippage > 10_000 ->
@@ -663,7 +703,11 @@ object TransactionGuard {
      *   then USDC) opens the wallet's own wrapped-SOL account, which it closes back to the wallet,
      *   and the wallet's own account for the pool token its route plan names, so those two
      *   rules would refuse a real swap. Either way the account belongs to the wallet, and its
-     *   rent is bounded by the cap below;
+     *   rent is bounded by the cap below and by the order's declared rent: [checkSwap] refuses
+     *   bytes where the wallet funds more accounts than `rentFeeLamports` covers
+     *   ([MIN_DECLARED_RENT_PER_ACCOUNT_LAMPORTS]). A hop account funded only by the fee payer was
+     *   considered (security review, 2026-09-27) and not adopted: in the real default order the
+     *   wallet itself funds its pool-token account, and declares that rent;
      * - a mint slot that is a static key names that same mint, and the program slots, where
      *   static, name the System program and a token program;
      * - the funder is the wallet or the transaction's fee payer. The task named the wallet
