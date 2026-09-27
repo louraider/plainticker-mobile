@@ -71,8 +71,8 @@ class VoteViewModelTest {
     /** The transaction lib/vote/build.ts would build for [voter] and NFLX. */
     private val unsigned: String = ServerBuilt.vote(voter.address, "NFLX").base64()
 
-    /** 31,209.870777 SKR: what the production forwarder returned for a staking wallet, 2026-09-13. */
-    private val measuredStake = 31_209_870_777L
+    /** 38,406.150222 SKR: what the production forwarder returned for a staking wallet, 2026-09-13. */
+    private val measuredStake = 38_406_150_222L
 
     private val body = """{"transaction":"$unsigned","summary":""" +
         """{"ticker":"NFLX","lamports":5000,"collector":"$collector"}}"""

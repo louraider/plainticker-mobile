@@ -64,7 +64,7 @@ class VoteTabViewModelTest {
         val nextUp = FakeNextUpRepository(
             answer = Result.success(
                 NextUpAnswer.Open(
-                    rows = listOf(NextUpRow(ticker = "TSM", weight = "31209870777", voters = 3)),
+                    rows = listOf(NextUpRow(ticker = "TSM", weight = "38406150222", voters = 3)),
                     round = VoteRound(2, "2026-09-15T00:00:00.000Z", "2026-09-22T00:00:00.000Z"),
                     previous = PreviousRound(id = 1, winner = "JEF", weight = "1", voters = 1, status = "published"),
                 ),
@@ -319,9 +319,9 @@ class VoteTabViewModelTest {
     @Test
     fun `a connected wallet's stake is read the way the vote sheet reads it`() = runTest {
         val wallet = FakeWalletSession().apply { connectedAs(WalletAccount(ByteArray(32) { 7 }, "Seeker")) }
-        val model = viewModel(wallet = wallet, rpc = staked(31_209_870_777L))
+        val model = viewModel(wallet = wallet, rpc = staked(38_406_150_222L))
         advanceUntilIdle()
-        assertEquals(TabStake.Read(31_209_870_777L), model.state.value.stake)
+        assertEquals(TabStake.Read(38_406_150_222L), model.state.value.stake)
 
         wallet.connectedAs(null)
         advanceUntilIdle()

@@ -60,9 +60,9 @@ class SkrStakeBoundTest {
     // ---- What the bound lets through -------------------------------------------------------------
 
     @Test
-    fun `the wallet the forwarder was proved with reads exactly as the device measured it`() {
-        // 31,209.870777 SKR, HTTP 200 in 3.6 s through the production forwarder, 2026-09-13.
-        assertEquals(31_209_870_777L, SkrStakeBound.principalOf(stake(31_209_870_777L)))
+    fun `a large realistic stake reads exactly`() {
+        // 38,406.150222 SKR, an example stake of realistic size.
+        assertEquals(38_406_150_222L, SkrStakeBound.principalOf(stake(38_406_150_222L)))
     }
 
     @Test
@@ -74,7 +74,7 @@ class SkrStakeBoundTest {
     @Test
     fun `several stake accounts are summed`() {
         assertEquals(9_000_000L, SkrStakeBound.principalOf(stake(9_000_000L, 0L)))
-        assertEquals(41_209_870_777L, SkrStakeBound.principalOf(stake(31_209_870_777L, 10_000_000_000L)))
+        assertEquals(48_406_150_222L, SkrStakeBound.principalOf(stake(38_406_150_222L, 10_000_000_000L)))
     }
 
     @Test
@@ -89,8 +89,8 @@ class SkrStakeBoundTest {
 
     @Test
     fun `one account outside the bound refuses the whole read`() {
-        assertNull(SkrStakeBound.principalOf(stake(31_209_870_777L, -6_994_426_482_741_105_544L)))
-        assertNull(SkrStakeBound.principalOf(stake(31_209_870_777L, SkrStakeBound.STAKED_SUPPLY_RAW + 1L)))
+        assertNull(SkrStakeBound.principalOf(stake(38_406_150_222L, -6_994_426_482_741_105_544L)))
+        assertNull(SkrStakeBound.principalOf(stake(38_406_150_222L, SkrStakeBound.STAKED_SUPPLY_RAW + 1L)))
     }
 
     @Test

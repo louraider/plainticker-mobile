@@ -542,7 +542,7 @@ private val RowGapHeight = 1.dp
  * being null gives the unlocked branch when there is genuinely no analysis. Measured against the
  * real font, this word is the shortest content this slot ever draws
  * (`AmberTickerRowTest`'s own "Pro" arithmetic), so it always clears the figure budget the row's
- * own worst-case figure ("31,209.9 SKR") already proves.
+ * own worst-case figure ("38,406.2 SKR") already proves.
  */
 @Composable
 private fun AnalyzedRow(row: ListRow, modifier: Modifier = Modifier, colors: AmberColors, onOpenDetail: (String) -> Unit) {
@@ -883,8 +883,8 @@ private val PreviewState = ListUiState(
         samplePriceOnlyRow("TSM", "TSMx", "Taiwan Semiconductor", 264.10, 263.97),
         samplePriceOnlyRow("ASML", "ASMLx", "ASML Holding", 1_059.61, 812.48, poolUsd = 61.0),
     ),
-    // The strip as the leaders would read: the measured stake of 2026-09-13 and the median stake.
-    nextUp = listOf(NextUpRow("TSM", "31209870777", 3), NextUpRow("ASML", "6719000000", 1)),
+    // The strip as the leaders would read: a large example stake and the median stake.
+    nextUp = listOf(NextUpRow("TSM", "38406150222", 3), NextUpRow("ASML", "6719000000", 1)),
 )
 
 @InstrumentPreviews

@@ -875,7 +875,7 @@ class DetailModelTest {
     /** Three leaders in the server's order, heaviest first, with TSLA second. */
     private val leaders = listOf(
         NextUpRow("NFLX", "123456000000", 5),
-        NextUpRow("TSLA", "31209870777", 3),
+        NextUpRow("TSLA", "38406150222", 3),
         NextUpRow("AMD", "6719000000", 1),
     )
 
@@ -887,9 +887,9 @@ class DetailModelTest {
         val weight = line.weight as Copy.Counted
         assertEquals(R.plurals.next_up_detail_weight, weight.id)
         assertEquals("the voters select the form", 3, weight.quantity)
-        assertEquals(listOf("31,209.9", "3"), weight.args)
+        assertEquals(listOf("38,406.2", "3"), weight.args)
         assertEquals("Next up: 2 of 3, by staked SKR", ShippedCopy.render(line.rank))
-        assertEquals("31,209.9 SKR from 3 voters", ShippedCopy.render(line.weight))
+        assertEquals("38,406.2 SKR from 3 voters", ShippedCopy.render(line.weight))
     }
 
     @Test

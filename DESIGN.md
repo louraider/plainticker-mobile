@@ -339,7 +339,7 @@ caller-supplied `color`; every Amber caller passes `colors.actionText`. Bricolag
 percent wider than the Outfit SemiBold it replaced, so every one-line slot a text action shares was
 re-measured with fontTools at that instance, at 1.0x and 1.3x (the notable margins: the Watchlist
 row with "Unwatch", 60.648dp, keeps 259.352dp of context at 1.0x; the Vote leader row keeps
-124.101dp of context at 1.3x beside "31,209.9 SKR"; the top bar keeps 151.639dp at 1.3x beside
+124.101dp of context at 1.3x beside "38,406.2 SKR"; the top bar keeps 151.639dp at 1.3x beside
 "Watching"; You's "Read license" beside a wallet key keeps 103.844dp at 1.3x). Vertically, its 20sp
 line box clears the "g" by 2.855sp (typo ascent 930, descent 270, "g" 180 units below the
 baseline), more than Outfit's 1.824sp, which closes the "Sian out" clipping class at the component
@@ -639,7 +639,7 @@ formatted from `TrackingQuality.MIN_POOL_USD`). An analyzed row's figure reads "
 round 2; it read "score 66" before, and a bare "66" before that), and one line above the rows says
 what the scale ranks against ("Each number ranks the stock against the others in its sector, from 0
 to 100."). The widest real value, "100 of 100", is 92.538dp at `figureRow`, narrower than the
-"$12,345.67" price figure and the "31,209.9 SKR" figure (113.220dp) every row budget in 4.1 is
+"$12,345.67" price figure and the "38,406.2 SKR" figure (113.220dp) every row budget in 4.1 is
 already proven against. The analysis age reads "2 days old" (counted copy, `list_row_age_days`),
 not "2 d old". The "Today: 1 stock watched" strip that used to sit above Stocks' banner is gone: it
 repeated Today's own screen.

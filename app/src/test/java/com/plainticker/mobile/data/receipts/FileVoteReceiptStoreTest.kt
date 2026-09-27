@@ -25,7 +25,7 @@ class FileVoteReceiptStoreTest {
         landedAtMillis: Long = 1_757_600_000_000L,
         ticker: String = "NFLX",
         symbol: String = "NFLXx",
-        weightRaw: Long = 31_209_870_777L,
+        weightRaw: Long = 38_406_150_222L,
         voter: String = "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ",
         round: Int? = 1,
     ) = VoteReceipt(
@@ -55,7 +55,7 @@ class FileVoteReceiptStoreTest {
         val row = reopened.receipts.value.single()
         assertEquals("NFLX", row.ticker)
         assertEquals("NFLXx", row.symbol)
-        assertEquals(31_209_870_777L, row.weightRaw)
+        assertEquals(38_406_150_222L, row.weightRaw)
         assertEquals("9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ", row.voter)
         assertEquals(1, row.round)
     }

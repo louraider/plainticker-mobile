@@ -751,10 +751,10 @@ class PassViewModelTest {
 
     @Test
     fun `a connected wallet's stake is read and bounded the same way the vote reads it`() = runTest {
-        val vm = machine(wallet = wallet(), rpc = staking(31_209_870_777L))
+        val vm = machine(wallet = wallet(), rpc = staking(38_406_150_222L))
         vm.pro.test {
             val loaded = awaitUntil { it.stakeRaw != null }
-            assertEquals(31_209_870_777L, loaded.stakeRaw)
+            assertEquals(38_406_150_222L, loaded.stakeRaw)
             assertFalse(loaded.stakeUnread)
             assertTrue(loaded.walletConnected)
             cancelAndIgnoreRemainingEvents()

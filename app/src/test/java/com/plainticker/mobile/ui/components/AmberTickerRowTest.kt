@@ -295,20 +295,20 @@ class AmberTickerRowTest {
      * The same proof for the meta line: [context] now leads the [figure] it used to sit under, so
      * its budget is the content width less only whatever [figure] actually is, not a fixed
      * 40-percent column. The widest realistic [figure] across every screen that calls this row is a
-     * worded one, `next_up_weight` ("31,209.9 SKR", [VoteScreen]'s own vote weight), 113.22dp.
+     * worded one, `next_up_weight` ("38,406.2 SKR", [VoteScreen]'s own vote weight), 113.22dp.
      */
     @Test
     fun `the worst-case context budget derived from the real font comfortably clears the longest real meta`() {
         val contentWidthDp = 336.0
         val gapDp = 8.0
-        val worstFigureWidthDp = 113.220 // "31,209.9 SKR" at figureRow's 18sp/600 tnum.
+        val worstFigureWidthDp = 113.220 // "38,406.2 SKR" at figureRow's 18sp/600 tnum.
         val worstCaseContextBudgetDp = contentWidthDp - worstFigureWidthDp - gapDp
         assertEquals(214.780, worstCaseContextBudgetDp, 0.01)
 
         // list_row_meta_join's own worst join, the exact clause this file's own worst-case-meta
         // test above pins the length of, measured at context's 14sp/400: 215.852dp since the age
         // is counted in words (2026-09-26). That clause is drawn on Stocks rows only, beside
-        // Stocks' own figures, never beside "31,209.9 SKR" (a Vote weight), so it is proven twice:
+        // Stocks' own figures, never beside "38,406.2 SKR" (a Vote weight), so it is proven twice:
         // against the real Stocks figures on one line, and against the app's widest figure within
         // the row's two-line ceiling.
         val longestMetaWidthDp = 215.852
@@ -392,7 +392,7 @@ class AmberTickerRowTest {
         val metaContentBudgetDp = contentWidthDp - (actionStartPaddingDp + voteLabelWidthDp)
         assertEquals(288.682, metaContentBudgetDp, 0.01)
 
-        // next_up_weight's own widest figure, "31,209.9 SKR", at figureRow's 18sp/600 tnum:
+        // next_up_weight's own widest figure, "38,406.2 SKR", at figureRow's 18sp/600 tnum:
         // 113.220dp, the same number the context budget test above already pins.
         val figureWidthDp = 113.220
         val contextBudgetDp = metaContentBudgetDp - figureWidthDp - gapDp

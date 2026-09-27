@@ -27,8 +27,8 @@ class VoteSheetModelTest {
 
     private val signature = "4xQm7gZ1LdPqR8vWnJb3sT6yUeK2cHaX9fNmD5oVtHe"
 
-    /** 31,209.870777 SKR, the principal the production forwarder returned on 2026-09-13. */
-    private val measuredStake = 31_209_870_777L
+    /** 38,406.150222 SKR, the principal the production forwarder returned on 2026-09-13. */
+    private val measuredStake = 38_406_150_222L
 
     private val build = VoteBuild(
         transaction = "UkVEQUNURUQ=",
@@ -74,7 +74,7 @@ class VoteSheetModelTest {
 
         val weight = content.cells[0]
         assertEquals("Staked SKR this vote carries", ShippedCopy.render(weight.label))
-        assertEquals("31,209.870777", ShippedCopy.render(weight.value))
+        assertEquals("38,406.150222", ShippedCopy.render(weight.value))
         assertEquals("the weight is the headline figure, so it takes the whole row", 2, weight.span)
 
         val fee = content.cells[1]
@@ -170,7 +170,7 @@ class VoteSheetModelTest {
 
         val cells = content.cells
         assertEquals("Staked SKR behind NFLXx", ShippedCopy.render(cells[0].label))
-        assertEquals("31,209.870777", ShippedCopy.render(cells[0].value))
+        assertEquals("38,406.150222", ShippedCopy.render(cells[0].value))
         assertEquals("Signature", ShippedCopy.render(cells[1].label))
         assertEquals("4xQm…VtHe", ShippedCopy.render(cells[1].value))
         assertEquals("the fragment is what is shown, the signature is what is copied", signature, cells[1].copies)
@@ -258,10 +258,10 @@ class VoteSheetModelTest {
     @Test
     fun `the weight appears as soon as it is bounded, and stays through the signing`() {
         val building = sheetOf(VoteState.Building("NFLX", "NFLXx", collector, measuredStake))
-        assertEquals("31,209.870777", ShippedCopy.render(building.cells.single().value))
+        assertEquals("38,406.150222", ShippedCopy.render(building.cells.single().value))
 
         val signing = sheetOf(VoteState.Signing("NFLX", "NFLXx", collector, measuredStake, build))
-        assertEquals("31,209.870777", ShippedCopy.render(signing.cells.first().value))
+        assertEquals("38,406.150222", ShippedCopy.render(signing.cells.first().value))
         assertNotNull("a wallet that is open still says what it is open for", render(signing.phase))
     }
 
@@ -320,7 +320,7 @@ class VoteSheetModelTest {
         val signing = VoteState.Signing("NFLX", "NFLXx", collector, measuredStake, counted)
         assertEquals("123,456", ShippedCopy.render(sheetOf(signing).cells[0].value))
         // A server that sent no figure leaves the app's own bounded read on the screen.
-        assertEquals("31,209.870777", ShippedCopy.render(sheetOf(ready()).cells[0].value))
+        assertEquals("38,406.150222", ShippedCopy.render(sheetOf(ready()).cells[0].value))
     }
 
     @Test
@@ -350,7 +350,7 @@ class VoteSheetModelTest {
         // Everything else about the step is what it was: the same three figures, the same button,
         // and the weakness still stated where a person is about to act on it.
         assertEquals(3, content.cells.size)
-        assertEquals("31,209.870777", ShippedCopy.render(content.cells[0].value))
+        assertEquals("38,406.150222", ShippedCopy.render(content.cells[0].value))
         assertEquals(VoteActionKind.Confirm, content.primary?.kind)
         assertEquals("Vote to cover next", render(content.primary?.label))
         assertNotNull(content.disclosure)

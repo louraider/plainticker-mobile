@@ -299,7 +299,7 @@ fun recordedHoldings(receipts: List<SwapReceipt>): List<RecordedHolding> {
  * one fact this clause actually needs to add. fontTools 4.63 against
  * `res/font/bricolage_grotesque.ttf`, 2026-09-26, `context`'s 14sp/400 instance: the shortened
  * string is 340.830dp at 1.0x and 443.079dp at 1.3x, against a two-line capacity of 524.060dp /
- * 484.478dp beside this row's own widest realistic figure (`AmberTickerRow`'s own "31,209.9,"
+ * 484.478dp beside this row's own widest realistic figure (`AmberTickerRow`'s own "38,406.2,"
  * 65.970dp / 85.761dp, [AmberTickerRowTest]'s "widest realistic figure this row draws across every
  * screen"), so it wraps to a real second line rather than clipping. `PortfolioModelTest` pins the
  * string and the arithmetic.

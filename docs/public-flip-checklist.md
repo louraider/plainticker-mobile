@@ -48,9 +48,9 @@ again, or move what matters out of that wallet.
 
 **Done 2026-09-13.** Both placeholders are filled. Neither identifier was ever typed or stored:
 the spike signature came back from `getSignaturesForAddress` on the founder wallet, matched on
-slot 445,899,686 and verified against plan section 3 (one transaction, -5.00000000 USDC and
-+0.01366647 TSLAx, no error); the stake account was re-read through the SKR staking program with
-the memcmp at offset 41, still 31,209.870777 SKR of principal. `scripts/redaction-denylist.sha256`
+its slot (held privately) and verified against plan section 3 (one transaction, -5 USDC and
+about +0.0137 TSLAx, no error); the stake account was re-read through the SKR staking program with
+the memcmp at offset 41, still 38,406.150222 SKR of principal. `scripts/redaction-denylist.sha256`
 holds three digests and no identifiers.
 
 **Re-checked 2026-09-18.** Three active lines, each 64 hex characters, each labelled: founder

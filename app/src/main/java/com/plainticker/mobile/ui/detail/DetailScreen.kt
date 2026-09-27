@@ -1145,7 +1145,7 @@ private fun DetailDegradedPreview() {
         DetailContent(
             PreviewState.copy(
                 analysisState = AnalysisState.NotServed,
-                nextUp = listOf(NextUpRow("AAPL", "12345678901", 2), NextUpRow("TSLA", "31209870777", 3)),
+                nextUp = listOf(NextUpRow("AAPL", "12345678901", 2), NextUpRow("TSLA", "38406150222", 3)),
                 quote = Piece.Ready(PriceEntry(usdPrice = 366.17, liquidity = 1_300_000.0)),
                 chain = Piece.Failed,
                 reserves = Piece.Absent,

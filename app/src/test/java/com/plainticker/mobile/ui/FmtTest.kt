@@ -222,8 +222,8 @@ class FmtTest {
         assertEquals("5", Fmt.tokenAmount(5_000_000L, decimals = 6))
         assertEquals("0.01364", Fmt.tokenAmount(13_640_000L, decimals = 9))
         assertEquals("0.083", Fmt.tokenAmount(83_000_000L, decimals = 9))
-        assertEquals("0.013666", Fmt.tokenAmount(1_366_647L, decimals = 8))
-        assertEquals("0.01366647", Fmt.tokenAmount(1_366_647L, decimals = 8, maxDecimals = 8))
+        assertEquals("0.012346", Fmt.tokenAmount(1_234_567L, decimals = 8))
+        assertEquals("0.01234567", Fmt.tokenAmount(1_234_567L, decimals = 8, maxDecimals = 8))
         assertEquals("0", Fmt.tokenAmount(0L, decimals = 6))
     }
 

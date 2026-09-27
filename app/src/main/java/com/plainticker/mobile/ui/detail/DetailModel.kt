@@ -184,7 +184,7 @@ data class FundamentalsNotice(val text: Copy, val hint: Copy?)
 data class NextUpLine(
     /** "Next up: 2 of 20, by staked SKR" */
     val rank: Copy,
-    /** "31,209.9 SKR from 3 voters", counted copy so one voter reads as one. */
+    /** "38,406.2 SKR from 3 voters", counted copy so one voter reads as one. */
     val weight: Copy,
 )
 

@@ -281,10 +281,10 @@ private val CellHeight = 84.dp
 private val AmberSheetTitle: TextStyle = AmberType.sectionHead
 
 /**
- * The measured stake of the wallet the SKR read was proved with on 2026-09-13: 31,209.870777 SKR
- * of principal, which is exactly what the forwarder returned through its 8-byte slice.
+ * An example stake for the preview: 38,406.150222 SKR
+ * of principal, wide enough to exercise the widest figure the sheet draws.
  */
-private const val PreviewStakeRaw = 31_209_870_777L
+private const val PreviewStakeRaw = 38_406_150_222L
 
 /** The public demo wallet. The founder's own address appears in no file in this repository. */
 private const val PreviewCollector = "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ"

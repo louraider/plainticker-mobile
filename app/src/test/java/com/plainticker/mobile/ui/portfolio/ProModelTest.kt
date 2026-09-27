@@ -154,10 +154,10 @@ class ProModelTest {
 
     @Test
     fun `a stake above the threshold is stated the same honest way, with no verdict either`() {
-        val state = ProUiState(walletConnected = true, stakeRaw = 31_209_870_777L)
+        val state = ProUiState(walletConnected = true, stakeRaw = 38_406_150_222L)
         val line = stakeLine(state) as Copy.Words
         assertEquals(R.string.pro_stake_read, line.id)
-        assertEquals(listOf("31,209.870777"), line.args)
+        assertEquals(listOf("38,406.150222"), line.args)
     }
 
     // ---- A pending payment (task A6 review) --------------------------------------------------

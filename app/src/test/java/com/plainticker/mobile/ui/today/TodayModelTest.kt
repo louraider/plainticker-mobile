@@ -449,7 +449,7 @@ class TodayModelTest {
      *
      * **The watched marker ("Watched", drawn in the [figure] slot the way the Pro-numbers lock's
      * own "Pro" marker already does) never narrows an already-proven budget.** At 77.418dp it is
-     * shorter than the app's own widest real figure ("31,209.9 SKR", 113.220dp,
+     * shorter than the app's own widest real figure ("38,406.2 SKR", 113.220dp,
      * `AmberTickerRowTest`'s own pinned number), so the context budget beside it (250.582dp at
      * 1.0x, 227.357dp at 1.3x) is wider than the 214.780dp that figure already proves clear.
      */

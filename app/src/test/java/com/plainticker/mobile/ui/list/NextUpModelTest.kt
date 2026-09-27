@@ -38,7 +38,7 @@ class NextUpModelTest {
 
     /** Five leaders in the server's order, heaviest first. */
     private val leaders = listOf(
-        NextUpRow("NFLX", "31209870777", 3),
+        NextUpRow("NFLX", "38406150222", 3),
         NextUpRow("TSM", "12345678901", 2),
         NextUpRow("AMD", "6719000000", 1),
         NextUpRow("UBER", "1000000000", 1),
@@ -59,8 +59,8 @@ class NextUpModelTest {
         assertEquals("0", skrWeight(BigInteger.ZERO))
         assertEquals("1,000", skrWeight(BigInteger.valueOf(1_000_000_000L)))
         assertEquals("12,345.7", skrWeight(BigInteger.valueOf(12_345_678_901L)))
-        // The measured stake of 2026-09-13, 31,209.870777 SKR, at the strip's precision.
-        assertEquals("31,209.9", skrWeight(BigInteger.valueOf(31_209_870_777L)))
+        // A large example stake, 38,406.150222 SKR, at the strip precision.
+        assertEquals("38,406.2", skrWeight(BigInteger.valueOf(38_406_150_222L)))
         // Twenty digits: the value the impossible account decodes to, which no Long carries.
         assertEquals("11,452,317,590,968.4", skrWeight(BigInteger("11452317590968446072")))
         assertEquals("a whole number keeps no trailing zero", "6,719", skrWeight(BigInteger.valueOf(6_719_000_000L)))
@@ -76,13 +76,13 @@ class NextUpModelTest {
         assertEquals("the token symbol, as the row under it reads", listOf("NFLXx", "TSMx", "AMDx"), strip.map { it.display })
         assertEquals(listOf("Netflix, Inc.", "Taiwan Semiconductor", "Advanced Micro Devices"), strip.map { it.company })
         assertEquals(listOf(3, 2, 1), strip.map { it.voters })
-        assertEquals(BigInteger.valueOf(31_209_870_777L), strip.first().weightRaw)
+        assertEquals(BigInteger.valueOf(38_406_150_222L), strip.first().weightRaw)
     }
 
     @Test
     fun `the strip reads its figures out of the shipped copy`() {
         val leader = state().nextUpStrip.first()
-        assertEquals("31,209.9 SKR", ShippedCopy.render(leader.weight))
+        assertEquals("38,406.2 SKR", ShippedCopy.render(leader.weight))
         assertEquals("3 voters", ShippedCopy.render(leader.votersCopy))
         assertEquals("one reads as one", "1 voter", ShippedCopy.render(state().nextUpStrip[2].votersCopy))
     }
@@ -121,13 +121,13 @@ class NextUpModelTest {
         // The list is keyed by this ticker, so a second row carrying it is not a repeated row,
         // it is a LazyColumn throwing on a key it has already used.
         val doubled = listOf(
-            NextUpRow("NFLX", "31209870777", 3),
+            NextUpRow("NFLX", "38406150222", 3),
             NextUpRow(" nflx ", "12345678901", 2),
             NextUpRow("TSM", "6719000000", 1),
         )
         val strip = state(nextUp = doubled).nextUpStrip
         assertEquals(listOf("NFLX", "TSM"), strip.map { it.ticker })
-        assertEquals("the row the server served first wins, which is the heavier", "31,209.9 SKR", ShippedCopy.render(strip.first().weight))
+        assertEquals("the row the server served first wins, which is the heavier", "38,406.2 SKR", ShippedCopy.render(strip.first().weight))
         assertEquals("no key is used twice", strip.map { it.ticker }.distinct(), strip.map { it.ticker })
     }
 

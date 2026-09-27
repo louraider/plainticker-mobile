@@ -38,7 +38,7 @@ data class NextUpLeader(
     val weightRaw: BigInteger,
     val voters: Int,
 ) {
-    /** "31,209.9 SKR" */
+    /** "38,406.2 SKR" */
     val weight: Copy get() = words(R.string.next_up_weight, skrWeight(weightRaw))
 
     /** "3 voters", "1 voter": counted copy, so one reads as one. */

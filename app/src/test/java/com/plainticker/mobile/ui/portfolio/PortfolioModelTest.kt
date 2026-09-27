@@ -286,14 +286,14 @@ class PortfolioModelTest {
      * measures in) for the full rendered sentence with `Fmt.utc`'s own worst case (21 characters,
      * every stamp is this long); `figureRow`'s 18sp/600 tnum instance for
      * [com.plainticker.mobile.ui.components.AmberTickerRowTest]'s own "the widest realistic figure
-     * this row draws across every screen," "31,209.9," which this row's own `figure` slot shares
+     * this row draws across every screen," "38,406.2," which this row's own `figure` slot shares
      * the meta line's 336dp content width with the same way every other caller of that row does.
      */
     /*
      * Re-measured 2026-09-26 (audit, item 4): "quantity not rescaled" was jargon, now "count at swap
      * time". fontTools 4.63, the same method as AmberTickerRowTest (hmtx advances, context 14/400
      * opsz 14, figureRow 18/600 opsz 18 with tnum): the new sentence is 345.814dp; the figure
-     * "31,209.9" with tnum is 73.296dp. The older constants here (340.830dp, 65.970dp) did not
+     * "38,406.2" with tnum is 73.296dp. The older constants here (340.830dp, 65.970dp) did not
      * reproduce under that method, so both are replaced with the measured ones, and the new line
      * still clears two lines at 1.3x with 15.87dp to spare.
      */
@@ -318,7 +318,7 @@ class PortfolioModelTest {
 
         val contentWidthDp = 336.0
         val gapDp = 8.0
-        val figureWidthDp = 73.296 // "31,209.9" at figureRow's 18sp/600 tnum, 1.0x.
+        val figureWidthDp = 73.296 // "38,406.2" at figureRow's 18sp/600 tnum, 1.0x.
         val contextWidthDp = 345.814 // the rendered sentence above, at context's 14sp/400, 1.0x.
 
         val budgetDp = contentWidthDp - figureWidthDp - gapDp

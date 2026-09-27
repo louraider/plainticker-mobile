@@ -602,7 +602,7 @@ private fun ballotEntry(ticker: String, symbol: String, company: String) = Ballo
 private val PreviewRound = VoteRound(id = 1, opensAt = "2026-09-15T00:00:00.000Z", closesAt = "2026-09-22T00:00:00.000Z")
 
 private val PreviewLeaders = listOf(
-    NextUpLeader("TSM", "TSMx", "Taiwan Semiconductor", BigInteger("31209870777"), 3),
+    NextUpLeader("TSM", "TSMx", "Taiwan Semiconductor", BigInteger("38406150222"), 3),
     NextUpLeader("ASML", "ASMLx", "ASML Holding", BigInteger("6719000000"), 1),
 )
 
@@ -617,7 +617,7 @@ private val PreviewVotes = listOf(
         signature = "4xQm7gZ1LdPqR8vWnJb3sT6yUeK2cHaX9fNmD5oVtHe",
         ticker = "TSM",
         symbol = "TSMx",
-        weightRaw = 31_209_870_777L,
+        weightRaw = 38_406_150_222L,
         landedAtMillis = 1_789_045_020_000L,
         voter = "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ",
         round = 1,

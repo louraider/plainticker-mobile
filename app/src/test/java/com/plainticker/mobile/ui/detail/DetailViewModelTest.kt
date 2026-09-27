@@ -295,7 +295,7 @@ class DetailViewModelTest {
     @Test
     fun `a ticker PlainTicker does not serve asks where it stands, and a served one does not`() = runTest {
         val leaders = FakeNextUpRepository(
-            Result.success(listOf(NextUpRow("NFLX", "123456000000", 3), NextUpRow("AAPL", "31209870777", 2))),
+            Result.success(listOf(NextUpRow("NFLX", "123456000000", 3), NextUpRow("AAPL", "38406150222", 2))),
         )
         val unserved = viewModel(summaries = FakeSummaryRepository(), nextUp = leaders)
         unserved.state.test {
@@ -306,7 +306,7 @@ class DetailViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        val served = FakeNextUpRepository(Result.success(listOf(NextUpRow("AAPL", "31209870777", 2))))
+        val served = FakeNextUpRepository(Result.success(listOf(NextUpRow("AAPL", "38406150222", 2))))
         val covered = viewModel(nextUp = served)
         covered.state.test {
             val state = awaitUntil { !it.isLoading }

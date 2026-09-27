@@ -80,8 +80,8 @@ class CountCopyTest {
             Case(3, listOf("3"), "3 voters"),
         ),
         "next_up_detail_weight" to listOf(
-            Case(1, listOf("31,209.9", "1"), "31,209.9 SKR from 1 voter"),
-            Case(3, listOf("31,209.9", "3"), "31,209.9 SKR from 3 voters"),
+            Case(1, listOf("38,406.2", "1"), "38,406.2 SKR from 1 voter"),
+            Case(3, listOf("38,406.2", "3"), "38,406.2 SKR from 3 voters"),
         ),
         "detail_fscore_of" to listOf(
             Case(1, listOf("1"), "of 1 signal"),

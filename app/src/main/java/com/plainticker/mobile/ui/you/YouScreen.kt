@@ -939,7 +939,7 @@ private val PreviewProPass = ProUiState(
     source = EntitlementSource.PASS,
     untilMillis = 1_792_368_000_000L,
     walletConnected = true,
-    stakeRaw = 31_209_870_777L,
+    stakeRaw = 38_406_150_222L,
 )
 private const val PreviewNow = 1_790_000_000_000L
 
