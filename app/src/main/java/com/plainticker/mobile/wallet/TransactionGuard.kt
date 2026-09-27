@@ -128,6 +128,89 @@ object TransactionGuard {
      */
     const val MIN_DECLARED_RENT_PER_ACCOUNT_LAMPORTS = 1_000_000L
 
+    /**
+     * The most a swap may charge the wallet in network fees, signature and priority together,
+     * whatever the order declares (security review, 2026-09-27): 0.01 SOL. The dearest real order
+     * charges 9,245 lamports (the RFQ one: 5,000 per signature and a 4,245 priority fee), so this
+     * is about a thousand times that: room for a congested hour, and a hard stop on bytes that
+     * would spend a real share of the wallet's SOL on fees. A refusal costs a retry.
+     */
+    const val MAX_WALLET_FEE_LAMPORTS = 10_000_000L
+
+    /**
+     * Lamports per byte of a rent-exempt account, as a ceiling: 3,480 lamports per byte-year over
+     * the two-year exemption threshold, the rate mainnet charged until 2026. Every real order
+     * since charges less (1,488,440 for a 165-byte account is 5,080 a byte, overhead included),
+     * so a figure computed at this rate is an upper bound on what a create can take, not an
+     * estimate of it.
+     */
+    const val RENT_LAMPORTS_PER_BYTE_CEILING = 6_960L
+
+    /** The 128 bytes of account metadata the runtime adds to every account's rent. */
+    const val ACCOUNT_STORAGE_OVERHEAD_BYTES = 128L
+
+    /** A classic Token account: always exactly 165 bytes. */
+    const val TOKEN_ACCOUNT_BYTES = 165L
+
+    /**
+     * The largest Token-2022 associated account this app budgets for. An associated account is
+     * 165 bytes, one account-type byte, and the account extensions its mint forces on it at
+     * creation: ImmutableOwner (4), TransferFeeAmount (12), NonTransferableAccount (4),
+     * TransferHookAccount (5), PausableAccount (4), 195 bytes with every one of them. The real
+     * xStock account is 179 (the gasless order's 1,559,560 lamports at 5,080 a byte). The app does
+     * not read each mint's extension list before a swap, so 256 stands for any of them, with room
+     * for an extension added later.
+     */
+    const val TOKEN_2022_ACCOUNT_BYTES_CEILING = 256L
+
+    /** The most one classic Token account can cost its funder: 2,039,280 lamports. */
+    const val TOKEN_ACCOUNT_RENT_CEILING_LAMPORTS =
+        (TOKEN_ACCOUNT_BYTES + ACCOUNT_STORAGE_OVERHEAD_BYTES) * RENT_LAMPORTS_PER_BYTE_CEILING
+
+    /** The most one Token-2022 associated account can cost its funder: 2,672,640 lamports. */
+    const val TOKEN_2022_ACCOUNT_RENT_CEILING_LAMPORTS =
+        (TOKEN_2022_ACCOUNT_BYTES_CEILING + ACCOUNT_STORAGE_OVERHEAD_BYTES) * RENT_LAMPORTS_PER_BYTE_CEILING
+
+    /**
+     * What one swap may cost the wallet in SOL, read from the bytes wherever the bytes say it
+     * (security review, 2026-09-27). The order's JSON declares three fees; the sheet used to add
+     * them up as they came. Now the figures a screen states are these:
+     *
+     * - [signatureFeeLamports]: 5,000 lamports for every signature the message requires, when the
+     *   wallet is the fee payer (the runtime charges the fee payer for all of them); zero when
+     *   someone else pays, as on a gasless order.
+     * - [priorityFeeLamports]: the ComputeBudget unit price times the unit limit in the bytes,
+     *   when the wallet pays; zero otherwise.
+     * - [rentUpperBoundLamports]: the most the token accounts the wallet funds can take, each at
+     *   its program's ceiling ([TOKEN_ACCOUNT_RENT_CEILING_LAMPORTS],
+     *   [TOKEN_2022_ACCOUNT_RENT_CEILING_LAMPORTS]), or the order's own declared rent when that is
+     *   higher. A create's bytes carry no lamport amount, so the declared figure is only a claim;
+     *   the bound is what the screen may promise. It is a deposit, returned if the account is
+     *   closed.
+     */
+    data class SwapCosts(
+        val signatureFeeLamports: Long,
+        val priorityFeeLamports: Long,
+        val rentUpperBoundLamports: Long,
+        /** The rent the order declares for this wallet, which the bound is never below. */
+        val rentDeclaredLamports: Long,
+        /** How many associated accounts the wallet itself funds in the bytes. */
+        val walletFundedCreates: Int,
+    ) {
+        /** The network's own charge, never returned: signature fee plus priority fee. */
+        val networkFeeLamports: Long get() = signatureFeeLamports + priorityFeeLamports
+
+        /** Everything the wallet can be charged, the deposit at its upper bound. */
+        val totalLamports: Long get() = networkFeeLamports + rentUpperBoundLamports
+    }
+
+    /** [readSwap]'s answer: the bytes refused, or allowed with what they can cost the wallet. */
+    sealed interface SwapReading {
+        data class Allowed(val costs: SwapCosts) : SwapReading
+
+        data class Refused(val refusal: Verdict.Refuse) : SwapReading
+    }
+
     /** A pass is paid in USDC or USDT, both classic-Token mints, named by symbol in the summary. */
     private val PASS_MINTS = mapOf("USDC" to KnownMints.USDC, "USDT" to KnownMints.USDT)
 
@@ -416,21 +499,70 @@ object TransactionGuard {
         inputMint: String,
         outputMint: String,
         amount: Long,
-    ): Verdict = guarded {
-        if (order.inputMint != inputMint) return@guarded refuse("order input mint is not the requested one", Why.NOT_THIS_REQUEST)
-        if (order.outputMint != outputMint) return@guarded refuse("order output mint is not the requested one", Why.NOT_THIS_REQUEST)
-        if (order.inAmount.toLongOrNull() != amount) return@guarded refuse("order amount ${order.inAmount} is not the requested $amount", Why.WRONG_AMOUNT)
-        if (order.taker != null && order.taker != wallet) return@guarded refuse("order was built for another taker", Why.NOT_YOUR_WALLET)
+    ): Verdict = when (val reading = readSwap(bytes, wallet, order, inputMint, outputMint, amount)) {
+        is SwapReading.Allowed -> Verdict.Allow
+        is SwapReading.Refused -> reading.refusal
+    }
+
+    /**
+     * [checkSwap], and on an Allow the [SwapCosts] the bytes can charge the wallet, which are the
+     * figures the swap sheet states and the SOL check adds (security review, 2026-09-27).
+     *
+     * **Fees, read from the bytes.** Every fee and rent field must be a non-negative lamport count
+     * that sums without overflow ([SwapOrder.feeFieldsValid]), and neither declared fee may exceed
+     * [MAX_WALLET_FEE_LAMPORTS]. When the wallet pays the fee, the signature fee the message
+     * requires (5,000 x its required signatures) and the priority fee its ComputeBudget
+     * instructions set may not exceed the order's declared ones, and the two together may not
+     * exceed [MAX_WALLET_FEE_LAMPORTS].
+     *
+     * **Rent, bounded.** The declared rent for this wallet may not exceed what
+     * [MAX_SWAP_ACCOUNT_CREATES] Token-2022 accounts could cost at their ceiling, and the rent
+     * shown is [SwapCosts.rentUpperBoundLamports].
+     */
+    suspend fun readSwap(
+        bytes: ByteArray,
+        wallet: String,
+        order: SwapOrder,
+        inputMint: String,
+        outputMint: String,
+        amount: Long,
+    ): SwapReading {
+        var costs: SwapCosts? = null
+        val verdict = guarded { swapVerdict(bytes, wallet, order, inputMint, outputMint, amount) { costs = it } }
+        return when (verdict) {
+            is Verdict.Refuse -> SwapReading.Refused(verdict)
+            Verdict.Allow -> costs?.let { SwapReading.Allowed(it) }
+                ?: SwapReading.Refused(refuse("the swap's costs could not be read", Why.UNREADABLE))
+        }
+    }
+
+    private suspend fun swapVerdict(
+        bytes: ByteArray,
+        wallet: String,
+        order: SwapOrder,
+        inputMint: String,
+        outputMint: String,
+        amount: Long,
+        onCosts: (SwapCosts) -> Unit,
+    ): Verdict {
+        if (!order.feeFieldsValid) return refuse("order fee or rent fields are negative or overflow", Why.COSTS_MORE_THAN_SHOWN)
+        if (order.signatureFeeLamports > MAX_WALLET_FEE_LAMPORTS || order.prioritizationFeeLamports > MAX_WALLET_FEE_LAMPORTS) {
+            return refuse("order declares a fee above the ceiling of $MAX_WALLET_FEE_LAMPORTS lamports", Why.COSTS_MORE_THAN_SHOWN)
+        }
+        if (order.inputMint != inputMint) return refuse("order input mint is not the requested one", Why.NOT_THIS_REQUEST)
+        if (order.outputMint != outputMint) return refuse("order output mint is not the requested one", Why.NOT_THIS_REQUEST)
+        if (order.inAmount.toLongOrNull() != amount) return refuse("order amount ${order.inAmount} is not the requested $amount", Why.WRONG_AMOUNT)
+        if (order.taker != null && order.taker != wallet) return refuse("order was built for another taker", Why.NOT_YOUR_WALLET)
         if (order.slippageBps > MAX_SLIPPAGE_BPS) {
-            return@guarded refuse("order slippage ${order.slippageBps} bps exceeds the ceiling of $MAX_SLIPPAGE_BPS", Why.SLIPPAGE_TOO_WIDE)
+            return refuse("order slippage ${order.slippageBps} bps exceeds the ceiling of $MAX_SLIPPAGE_BPS", Why.SLIPPAGE_TOO_WIDE)
         }
 
-        val tx = decode(bytes) ?: return@guarded refuse("not a transaction this app can read", Why.UNREADABLE)
+        val tx = decode(bytes) ?: return refuse("not a transaction this app can read", Why.UNREADABLE)
         val m = tx.message
         val keys = staticKeys(m)
         val signers = keys.take(m.signatureCount.toInt())
-        if (wallet !in signers) return@guarded refuse("the wallet is not a required signer", Why.NOT_YOUR_WALLET)
-        requirePrograms(m, keys, SWAP_PROGRAMS)?.let { return@guarded it }
+        if (wallet !in signers) return refuse("the wallet is not a required signer", Why.NOT_YOUR_WALLET)
+        requirePrograms(m, keys, SWAP_PROGRAMS)?.let { return it }
 
         // The wallet's own accounts for each side, under either token program: USDC lives under
         // the classic one and every xStock under Token-2022, and an account derived for this owner
@@ -442,9 +574,13 @@ object TransactionGuard {
         // SOL, or a mint the order's own route plan passes through (see checkSwapCreateAta).
         val creatable = creatableMints(order, inputMint, outputMint).associateWith { ownAccounts(wallet, it) }
 
+        // The wallet's classic-Token accounts among those, for the rent ceiling of each create.
+        val classicAccounts = creatable.keys.map { ata(wallet, it, KnownPrograms.TOKEN) }.toSet()
+
         var jupiter = 0
         var creates = 0
         var walletFundedCreates = 0
+        var walletFundedRentCeiling = 0L
         for (ix in m.instructions) {
             val program = keys[ix.programIdIndex.toInt()]
             // An index past the static keys is an address-table account: never the wallet, which
@@ -458,18 +594,18 @@ object TransactionGuard {
                     val shape = when {
                         program == KnownPrograms.JUPITER_AGGREGATOR_V6 && head.contentEquals(ROUTE_V2) -> RouteV2Accounts
                         program == KnownPrograms.JUPITER_RFQ && head.contentEquals(RFQ_FILL) -> RfqFillAccounts
-                        else -> return@guarded refuse("Jupiter instruction ${head.toHex()} is not one whose accounts this app can read", Why.UNKNOWN_PROGRAM)
+                        else -> return refuse("Jupiter instruction ${head.toHex()} is not one whose accounts this app can read", Why.UNKNOWN_PROGRAM)
                     }
                     if (readU64(data, AMOUNT_OFFSET) != amount) {
-                        return@guarded refuse("Jupiter instruction amount is not the requested $amount", Why.WRONG_AMOUNT)
+                        return refuse("Jupiter instruction amount is not the requested $amount", Why.WRONG_AMOUNT)
                     }
                     checkSwapAccounts(shape, acc, wallet, inputMint, outputMint, spendFrom, payInto)
-                        ?.let { return@guarded it }
-                    checkSwapOutput(shape, data, order)?.let { return@guarded it }
+                        ?.let { return it }
+                    checkSwapOutput(shape, data, order)?.let { return it }
                 }
                 KnownPrograms.TOKEN, KnownPrograms.TOKEN_2022 -> {
                     val tag = data.firstOrNull()?.toInt()?.and(0xff)
-                        ?: return@guarded refuse("token instruction without data", Why.UNREADABLE)
+                        ?: return refuse("token instruction without data", Why.UNREADABLE)
                     when (tag) {
                         // The delegate is account 1 of Approve [source, delegate, owner] and
                         // account 2 of ApproveChecked [source, mint, delegate, owner]. Reading slot 1
@@ -477,59 +613,114 @@ object TransactionGuard {
                         // 2026-09-26): an honest approve to the wallet itself was refused, and one
                         // naming the wallet in the mint slot passed whoever the delegate was.
                         TOKEN_APPROVE ->
-                            if (acc.getOrNull(APPROVE_DELEGATE) != wallet) return@guarded refuse("swap carries an Approve to another delegate", Why.HANDS_OVER_CONTROL)
+                            if (acc.getOrNull(APPROVE_DELEGATE) != wallet) return refuse("swap carries an Approve to another delegate", Why.HANDS_OVER_CONTROL)
                         TOKEN_APPROVE_CHECKED ->
-                            if (acc.getOrNull(APPROVE_CHECKED_DELEGATE) != wallet) return@guarded refuse("swap carries an ApproveChecked to another delegate", Why.HANDS_OVER_CONTROL)
+                            if (acc.getOrNull(APPROVE_CHECKED_DELEGATE) != wallet) return refuse("swap carries an ApproveChecked to another delegate", Why.HANDS_OVER_CONTROL)
                         TOKEN_SET_AUTHORITY -> {
                             val newAuthority = setAuthorityTarget(data)
-                            if (newAuthority != wallet) return@guarded refuse("swap carries a SetAuthority to another key", Why.HANDS_OVER_CONTROL)
+                            if (newAuthority != wallet) return refuse("swap carries a SetAuthority to another key", Why.HANDS_OVER_CONTROL)
                         }
                         TOKEN_CLOSE_ACCOUNT ->
-                            if (acc.getOrNull(1) != wallet) return@guarded refuse("swap closes an account into another key", Why.HANDS_OVER_CONTROL)
+                            if (acc.getOrNull(1) != wallet) return refuse("swap closes an account into another key", Why.HANDS_OVER_CONTROL)
                         TOKEN_SYNC_NATIVE -> Unit
                         TOKEN_TRANSFER, TOKEN_TRANSFER_CHECKED, TOKEN_BURN, TOKEN_BURN_CHECKED ->
-                            return@guarded refuse("swap carries a top-level token transfer or burn", Why.WRONG_RECIPIENT)
-                        else -> return@guarded refuse("swap carries token instruction $tag", Why.UNKNOWN_PROGRAM)
+                            return refuse("swap carries a top-level token transfer or burn", Why.WRONG_RECIPIENT)
+                        else -> return refuse("swap carries token instruction $tag", Why.UNKNOWN_PROGRAM)
                     }
                 }
                 KnownPrograms.ASSOCIATED_TOKEN -> {
-                    checkSwapCreateAta(acc, data, wallet, feePayer = keys.first(), creatable)?.let { return@guarded it }
+                    checkSwapCreateAta(acc, data, wallet, feePayer = keys.first(), creatable)?.let { return it }
                     creates++
-                    if (acc[0] == wallet) walletFundedCreates++
+                    if (acc[0] == wallet) {
+                        walletFundedCreates++
+                        // The account's own address says which program it is under: a classic
+                        // account is always 165 bytes, a Token-2022 one is held to its ceiling.
+                        walletFundedRentCeiling += if (acc[1] in classicAccounts) {
+                            TOKEN_ACCOUNT_RENT_CEILING_LAMPORTS
+                        } else {
+                            TOKEN_2022_ACCOUNT_RENT_CEILING_LAMPORTS
+                        }
+                    }
                     if (creates > MAX_SWAP_ACCOUNT_CREATES) {
-                        return@guarded refuse("swap opens $creates token accounts, more than $MAX_SWAP_ACCOUNT_CREATES", Why.STRANGE_TOKEN_ACCOUNT)
+                        return refuse("swap opens $creates token accounts, more than $MAX_SWAP_ACCOUNT_CREATES", Why.STRANGE_TOKEN_ACCOUNT)
                     }
                 }
-                KnownPrograms.SYSTEM -> checkSwapSystem(acc, data, wallet)?.let { return@guarded it }
+                KnownPrograms.SYSTEM -> checkSwapSystem(acc, data, wallet)?.let { return it }
                 KnownPrograms.COMPUTE_BUDGET -> Unit
-                else -> return@guarded refuse("program $program is not allowed in a swap", Why.UNKNOWN_PROGRAM)
+                else -> return refuse("program $program is not allowed in a swap", Why.UNKNOWN_PROGRAM)
             }
         }
-        if (jupiter == 0) return@guarded refuse("swap carries no Jupiter instruction", Why.NOT_THIS_REQUEST)
-        if (jupiter > 1) return@guarded refuse("swap carries $jupiter Jupiter instructions, not exactly one", Why.NOT_THIS_REQUEST)
+        if (jupiter == 0) return refuse("swap carries no Jupiter instruction", Why.NOT_THIS_REQUEST)
+        if (jupiter > 1) return refuse("swap carries $jupiter Jupiter instructions, not exactly one", Why.NOT_THIS_REQUEST)
 
         // The rent the wallet funds in the bytes, against the rent the order says the wallet pays,
         // the way checkPass holds its transfer to the summary. An order that names someone else
-        // as the rent payer declares nothing for the wallet.
+        // as the rent payer declares nothing for the wallet. This is a floor, not a proof: a create
+        // carries no lamport amount, so the figure shown is the upper bound below.
         if (walletFundedCreates > 0) {
             val declared = if ((order.rentFeePayer ?: keys.first()) == wallet) order.rentFeeLamports else 0L
             val needed = walletFundedCreates * MIN_DECLARED_RENT_PER_ACCOUNT_LAMPORTS
             if (declared < needed) {
-                return@guarded refuse(
+                return refuse(
                     "the wallet funds $walletFundedCreates token account(s), but the order declares $declared lamports of rent for it",
                     Why.COSTS_MORE_THAN_SHOWN,
                 )
             }
         }
 
-        if (keys.first() == wallet) {
-            val priority = priorityFeeLamports(m, keys) ?: return@guarded refuse("compute budget instruction is malformed", Why.UNREADABLE)
-            if (priority > order.prioritizationFeeLamports) {
-                return@guarded refuse("priority fee $priority exceeds the order's ${order.prioritizationFeeLamports}", Why.COSTS_MORE_THAN_SHOWN)
-            }
+        // The rent a screen may state for this wallet: the order's own figure where it is the
+        // wallet's (every figure, on an order that is not gasless, as the sheet has always read
+        // it), never above what the most accounts a swap may open could cost at the largest size
+        // ([MAX_SWAP_ACCOUNT_CREATES] Token-2022 accounts at their ceiling), and shown at the bound
+        // the bytes allow when that is higher. Counted against the ceiling and not against this
+        // order's top-level creates: an account the route opens inside Jupiter's own program is
+        // declared too, and cannot be seen from here.
+        val rentDeclared = declaredForWallet(order.rentFeeLamports, order.rentFeePayer, wallet, order.gasless)
+        if (rentDeclared > MAX_SWAP_ACCOUNT_CREATES * TOKEN_2022_ACCOUNT_RENT_CEILING_LAMPORTS) {
+            return refuse(
+                "the order declares $rentDeclared lamports of rent, above the ceiling for $MAX_SWAP_ACCOUNT_CREATES accounts",
+                Why.COSTS_MORE_THAN_SHOWN,
+            )
         }
-        Verdict.Allow
+
+        // The fees the wallet pays, from the bytes: the runtime charges the fee payer 5,000
+        // lamports for every required signature and the priority fee its compute budget sets.
+        val walletPays = keys.first() == wallet
+        val signatureFee = if (walletPays) m.signatureCount.toLong() * SIGNATURE_FEE_LAMPORTS else 0L
+        val priority = if (walletPays) {
+            priorityFeeLamports(m, keys) ?: return refuse("compute budget instruction is malformed", Why.UNREADABLE)
+        } else {
+            0L
+        }
+        if (walletPays && signatureFee > order.signatureFeeLamports) {
+            return refuse("signature fee $signatureFee exceeds the order's ${order.signatureFeeLamports}", Why.COSTS_MORE_THAN_SHOWN)
+        }
+        if (walletPays && priority > order.prioritizationFeeLamports) {
+            return refuse("priority fee $priority exceeds the order's ${order.prioritizationFeeLamports}", Why.COSTS_MORE_THAN_SHOWN)
+        }
+        if (signatureFee + priority > MAX_WALLET_FEE_LAMPORTS) {
+            return refuse("fees of ${signatureFee + priority} lamports exceed the ceiling of $MAX_WALLET_FEE_LAMPORTS", Why.COSTS_MORE_THAN_SHOWN)
+        }
+        onCosts(
+            SwapCosts(
+                signatureFeeLamports = signatureFee,
+                priorityFeeLamports = priority,
+                rentUpperBoundLamports = maxOf(rentDeclared, walletFundedRentCeiling),
+                rentDeclaredLamports = rentDeclared,
+                walletFundedCreates = walletFundedCreates,
+            ),
+        )
+        return Verdict.Allow
     }
+
+    /**
+     * A declared fee as this wallet's: on an order that is not gasless the taker pays all three,
+     * as every real one confirms; on a gasless one only a fee whose named payer is the wallet (or
+     * that names none) is the wallet's. The sheet's own reading before this check existed.
+     */
+    private fun declaredForWallet(lamports: Long, payer: String?, wallet: String, gasless: Boolean): Long =
+        if (!gasless || payer == null || payer == wallet) lamports else 0L
+
 
     /**
      * Where, in one Jupiter swap instruction's account list, the four accounts that decide whose

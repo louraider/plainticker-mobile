@@ -38,6 +38,14 @@ sealed class SwapError(
     class OrderRejected(code: Int?, detail: String?) :
         SwapError(Stage.ORDER, code, detail, "order rejected${code?.let { " ($it)" } ?: ""}: ${detail ?: "-"}")
 
+    /**
+     * /order answered 200 with an order this app will not read as one: a fee or rent field that
+     * is negative, or fields whose sum overflows ([SwapOrder.feeFieldsValid]). Not a refusal of
+     * the pair by Jupiter; a refusal of the order by this app, before anything adds the figures.
+     */
+    class InvalidOrder(detail: String?) :
+        SwapError(Stage.ORDER, null, detail, "order refused by this app: ${detail ?: "-"}")
+
     /** /execute failed with a code this app does not special-case. */
     class ExecuteFailed(code: Int?, detail: String?) :
         SwapError(Stage.EXECUTE, code, detail, "execute failed${code?.let { " ($it)" } ?: ""}: ${detail ?: "-"}")
