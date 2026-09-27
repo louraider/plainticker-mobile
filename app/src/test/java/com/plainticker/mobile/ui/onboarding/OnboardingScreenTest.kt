@@ -51,10 +51,9 @@ class OnboardingScreenTest {
     fun `every sentence on the screen comes from strings xml`() {
         listOf(
             "app_name", "onboarding_headline", "onboarding_body_reads",
-            "onboarding_map_today", "onboarding_map_stocks", "onboarding_map_vote",
-            "onboarding_map_portfolio", "onboarding_map_you",
-            "onboarding_body_disclaimer", "onboarding_certify", "onboarding_continue",
-            "nav_today", "nav_stocks", "nav_vote", "nav_portfolio", "nav_you",
+            "onboarding_body_disclaimer", "onboarding_certify", "onboarding_consent_continue",
+            "onboarding_continue", "onboarding_pick_title", "onboarding_pick_body",
+            "onboarding_pick_skip_example", "onboarding_pick_skip",
             "today_status_closed_tomorrow", "today_heading_reports", "today_reports_watched",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
@@ -84,23 +83,22 @@ class OnboardingScreenTest {
      * which is what the panel sets in weight 600 and what the reader then sees under the icon.
      */
     @Test
-    fun `the map names the five bottom-bar destinations, each sentence opening with its own label`() {
+    fun `the tab map is gone, and the second step picks stocks to watch from real analysed chips`() {
         fun string(name: String) = Regex("""<string name="$name">(.*?)</string>""").find(stringsXml)?.groupValues?.get(1)
         listOf("today", "stocks", "vote", "portfolio", "you").forEach { key ->
-            val label = requireNotNull(string("nav_$key")) { "nav_$key is not declared" }
-            val sentence = requireNotNull(string("onboarding_map_$key")) { "onboarding_map_$key is not declared" }
-            assertTrue("onboarding_map_$key does not open with \"$label\"", sentence.startsWith("$label "))
+            assertTrue("onboarding_map_$key ended onboarding on a list of tabs", string("onboarding_map_$key") == null)
         }
-        val all = listOf("onboarding_body_reads", "onboarding_map_today", "onboarding_map_stocks", "onboarding_map_vote",
-            "onboarding_map_portfolio", "onboarding_map_you").joinToString(" ") { string(it).orEmpty() }
-        // What the brief asked the first screen to teach: reads per stock, Swap both ways, the SKR vote, Pro.
-        listOf("reads", "Swap", "back to USDC", "SKR", "Pro").forEach { word ->
-            assertTrue("the panel never says \"$word\"", word in all)
-        }
-        listOf("List", "Watchlist", "top right").forEach { gone ->
-            assertTrue("the panel still names the retired \"$gone\"", !Regex("""\b$gone\b""").containsMatchIn(all))
-        }
+        assertEquals("Continue", string("onboarding_consent_continue"))
         assertEquals("Open Today", string("onboarding_continue"))
+        assertEquals("Pick stocks to watch", string("onboarding_pick_title"))
+        assertEquals("Skip and read %1\$s", string("onboarding_pick_skip_example"))
+
+        val pick = scan.code.substringAfter("private fun PickPanel(").substringBefore("\n}\n")
+        assertTrue("the chips are the state's suggestions, never literals", "state.suggestions.forEach" in pick)
+        assertTrue("each chip is an Amber chip", "AmberChip(" in pick)
+        assertTrue("the primary action is live once something is picked", "enabled = state.canFinish" in pick)
+        assertTrue("skip is always offered", "onClick = actions.onSkip" in pick)
+        assertTrue("skip names the worked example when it is on offer", "R.string.onboarding_pick_skip_example" in pick)
     }
 
     @Test
@@ -138,6 +136,10 @@ class OnboardingScreenTest {
         assertTrue("the backdrop does not swallow touches", ".swallowTouches()" in scan.code)
         assertTrue("touches are not consumed before the children see them", "PointerEventPass.Initial" in scan.code)
         val handlers = Regex("""\bonClick\s*=\s*(\w+)""").findAll(scan.code).map { it.groupValues[1] }.toList()
-        assertEquals("the button is the only click handler on the screen", listOf("onContinue"), handlers)
+        assertEquals(
+            "the consent button, then the pick step's finish and skip, are the only named click handlers",
+            listOf("onContinue", "actions", "actions"),
+            handlers,
+        )
     }
 }

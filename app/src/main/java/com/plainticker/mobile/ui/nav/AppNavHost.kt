@@ -86,10 +86,13 @@ fun AppNavHost(
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 viewModel = viewModel(factory = factory),
-                onDone = {
+                onDone = { exit ->
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.ONBOARDING) { inclusive = true }
                     }
+                    // The worked example: a skipped pick lands on a stock page whose every figure
+                    // is open, over Today, rather than on an empty screen.
+                    exit.ticker?.let { navController.navigate(Routes.detail(it)) }
                 },
             )
         }

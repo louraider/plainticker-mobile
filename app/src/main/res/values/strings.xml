@@ -67,14 +67,17 @@
          that destination's own nav_ label so the panel can set it in weight 600. The old copy
          described a List to start on, a Watchlist that sent the digest and You "top right". -->
     <string name="onboarding_body_reads">Each stock page reads the token live from Solana first, then the company against its sector, from SEC filings.</string>
-    <string name="onboarding_map_today">Today shows market hours, the stocks you watch and who reports this week.</string>
-    <string name="onboarding_map_stocks">Stocks lists every tokenized stock by sector. Search, or open one to read it.</string>
-    <string name="onboarding_map_vote">Vote lets your staked SKR choose the next stock to be analyzed.</string>
-    <string name="onboarding_map_portfolio">Portfolio reads your wallet. Swap USDC into a stock token there or on its page, and back to USDC.</string>
-    <string name="onboarding_map_you">You has your sign-in, your wallet and Pro, which opens every figure on every covered stock.</string>
     <string name="onboarding_body_disclaimer">This is not a price forecast or investment advice.</string>
     <string name="onboarding_certify">I am not a US person, and I understand xStocks are tokenized tracker instruments issued by a third party, not shares.</string>
     <string name="onboarding_continue">Open Today</string>
+    <!-- Step one ends on the consent; step two (judges' round 2) lets the reader pick stocks to
+         watch, so onboarding ends on a filled Today or on the open AAPLx example, never on an
+         empty screen. The chips are real analysed stocks, never copy. -->
+    <string name="onboarding_consent_continue">Continue</string>
+    <string name="onboarding_pick_title">Pick stocks to watch</string>
+    <string name="onboarding_pick_body">Today will show their next report dates and how closely each token follows its share. One short digest a day says what changed.</string>
+    <string name="onboarding_pick_skip_example">Skip and read %1$s</string>
+    <string name="onboarding_pick_skip">Skip</string>
 
     <!-- List -->
     <string name="list_today_stale">Checked %1$s, tap to refresh</string>

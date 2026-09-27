@@ -127,7 +127,13 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
         )
     }
     initializer {
-        OnboardingViewModel(container.onboardingStore)
+        OnboardingViewModel(
+            container.onboardingStore,
+            watchlist = container.watchlistStore,
+            summaries = container.summaryRepository,
+            catalog = container.catalogRepository,
+            snapshot = container.snapshotRepository,
+        )
     }
     initializer {
         YouViewModel(
