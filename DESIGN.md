@@ -515,7 +515,7 @@ The shared information architecture (Today, Stocks, Vote, Portfolio, You under `
 replacing the old List/Vote/Portfolio/Watchlist tab row and a TopBar "You" action; chapters
 replacing infinite scroll on Stocks) is `docs/design-research-2026-09-21.md` section 3, and it
 shipped as drawn: `HomeScreen` hosts five peer destinations, Watchlist folded into Today's own
-"Yours" block, Stocks gained sticky sector chapters, a jump index and a wrapping filter row.
+"Yours" block, Stocks gained sticky sector chapters, a jump index and a wrapping filter row (both reshaped in the judges' round 2, below).
 Detail's own layout order does not change in any direction the research drew, Amber included; only
 the tokens and components under it do.
 
@@ -624,25 +624,24 @@ screen, beside the digest it delivers.
 
 **Stocks** (`ListScreen.kt`, mounted by `StocksScreen`) replaced an infinite scroll with search at
 the top, sticky sector chapters (`stickyHeader` items painted opaque so pinned content never shows
-scrolling rows through it), a chapter jump index as a real `Row` sibling of the list, not an overlay
-(an earlier version drew it as a `Box` on top of the full-width `LazyColumn` and it covered the
-search field, the chips and every sticky heading; the list now takes `weight(1f)` so the jump index
-narrows it rather than sitting over it), and a wrapping filter row (`FlowRow`, so 1.3x font scale
-grows the row instead of hiding a chip past an edge). One filter active at a time, because the jump
-index already reaches a sector without narrowing anything, so a sector chip's own job is holding
-one still rather than stacking with Deep pool/Watched.
+scrolling rows through it) and one horizontally scrolling filter row (Deep pool, Watched, then every
+sector). Judges' round 2 (2026-09-27) removed the chapter jump rail that sat beside the list (its
+"Com", "Dis", "Sta" codes clipped and meant nothing to a beginner, and it narrowed every line beside
+it, the hours banner included) and replaced the wrapping `FlowRow` of chips, which grew to four rows
+and pushed the first stock below the fold. One filter active at a time: a sector chip holds one
+sector still rather than stacking with Deep pool/Watched. The Deep pool chip is drawn only from five
+deep rows up (`DEEP_POOL_CHIP_MIN`), or while it is the active filter.
 
 Plain copy on Stocks (audit 2026-09-26): the first chip reads "Deep pool 21", not "Tracked 21",
 and while it is selected one line under the chips says what it means once ("Deep pool means at
 least $4k sits in the token's trading pool, so its price follows the share closely", the floor
-formatted from `TrackingQuality.MIN_POOL_USD`). An analyzed row's figure reads "score 66", not a
-bare "66": the widest real value, "score 100", is 85.842dp at `figureRow` (111.595dp at 1.3x),
-narrower than the "31,209.9 SKR" figure (113.220dp) every row budget in 4.1 is already proven
-against. The analysis age reads "2 days old" (counted copy, `list_row_age_days`), not "2 d old".
-The jump rail keeps its three-letter labels ("Com", "Dis", "Sta"), because no set of full words
-fits 48dp at 1.3x ("Staples" 54.96dp, "Utilities" 55.57dp, "Industry" 61.65dp at `meta`); each
-label carries the sector's full name as its content description, so a screen reader never says
-"Com". The "Today: 1 stock watched" strip that used to sit above Stocks' banner is gone: it
+formatted from `TrackingQuality.MIN_POOL_USD`). An analyzed row's figure reads "62 of 100" (judges'
+round 2; it read "score 66" before, and a bare "66" before that), and one line above the rows says
+what the scale ranks against ("Each number ranks the stock against the others in its sector, from 0
+to 100."). The widest real value, "100 of 100", is 92.538dp at `figureRow`, narrower than the
+"$12,345.67" price figure and the "31,209.9 SKR" figure (113.220dp) every row budget in 4.1 is
+already proven against. The analysis age reads "2 days old" (counted copy, `list_row_age_days`),
+not "2 d old". The "Today: 1 stock watched" strip that used to sit above Stocks' banner is gone: it
 repeated Today's own screen.
 
 **Vote** lays out a header, an explainer, the round header, Leaders, Your votes, Last round, a

@@ -264,6 +264,18 @@ private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?, now
 
 // ---- On this device, notifications, about -------------------------------------------------
 
+/**
+ * The pages About links to on plainticker.com (judges' round 2; the dApp Store listing asks for a
+ * privacy policy, terms and a way to delete the account). Each opens in the browser, English
+ * locale, the same pages the web footer links. [DELETE_ACCOUNT] lands on the web account page's
+ * own deletion section, where a signed-in reader can remove the account and what it holds.
+ */
+object AboutLinks {
+    const val PRIVACY = "https://www.plainticker.com/en/privacy"
+    const val TERMS = "https://www.plainticker.com/en/terms"
+    const val DELETE_ACCOUNT = "https://www.plainticker.com/en/account#delete"
+}
+
 /** The three numerals "On this device" draws, each already formatted, never worked out on screen. */
 data class DeviceFacts(val swaps: String, val votes: String, val watched: String)
 

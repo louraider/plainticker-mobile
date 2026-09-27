@@ -99,15 +99,17 @@
         <item quantity="one">%1$s day old</item>
         <item quantity="other">%1$s days old</item>
     </plurals>
-    <!-- The composite on a Stocks row, labelled so a bare "66" is not a mystery number. Lowercase
-         because it sits in the figure slot beside the name, not at the start of a sentence. -->
-    <string name="list_row_score">score %1$s</string>
+    <!-- The composite on a Stocks row, with its scale, so a bare "66" is not a mystery number.
+         "62 of 100" replaced "score 62" (judges' round 2, 2026-09-27): "score" named no scale.
+         What the scale ranks against is said once above the rows, in list_row_score_legend. -->
+    <string name="list_row_score">%1$s of 100</string>
+    <string name="list_row_score_legend">Each number ranks the stock against the others in its sector, from 0 to 100.</string>
     <string name="list_state_strong">strong</string>
     <string name="list_state_fair">fair</string>
     <string name="list_state_weak">weak</string>
 
-    <!-- Stocks: the wrapping filter row (docs/design-research-2026-09-21.md section 3, "a
-         wrapping filter row (Deep pool, Watched, sector)"). Deep pool and Watched are a label plus
+    <!-- Stocks: the filter row (docs/design-research-2026-09-21.md section 3), one horizontally
+         scrolling row of chips (Deep pool, Watched, sector) since the judges' round 2. Deep pool and Watched are a label plus
          a count, not a sentence with a noun the count has to agree with, so the count stays a plain
          string (the Kotlin call site carries the lint opt out). The sector name itself is the
          chip label and is read data, never a literal here. "Deep pool" replaced "Tracked"
@@ -117,34 +119,6 @@
          formatted from TrackingQuality.MIN_POOL_USD ("$4k"), never typed here. -->
     <string name="stocks_filter_tracked_note">Deep pool means at least %1$s sits in the token\'s trading pool, so its price follows the share closely.</string>
     <string name="stocks_filter_watched">Watched %1$s</string>
-    <!-- The disclosure chip past the eight shown by default; "sector" is a counted noun here, so
-         it is a plurals like next_up_voters above. -->
-    <plurals name="stocks_filter_more_sectors">
-        <item quantity="one">+%1$s sector</item>
-        <item quantity="other">+%1$s sectors</item>
-    </plurals>
-    <string name="stocks_filter_fewer_sectors">Fewer sectors</string>
-
-    <!-- Stocks: the chapter jump index (docs/design-research-2026-09-21.md section 3, "a chapter
-         jump index"). Eleven GICS sector names plus the trailing chapter /summary sends no sector
-         for, each cut to two or three letters so the rail stays one narrow column beside the list
-         (gen.py's approved Amber Stocks frame draws the same codes: Com, Dis, Sta, Ene, Fin, Hea,
-         Ind, IT, Mat, RE, Uti). A short code alone would be a row of letters nobody can place, so
-         every jump target also carries stocks_jump_action, which speaks the sector's own full name
-         to a screen reader instead of the abbreviation. -->
-    <string name="stocks_jump_communication_services">Com</string>
-    <string name="stocks_jump_consumer_discretionary">Dis</string>
-    <string name="stocks_jump_consumer_staples">Sta</string>
-    <string name="stocks_jump_energy">Ene</string>
-    <string name="stocks_jump_financials">Fin</string>
-    <string name="stocks_jump_health_care">Hea</string>
-    <string name="stocks_jump_industrials">Ind</string>
-    <string name="stocks_jump_information_technology">IT</string>
-    <string name="stocks_jump_materials">Mat</string>
-    <string name="stocks_jump_real_estate">RE</string>
-    <string name="stocks_jump_utilities">Uti</string>
-    <string name="stocks_jump_no_sector">No</string>
-    <string name="stocks_jump_action">Jump to %1$s</string>
 
     <!-- The "Next up" strip and the Detail standing: the uncovered tickers staked SKR has chosen,
          from GET /api/v1/vote/next-up (docs/skr-curation-spec-2026-09-13.md, app work step 3). -->
@@ -163,14 +137,19 @@
     <!-- Detail -->
     <!-- The verdict (task app-verdict): directly under the hero and above the gauge, the same slot
          the web gives it. The label above it names what the value is; the value itself is either
-         the payload's own text (never here) or, while monetization withholds it, a placeholder
-         shape with no text standing in for the word, plus detail_pro_peek_note below it.
+         the payload's own text (never here) or, while monetization withholds it, the lock
+         detail_verdict_locked, then detail_pro_peek_note and detail_action_get_pro below it
+         (judges' round 2 replaced the grey placeholder bar, which read as still loading).
          detail_verdict_qualifier sits beside the unlocked value itself (the fix for the "no
          verdict" versus "Classification: Skip" contradiction judges flagged): the app classifies
          by a fixed rule and says so right next to the word, the same pairing the web gives it,
          rather than only lower down in Method. -->
     <string name="detail_verdict_label">Classification</string>
     <string name="detail_verdict_qualifier">By the method\'s fixed rule. Not a price forecast or advice.</string>
+    <string name="detail_verdict_locked">Pro only</string>
+    <!-- The lock's one action: You, Plan, with the promo code field open and focused, where the
+         hero's Get Pro sits too. -->
+    <string name="detail_action_get_pro">Have a code? Get Pro</string>
     <string name="detail_token_price">Token price</string>
     <!-- What the token's own figure is called below the liquidity floor, where the quote is a
          reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->
@@ -501,6 +480,11 @@
     <string name="pro_stake_disconnected">Connect a wallet to read what it has staked.</string>
     <string name="pro_stake_unread">This wallet\'s staked SKR could not be read.</string>
     <string name="pro_stake_read">This wallet has %1$s SKR staked.</string>
+    <!-- Below the stake threshold, on a device that is not Pro yet (Akshay, judges' round 2): how
+         far this wallet is from Pro by stake. %1$s is the whole SKR staked, %2$s the whole SKR
+         still missing, both formatted from ProModel's PRO_STAKE_THRESHOLD_RAW (7,500 SKR, the
+         server's STAKE_ENTITLEMENT_THRESHOLD_SKR), never typed here. -->
+    <string name="pro_stake_progress">%1$s SKR staked · %2$s more opens Pro</string>
     <!-- A landed pass signature this device has not yet seen confirmed (task A6 review): the Pay
          action is withheld while this is shown, so a second payment is never offered for the one
          the chain, or the ten-minute cron, might still be settling. -->
@@ -535,7 +519,10 @@
          reader, the full text once a device presents an entitled code. -->
     <string name="detail_heading_read">The read</string>
     <string name="detail_heading_next_steps">What to check next</string>
-    <string name="detail_pro_peek_note">The rest is available to a wallet with a pass, a qualifying stake, or a subscription.</string>
+    <!-- Where Pro comes from (judges' round 2: the old note said "a wallet", but Pro belongs to
+         the device or the account, and a code is a way in too). %1$s is the stake threshold,
+         formatted from ProModel's PRO_STAKE_THRESHOLD_RAW ("7,500"), never typed here. -->
+    <string name="detail_pro_peek_note">The rest is for Pro. Pro belongs to this device or your account, and comes from a pass, staking %1$s SKR, or a code.</string>
     <!-- The call reached the server and got back something this app could not read (ReadState.Failed).
          Never shown for Loading, NotServed or Disabled: those are not a fault to report. -->
     <string name="detail_read_unavailable">The read is unavailable</string>
@@ -706,6 +693,12 @@
     <string name="you_wallet_method">Solana wallet</string>
     <string name="you_wallet_none">Not connected</string>
     <string name="you_wallet_note">Stays connected between launches. This phone keeps the session token your wallet issued, encrypted, and never a key. Disconnect forgets it.</string>
+    <!-- The Wallet group (judges' round 2): the phone's wallet connection is its own group, not a
+         sign-in method, because it signs transactions through Mobile Wallet Adapter and opens no
+         account. One line under the key; the fuller you_wallet_note sits behind you_wallet_how. -->
+    <string name="you_heading_wallet">Wallet</string>
+    <string name="you_wallet_note_short">Signs swaps, votes and Pro payments. It is not a way to sign in.</string>
+    <string name="you_wallet_how">What this phone keeps of the connection</string>
     <string name="you_action_sign_in">Sign in</string>
     <string name="you_action_connect">Connect</string>
     <string name="you_action_copy">Copy</string>
@@ -733,6 +726,13 @@
     <string name="you_action_show">Show</string>
     <string name="you_action_hide">Hide</string>
     <string name="you_version">Version %1$s</string>
+    <!-- About's links (judges' round 2, and the dApp Store listing): each opens plainticker.com in
+         the browser (YouModel's AboutLinks). -->
+    <string name="you_about_privacy">Privacy policy</string>
+    <string name="you_about_terms">Terms</string>
+    <string name="you_about_delete_account">Delete account</string>
+    <string name="you_about_delete_account_sub">On plainticker.com, signed in with the same account.</string>
+    <string name="you_about_open_link">Open %1$s in the browser</string>
 
     <!-- Fonts and licenses (U11): the OFL texts ship as assets (app/src/main/assets/licenses/,
          docs/fonts.md); this device-facing name and credit line are the only part of that

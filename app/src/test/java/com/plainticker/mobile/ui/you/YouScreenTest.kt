@@ -93,6 +93,7 @@ class YouScreenTest {
                 "Hero(hero = hero",
                 "PlanGroup(",
                 "AccountSection(",
+                "WalletSection(",
                 "DeviceGroup(",
                 "NotificationsGroup(",
                 "AboutGroup(",
@@ -106,10 +107,57 @@ class YouScreenTest {
         assertOrder(
             "AboutGroup",
             about,
-            listOf("R.string.you_version", "R.string.onboarding_body_disclaimer", "R.string.you_heading_licenses", "LicenseRow("),
+            listOf(
+                "R.string.you_version",
+                "R.string.onboarding_body_disclaimer",
+                "R.string.you_about_privacy",
+                "R.string.you_about_terms",
+                "R.string.you_about_delete_account",
+                "R.string.you_heading_licenses",
+                "LicenseRow(",
+            ),
         )
+        assertTrue("AboutLinks.PRIVACY" in about)
+        assertTrue("AboutLinks.TERMS" in about)
+        assertTrue("AboutLinks.DELETE_ACCOUNT" in about)
         assertTrue("the licenses are collapsed until asked for", "if (licensesOpen)" in about)
         assertTrue("each license still reads its shipped OFL text", "context.assets.open(license.assetPath)" in scan.code)
+    }
+
+    @Test
+    fun `about's links open the browser, and a phone without one does not crash`() {
+        val row = body("private fun AboutLinkRow(", "private fun LicenseRow(")
+        assertTrue("the whole row is the tap target", "onTap = { onOpenLink(url) }" in row)
+        assertTrue("and it is labelled", "R.string.you_about_open_link" in row)
+        assertTrue("Intent(Intent.ACTION_VIEW, Uri.parse(url))" in scan.code)
+        assertTrue("runCatching {" in body("fun YouScreen(", "internal fun YouContent("))
+    }
+
+    // ---- Have a code? (judges' round 2) ---------------------------------------------------------
+
+    @Test
+    fun `have a code is the plan group's first row, in full action colour`() {
+        val plan = body("private fun PlanGroup(", "private fun planRowAction(")
+        assertTrue("PromoRow must come before the plan rows", plan.indexOf("PromoRow(") in 0 until plan.indexOf("rows.forEach"))
+        val promo = body("private fun PromoRow(", "private fun PromoEditingRow(")
+        assertTrue("RowAction(stringResource(R.string.promo_action_have_code), onOpen)" in promo)
+        assertTrue("no dimmed colour on the action", "textSecondary" !in promo)
+    }
+
+    @Test
+    fun `the code field takes focus as it appears`() {
+        val field = body("private fun PromoField(", "private fun DeviceGroup(")
+        assertTrue("LaunchedEffect(focus) { runCatching { focus.requestFocus() } }" in field)
+        assertTrue(".focusRequester(focus)" in field)
+    }
+
+    @Test
+    fun `detail's request opens the field, returns to the top, then clears itself`() {
+        val content = body("internal fun YouContent(", "private fun amberColors(")
+        val effect = content.substring(content.indexOf("LaunchedEffect(openPromo)"), content.indexOf("LazyColumn("))
+        assertOrder("the promo request", effect, listOf("onOpenPromo()", "scrollToItem(0)", "onPromoOpened()"))
+        assertTrue("a finished redeem folds first so the field can open", "if (promo is PromoState.Success) onDismissPromo()" in effect)
+        assertTrue("openPromo = openPromo" in body("fun YouScreen(", "internal fun YouContent("))
     }
 
     @Test

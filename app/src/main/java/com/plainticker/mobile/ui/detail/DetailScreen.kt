@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -49,6 +50,7 @@ import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.rpc.MintFacts
 import com.plainticker.mobile.data.rpc.PausableConfig
 import com.plainticker.mobile.data.rpc.PermanentDelegate
+import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.data.rpc.ScaledUiAmountConfig
 import com.plainticker.mobile.data.rpc.TransferHookConfig
 import com.plainticker.mobile.data.xstocks.Deployment
@@ -79,6 +81,7 @@ import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.TopScrim
 import com.plainticker.mobile.ui.components.Track
+import com.plainticker.mobile.ui.portfolio.PRO_STAKE_THRESHOLD_RAW
 import com.plainticker.mobile.ui.swap.SwapActions
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.swap.SwapSheet
@@ -117,6 +120,11 @@ fun DetailScreen(
     voteViewModel: VoteViewModel,
     onViewPortfolio: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The lock's way to Pro (judges' round 2): You, Plan, with the promo code field open and
+     * focused. Null keeps the lock's sentence without the action.
+     */
+    onGetPro: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
@@ -172,8 +180,9 @@ fun DetailScreen(
         },
         onSwap = { swapToken?.let(swapViewModel::open) },
         // The peek's own way to Pro, beside the honest short form rather than in place of it
-        // (task A6): the same destination the swap receipt already leads to.
-        onViewPortfolio = onViewPortfolio,
+        // (task A6). It used to lead to Portfolio, which neither sells Pro nor takes a code; since
+        // the judges' round 2 it leads to You's Plan with the code field open.
+        onGetPro = onGetPro,
         modifier = modifier,
     )
 }
@@ -190,8 +199,8 @@ internal fun DetailContent(
     voteActions: VoteActions = NoVoteActions,
     /** Null in the previews and the gallery, where no wallet can be reached. */
     onVote: (() -> Unit)? = null,
-    /** Null in the previews and the gallery; the peek's own way to Pro when it is not (task A6). */
-    onViewPortfolio: (() -> Unit)? = null,
+    /** Null in the previews and the gallery; the lock's own way to Pro when it is not (task A6). */
+    onGetPro: (() -> Unit)? = null,
     /** The connected wallet's chain-read balance of this token; null with no wallet or no read. */
     holding: SwapHolding? = null,
     /** "Swap to USDC"; null in the previews and the gallery. */
@@ -218,7 +227,7 @@ internal fun DetailContent(
             state.banner?.let { Banner(text = stringResource(it.text)) }
 
             Hero(state)
-            VerdictSection(state = state, onViewPortfolio = onViewPortfolio)
+            VerdictSection(state = state, onGetPro = onGetPro)
 
             val tokenNotice = state.tokenNotice
             if (tokenNotice != null) {
@@ -241,7 +250,7 @@ internal fun DetailContent(
             }
 
             FundamentalsBlock(state)
-            ReadSection(state = state, onViewPortfolio = onViewPortfolio)
+            ReadSection(state = state, onGetPro = onGetPro)
             NextStepsSection(state)
             state.readNotice?.let { NoticeLine(it) }
             NextUpBlock(state)
@@ -271,12 +280,14 @@ internal fun DetailContent(
  *
  * [DetailUiState.verdictBlock] is null in every state this screen already drew nothing extra in: no
  * analysis served, or a served payload with no `verdict` block at all. [VerdictBlock.Loading] draws
- * a skeleton the way [Hero]'s own company line does. [VerdictBlock.Locked] draws a placeholder
- * shape with no text behind it, because the real word never reached this app to blur, plus the one
- * sentence this screen already uses lower down for the same reason, pointing at the same place.
+ * a skeleton the way [Hero]'s own company line does. [VerdictBlock.Locked] draws a plain lock,
+ * "Pro only", where the word would be (judges' round 2: the grey placeholder bar it used to draw
+ * read as a page still loading, not as something a reader could get), the one sentence saying
+ * where Pro comes from, and "Have a code? Get Pro", which opens You's Plan with the code field
+ * ready. The real word never reached this app, so there is still nothing behind the lock to blur.
  */
 @Composable
-private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
+private fun VerdictSection(state: DetailUiState, onGetPro: (() -> Unit)?) {
     val block = state.verdictBlock ?: return
     val colors = defaultAmberColors()
     Column(
@@ -310,22 +321,16 @@ private fun VerdictSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?)
             }
 
             VerdictBlock.Locked -> {
-                // The placeholder shape carries no text at all, amber or otherwise: the real
-                // word never reached this app to draw, so there is nothing here to restyle
-                // into something that reads as the word behind a filter.
-                SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
+                // A lock, not the word behind a filter: "Pro only" in the secondary colour, never
+                // amber and never the classification's own primary weight, so it cannot be read
+                // as a verdict called "Pro".
                 Text(
-                    text = stringResource(R.string.detail_pro_peek_note),
-                    style = AmberType.context,
+                    text = stringResource(R.string.detail_verdict_locked),
+                    style = AmberType.sectionHead,
                     color = colors.textSecondary,
                 )
-                if (onViewPortfolio != null) {
-                    TextAction(
-                        label = stringResource(R.string.receipt_view_portfolio),
-                        onClick = onViewPortfolio,
-                        color = colors.actionText,
-                    )
-                }
+                ProPeekNote(color = colors.textSecondary)
+                GetProAction(onGetPro = onGetPro, color = colors.actionText)
             }
         }
     }
@@ -745,7 +750,7 @@ private fun MethodBlock(method: MethodContent) {
  * before task A6 (the free-stays-free invariant this screen keeps).
  */
 @Composable
-private fun ReadSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
+private fun ReadSection(state: DetailUiState, onGetPro: (() -> Unit)?) {
     val block = state.readNarrative ?: return
     val colors = defaultAmberColors()
     AmberSectionHead(title = stringResource(R.string.detail_heading_read))
@@ -755,20 +760,34 @@ private fun ReadSection(state: DetailUiState, onViewPortfolio: (() -> Unit)?) {
     ) {
         Text(text = block.text.text(), style = AmberType.body, color = colors.textSecondary)
         if (!block.full) {
-            Text(
-                text = stringResource(R.string.detail_pro_peek_note),
-                style = AmberType.context,
-                color = colors.textTertiary(AmberSurface.GROUND),
-            )
-            if (onViewPortfolio != null) {
-                TextAction(
-                    label = stringResource(R.string.receipt_view_portfolio),
-                    onClick = onViewPortfolio,
-                    color = colors.actionText,
-                )
-            }
+            ProPeekNote(color = colors.textTertiary(AmberSurface.GROUND))
+            GetProAction(onGetPro = onGetPro, color = colors.actionText)
         }
     }
+}
+
+/**
+ * Where Pro comes from, in one sentence shared by every locked block on this screen: it belongs to
+ * this device or the account, and comes from a pass, the stake threshold (formatted from
+ * [PRO_STAKE_THRESHOLD_RAW], the server's own 7,500 SKR), or a code.
+ */
+@Composable
+private fun ProPeekNote(color: Color) {
+    Text(
+        text = stringResource(
+            R.string.detail_pro_peek_note,
+            Fmt.tokenAmount(PRO_STAKE_THRESHOLD_RAW, SkrStakeBound.SKR_DECIMALS),
+        ),
+        style = AmberType.context,
+        color = color,
+    )
+}
+
+/** "Have a code? Get Pro": You, Plan, with the code field open. Draws nothing without a destination. */
+@Composable
+private fun GetProAction(onGetPro: (() -> Unit)?, color: Color) {
+    if (onGetPro == null) return
+    TextAction(label = stringResource(R.string.detail_action_get_pro), onClick = onGetPro, color = color)
 }
 
 /**
@@ -793,13 +812,7 @@ private fun NextStepsSection(state: DetailUiState) {
                 row.detail?.let { Text(text = it, style = AmberType.context, color = colors.textSecondary) }
             }
         }
-        if (!block.full) {
-            Text(
-                text = stringResource(R.string.detail_pro_peek_note),
-                style = AmberType.context,
-                color = colors.textTertiary(AmberSurface.GROUND),
-            )
-        }
+        if (!block.full) ProPeekNote(color = colors.textTertiary(AmberSurface.GROUND))
     }
 }
 
