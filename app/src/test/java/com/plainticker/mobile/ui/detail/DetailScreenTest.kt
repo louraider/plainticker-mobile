@@ -296,4 +296,35 @@ class DetailScreenTest {
         assertTrue("the loading state has no preview", "DetailLoadingPreview" in scan.code)
         assertTrue("the degraded state has no preview", "DetailDegradedPreview" in scan.code)
     }
+
+    // ---- The Pro lock (judges' round 2) -------------------------------------------------------
+
+    @Test
+    fun `a locked classification draws a Pro lock and a way in, not a grey loading bar`() {
+        val section = body("private fun VerdictSection(", "private fun Hero(")
+        val locked = section.substring(section.indexOf("VerdictBlock.Locked ->"))
+        assertTrue("R.string.detail_verdict_locked" in locked)
+        assertTrue("the lock must not read as still loading", "SkeletonBar(" !in locked)
+        assertTrue("ProPeekNote(" in locked)
+        assertTrue("GetProAction(onGetPro = onGetPro" in locked)
+        assertTrue("never amber, never the verdict's own primary colour", "color = colors.textSecondary" in locked)
+    }
+
+    @Test
+    fun `every peek leads to You's code field, not to Portfolio`() {
+        assertEquals("the read and the classification both offer the way in", 2, count("GetProAction(onGetPro = onGetPro"))
+        val action = body("private fun GetProAction(", "private fun NextStepsSection(")
+        assertTrue("R.string.detail_action_get_pro" in action)
+        assertEquals("the lock no longer leads to Portfolio", 0, count("R.string.receipt_view_portfolio"))
+    }
+
+    @Test
+    fun `the peek note is formatted from the server's own stake threshold`() {
+        val note = body("private fun ProPeekNote(", "private fun GetProAction(")
+        assertTrue("Fmt.tokenAmount(PRO_STAKE_THRESHOLD_RAW, SkrStakeBound.SKR_DECIMALS)" in note)
+        val text = Regex("""<string name="detail_pro_peek_note">(.*?)</string>""").find(stringsXml)!!.groupValues[1]
+        assertTrue("the note names the device or the account, not a wallet", "this device or your account" in text)
+        assertTrue("%1\$s SKR" in text)
+        assertTrue("a code is one of the ways in", "or a code" in text)
+    }
 }

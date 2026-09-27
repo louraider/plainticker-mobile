@@ -69,4 +69,12 @@ class HomeScreenTest {
         }
         return code.length - 1
     }
+
+    @Test
+    fun `a promo request from Detail selects You and hands the request on`() {
+        val effect = source.substring(source.indexOf("LaunchedEffect(openPromo)"), source.indexOf("BackHandler("))
+        assertTrue("if (openPromo) select(AmberDestination.YOU)" in effect)
+        assertTrue("openPromo = openPromo," in source)
+        assertTrue("onPromoOpened = onPromoOpened," in source)
+    }
 }

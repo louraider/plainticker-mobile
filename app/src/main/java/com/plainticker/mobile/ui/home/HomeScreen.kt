@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -116,6 +117,13 @@ fun HomeScreen(
     initialTab: Int = HomeTab.LIST.ordinal,
     /** Today's digest line and You's digest link: the digest screen, a route of its own. */
     onOpenDigest: (() -> Unit)? = null,
+    /**
+     * True when Detail's "Have a code? Get Pro" asked for You with the promo code field open
+     * (judges' round 2). Home selects You and hands the request on; [onPromoOpened] clears it once
+     * You has acted on it, so a later recomposition does not open the field again.
+     */
+    openPromo: Boolean = false,
+    onPromoOpened: () -> Unit = {},
 ) {
     val initialDestination = homeTabFrom(initialTab).toAmberDestination()
     var selectedOrdinal by rememberSaveable { mutableIntStateOf(initialDestination.ordinal) }
@@ -131,6 +139,10 @@ fun HomeScreen(
     // You's device-fact cells still hand back a HomeTab ordinal (YouScreen.kt, left untouched by
     // this task); translated the same way a stored deep link is.
     fun selectTab(tabOrdinal: Int) = select(homeTabFrom(tabOrdinal).toAmberDestination())
+
+    LaunchedEffect(openPromo) {
+        if (openPromo) select(AmberDestination.YOU)
+    }
 
     BackHandler(enabled = selected != AmberDestination.TODAY) {
         selectedOrdinal = previousOrdinal
@@ -210,6 +222,8 @@ fun HomeScreen(
                         onOpenTab = ::selectTab,
                         onOpenDigest = onOpenDigest,
                         header = header,
+                        openPromo = openPromo,
+                        onPromoOpened = onPromoOpened,
                     )
                 }
             }
