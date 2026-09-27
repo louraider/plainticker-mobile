@@ -229,4 +229,30 @@ class VoteTabModelTest {
         assertTrue(VoteTabUiState(ballotLoaded = true, query = "", ballot = emptyList()).searchMiss.not())
         assertTrue(VoteTabUiState(notOpen = true, ballotLoaded = true, query = "zzz").searchMiss.not())
     }
+
+    // ---- The top card ----------------------------------------------------------------------------
+
+    @Test
+    fun `the stake sentence names the figure only when one was read`() {
+        fun say(stake: TabStake) = com.plainticker.mobile.ui.ShippedCopy.render(stake.sentence)
+        assertEquals("This wallet has 31,209.9 SKR staked. That is the weight each vote from it carries.", say(TabStake.Read(31_209_870_777L)))
+        assertEquals("This wallet has no staked SKR, so a vote from it carries no weight.", say(TabStake.Read(0L)))
+        assertEquals(
+            "Connect a wallet with staked SKR to vote. Your stake is the weight your vote carries.",
+            say(TabStake.NoWallet),
+        )
+        listOf(TabStake.Reading, TabStake.Unread, TabStake.NoWallet).forEach { state ->
+            assertTrue("$state prints no figure", say(state).none { it.isDigit() })
+        }
+    }
+
+    @Test
+    fun `the round closes in the reader's own zone and words`() {
+        val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
+        val berlin = roundClosesLocal(round, java.time.ZoneId.of("Europe/Berlin"))!!
+        assertEquals("Closes Monday 28 Sep at 02:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(berlin))
+        val newYork = roundClosesLocal(round, java.time.ZoneId.of("America/New_York"))!!
+        assertEquals("Closes Sunday 27 Sep at 20:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(newYork))
+        assertEquals(null, roundClosesLocal(round.copy(closesAt = "not-a-date"), java.time.ZoneOffset.UTC))
+    }
 }

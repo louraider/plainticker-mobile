@@ -111,6 +111,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.summaryRepository,
             container.voteReceiptStore,
             container.walletSession,
+            rpc = container.rpcRepository,
         )
     }
     initializer {

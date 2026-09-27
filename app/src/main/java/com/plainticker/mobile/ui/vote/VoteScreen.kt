@@ -1,5 +1,7 @@
 package com.plainticker.mobile.ui.vote
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +14,15 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -28,6 +35,7 @@ import com.plainticker.mobile.data.plainticker.PreviousRoundStatus
 import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.data.receipts.VoteReceipt
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRow
 import com.plainticker.mobile.ui.components.Banner
@@ -40,9 +48,13 @@ import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.list.NextUpLeader
 import com.plainticker.mobile.ui.list.skrWeight
 import com.plainticker.mobile.ui.text
+import com.plainticker.mobile.ui.theme.AmberColors
+import com.plainticker.mobile.ui.theme.AmberLightColors
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
 import java.math.BigInteger
+import java.time.ZoneId
+import kotlinx.coroutines.launch
 
 /**
  * The Vote tab (task A2, `HomeTab.VOTE`, docs/plan-monetisation-2026-09-19.md section 1.5). One
@@ -138,31 +150,58 @@ internal fun VoteTabContent(
     modifier: Modifier = Modifier,
     onVote: ((ticker: String, symbol: String) -> Unit)? = null,
     header: @Composable () -> Unit = {},
+    zone: ZoneId = remember { ZoneId.systemDefault() },
 ) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // Where the ballot's search field sits in this list, counted while the items below are laid
+    // out, so the top card's action can scroll straight to it (LazyListState scrolls by index).
+    val ballotSearchIndex = remember { IntArray(1) }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
+        state = listState,
         contentPadding = WindowInsets.navigationBars.asPaddingValues(),
     ) {
+        var position = 0
         item(key = "header") { header() }
-        item(key = "explainer") { Explainer() }
+        position++
 
         when {
-            state.notOpen -> item(key = "not-open") {
-                Footnote(text = stringResource(R.string.vote_tab_not_open), muted = false)
+            state.notOpen -> {
+                item(key = "explainer") { Explainer() }
+                item(key = "not-open") {
+                    Footnote(text = stringResource(R.string.vote_tab_not_open), muted = false)
+                }
             }
 
-            state.failed -> item(key = "failed") {
-                Banner(
-                    text = stringResource(R.string.vote_tab_unavailable),
-                    action = stringResource(R.string.action_retry),
-                    onAction = onRetry,
-                )
+            state.failed -> {
+                item(key = "explainer") { Explainer() }
+                item(key = "failed") {
+                    Banner(
+                        text = stringResource(R.string.vote_tab_unavailable),
+                        action = stringResource(R.string.action_retry),
+                        onAction = onRetry,
+                    )
+                }
             }
 
-            state.isLoading -> item(key = "skeleton") { SkeletonRows(count = SkeletonRowCount) }
+            state.isLoading -> {
+                item(key = "explainer") { Explainer() }
+                item(key = "skeleton") { SkeletonRows(count = SkeletonRowCount) }
+            }
 
             else -> {
-                state.round?.let { round -> item(key = "round") { RoundHeader(round) } }
+                // The top card: the round's close in the reader's own time, what this wallet's
+                // vote weighs, and the one action that leads to the ballot. Leaders right under it.
+                item(key = "round") {
+                    RoundCard(
+                        round = state.round,
+                        stake = state.stake,
+                        zone = zone,
+                        onPick = { scope.launch { listState.animateScrollToItem(ballotSearchIndex[0]) } },
+                    )
+                }
+                position++
 
                 if (state.leaders.isNotEmpty()) {
                     item(key = "leaders-heading") {
@@ -174,6 +213,7 @@ internal fun VoteTabContent(
                     itemsIndexed(state.leaders, key = { _, leader -> "leader:" + leader.ticker }) { index, leader ->
                         LeaderRow(leader = leader, last = index == state.leaders.lastIndex, onOpenDetail = onOpenDetail, onVote = onVote)
                     }
+                    position += 1 + state.leaders.size
                 } else if (state.round != null) {
                     // A round is open and nothing has been voted on yet: the heading above would
                     // otherwise sit over nothing. Drawn only here, never in the notOpen branch,
@@ -181,6 +221,7 @@ internal fun VoteTabContent(
                     item(key = "no-votes-yet") {
                         Footnote(text = stringResource(R.string.vote_tab_no_votes_yet))
                     }
+                    position++
                 }
 
                 if (state.myVotes.isNotEmpty()) {
@@ -194,13 +235,19 @@ internal fun VoteTabContent(
                     itemsIndexed(state.myVotes, key = { _, receipt -> "mine:" + receipt.signature }) { index, receipt ->
                         MyVoteRow(receipt = receipt, last = index == state.myVotes.lastIndex, onOpenDetail = onOpenDetail)
                     }
+                    position += 2 + state.myVotes.size
                 }
+
+                // How it works, below what a returning voter came for rather than above it.
+                item(key = "explainer") { Explainer() }
+                position++
 
                 state.previous?.let { previous ->
                     item(key = "last-round-heading") {
                         AmberSectionHead(title = stringResource(R.string.vote_tab_heading_last_round))
                     }
                     item(key = "last-round") { LastRoundRow(previous = previous, onOpenDetail = onOpenDetail) }
+                    position += 2
                 }
 
                 item(key = "ballot-heading") {
@@ -209,6 +256,8 @@ internal fun VoteTabContent(
                         meta = if (state.ballotLoaded) Fmt.count(state.ballot.size) else null,
                     )
                 }
+                position++
+                ballotSearchIndex[0] = position
                 item(key = "ballot-search") {
                     BallotSearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)
                 }
@@ -242,6 +291,43 @@ internal fun VoteTabContent(
 }
 
 /**
+ * The top card (judges' round 2): the round and when it closes in the reader's own time, what a
+ * vote from the connected wallet weighs, and one action that scrolls to the ballot. The honest
+ * note on how stake decides left this tab's header for the vote sheet, where a voter reads it at
+ * the moment of signing ([VoteSheetModel]'s disclosure), phrased as the roadmap it is. A 28dp
+ * [AmberColors.surfaceRaised] card at the 16dp group inset, the anatomy You's hero card uses.
+ */
+@Composable
+private fun RoundCard(round: VoteRound?, stake: TabStake, zone: ZoneId, onPick: () -> Unit) {
+    val colors = defaultAmberColors()
+    val shape = RoundedCornerShape(CardRadius)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = CardInset)
+            .padding(top = 8.dp)
+            .clip(shape)
+            .background(colors.surfaceRaised)
+            .then(if (colors === AmberLightColors) Modifier.border(1.dp, colors.border, shape) else Modifier)
+            .padding(bottom = 16.dp),
+    ) {
+        if (round != null) RoundHeader(round = round, zone = zone, colors = colors)
+        Text(
+            text = stake.sentence.text(),
+            style = AmberType.body,
+            color = colors.textPrimary,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = if (round == null) 16.dp else 4.dp),
+        )
+        AmberPrimaryAction(
+            label = stringResource(R.string.vote_tab_pick_action),
+            onClick = onPick,
+            colors = colors,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+        )
+    }
+}
+
+/**
  * Two short paragraphs, then the disclosure as its own quieter line (section 1.5, tightened on
  * review): coverage is finite and costs money, and staked SKR decides what is read next, in the
  * first; a vote is a signed transaction rather than a login and counts once per wallet per token
@@ -265,12 +351,6 @@ private fun Explainer() {
             text = stringResource(R.string.vote_tab_explainer_how),
             style = AmberType.body,
             color = colors.textPrimary,
-            modifier = Modifier.padding(top = 10.dp),
-        )
-        Text(
-            text = stringResource(R.string.vote_gameable),
-            style = AmberType.context,
-            color = colors.textSecondary,
             modifier = Modifier.padding(top = 10.dp),
         )
     }
@@ -301,13 +381,15 @@ private fun Explainer() {
  * can really get.
  */
 @Composable
-private fun RoundHeader(round: VoteRound) {
+private fun RoundHeader(round: VoteRound, zone: ZoneId, colors: AmberColors) {
     val roundId = Fmt.count(round.id)
-    val closesText = round.closesAtInstant()?.let { stringResource(R.string.vote_tab_round_closes, Fmt.utc(it)) }
+    val closesText = roundClosesLocal(round, zone)?.text()
     AmberSectionHead(
         title = stringResource(R.string.vote_tab_round_heading),
         meta = roundId,
         lede = closesText,
+        colors = colors,
+        background = colors.surfaceRaised,
     )
 }
 
@@ -507,6 +589,8 @@ private fun Footnote(text: String, muted: Boolean = true) {
 }
 
 private val Side = 20.dp
+private val CardInset = 16.dp
+private val CardRadius = 28.dp
 /** Vertical centering for a standalone Footnote's sentence; unrelated to Heading's own rhythm (U6). */
 private val EmptyLineGap = 30.dp
 private const val SkeletonRowCount = 4

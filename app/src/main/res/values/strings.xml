@@ -22,6 +22,16 @@
     <string name="action_watch">Watch</string>
     <string name="action_watching">Watching</string>
     <string name="action_unwatch">Unwatch</string>
+    <!-- Share on a stock page (judges' round 2): one factual line off the trust card, then the
+         stock's page on the web. Facts only, and only those the page actually read. -->
+    <string name="action_share">Share</string>
+    <string name="detail_share_line">%1$s: %2$s.</string>
+    <string name="detail_share_plain">%1$s on PlainTicker.</string>
+    <string name="detail_share_delegate">issuer can move tokens (permanent delegate)</string>
+    <string name="detail_share_no_delegate">no permanent delegate</string>
+    <string name="detail_share_reserves">reserves reported at %1$s</string>
+    <string name="detail_share_url">https://www.plainticker.com/en/%1$s</string>
+    <string name="detail_share_home_url">https://www.plainticker.com/en</string>
     <string name="action_max">Max</string>
     <string name="action_clear">Clear</string>
     <string name="action_retry">Retry</string>
@@ -420,8 +430,8 @@
     <string name="vote_action">Vote to cover next</string>
     <string name="vote_action_row">Vote</string>
     <string name="vote_title">Vote to cover %1$s</string>
-    <string name="vote_lede">This asks for %1$s to be analyzed next. The vote is a transaction carrying a memo, so the wallet that signs it is the voter, and anyone can count the votes from the chain.</string>
-    <string name="vote_gameable">A vote weighted by stake is decided by the largest stake. One wallet staking more than the rest outweighs them all, and nothing here corrects for that.</string>
+    <string name="vote_lede">This asks for %1$s to be analyzed next. The vote is a transaction carrying a memo, so the wallet that signs it is the voter. It weighs the stake the server reads when it counts.</string>
+    <string name="vote_gameable">Today the largest stake decides: one wallet staking more than the rest outweighs them all. The planned next change is one Seeker, one voice, checked through the Seeker Genesis Token.</string>
     <string name="vote_weight_label">Staked SKR this vote carries</string>
     <string name="vote_weight_landed_label">Staked SKR behind %1$s</string>
     <string name="vote_fee_label">Signature fee</string>
@@ -429,7 +439,9 @@
     <string name="vote_collector_label">Sent to</string>
     <string name="vote_refreshed">The transaction went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the vote.</string>
     <string name="vote_landed_label">Vote sent</string>
-    <string name="vote_landed_note">The vote is on the chain. It is counted from the memos of that address, so anyone can count it the same way. It can take up to about twenty minutes to reach the leaders, because the tally runs every ten minutes and the leaders are cached for five more.</string>
+    <string name="vote_landed_note">The vote is on the chain. Counted within about 20 minutes.</string>
+    <!-- Share from the landed state: a plain sentence and the public transaction, nothing else. -->
+    <string name="vote_share_text">I voted for %1$s to be analysed next on PlainTicker. https://solscan.io/tx/%2$s</string>
 
     <!-- What is in flight, one sentence each. Reaching the first means no wallet was connected. -->
     <string name="vote_phase_connecting">No wallet is connected, so the wallet is being asked to authorize.</string>
@@ -452,7 +464,7 @@
     <!-- The Vote tab (task A2, docs/plan-monetisation-2026-09-19.md section 1.5): the explainer,
          the round header, the leaders, the wallet's own votes, the last round and the ballot. -->
     <string name="vote_tab_explainer_what">This app covers only some of the tokenized stocks on Solana, and every analysis costs money. Staked SKR decides which uncovered token is analyzed next.</string>
-    <string name="vote_tab_explainer_how">A vote is a transaction you sign, not a login. It counts once per wallet per token in a round.</string>
+    <string name="vote_tab_explainer_how">A vote is a transaction you sign, not a login. One wallet can back several stocks in a round, each once, and every vote carries the stake the server reads when it counts.</string>
     <!-- The not-open state: HTTP 404, or 503 vote_not_configured, replaces every section below
          this one with the single honest line rather than an error banner. -->
     <string name="vote_tab_not_open">Voting is not open yet.</string>
@@ -461,13 +473,21 @@
          next-up, so it carries its own banner and its own Retry (VoteTabViewModel.refresh). -->
     <string name="vote_tab_ballot_unavailable">Ballot unavailable</string>
     <string name="vote_tab_round_heading">Round</string>
-    <string name="vote_tab_round_closes">Closes %1$s</string>
+    <!-- The top card (judges' round 2): the round's close in the reader's own time, the
+         connected wallet's stake, and the one action that leads to the ballot. -->
+    <string name="vote_tab_round_closes_local">Closes %1$s %2$s at %3$s your time</string>
+    <string name="vote_tab_stake_no_wallet">Connect a wallet with staked SKR to vote. Your stake is the weight your vote carries.</string>
+    <string name="vote_tab_stake_reading">Reading what this wallet has staked.</string>
+    <string name="vote_tab_stake">This wallet has %1$s SKR staked. That is the weight each vote from it carries.</string>
+    <string name="vote_tab_stake_zero">This wallet has no staked SKR, so a vote from it carries no weight.</string>
+    <string name="vote_tab_stake_unread">The stake of this wallet did not read, so no figure is shown.</string>
+    <string name="vote_tab_pick_action">Choose a stock to vote for</string>
     <string name="vote_tab_heading_leaders">Leaders</string>
     <!-- A round present with nothing voted yet: one line under the round header, drawn only in
          that state and never in vote_tab_not_open, which is a different thing already said. -->
     <string name="vote_tab_no_votes_yet">No votes in this round yet. The first vote leads.</string>
     <string name="vote_tab_heading_your_votes">Your votes</string>
-    <string name="vote_tab_your_votes_note">A vote can take up to about twenty minutes to reach the leaders above. The tally runs every ten minutes, and the leaders are cached for five more.</string>
+    <string name="vote_tab_your_votes_note">Counted within about 20 minutes.</string>
     <string name="vote_tab_your_vote_meta">Voted %1$s</string>
     <string name="vote_tab_heading_last_round">Last round</string>
     <string name="vote_tab_last_round_pending">%1$s is being covered</string>

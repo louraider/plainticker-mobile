@@ -116,11 +116,12 @@ class VoteSheetModelTest {
     }
 
     @Test
-    fun `the vote states that it is gameable by a large stake, where a voter reads it before acting`() {
+    fun `the vote states how stake decides today and the planned change, where a voter reads it before acting`() {
         val disclosure = render(sheetOf(ready()).disclosure)
         assertEquals(
-            "A vote weighted by stake is decided by the largest stake. One wallet staking more " +
-                "than the rest outweighs them all, and nothing here corrects for that.",
+            "Today the largest stake decides: one wallet staking more than the rest outweighs them " +
+                "all. The planned next change is one Seeker, one voice, checked through the Seeker " +
+                "Genesis Token.",
             disclosure,
         )
 
@@ -173,9 +174,10 @@ class VoteSheetModelTest {
         assertEquals("4xQm…VtHe", ShippedCopy.render(cells[1].value))
         assertEquals("the fragment is what is shown, the signature is what is copied", signature, cells[1].copies)
 
-        assertNull("a landed vote has nothing left to do", content.primary)
+        assertEquals("a landed vote offers to share it, and nothing that sends another", VoteActionKind.Share, content.primary?.kind)
+        assertEquals("Share", render(content.primary?.label))
         assertEquals(VoteActionKind.Close, content.secondary?.kind)
-        assertTrue(render(content.notice)!!.contains("anyone can count it"))
+        assertEquals("The vote is on the chain. Counted within about 20 minutes.", render(content.notice))
     }
 
     // ---- Every state ------------------------------------------------------------------------------------
@@ -343,5 +345,16 @@ class VoteSheetModelTest {
         val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", VoteRefusal.RATE_LIMITED))
         assertTrue(render(content.notice)!!.contains("Try again shortly."))
         assertEquals(VoteActionKind.Retry, content.primary?.kind)
+    }
+
+    @Test
+    fun `the share line is the plain sentence and the public transaction, nothing else`() {
+        val shared = render(sheetOf(landed()).shareText)
+        assertEquals(
+            "I voted for NFLX to be analysed next on PlainTicker. https://solscan.io/tx/$signature",
+            shared,
+        )
+        val others = allStates.filter { it !is VoteState.Landed }.map { sheetOf(it) }
+        assertTrue("only a landed vote has anything to share", others.all { it.shareText == null && it.primary?.kind != VoteActionKind.Share })
     }
 }
