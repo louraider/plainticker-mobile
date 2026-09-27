@@ -107,6 +107,10 @@ class GoogleAuthApiTest {
         Triple(503, "auth_disabled", GoogleAuthFailure.AUTH_DISABLED),
         Triple(503, "not_configured", GoogleAuthFailure.NOT_CONFIGURED),
         Triple(503, "jwks_unavailable", GoogleAuthFailure.JWKS_UNAVAILABLE),
+        // The pack's shared server contract (2026-09-27).
+        Triple(409, "link_on_web", GoogleAuthFailure.LINK_ON_WEB),
+        Triple(401, "rekey_required", GoogleAuthFailure.REKEY_REQUIRED),
+        Triple(401, "code_retired", GoogleAuthFailure.CODE_RETIRED),
     )
 
     @Test

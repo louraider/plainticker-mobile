@@ -758,6 +758,11 @@
     <string name="promo_error_rate_limited">Too many attempts. Wait a minute, then try again.</string>
     <string name="promo_error_not_open">Code redemption is not open on PlainTicker yet.</string>
     <string name="promo_error_unavailable">PlainTicker could not read the answer. Try again.</string>
+    <string name="promo_error_rekey_pending">This phone\'s code is being updated. Try again in a minute.</string>
+    <string name="promo_error_code_retired">PlainTicker no longer accepts this phone\'s code. Write to hi@plainticker.com and we will sort it out.</string>
+    <!-- Under a redeemed code when no Google account is signed in: a promo grant belongs to this
+         phone's own code, which a reinstall loses, and each code works once. -->
+    <string name="promo_success_keep_note">Sign in with Google to keep Pro if you reinstall.</string>
 
     <string name="you_heading_methods">Sign-in methods</string>
     <string name="you_method_google">Google</string>
@@ -775,7 +780,7 @@
     <string name="you_action_copy">Copy</string>
     <string name="you_action_copied">Copied</string>
     <string name="you_copy_clip_label">Wallet address</string>
-    <string name="you_sign_out_confirm">Sign out on this phone? It stays linked to the account and keeps that account\'s Pro.</string>
+    <string name="you_sign_out_confirm">Sign out on this phone? PlainTicker unlinks it from the account. A pass or promo code used on this phone stays with it.</string>
     <string name="you_action_cancel">Cancel</string>
     <string name="you_action_keep">Keep</string>
 
@@ -856,6 +861,17 @@
     <string name="account_msg_jwks_unavailable">PlainTicker could not reach Google to check the sign-in. Try again later.</string>
     <string name="account_msg_not_open">Sign-in is not open on PlainTicker yet.</string>
     <string name="account_msg_unknown">The sign-in did not finish. Try again.</string>
+    <!-- The pack's shared server contract (2026-09-27): link_on_web, the device-code answers, and a
+         sign-out the server has not confirmed yet. Never worded as if the server had let go. -->
+    <string name="account_msg_link_on_web">This email already has a PlainTicker account. Sign in on plainticker.com and link Google there.</string>
+    <string name="account_action_open_web">Open plainticker.com</string>
+    <string name="account_msg_rekey_pending">PlainTicker is updating this phone\'s code. Try again in a minute.</string>
+    <string name="account_msg_code_retired">PlainTicker no longer accepts this phone\'s code, so nothing was linked.</string>
+    <string name="account_msg_sign_out_unconfirmed">Signed out here. PlainTicker has not confirmed it yet, so this phone will ask again.</string>
+    <string name="account_signing_out">Signing out</string>
+    <string name="device_code_label">This phone</string>
+    <string name="device_code_blocked">This phone\'s code could not be updated, so its Pro may not show here. Write to hi@plainticker.com and we will sort it out.</string>
+    <string name="device_code_retired">PlainTicker no longer accepts this phone\'s code, so it is signed out here. Write to hi@plainticker.com and we will sort it out.</string>
 
     <!-- Unlinking a wallet (GET /api/v1/account, POST /api/v1/account/wallets/unlink), built
          against the web agent's contract in parallel: each linked wallet row's own two-step

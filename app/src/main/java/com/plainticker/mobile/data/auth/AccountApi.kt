@@ -14,12 +14,13 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * `GET /api/v1/account` and `POST /api/v1/account/wallets/unlink` (a web agent's contract, built
  * in parallel with this app): re-reading the signed-in account's own state the way every screen
  * re-reads the entitlement, and dropping one linked wallet from it. Both answer the exact shape
- * [GoogleAuthApi.signIn] does.
+ * [GoogleAuthApi.signIn] does. `POST /api/v1/account/signout` (2026-09-27) unbinds this device.
  *
  * ```
  * GET /api/v1/account
@@ -31,6 +32,18 @@ import kotlinx.serialization.json.Json
  * Content-Type: application/json
  * { "wallet": "<base58>" }
  * 200 { "user": { "email", "name" }, "linkedWallets": [...], "pro", "source", "until" }
+ * ```
+ *
+ * POST /api/v1/account/signout
+ * X-PT-Code: <the device's code, in the clear>
+ * 200 { "ok": true }   (also when this device was not bound: idempotent)
+ * ```
+ *
+ * ```
+ * Any of the three, with a legacy 10-symbol code not yet rekeyed:
+ * 401 { "error": "rekey_required" }   (AccountApiError.RekeyRequired; DeviceRekeyer.withCode)
+ * With a retired code:
+ * 401 { "error": "code_retired" }     (AccountApiError.CodeRetired)
  * ```
  *
  * The device code rides in `X-PT-Code` only, the same header [GoogleAuthApi] and
@@ -48,6 +61,8 @@ class AccountApi(
      * `/api/v1` route not yet deployed reads.
      *
      * @throws AccountApiError.NotSignedIn on 401 `not_signed_in`: this device is no longer bound
+     * @throws AccountApiError.RekeyRequired on 401 `rekey_required`: a legacy code, not yet rekeyed
+     * @throws AccountApiError.CodeRetired on 401 `code_retired`
      * @throws AccountApiError.BadRequest on 400 `bad_request`
      * @throws AccountApiError.RateLimited on 429 `rate_limited`
      * @throws AccountApiError.NotOpen on 404: the route is not deployed yet
@@ -91,6 +106,34 @@ class AccountApi(
     }
 
     /**
+     * Removes this device's binding to the signed-in account server side (the pack's shared server
+     * contract, item 3). Pass and promo entitlements that belong to the device code itself stay
+     * with the device. Returns only on a 2xx: that answer, and nothing else, is what lets You say
+     * the server has let go of this device.
+     *
+     * @throws AccountApiError.NotSignedIn on 401 `not_signed_in`
+     * @throws AccountApiError.RekeyRequired on 401 `rekey_required`
+     * @throws AccountApiError.CodeRetired on 401 `code_retired`
+     * @throws AccountApiError.RateLimited on 429 `rate_limited`
+     * @throws AccountApiError.NotOpen on 404: the route is not deployed yet
+     * @throws AccountApiError.Unavailable on a 5xx
+     * @throws java.io.IOException when the network itself fails (no route, a timeout)
+     */
+    suspend fun signOut(deviceCode: String?) {
+        val response = client.post("$baseUrl$SIGNOUT_PATH") {
+            contentType(ContentType.Application.Json)
+            if (!deviceCode.isNullOrBlank()) header(HEADER_CODE, deviceCode)
+            // An empty JSON object: the contract needs only the header, and a route that parses
+            // a body anyway still gets valid JSON.
+            setBody(JsonObject(emptyMap()))
+        }
+        if (!response.status.isSuccess()) {
+            val text = runCatching { response.bodyAsText() }.getOrNull()
+            throw AccountApiError.fromErrorBody(response.status.value, text, json)
+        }
+    }
+
+    /**
      * A 2xx body as the shared account shape, or [AccountApiError.Unavailable] naming why not. The
      * detail names the decoder's exception class, never the body: a 200 here carries the account's
      * email and wallets, which have no business in a log line, debug build or not.
@@ -108,6 +151,7 @@ class AccountApi(
     companion object {
         const val PATH = "/account"
         const val UNLINK_PATH = "/account/wallets/unlink"
+        const val SIGNOUT_PATH = "/account/signout"
         const val HEADER_CODE = EntitlementApi.HEADER_CODE
     }
 }

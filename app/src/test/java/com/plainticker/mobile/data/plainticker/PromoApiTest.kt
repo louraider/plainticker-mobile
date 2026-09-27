@@ -155,4 +155,17 @@ class PromoApiTest {
         assertEquals("", PromoApi.normalize(""))
         assertEquals("", PromoApi.normalize("   -- -- "))
     }
+
+    @Test
+    fun `rekey_required and code_retired are read from either field of a 401`() = runTest {
+        listOf(
+            """{"error":"rekey_required"}""" to PromoError.RekeyRequired::class,
+            """{"error":"x","code":"rekey_required"}""" to PromoError.RekeyRequired::class,
+            """{"error":"code_retired"}""" to PromoError.CodeRetired::class,
+        ).forEach { (body, expected) ->
+            val mock = MockApi { respondJson(body, HttpStatusCode.Unauthorized) }
+            val error = expectThrows<PromoError> { PromoApi(mock.client).redeem("PTAAAABBBBCCCC", "ABCDE12345") }
+            assertEquals(body, expected, error::class)
+        }
+    }
 }

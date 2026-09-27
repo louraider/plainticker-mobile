@@ -36,6 +36,12 @@ sealed class PromoError(val status: Int?, val code: String?, val detail: String?
     class AlreadyApplied(detail: String?) :
         PromoError(409, CODE_ALREADY_APPLIED, detail, "promo redeem: already applied: ${detail ?: "-"}")
 
+    /** 401 `rekey_required`: this device still carries a legacy 10-symbol code (DeviceRekeyer). */
+    class RekeyRequired : PromoError(401, CODE_REKEY_REQUIRED, null, "promo redeem: rekey required")
+
+    /** 401 `code_retired`: the server no longer accepts this device's code anywhere. */
+    class CodeRetired : PromoError(401, CODE_CODE_RETIRED, null, "promo redeem: code retired")
+
     class RateLimited(detail: String?) :
         PromoError(429, CODE_RATE_LIMITED, detail, "promo redeem: rate limited: ${detail ?: "-"}")
 
@@ -53,6 +59,8 @@ sealed class PromoError(val status: Int?, val code: String?, val detail: String?
         const val CODE_ALREADY_REDEEMED = "already_redeemed"
         const val CODE_ALREADY_APPLIED = "already_applied"
         const val CODE_RATE_LIMITED = "rate_limited"
+        const val CODE_REKEY_REQUIRED = "rekey_required"
+        const val CODE_CODE_RETIRED = "code_retired"
         private const val EXCERPT = 200
 
         /** Maps a non-2xx `/promo/redeem` answer onto one of the states above. */
@@ -60,7 +68,12 @@ sealed class PromoError(val status: Int?, val code: String?, val detail: String?
             val obj = body?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
             val detail = obj.str("error") ?: body?.trim()?.take(EXCERPT)?.takeIf { it.isNotEmpty() }
             val code = obj.str("code")
+            // The pack's shared contract (2026-09-27) sends the device-code answers as
+            // {"error":"<code>"}; read either field so neither shape is missed.
+            val deviceCode = setOfNotNull(code, obj.str("error"))
             return when {
+                status == 401 && CODE_REKEY_REQUIRED in deviceCode -> RekeyRequired()
+                status == 401 && CODE_CODE_RETIRED in deviceCode -> CodeRetired()
                 status == 400 && code == CODE_INVALID_CODE -> InvalidCode(detail)
                 status == 400 -> BadRequest(detail)
                 status == 410 -> ExpiredCode(detail)

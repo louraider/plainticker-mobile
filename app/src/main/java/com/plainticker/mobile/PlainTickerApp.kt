@@ -35,6 +35,17 @@ class PlainTickerApp : Application() {
         scope.launch { container.autoWatch.followVotes(container.voteReceiptStore.receipts) }
         scope.launch { container.autoWatch.followSwaps(container.receiptStore.receipts) }
         scope.launch { runCatching { container.autoWatch.resolvePending() } }
+
+        // A legacy 10-symbol device code is replaced by a 26-symbol one (DeviceRekeyer: the new
+        // code is on disk before the call, and current only after the server's 200), then a
+        // sign-out the server never confirmed is asked once more. Offline, the rekey backs off
+        // and tries again while the process lives, and on the next launch.
+        scope.launch {
+            container.deviceRekeyer.runOnLaunch()
+        }
+        scope.launch {
+            container.accountSignOut.retryPending()
+        }
     }
 }
 

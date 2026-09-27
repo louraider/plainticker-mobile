@@ -15,6 +15,11 @@ import java.io.IOException
  * checking the `nonce` field `AccountViewModel` sends alongside the ID token (docs/google-sign-in.md,
  * "The nonce"): both 401, distinct from [INVALID_TOKEN] and [EXPIRED_TOKEN], which are about the
  * token itself rather than the nonce it carries.
+ *
+ * [LINK_ON_WEB], [REKEY_REQUIRED] and [CODE_RETIRED] come from the pack's shared server contract
+ * (2026-09-27): a new Google `sub` whose email already belongs to an account made another way is
+ * refused with 409 `link_on_web` (the reader links Google on the web instead), and the two 401s
+ * are the device-code answers every account route shares (DeviceRekeyer).
  */
 enum class GoogleAuthFailure(val wire: String?) {
     BAD_REQUEST("bad_request"),
@@ -30,6 +35,9 @@ enum class GoogleAuthFailure(val wire: String?) {
     AUTH_DISABLED("auth_disabled"),
     NOT_CONFIGURED("not_configured"),
     JWKS_UNAVAILABLE("jwks_unavailable"),
+    LINK_ON_WEB("link_on_web"),
+    REKEY_REQUIRED("rekey_required"),
+    CODE_RETIRED("code_retired"),
     NOT_OPEN(null),
     UNKNOWN(null),
     ;

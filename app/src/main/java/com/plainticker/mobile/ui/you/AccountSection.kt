@@ -14,8 +14,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import com.plainticker.mobile.R
+import com.plainticker.mobile.data.auth.DeviceCodeStatus
 import com.plainticker.mobile.prefs.SignedInAccount
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
@@ -53,6 +55,12 @@ import kotlinx.coroutines.launch
  * fontTools against the Outfit SemiBold file `TextAction` draws, and the wallet key in JetBrains
  * Mono, and proves each fits at 1.3x beside the space left for the key.
  *
+ * **The device code** (2026-09-27): a rekey that can never finish, or a code the server has
+ * retired, draws one caution row first ("This phone", [deviceCodeNoticeRes]), never the code.
+ * A Google sign-in refused with `link_on_web` carries its own text action to the web account
+ * page ([AccountMessage.LINK_ON_WEB_URL]), since linking happens there. A sign-out in flight
+ * reads "Signing out" and offers nothing until the server has answered.
+ *
  * No amber fill here: the hero above is the only place You draws one.
  */
 @Composable
@@ -63,6 +71,7 @@ internal fun AccountSection(
     onUnlink: (String) -> Unit,
     colors: AmberColors,
     showMessage: Boolean = true,
+    deviceCodeStatus: DeviceCodeStatus = DeviceCodeStatus.OK,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(
@@ -71,6 +80,14 @@ internal fun AccountSection(
             colors = colors,
         )
         AmberTickerRowGroup(colors = colors) {
+            deviceCodeNoticeRes(deviceCodeStatus)?.let { notice ->
+                CabinetRow(
+                    colors = colors,
+                    value = stringResource(R.string.device_code_label),
+                    sub = stringResource(notice),
+                    subCaution = true,
+                )
+            }
             GoogleRow(state = state, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors, showMessage = showMessage)
             (state as? AccountUiState.SignedIn)?.let { signedIn ->
                 LinkedWalletsGroup(state = signedIn, onUnlink = onUnlink, colors = colors)
@@ -88,6 +105,11 @@ private fun GoogleRow(
     showMessage: Boolean,
 ) {
     val label = stringResource(R.string.you_method_google)
+    val uriHandler = LocalUriHandler.current
+    // runCatching: a phone with no browser has nothing to open, and a tap must never crash.
+    val openWeb = RowAction(stringResource(R.string.account_action_open_web), {
+        runCatching { uriHandler.openUri(AccountMessage.LINK_ON_WEB_URL) }
+    })
     when (state) {
         AccountUiState.Restoring -> CabinetRow(colors = colors, label = label, value = stringResource(R.string.state_loading))
         is AccountUiState.SignedOut -> CabinetRow(
@@ -96,10 +118,22 @@ private fun GoogleRow(
             value = stringResource(R.string.you_identity_none),
             sub = state.message?.takeIf { showMessage }?.let { stringResource(accountMessageRes(it)) },
             subCaution = true,
-            actions = listOf(RowAction(stringResource(R.string.you_action_sign_in), onSignIn)),
+            actions = listOfNotNull(
+                RowAction(stringResource(R.string.you_action_sign_in), onSignIn),
+                openWeb.takeIf { showMessage && accountMessageOpensWeb(state.message) },
+            ),
         )
         AccountUiState.SigningIn -> CabinetRow(colors = colors, label = label, value = stringResource(R.string.account_signing_in))
-        is AccountUiState.SignedIn -> SignedInRow(state.account, label, onSignOut, colors)
+        is AccountUiState.SignedIn -> if (state.signingOut) {
+            CabinetRow(
+                colors = colors,
+                label = label,
+                value = accountIdentity(state.account).text(),
+                sub = stringResource(R.string.account_signing_out),
+            )
+        } else {
+            SignedInRow(state.account, label, onSignOut, colors)
+        }
     }
 }
 
