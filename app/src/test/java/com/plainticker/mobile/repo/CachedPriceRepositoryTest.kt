@@ -47,6 +47,44 @@ class CachedPriceRepositoryTest {
 
     // ---- The shared source every screen observes (device QA of 1.3.18) ------------------------
 
+    /**
+     * QA of 1.3.21: Stocks and Detail lagged Today by one refresh. A paced run that left first and
+     * landed last overwrote the newer quote a pull on another screen had just drawn, in the cache
+     * and in [PriceRepository.latest], so every screen but the one that pulled stepped back.
+     */
+    @Test
+    fun `an older answer landing after a newer one never overwrites it, in the cache or the shared flow`() = runTest {
+        val reached = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val mock = MockApi { request ->
+            val ids = request.ids()
+            if (ids.size > 1) {
+                // The slow run: asked first, with the older figure, held until the pull has landed.
+                reached.complete(Unit)
+                release.await()
+                respondJson(ids.joinToString(",", "{", "}") { "\"$it\": {\"usdPrice\": 2.0}" })
+            } else {
+                respondJson(ids.joinToString(",", "{", "}") { "\"$it\": {\"usdPrice\": 3.0}" })
+            }
+        }
+        val clock = FakeClock()
+        val repo = repo(mock, clock)
+
+        val slow = launch { repo.pricesFirst(listOf("MintA", "MintB")) }
+        reached.await()
+        clock.now += 1_000L
+        repo.forget()
+        assertEquals(3.0, repo.prices(listOf("MintA")).getValue("MintA").usdPrice, 0.0)
+        assertEquals(3.0, repo.latest.value.getValue("MintA").usdPrice, 0.0)
+
+        release.complete(Unit)
+        slow.join()
+
+        assertEquals("the shared flow keeps the newer quote", 3.0, repo.latest.value.getValue("MintA").usdPrice, 0.0)
+        assertEquals("and so does the cache every screen reads", 3.0, repo.prices(listOf("MintA")).getValue("MintA").usdPrice, 0.0)
+        assertEquals("a mint only the slow run asked for still lands", 2.0, repo.latest.value.getValue("MintB").usdPrice, 0.0)
+    }
+
     /** Final QA of 1.3.19: a pull inside the 30 s window drew the same figure again. */
     @Test
     fun `a pull forgets the cached answers, so the next ask reaches Jupiter inside the window`() = runTest {
