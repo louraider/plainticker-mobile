@@ -7,8 +7,8 @@ signed in the Seed Vault through Mobile Wallet Adapter. Staked SKR decides which
 analysed next.
 
 Kotlin and Jetpack Compose, package `com.plainticker.mobile`, built from 10 September 2026 for
-CLOCK IN, the Solana Mobile hackathon. This README describes 1.3.18, the next release; the latest
-published release is 1.3.17.
+CLOCK IN, the Solana Mobile hackathon. This README describes 1.3.21, on main and the latest
+published release.
 
 The analysis is a classification by a fixed rule against the sector. It is not a price forecast
 and not investment advice. xStocks are tokenized tracker instruments issued by a third party and
@@ -30,27 +30,32 @@ are not available to US persons; the app asks for that self-certification on its
      permanent delegate and its address, pausable transfers, the split multiplier and the transfer
      hook. Beside them sit the proof of reserves and the circulating count, which xStocks reports.
      The app does not read reserves from the chain.
-   - **A swap and its receipt.** On the same page, swap 1 USDC into the token. The wallet sheet
-     names `www.plainticker.com`. The app decodes the transaction before the wallet opens. In 1.3.18 a
-     Review step first shows what the phone checked, and **Continue to wallet** is the only way on
-     (landing with pull request #65, open when this was written). The result reads *Swap landed*,
-     and the receipt keeps the executed fill plus estimated network costs, and the signature. Portfolio then offers **Swap to USDC** for the
-     way back. This needs a wallet holding a few USDC and about 0.01 SOL.
-   - **The Vote tab.** *Last round* shows round 1's result: JEF had the most stake, and JEF is
-     now analysed (open JEFx from Stocks). Cast a vote for any uncovered US stock in the current
-     round. A vote is a transaction you sign, weighted by the SKR your wallet has staked. A
-     wallet with no stake is told its vote would carry no weight before anything is signed.
+   - **A swap and its receipt.** On the same page, swap 1 USDC into the token. The app decodes the
+     transaction before the wallet opens. A Review step then shows what you spend, the least you
+     receive, the network fee read from the transaction, the token account deposit as an upper
+     bound ("Up to X SOL", returned if the account is closed) and the all-in cost. **Continue to
+     wallet** is the only way on. The wallet sheet names `www.plainticker.com`. The result reads
+     *Swap landed*, and the receipt keeps the executed fill plus estimated network costs, and the
+     signature. Portfolio then offers **Swap to USDC** for the way back. This needs a wallet
+     holding a few USDC and about 0.01 SOL.
+   - **The Vote tab.** *Last round* shows the round that closed most recently: round 2, which AAL
+     won on 28 September. Round 1's winner, JEF, is now analysed (open JEFx from Stocks). Cast a
+     vote for any uncovered US stock in the current round. A vote is a transaction you sign,
+     weighted by the SKR your wallet has staked. A wallet with no stake is told its vote would
+     carry no weight before anything is signed. *Your votes* also lists the connected wallet's
+     votes from earlier rounds, the most recent round first.
 
 | Today | Stocks | A stock page |
 |---|---|---|
-| ![Today: market status, Watched, Reports next week](docs/img/01-today.png) | ![Stocks: search, Deep pool and sector filters, scores](docs/img/02-stocks.png) | ![AAPLx: classification, price against the NYSE close, live from the mint, backing and controls](docs/img/03-stock-page-aapl.png) |
+| ![Today: market status, Watched, Reports next week](docs/img/01-today.png) | ![Stocks: search, Deep pool and sector filters, scores](docs/img/02-stocks.png) | ![AAPLx: classification, token price against its share, live from the mint, backing and controls](docs/img/03-stock-page-aapl.png) |
 
 | The daily digest | Swaps this app made on mainnet |
 |---|---|
 | ![Daily digest: one short check a day](docs/img/04-daily-digest.png) | ![Recent swaps: three real swaps with their all-in cost](docs/img/05-recent-swaps.png) |
 
-All five screenshots were captured on a Seeker (1200 × 2670) from builds 1.3.8 to 1.3.12. The last
-one is cropped from Portfolio and lists the three swaps in the proof table below.
+All five screenshots were captured on a Seeker (1200 × 2670) from builds 1.3.8 to 1.3.12, so they
+predate the 1.3.21 labels: the stock page now names its reference *Last US price*. The last one is
+cropped from Portfolio and lists the three swaps in the proof table below.
 
 ## What it is and who it is for
 
@@ -66,14 +71,17 @@ price. PlainTicker gives them three things that screen does not.
   against its sector: quality, valuation and momentum, and the F-Score with its nine signals. The
   age of the analysis is shown on every row. Every number is a position against the sector. None
   of them is a forecast.
-- **What the price is worth.** The token price against the NYSE close. It is drawn only where
-  Jupiter reports at least $4,000 of depth behind the price. Below that floor the app states the
+- **What the price is worth.** The token's gap to the last US price of the share, labelled *Last
+  US price* on the stock page. That reference is Jupiter Price v3's `stockData.price`: the share's
+  latest US trade, pre-market and after-hours included, so it keeps moving while the NYSE is shut.
+  It is not the NYSE close, and no source the app reads carries the regular-session close. The
+  gap is drawn only where Jupiter reports at least $4,000 of depth behind the price. Below that floor the app states the
   depth instead ("Depth $34, too thin") and draws no premium. The rule lives in one function,
   `data/jupiter/TrackingQuality.kt`, which every screen reads.
 
 **The daily habit** is Today and the digest. Today opens on the market's state in your own time
 zone ("NYSE closed. Opens Monday at 16:30 your time"), then your watched stocks and how far each
-token sits from its share, then *Reports this week* (or *next week* at the weekend), because
+token sits from its share's last US price, then *Reports this week* (or *next week* at the weekend), because
 prices often move around a company's report. One digest a day arrives as a notification about the
 stocks you watch. No other notification is sent.
 
@@ -86,7 +94,8 @@ A web page cannot do most of this. The website shares only the analysis engine.
 
 - **Mobile Wallet Adapter 2.2 and the Seed Vault.** Every signature (swap, vote, Pro pass) goes
   through MWA to the Seeker's Seed Vault Wallet. The app never holds a wallet key and never asks for a
-  seed phrase.
+  seed phrase. Backing out of the wallet's connect sheet ends the request as cancelled within a
+  few seconds, rather than waiting out the adapter's own timeouts.
 - **A verified app identity.** The release certificate's SHA-256,
   `66ce92eafa2f819b9a2f6e4eeddc33ac51be46644c295a02750231b1229a49af` (the certificate that signs
   every release, 1.3.17 included, checked with `apksigner` on 27 September), is published in
@@ -101,11 +110,12 @@ A web page cannot do most of this. The website shares only the analysis engine.
 - **SKR decides coverage, and the first loop has closed.** Each analysis costs money to make, and
   most xStocks have none. Staked SKR decides which one is made next. Round 1 ran 14 to 21
   September: JEF won with 878.98 SKR from one voter, the vote landed on mainnet, and JEF
-  (Jefferies Financial Group) was analysed on 26 September. Rounds are weekly, closing Monday
-  00:00 UTC.
+  (Jefferies Financial Group) was analysed on 26 September. Round 2 closed on 28 September with
+  AAL on top, again from one voter. Rounds are weekly, closing Monday 00:00 UTC.
 - **Phone-native work:** a WorkManager digest with the notification permission asked at the first
-  watch, a bundled snapshot painted before the network answers, and an offline state that says
-  what it is showing and from when.
+  watch, a bundled snapshot drawn when the live list is slow or fails, pull to refresh on Today,
+  Stocks and a stock page (it skips the 30-second price cache and holds the indicator until fresh
+  figures land), and an offline state that says what it is showing and from when.
 
 ## How the vote works
 
@@ -164,7 +174,7 @@ Seeker: Kotlin 2.4, Jetpack Compose, Mobile Wallet Adapter 2.2, Ktor, WorkManage
 |     /pass/*, /promo/*   Pro: pass build and confirm, promo redeem, entitlement
 |     /auth/google        Google sign-in, with /nonce
 |-- xStocks public API    catalog (mints, trading calendar), proof of reserves, split multiplier
-|-- Jupiter               Price v3 (reference price and depth), Swap order and execute, keyless
+|-- Jupiter               Price v3 (token price, the share's last US price, depth), Swap order and execute, keyless
 `-- Solana mainnet        Token-2022 mints and token accounts through /rpc; a second public node
                           cross-checks decimals, multiplier and balance before Swap to USDC
 ```
@@ -196,9 +206,10 @@ contract here for audit.
   costs a retry, never money. The guard reads the top level of the message only: the
   cross-program calls Jupiter makes inside its own program, and accounts a swap loads from an
   address lookup table, are outside it. The second table below says what stands in for each.
-- **The device code is sealed at rest** (landing in 1.3.18 with pull request #65): the code that
-  carries a device's Pro entitlement is encrypted with AES-GCM under an Android Keystore key of its
-  own, in preferences that backups exclude.
+- **The device code is sealed at rest:** the code that carries a device's Pro entitlement, and its
+  pending replacement during a rekey, are encrypted with AES-GCM under an Android Keystore key of
+  their own, in preferences that backups exclude. An older plain copy is removed only after the
+  sealed copy has been read back and opened.
 - **Money moves only in a release build.** Jupiter `/execute` sits behind `BuildConfig.SUBMIT_SWAPS`:
   false in debug, true in release. The unit tests run against debug.
 - **Repository hygiene.** `scripts/redaction-guard.sh` hashes every base58 candidate in the tree and
@@ -214,7 +225,7 @@ contract here for audit.
 | Every server-built transaction (vote, pass) | The fee payer is the connected wallet. The wallet is the only signer. No address lookup tables. Every program is on the flow's allowlist. The fee cannot exceed the one displayed. |
 | Vote | Only ComputeBudget, System and Memo. Exactly one 0-lamport transfer, to the pinned collector. Exactly one memo, `PT-VOTE:` plus the ticker the person chose, naming no account but the wallet. |
 | Pro pass | The amount can never exceed 12 USDC or 12 USDT, a ceiling pinned in the app. Exactly one SPL Token transfer of exactly the displayed amount, from the wallet's own USDC or USDT account to the pinned treasury's account. Exactly one `PT-PASS` memo for this device. Token accounts are created only for the wallet or the treasury. Any Approve, SetAuthority or CloseAccount is refused. |
-| Swap, both directions | The order's mints, amount and taker match what was asked for, and the wallet is a required signer. Exactly one Jupiter instruction, and only `route_v2` or JupiterZ `fill`, whose layouts are known. The amount is read from the instruction bytes, and so is the least the swap may pay out, which cannot be below the figure shown. The account spent from and the account paid into must be the wallet's own for the input and output mints. No top-level transfer or burn. Approve, SetAuthority and CloseAccount may name only the wallet. Token accounts may be opened only for the wallet, only for a mint on the swap or its route, at most two, and no more than the order's declared rent covers. Slippage may not exceed 300 bps, in the order or in the bytes. `route_v2`'s platform fee may not exceed the order's own fee, nor 400 bps. No lamports leave the wallet through System. The priority fee cannot exceed the order's. **Landing in 1.3.18 with pull request #65:** an order whose fee or rent fields are negative or overflow is refused; the network fee is read from the bytes (5,000 lamports per signature plus the compute-budget price) and may not exceed the declared one; declared fees are capped at 0.01 SOL; and every SOL figure on the sheet and the receipt comes from those checked values. |
+| Swap, both directions | The order's mints, amount and taker match what was asked for, and the wallet is a required signer. Exactly one Jupiter instruction, and only `route_v2` or JupiterZ `fill`, whose layouts are known. The amount is read from the instruction bytes, and so is the least the swap may pay out, which cannot be below the figure shown. The account spent from and the account paid into must be the wallet's own for the input and output mints. No top-level transfer or burn. Approve, SetAuthority and CloseAccount may name only the wallet. Token accounts may be opened only for the wallet, only for a mint on the swap or its route, at most two, and no more than the order's declared rent covers. Slippage may not exceed 300 bps, in the order or in the bytes. `route_v2`'s platform fee may not exceed the order's own fee, nor 400 bps. No lamports leave the wallet through System. The priority fee cannot exceed the order's. An order whose fee or rent fields are negative or overflow is refused. The network fee is read from the bytes (5,000 lamports per signature plus the compute-budget price times its limit) and may not exceed the declared one, and declared fees and the derived total are capped at 0.01 SOL. The deposit is shown as an upper bound, each account the wallet funds at its program's largest size, and declared rent above two of the largest accounts is refused. Every SOL figure on the Review step, the sheet and the receipt comes from those checked values. |
 
 | What it cannot see | Why, and what stands in for it |
 |---|---|
@@ -239,27 +250,31 @@ Every transaction below was made by this app on a Seeker, from the public demo w
 
 ## The numbers
 
-Measured on 27 September 2026 unless the row says otherwise.
+Measured on 28 September 2026 unless the row says otherwise.
 
 | What | Number | Source |
 |---|---|---|
-| Companies covered | **57**, each with its own full page on plainticker.com. The app's ranked list serves 52 of them; the other five have a page and no classification yet, because their sector cohort is too thin to compare. JEF, the round-1 winner, is in the list and unclassified until its sector model is ready | The count plainticker.com's navigation shows; `GET /api/v1/summary` (52 rows) |
+| Companies covered | **57** companies analysed on plainticker.com, **56** of them with an xStock. Each has its own full page on the web. The app lists the 56: xStocks issues no BABA token, so BABA is covered on the web only. 50 of the 56 carry a classification. ABBV, CMCSA, MA, NKE and V read *Not classified* in Stocks, because their sector has too few companies to compare fairly, and JEF, the round-1 winner, waits for a sector model. Each of the six stock pages names its reason | The server's `covered` list (57 tickers); `GET /api/v1/summary` (51 rows, JEF's without a classification) |
 | xStocks with a Solana mint | 1,124 | The live xStocks catalog (commit `22222ea`) |
 | On the ballot | 898 US-listed xStocks without an analysis | The app's US filter over the live catalog (commit `22222ea`); the server's universe file accepts 916 US tickers (`GET /api/v1/vote/universe`) |
-| Commits | 405 since 10 September (336 without merges) | `git rev-list --count` on the 1.3.18 branch |
-| Pull requests | 65 opened, 62 merged | `gh pr list --state all` |
-| Unit tests | 1,846 passing on the 1.3.18 QA branch; 1,905 with the swap-safety changes | Pull requests #64 and #65 |
-| Mainnet transactions from the app | The five in the table above, one of each flow and direction. The demo wallet has made more since, including a round-2 vote for AAL on 27 September | The table above; the round-2 ledger |
+| Commits | 444 on main since 10 September (369 without merges) | `git rev-list --count` at 1.3.21 (`14aef1a`) |
+| Pull requests | 69 opened, 68 merged, by the 1.3.21 release | `gh pr list --state all` |
+| Unit tests | 1,967 passing at 1.3.21 | Pull request #69 |
+| Mainnet transactions from the app | The five in the table above, one of each flow and direction. The demo wallet has made more since, including the round-2 vote for AAL on 27 September that won that round | The table above; the round-2 ledger |
 | Pro | 12 USDC for 30 days, or 7,500 SKR staked | plainticker.com's billing constant `STAKE_ENTITLEMENT_THRESHOLD_SKR` |
 
 ## Honest limits
 
 - **All usage so far is the founder's.** Every transaction above came from the demo wallet. Round 1
-  had one voter, and round 2, which closes on 28 September, has one vote, also from the demo
-  wallet (the ledger, 27 September). Round 3 runs 28 September to 5 October. Nothing here claims
-  users the app does not have.
-- **Coverage is 57 companies against 1,124 xStocks.** The vote exists because of that gap, and it closes it one
-  company a week.
+  had one voter, and round 2, which closed on 28 September, had one vote, also from the demo
+  wallet (the round-2 ledger). Round 3 runs 28 September to 5 October. Nothing here claims users
+  the app does not have.
+- **Coverage is 57 companies analysed on plainticker.com, 56 of them with an xStock, against 1,124
+  xStocks.** The vote exists because of that gap, and it closes it one company a week.
+- **Not every covered company has a classification.** Six of the 56 in the app have none yet:
+  ABBV, CMCSA, MA, NKE and V, because their sector has too few companies to compare fairly, and
+  JEF, until a sector model for banks and capital-markets firms is ready. Their stock pages keep
+  the available figures and say why.
 - **The vote is decided by the largest stake.** The app says so where the vote is cast. A
   one-Seeker-one-voice weight is on the roadmap.
 - **Not on the Solana dApp Store yet.** The publisher account and KYC are done, the signing chain
@@ -276,7 +291,7 @@ Android Studio with the API 37 SDK (`compileSdk 37`, `minSdk 26`), JDK 17 or 21,
 Mobile Wallet Adapter wallet.
 
 ```
-./gradlew :app:testDebugUnitTest    # about 1,850 unit tests
+./gradlew :app:testDebugUnitTest    # 1,967 unit tests at 1.3.21
 ./gradlew :app:assembleDebug        # debug: signs a swap, never submits it
 ./gradlew :app:assembleRelease      # release: env-driven signing, docs/release-signing.md
 scripts/device-smoke.sh             # assertions against a connected phone
@@ -284,8 +299,10 @@ scripts/redaction-guard.sh          # the tree and the full history against the 
 ```
 
 CI is green. GitHub Actions runs the unit suite and the redaction guard on every push and pull
-request, and builds and signs every release from a `v*` tag on `main` (1.3.16 and 1.3.17 so far),
-so the APK at the stable link above is a CI build.
+request, and builds and signs every release from a `v*` tag (1.3.16 to 1.3.21 so far). The release
+job refuses a tag whose commit is not on `main`, and it runs in the protected `release`
+environment, so nothing is built or signed until the founder approves the run. The APK at the
+stable link above is a CI build.
 
 ## Where things are
 
