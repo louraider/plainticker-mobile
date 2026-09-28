@@ -101,7 +101,9 @@ fun PassState.sheet(): PassSheetContent? = when (this) {
         bar = null,
         cells = emptyList(),
         notice = why?.takeIf { reason == PassRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text),
-        primary = if (reason.retryable) PassAction(words(R.string.action_retry), PassActionKind.Retry) else null,
+        // The same two labels the swap and vote sheets use (QA of 1.3.20): "Connect again" when no
+        // wallet was connected, "Try again" for every other retry.
+        primary = if (reason.retryable) PassAction(words(retryLabel(reason)), PassActionKind.Retry) else null,
         secondary = PassAction(words(R.string.action_close), PassActionKind.Close),
     )
 }
@@ -137,3 +139,8 @@ private fun readyCells(summary: PassSummary) = listOf(
         copies = summary.destination,
     ),
 )
+
+/** The retry label every wallet flow shares: "Connect again" when no wallet was connected. */
+@androidx.annotation.StringRes
+internal fun retryLabel(reason: PassRefusal): Int =
+    if (reason == PassRefusal.NOT_CONNECTED) R.string.action_connect_again else R.string.action_try_again
