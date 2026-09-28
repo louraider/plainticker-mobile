@@ -153,6 +153,10 @@ class SwapSheetTest {
         assertEquals("the mark has no text of its own", 0, mark.split("Text(").size - 1)
         assertTrue("the failure mark is not the caution colour", "color = caution" in mark)
         assertTrue("the landing ring does not close with the settle", "sweepAngle = 360f * progress" in mark)
+        // QA of 1.3.20: a static open ring beside "No wallet connected" read as a frozen spinner.
+        val failed = mark.substringAfter("ResultTone.Failed ->").substringBefore("ResultTone.Pending ->")
+        assertTrue("the failure ring is not closed", "sweepAngle = 360f," in failed)
+        assertTrue("the failure mark carries no caution sign", "drawLine(" in failed && "drawCircle(" in failed)
     }
 
     @Test
