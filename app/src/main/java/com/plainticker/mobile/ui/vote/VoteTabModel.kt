@@ -11,6 +11,7 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.words
 import com.plainticker.mobile.ui.list.NextUpLeader
+import com.plainticker.mobile.ui.list.searchTier
 import com.plainticker.mobile.ui.list.skrWeight
 import java.math.BigInteger
 import java.time.ZoneId
@@ -34,15 +35,16 @@ data class BallotEntry(
     val display: String get() = symbol.ifBlank { ticker }
 }
 
-/** [BallotEntry.ticker], [BallotEntry.symbol] or [BallotEntry.company] containing [query]. */
+/**
+ * [BallotEntry.ticker], [BallotEntry.symbol] or [BallotEntry.company] containing [query], the exact
+ * ticker first, then ticker prefixes, then names: the same order Stocks search keeps ([searchTier]).
+ */
 fun List<BallotEntry>.matchingBallot(query: String): List<BallotEntry> {
     val q = query.trim()
     if (q.isEmpty()) return this
-    return filter { entry ->
-        entry.ticker.contains(q, ignoreCase = true) ||
-            entry.symbol.contains(q, ignoreCase = true) ||
-            entry.company?.contains(q, ignoreCase = true) == true
-    }
+    return mapNotNull { entry -> searchTier(q, entry.ticker, entry.symbol, entry.company)?.let { entry to it } }
+        .sortedBy { it.second }
+        .map { it.first }
 }
 
 /**

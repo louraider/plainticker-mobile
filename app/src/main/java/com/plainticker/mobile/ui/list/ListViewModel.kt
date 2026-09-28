@@ -1004,14 +1004,13 @@ class ListViewModel(
 
     // ---- Search -------------------------------------------------------------------------
 
+    /** The rows [query] finds, best match first (see [searchTier]); the list order within a tier. */
     private fun List<ListRow>.matching(query: String): List<ListRow> {
         val q = query.trim()
         if (q.isEmpty()) return this
-        return filter { row ->
-            row.ticker.contains(q, ignoreCase = true) ||
-                row.symbol?.contains(q, ignoreCase = true) == true ||
-                row.company?.contains(q, ignoreCase = true) == true
-        }
+        return mapNotNull { row -> searchTier(q, row.ticker, row.symbol, row.company)?.let { row to it } }
+            .sortedBy { it.second }
+            .map { it.first }
     }
 
     // ---- Mapping ------------------------------------------------------------------------

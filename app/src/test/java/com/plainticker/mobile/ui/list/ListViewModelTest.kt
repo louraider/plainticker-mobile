@@ -631,6 +631,57 @@ class ListViewModelTest {
         assertFalse(jef.copy(tone = Tone.CAUTION).classUnavailable(withheld = false))
     }
 
+    // ---- QA of 1.3.22: search ranks the exact ticker first ---------------------------------------
+
+    @Test
+    fun `searching MA or V lists MAx or Vx first, then prefixes, then names`() = runTest {
+        val tickers = listOf(
+            Triple("TSM", "Taiwan Semiconductor Manufacturing Company Limited", 66.0),
+            Triple("GS", "The Goldman Sachs Group, Inc.", 60.0),
+            Triple("IBM", "International Business Machines Corporation", 57.0),
+            Triple("AMZN", "Amazon.com, Inc.", 55.0),
+            Triple("NVDA", "NVIDIA Corporation", 77.0),
+            Triple("MA", "Mastercard Incorporated", 50.0),
+            Triple("V", "Visa Inc.", 40.0),
+        )
+        val rows = tickers.map { (ticker, company, composite) ->
+            SummaryRow(ticker = ticker, company = company, headline = "h", tone = Tone.CAUTION, composite = composite)
+        }
+        val assets = tickers.map { (ticker, _, _) -> openAsset("${ticker}x", ticker, "${ticker}xMint".padEnd(44, '1')) } +
+            openAsset("MARAx", "MARA", "MARAxMint".padEnd(44, '1')) +
+            openAsset("VZx", "VZ", "VZxMint".padEnd(44, '1'))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(
+                Result.success(SummaryResponse("v1.5", "2026-09-28T00:00:00.000Z", rows, covered = tickers.map { it.first })),
+            ),
+            catalog = FakeCatalogRepository(Result.success(assets)),
+        )
+
+        vm.state.test {
+            awaitUntil { !it.refreshing && it.analyzed.size == tickers.size }
+
+            vm.search("MA")
+            val ma = awaitUntil { it.query == "MA" }
+            assertEquals("the exact ticker first, then the names in list order", listOf("MA", "TSM", "GS", "IBM", "AMZN"), ma.analyzed.map { it.ticker })
+            assertEquals(listOf("MARA"), ma.withoutAnalysis.map { it.ticker })
+            assertEquals(
+                "one flat order: MAx, the MARAx prefix, then the names",
+                listOf("MA", "MARA", "TSM", "GS", "IBM", "AMZN"),
+                searchResults(ma.analyzed, ma.withoutAnalysis, ma.query).map { it.ticker },
+            )
+
+            vm.search("v")
+            val v = awaitUntil { it.query == "v" }
+            assertEquals("V", v.analyzed.first().ticker)
+            assertEquals(
+                "Vx, then VZx by prefix, then NVDAx and Visa's name",
+                listOf("V", "VZ", "NVDA"),
+                searchResults(v.analyzed, v.withoutAnalysis, v.query).map { it.ticker },
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `the server's covered list, once sent, is the covered set`() = runTest {
         val withCovered = summary().copy(covered = listOf("AAPL", "JPM", "TSLA"))
