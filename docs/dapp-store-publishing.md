@@ -6,7 +6,7 @@ Researched 2026-09-11 against docs.solanamobile.com, legal.solanamobile.com, the
 
 The publishing flow described in older guides (a local `dapp-store init` / `create publisher` / `create app` / `create release` / `publish submit` sequence that minted a Publisher NFT from your own keypair) is retired. The current README of solana-mobile/dapp-publishing states: "The legacy config-driven `init`, `create`, `validate`, and direct `publish submit|update|remove|support` flows are no longer part of the active CLI surface." Publishing now goes through the Solana dApp Publisher Portal at https://publish.solanamobile.com: you sign up, "Fill out your publisher profile and submit your KYC/KYB verification", connect a browser-extension wallet holding "sufficient SOL (~0.2 SOL) to cover transaction fees and ArDrive upload costs", create the app record (this mints the App NFT), and submit a release (this uploads assets to Arweave via ArDrive and mints the Release NFT). The `@solana-mobile/dapp-store-cli` package still exists but is now a portal-backed tool for pushing new versions with an API key. There is no separate publisher-NFT mint step for you to run; the publisher identity is the portal account plus the connected wallet, and the docs warn: "Your publisher wallet is required for all future submissions of this app. Do not lose access to it or you will not be able to make new submissions of this app." Review takes "3-5 business days", and the hackathon Terms require the app to be "published, listed, and publicly available on the Solana dApp Store no later than thirty (30) calendar days after the date on which the winners are first publicly announced", with the explicit statement that "Merely submitting an application for store review does not constitute publication." The correct Week 1 action is therefore: create the portal account, clear KYC/KYB, fund and back up the publisher wallet, and create the app record, so that only the release submission and the review wait remain after winners are announced.
 
-## Progress (updated 2026-09-27)
+## Progress (updated 2026-09-28)
 
 **Target: the first release is submitted for review on 1 October 2026**, with the hackathon build.
 
@@ -14,9 +14,9 @@ The publishing flow described in older guides (a local `dapp-store init` / `crea
 |---|---|
 | 3. Portal account and KYC/KYB | **Done 2026-09-12.** |
 | 1, 2. Publisher wallet chosen, funded ~0.2 SOL, backed up | Not recorded as done in this document. The wallet funded on 2026-09-12 is the **demo** wallet for the video and fixtures, not the publisher wallet (founder's decision the same day). The founder confirms this step before 1 October. |
-| 4. Storage provider and ArDrive balance | Open. The APK size is now known: the 1.3.17 release APK is 3,863,281 bytes (about 3.9 MB). |
+| 4. Storage provider and ArDrive balance | Open. The APK size is now known: the 1.3.21 release APK is 3,947,457 bytes (about 3.9 MB). |
 | 5. App record and App NFT | **Unblocked, not created yet.** The package name is final, the release keystore exists, `assetlinks.json` is live and signed releases come from CI. The record waits for the submission build. |
-| 6. Release signing key | **Done.** One release key, off-machine (`docs/release-signing.md`). Releases are built and signed by GitHub Actions from a `v*` tag on `main`; 1.3.16 and 1.3.17 were built that way, and the 1.3.17 APK's certificate SHA-256 is the one `assetlinks.json` names (checked with `apksigner`, 2026-09-27). |
+| 6. Release signing key | **Done.** One release key, off-machine (`docs/release-signing.md`). Releases are built and signed by GitHub Actions from a `v*` tag whose commit is on `main`; the job runs in the protected `release` environment, so nothing is built or signed until the founder approves the run. 1.3.16 to 1.3.21 were built that way, and the 1.3.17 APK's certificate SHA-256 is the one `assetlinks.json` names (checked with `apksigner`, 2026-09-27). |
 | Repository | **Public** (checked 2026-09-27): `https://github.com/louraider/plainticker-mobile`. CI runs the unit suite and the redaction guard on every push and pull request, and is green. |
 | Privacy policy, terms, account deletion | **Live on the web** (each returned 200 on 2026-09-27): `https://www.plainticker.com/en/privacy`, `https://www.plainticker.com/en/terms`, and account deletion in the `#delete` section of `https://www.plainticker.com/en/account`, signed in. |
 | The same links in the app | **Done.** You → About has *Privacy policy*, *Terms* and *Delete account*. *Delete account* opens the web account page's deletion section, "On plainticker.com, signed in with the same account." |
@@ -42,7 +42,7 @@ This is what makes Mobile Wallet Adapter able to tell a person that the app aski
 ### Still open before the app record (2026-09-13; items 1 and 2 done by 2026-09-27)
 
 1. **Done.** Three GitHub secrets for the tag workflow, which only the founder can set because one of them is the keystore password: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. The exact commands were printed by `scripts/make-keystore.sh`.
-2. **Done** (1.3.16 and 1.3.17). A signed release build from a `v*` tag, which is also the only build that can move real money, since `SUBMIT_SWAPS` is false in debug.
+2. **Done** (1.3.16 to 1.3.21). A signed release build from a `v*` tag, which is also the only build that can move real money, since `SUBMIT_SWAPS` is false in debug.
 3. The storage provider and the ArDrive balance, which need the APK size.
 4. Then, and only then, the app record and its App NFT.
 
@@ -168,9 +168,9 @@ This is what makes Mobile Wallet Adapter able to tell a person that the app aski
 
 The old `config.yaml` (https://github.com/solana-mobile/dapp-publishing/blob/main/example/config.yaml) had `publisher` (name, website, email), `app` (name, android_package, license_url, copyright_url, privacy_policy_url, icon), `release` (media: icon, banner, featureGraphic, screenshot, video; files: apk; localized catalog: name, short_description, long_description, new_in_version, saga_features) and `solana_mobile_dapp_publisher_portal` (google_store_package, testing_instructions, alpha_testers with wallet addresses). Legacy commands `dapp-store init`, `create publisher`, `create app`, `create release`, `publish submit`, `publish update` with `-k`, `-u`, `-b`, `--requestor-is-authorized`, `--complies-with-solana-dapp-store-policies` are removed from the active CLI. Alpha testers and testing instructions in the portal: not published.
 
-## Listing copy (refreshed 2026-09-27)
+## Listing copy (refreshed 2026-09-28)
 
-The copy the portal form asks for, rewritten on 2026-09-27 for build 1.3.16 (checked against 1.3.13). The 18 September
+The copy the portal form asks for, rewritten on 2026-09-27 for build 1.3.16 (checked against 1.3.13) and re-checked on 2026-09-28 against 1.3.21, the latest release. The 18 September
 version predated the live vote, Pro, sign-in, Today and the light theme, and held the vote
 paragraph back because the vote was not live; it is live now, so the paragraph is in. Nothing below
 names a feature that is not in the build being submitted, which is both the honest position and the
@@ -184,7 +184,7 @@ nature, or purpose of any dApp". The figures match the one number set in
 | --- | --- | --- |
 | App name | **Not published** (checked listing-page-guidelines, submit-new-app, legacy `config.yaml`) | Written to 30 characters, the one text length the guidelines do publish. Assumption. |
 | Short description | **30 characters**, published: "Short description cannot exceed 30 characters." | listing-page-guidelines |
-| Long description | **No published limit**; "a well-written, concise overview" | Written to 2,859 characters, under Google Play's 4,000-character long description, the conservative neighbour. Assumption. |
+| Long description | **No published limit**; "a well-written, concise overview" | Written to 3,132 characters, under Google Play's 4,000-character long description, the conservative neighbour. Assumption. |
 | What's new | **Not published.** The field is required and no length is given | Written to 451 characters, under Google Play's 500-character release notes. Assumption. |
 | Category | **Not published**; "Expect a dropdown in the portal form" | listing-page-guidelines, submit-new-app and the legacy `config.yaml`, all checked |
 | Tags | **Not recorded by this document at all.** No tag field is published anywhere checked | If the form has one, the candidates are below; if it has none, nothing is lost |
@@ -217,13 +217,13 @@ The wallet on this phone can swap into tokenized US stocks. What it tells you ab
 
 What the mint says. Each time a stock page opens, it reads the Token-2022 mint live: the supply minted on chain, the permanent delegate, pausable transfers, the split multiplier and the transfer hook, with the slot they came from and its age. Beside them it shows the proof of reserves that xStocks reports. An issuer that can move a token out of a wallet without its owner's signature is a fact about that token, and the page says it in plain words. A mint that could not be read is shown as unknown, never as no risk.
 
-What the filings say. PlainTicker, the engine behind www.plainticker.com, classifies each company's SEC EDGAR filings against its own sector by a fixed rule: quality, valuation and momentum, and the F-Score with its nine signals. The age of the analysis is on every row. It is a classification, not a forecast and not investment advice.
+What the filings say. PlainTicker, the engine behind www.plainticker.com, classifies each company's SEC EDGAR filings against its own sector by a fixed rule: quality, valuation and momentum, and the F-Score with its nine signals. The age of the analysis is on every row. It is a classification, not a forecast and not investment advice. A company whose sector has too few companies to compare fairly reads Not classified, and its page says why.
 
-What the price is worth. The token price is set against the NYSE close only where at least $4,000 of depth stands behind it. Below that, the app states the depth instead and draws no premium.
+What the price is worth. The app shows the token's gap to the last US price of the share, its latest US trade including pre-market and after-hours, only where at least $4,000 of depth stands behind it. Below that, the app states the depth instead and draws no premium.
 
 Your day. Today opens on the NYSE state in your own time, the stocks you watch and the companies reporting soon. One digest a day arrives as a notification, and no other.
 
-The swap, when you want one. Jupiter routes it; Mobile Wallet Adapter and the Seed Vault sign it. Every transaction is decoded on the phone before the wallet opens, and refused if its instructions do more than the screen shows. The wallet names the app as www.plainticker.com. The receipt keeps the executed fill plus estimated network costs, and the signature. Portfolio reads your xStocks with the split multiplier applied and offers Swap to USDC.
+The swap, when you want one. Jupiter routes it; Mobile Wallet Adapter and the Seed Vault sign it. Every transaction is decoded on the phone before the wallet opens, and refused if its instructions do more than the screen shows. A Review step shows what the phone checked, and Continue to wallet is the only way on. The wallet names the app as www.plainticker.com. The receipt keeps the executed fill plus estimated network costs, and the signature. Portfolio reads your xStocks with the split multiplier applied and offers Swap to USDC.
 
 Staked SKR decides what is analysed next. Most tokenized stocks have no analysis yet. Each week you can vote for one with a transaction weighted by the SKR you have staked, and the winner is analysed. A vote weighted by stake is decided by the largest stake, and the app says so where you cast it.
 
@@ -234,7 +234,7 @@ xStocks are tokenized tracker instruments issued by a third party, Backed Financ
 Analysis by PlainTicker. Token catalog and proof of reserves by xStocks. Prices and routing by Jupiter. Filings from SEC EDGAR. Not affiliated with any of them.
 ```
 
-2,859 characters. The headings inside it are sentences rather than styled headers, because the
+3,132 characters. The headings inside it are sentences rather than styled headers, because the
 portal's rendering of this field is not published and a listing that depends on markdown surviving
 can break on somebody else's release.
 
@@ -275,7 +275,7 @@ words, "Screenshots accurately represent the app".
 | Icon PNG | 512 x 512 | **Written, Amber.** `design/brand/store/icon-512.png`, re-rendered 2026-09-24 by `design/brand/render_icons.py` from the shipped `ic_launcher_foreground.xml` (commit `66c21af`) | The shipped launcher icon flattened: the two-corner mark on the amber tile. Square, opaque, no radius: the store applies its own mask. |
 | Banner | 1024 x 500 PNG | **Written, Amber.** `design/brand/store/banner-1024x500.png`, same commit and generator | The mark, the wordmark in Bricolage Grotesque and the short description under it. No phone mockup, no stock photography, no gradient. |
 | Screenshot 1 | Portrait, 1200 x 2670 off the Seeker | Candidate: `docs/img/01-today.png` (1.3.12). Recapture on the submission build | Today: the NYSE status line, Watched, Reports next week. |
-| Screenshot 2 | Same device, orientation and aspect ratio | Candidate: `docs/img/03-stock-page-aapl.png` (1.3.8). Recapture | A stock page: the classification, the token price against the NYSE close, *Live from the mint* with its slot, and *Backing and controls*. |
+| Screenshot 2 | Same device, orientation and aspect ratio | Candidate: `docs/img/03-stock-page-aapl.png` (1.3.8). Recapture | A stock page: the classification, the token price beside the share's last US price, *Live from the mint* with its slot, and *Backing and controls*. |
 | Screenshot 3 | Same | Candidate: `docs/img/02-stocks.png` (1.3.12). Recapture | Stocks: search, the Deep pool and sector filters, the covered list. |
 | Screenshot 4 | Same | To capture | The swap result, *Swap landed*, with the receipt and its signature. |
 | Screenshot 5 | Same | To capture | The Vote tab: the explainer, the round, *Last round*, the ballot. |

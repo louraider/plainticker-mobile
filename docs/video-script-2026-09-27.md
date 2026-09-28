@@ -1,6 +1,6 @@
 # Demo video: script of record
 
-Written 2026-09-27 for build 1.3.18, the next release. It replaces
+Written 2026-09-27 and updated 2026-09-28 for build 1.3.21, on main and the latest release. It replaces
 `docs/video-script-2026-09-15.md`, which was written before the redesign, before the vote went live and before Pro existed.
 
 **One person's day on the current app,** filmed on a Seeker, screen capture with voice-over.
@@ -25,8 +25,8 @@ then YouTube's automatic ones), not the picture. So:
 no exclamation, no buy or sell verbs. The classification is a classification by a fixed rule, and
 is never called advice or a recommendation.
 
-**Timing:** the spoken lines below run to **387 words**, about **166 seconds** at 140 words
-a minute. That leaves about 12 seconds of screen time without speech inside a 2:58 cut, which is
+**Timing:** the spoken lines below run to **401 words**, about **172 seconds** at 140 words
+a minute. That leaves about 6 seconds of screen time without speech inside a 2:58 cut, which is
 tight: the Brief caps the demo at three minutes, so if a take runs over, cut in the order at the
 end of this document.
 
@@ -40,9 +40,9 @@ end of this document.
   SKR staked, and You shows Pro (the pass runs to 20 October; otherwise redeem a promo code).
 - Watch one stock at least a day ahead, so a real digest notification exists and Today has a
   Watched row. Pick a watched stock with a report inside the next two weeks if possible.
-- Film on or after **28 September**, when round 3 opens. Look at the Vote tab first. If *Last
-  round* already shows round 2 rather than JEF, keep the same spoken line and take the JEF shot
-  from JEFx's own stock page (shot 5b), which carries its research either way.
+- Film on or after **28 September**, when round 3 opens. Since round 2 closed on 28 September,
+  *Last round* shows round 2 (AAL) rather than JEF. Keep the same spoken line and take the JEF
+  shot from JEFx's own stock page (shot 5b), which carries its research either way.
 - Release build only. A debug build signs and never submits, and its key does not verify as
   www.plainticker.com.
 - Notifications from other apps off, Do Not Disturb on except for PlainTicker, a clean status bar.
@@ -52,14 +52,14 @@ end of this document.
 | # | Time | What must be on screen |
 |---|---|---|
 | 1 | 0:00–0:10 | Lock screen; the PlainTicker "Daily digest" notification; tap into the app |
-| 2 | 0:10–0:26 | Today: the status line, Watched with at least one row, Reports next week (or this week) |
-| 3 | 0:26–0:55 | Stocks → AAPLx: the classification, token price against the NYSE close, *Live from the mint* with its slot and age, then scroll *Backing and controls* (Minted on chain, the proof of reserves xStocks reports, Permanent delegate Yes) |
-| 4 | 0:55–1:28 | Swap 1 USDC into AAPLx: the sheet with the estimated all-in cost, then, if the filmed build has it, the Review step and **Continue to wallet** (landing in 1.3.18 with pull request #65, open when this was written), the Seed Vault Wallet connect sheet showing www.plainticker.com, approval, *Swap landed*, the receipt with its signature |
-| 5 | 1:28–1:40 | Portfolio: the holding and **Swap to USDC**, run to its result |
-| 5b | 1:40–2:14 | Vote tab: the explainer, *Last round* (JEF), then JEFx's stock page with its research (classification *Unavailable*, sector model pending); back to Vote, the current round, one vote cast, the wallet approval, the landed state |
-| 6 | 2:14–2:28 | You: the Pro hero card, Plan, Sign-in methods (Google), then the Wallet group below it, which signs and is not a sign-in. The demo account's email only |
-| 7 | 2:28–2:40 | Airplane mode on: Today's offline state, then a stock page reading *Mint not read* |
-| 8 | 2:40–2:58 | Airplane mode off; Today refreshes, then the Vote tab's current round. End there, no title card |
+| 2 | 0:10–0:27 | Today: the status line, Watched with at least one row, Reports next week (or this week) |
+| 3 | 0:27–0:56 | Stocks → AAPLx: the classification, the token price beside *Last US price*, *Live from the mint* with its slot and age, then scroll *Backing and controls* (Minted on chain, the proof of reserves xStocks reports, Permanent delegate Yes) |
+| 4 | 0:56–1:32 | Swap 1 USDC into AAPLx: the sheet with the estimated all-in cost, the Review step and **Continue to wallet**, the Seed Vault Wallet connect sheet showing www.plainticker.com, approval, *Swap landed*, the receipt with its signature |
+| 5 | 1:32–1:44 | Portfolio: the holding and **Swap to USDC**, run to its result |
+| 5b | 1:44–2:16 | Vote tab: the explainer, *Last round* (round 2, AAL), then JEFx's stock page with its research (classification *Unavailable*, sector model pending); back to Vote, the current round, one vote cast, the wallet approval, the landed state |
+| 6 | 2:16–2:30 | You: the Pro hero card, Plan, Sign-in methods (Google), then the Wallet group below it, which signs and is not a sign-in. The demo account's email only |
+| 7 | 2:30–2:41 | Airplane mode on: Today's offline state, then a stock page reading *Mint not read* |
+| 8 | 2:41–2:58 | Airplane mode off; Today refreshes, then the Vote tab's current round. End there, no title card |
 
 ## The script
 
@@ -70,14 +70,15 @@ end of this document.
 > PlainTicker, on a Solana Seeker, reads a tokenized stock before you hold it. My day starts with
 > its one daily digest.
 
-### 2 · 0:10–0:26 · Today
+### 2 · 0:10–0:27 · Today
 
 **Screen:** Today. Hold on the status line, then Watched, then Reports next week.
 
 > Today shows the market in my own time zone: New York is closed and opens on Monday. Then the
-> stocks I watch, how far each token sits from its share, and the companies reporting next week.
+> stocks I watch, each token's gap to the last US price of its share, and the companies reporting
+> next week.
 
-### 3 · 0:26–0:55 · A stock page, read live from the mint
+### 3 · 0:27–0:56 · A stock page, read live from the mint
 
 **Screen:** Stocks, search AAPL, open AAPLx. Pause on *Live from the mint*, then scroll into
 *Backing and controls* and stop on the permanent delegate.
@@ -89,28 +90,29 @@ end of this document.
 > ago. The issuer holds a permanent delegate, so it can move this token without my signature. The
 > app says so in plain words.
 
-### 4 · 0:55–1:28 · A swap, and the receipt
+### 4 · 0:56–1:32 · A swap, and the receipt
 
-**Screen:** Swap on the stock page, 1 USDC, the estimated all-in cost, the Review step if the
-build has it, the wallet sheet naming www.plainticker.com, approval, *Swap landed*, the receipt.
+**Screen:** Swap on the stock page, 1 USDC, the estimated all-in cost, the Review step and
+**Continue to wallet**, the wallet sheet naming www.plainticker.com, approval, *Swap landed*, the receipt.
 Hold on the signature for a beat.
 
 > Now a one-dollar swap, routed by Jupiter. Before your wallet opens, this phone checks the
 > transaction's amounts and accounts against the request; Jupiter's internal routing and the
-> issuer's power to move tokens stay outside those checks.
+> issuer's power to move tokens stay outside those checks. Review shows what the phone checked; I
+> continue to the wallet.
 >
 > Mobile Wallet Adapter hands it to the Seed Vault, and the wallet shows this app verified as
 > www.plainticker.com. I approve. Swap landed. The receipt keeps the executed fill plus estimated
 > network costs, and the signature.
 
-### 5 · 1:28–1:40 · Swap to USDC
+### 5 · 1:32–1:44 · Swap to USDC
 
 **Screen:** Portfolio, the holding, Swap to USDC, the result.
 
 > Portfolio sends it back with Swap to USDC. Swaps like these landed on mainnet from this app on
 > the thirteenth and the twenty-fourth of September.
 
-### 5b · 1:40–2:14 · Vote
+### 5b · 1:44–2:16 · Vote
 
 **Screen:** Vote tab explainer, *Last round*, JEFx's stock page with its research, back to the
 current round, one vote, the wallet approval, the landed state.
@@ -124,7 +126,7 @@ current round, one vote, the wallet approval, the landed state.
 > Now round three. My vote is a transaction, weighted by the SKR I have staked, and the app says
 > plainly that the largest stake decides.
 
-### 6 · 2:14–2:28 · You, with Pro
+### 6 · 2:16–2:30 · You, with Pro
 
 **Screen:** You, the Pro hero card, Plan, Sign-in methods, and the Wallet group below it.
 
@@ -132,14 +134,14 @@ current round, one vote, the wallet approval, the landed state.
 > five hundred SKR staked. I signed in with Google, and the account is shared with
 > plainticker.com.
 
-### 7 · 2:28–2:40 · Airplane mode
+### 7 · 2:30–2:41 · Airplane mode
 
 **Screen:** airplane mode on, Today's offline state, a stock page reading *Mint not read*.
 
 > In airplane mode the app says what it is showing and from when. A stock page says the mint was
 > not read, rather than guess.
 
-### 8 · 2:40–2:58 · Close
+### 8 · 2:41–2:58 · Close
 
 **Screen:** airplane mode off, Today refreshing, then the Vote tab's current round. End there.
 
@@ -154,13 +156,13 @@ Upload this as the caption track, split to the cut. It is the spoken lines above
 ```text
 PlainTicker, on a Solana Seeker, reads a tokenized stock before you hold it. My day starts with its one daily digest.
 
-Today shows the market in my own time zone: New York is closed and opens on Monday. Then the stocks I watch, how far each token sits from its share, and the companies reporting next week.
+Today shows the market in my own time zone: New York is closed and opens on Monday. Then the stocks I watch, each token's gap to the last US price of its share, and the companies reporting next week.
 
 This is Apple's token. The classification comes from Apple's SEC filings, set against its sector by a fixed rule. It is not a forecast and not advice.
 
 Live from the mint: this phone just read the Token-2022 mint, at the slot on screen, seconds ago. The issuer holds a permanent delegate, so it can move this token without my signature. The app says so in plain words.
 
-Now a one-dollar swap, routed by Jupiter. Before your wallet opens, this phone checks the transaction's amounts and accounts against the request; Jupiter's internal routing and the issuer's power to move tokens stay outside those checks.
+Now a one-dollar swap, routed by Jupiter. Before your wallet opens, this phone checks the transaction's amounts and accounts against the request; Jupiter's internal routing and the issuer's power to move tokens stay outside those checks. Review shows what the phone checked; I continue to the wallet.
 
 Mobile Wallet Adapter hands it to the Seed Vault, and the wallet shows this app verified as www.plainticker.com. I approve. Swap landed. The receipt keeps the executed fill plus estimated network costs, and the signature.
 
@@ -187,10 +189,12 @@ Re-read these against the app before recording, and change the line rather than 
   line says ("open, and closes at ten my time", or "opens at half past four my time").
 - **Shot 3:** proof of reserves is on screen (100.8% for AAPLx on 25 September) and is not
   spoken, so the line stays true whatever the figure reads.
-- **Shot 4, the Review step:** Review and **Continue to wallet** land in 1.3.18 with pull request
-  #65, open when this was written. Film them only if the filmed build has them, and then add one
-  spoken sentence after the check line: "Review shows what the phone checked; I continue to the
-  wallet." Recount the timing if you do.
+- **Shot 3, the price:** while the NYSE is shut the stock page labels the reference *Last US
+  price* (during the session it reads *NYSE price*): the share's latest US trade from Jupiter,
+  which moves before the open and after the close. It is not the NYSE
+  close, so no line calls it the close.
+- **Shot 4, the Review step:** Review and **Continue to wallet** are in 1.3.21, and the spoken
+  line names them. Hold Review long enough to read the network fee and the "Up to" deposit.
 - **Shot 5b:** the Jefferies line is true of round 1 whatever *Last round* shows, because it names
   the round. "Waits for a sector model" is true while JEFx's page reads *Unavailable* with the
   sector-model reason; if a classification has appeared by the day, say what the page says.
@@ -199,7 +203,7 @@ Re-read these against the app before recording, and change the line rather than 
   wallet has voted yet" for 0. Round 3 opens 28 September 00:00 UTC and closes 5 October 00:00
   UTC, so film after it opens. "Round one had one voter, me" is true of round 1 (the round-1
   ledger lists one vote).
-- If a digest, a label or a screen changes in 1.3.18 or later before filming, the spoken line follows the
+- If a digest, a label or a screen changes after 1.3.21 before filming, the spoken line follows the
   build that is filmed.
 
 ## If it runs long, cut in this order
