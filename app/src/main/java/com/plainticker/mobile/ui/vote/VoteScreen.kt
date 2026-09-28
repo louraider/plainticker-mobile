@@ -279,6 +279,31 @@ internal fun VoteTabContent(
                     position += 2 + state.myVotes.size
                 }
 
+                // Earlier rounds' votes, most recent round first (final QA of 1.3.19: You counted a
+                // round 2 vote as "Listed under Vote", and Vote listed only the open round's).
+                if (state.pastVotes.isNotEmpty()) {
+                    item(key = "past-votes-heading") {
+                        AmberSectionHead(
+                            title = stringResource(R.string.vote_tab_heading_your_votes_earlier),
+                            meta = Fmt.count(state.pastVotes.sumOf { it.votes.size }),
+                        )
+                    }
+                    position++
+                    state.pastVotes.forEach { group ->
+                        item(key = "past-round:" + (group.round?.toString() ?: "none")) {
+                            Footnote(
+                                text = group.round
+                                    ?.let { stringResource(R.string.vote_tab_past_round, it.toString()) }
+                                    ?: stringResource(R.string.vote_tab_past_round_unknown),
+                            )
+                        }
+                        itemsIndexed(group.votes, key = { _, receipt -> "past:" + receipt.signature }) { index, receipt ->
+                            MyVoteRow(receipt = receipt, last = index == group.votes.lastIndex, onOpenDetail = onOpenDetail, zone = zone)
+                        }
+                        position += 1 + group.votes.size
+                    }
+                }
+
                 // How it works, below what a returning voter came for rather than above it.
                 item(key = "explainer") { Explainer() }
                 position++

@@ -196,6 +196,24 @@ class VoteTabModelTest {
         assertEquals(listOf("ASML"), mine.map { it.ticker })
     }
 
+    /** Final QA of 1.3.19: You counted a round 2 vote "Listed under Vote", which listed only round 3's. */
+    @Test
+    fun `earlier rounds' votes are listed by round, most recent first, never repeating this round's`() {
+        val receipts = listOf(
+            receipt("TSM", alice, round = 1, landedAtMillis = 1_000L),
+            receipt("ASML", alice, round = 2, landedAtMillis = 2_000L),
+            receipt("MDT", alice, round = 2, landedAtMillis = 3_000L),
+            receipt("NKE", alice, round = null, landedAtMillis = 500L),
+            receipt("ABF", bob, round = 1),
+            receipt("CRWD", alice, round = 3, landedAtMillis = 9_000L),
+        )
+        val past = pastVotesFor(receipts, VoteRound(3, "", ""), connectedVoter = alice)
+        assertEquals(listOf(2, 1, null), past.map { it.round })
+        assertEquals(listOf("MDT", "ASML"), past[0].votes.map { it.ticker })
+        assertTrue("the open round's vote is under Your votes, not here", past.none { g -> g.votes.any { it.ticker == "CRWD" } })
+        assertTrue("another wallet's vote is not yours", past.none { g -> g.votes.any { it.ticker == "ABF" } })
+    }
+
     @Test
     fun `no round at all is the minimum-slice case, and nothing is scoped to a round that does not exist`() {
         val receipts = listOf(receipt("TSM", alice, round = 1), receipt("ASML", alice, round = null))

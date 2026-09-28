@@ -251,6 +251,8 @@ class VoteTabViewModel(
 
     private fun republishVotes() {
         val voter = wallet.account.value?.address
-        _state.update { it.copy(myVotes = myVotesFor(allReceipts, it.round, voter)) }
+        _state.update {
+            it.copy(myVotes = myVotesFor(allReceipts, it.round, voter), pastVotes = pastVotesFor(allReceipts, it.round, voter))
+        }
     }
 }

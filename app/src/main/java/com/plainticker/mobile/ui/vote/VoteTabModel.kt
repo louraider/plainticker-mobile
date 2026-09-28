@@ -148,6 +148,26 @@ fun myVotesFor(receipts: List<VoteReceipt>, round: VoteRound?, connectedVoter: S
     return byRound.sortedByDescending { it.landedAtMillis }
 }
 
+/** One earlier round's votes, for "Your votes": [round] is null for votes cast before rounds were stamped. */
+data class PastRoundVotes(val round: Int?, val votes: List<VoteReceipt>)
+
+/**
+ * The wallet's votes from earlier rounds, by round, most recent round first (final QA of 1.3.19:
+ * You said "Votes cast 1, Listed under Vote" while the Vote tab showed only the open round's
+ * votes, so a vote from round 2 was listed nowhere). The same voter scoping as [myVotesFor]; a
+ * receipt [myVotesFor] already shows is never repeated here, and votes the device cannot place in
+ * a round come last, under no round number.
+ */
+fun pastVotesFor(receipts: List<VoteReceipt>, round: VoteRound?, connectedVoter: String?): List<PastRoundVotes> {
+    val shown = myVotesFor(receipts, round, connectedVoter).mapTo(HashSet()) { it.signature }
+    val byVoter = if (connectedVoter == null) receipts else receipts.filter { it.voter == connectedVoter }
+    return byVoter
+        .filter { it.signature !in shown }
+        .groupBy { it.round }
+        .map { (id, votes) -> PastRoundVotes(id, votes.sortedByDescending { it.landedAtMillis }) }
+        .sortedWith(compareByDescending<PastRoundVotes, Int?>(nullsFirst()) { it.round })
+}
+
 /**
  * The connected wallet's own stake, the one figure the Vote tab's top card leads with (judges'
  * round 2: the vote action and the weight it carries belong at the top, not under an explainer).
@@ -227,6 +247,8 @@ data class VoteTabUiState(
     val previous: PreviousRoundDisplay? = null,
     val leaders: List<NextUpLeader> = emptyList(),
     val myVotes: List<VoteReceipt> = emptyList(),
+    /** This wallet's votes from earlier rounds, most recent round first ([pastVotesFor]). */
+    val pastVotes: List<PastRoundVotes> = emptyList(),
     val query: String = "",
     /** Already filtered by [query]; the unfiltered set is not this screen's concern. */
     val ballot: List<BallotEntry> = emptyList(),
