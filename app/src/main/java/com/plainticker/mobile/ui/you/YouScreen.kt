@@ -160,6 +160,7 @@ fun YouScreen(
     val pass by passViewModel.state.collectAsStateWithLifecycle()
     val account by accountViewModel.state.collectAsStateWithLifecycle()
     val deviceCodeStatus by accountViewModel.deviceCodeStatus.collectAsStateWithLifecycle()
+    val newCodeFailed by accountViewModel.newCodeFailed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // An Activity context: Credential Manager draws Google's sheet over it.
     val credentials = remember(context) { CredentialManagerGoogleSource(context, BuildConfig.GOOGLE_SERVER_CLIENT_ID) }
@@ -208,6 +209,8 @@ fun YouScreen(
             onOpenDigest = onOpenDigest,
             account = account,
             deviceCodeStatus = deviceCodeStatus,
+            onStartWithNewCode = accountViewModel::startWithNewCode,
+            newCodeFailed = newCodeFailed,
             onSignIn = { accountViewModel.signIn(credentials) },
             onSignOut = accountViewModel::signOut,
             onUnlink = accountViewModel::unlink,
@@ -263,6 +266,8 @@ internal fun YouContent(
     onOpenDigest: (() -> Unit)? = null,
     account: AccountUiState = AccountUiState.Restoring,
     deviceCodeStatus: DeviceCodeStatus = DeviceCodeStatus.OK,
+    onStartWithNewCode: () -> Unit = {},
+    newCodeFailed: Boolean = false,
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onUnlink: (String) -> Unit = {},
@@ -351,6 +356,8 @@ internal fun YouContent(
                 colors = colors,
                 showMessage = heroMessage == null,
                 deviceCodeStatus = deviceCodeStatus,
+                onStartWithNewCode = onStartWithNewCode,
+                newCodeFailed = newCodeFailed,
             )
         }
         item(key = "wallet") {

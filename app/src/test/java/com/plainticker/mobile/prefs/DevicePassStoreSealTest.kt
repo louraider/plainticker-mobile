@@ -294,4 +294,79 @@ class DevicePassStoreSealTest {
         assertTrue(SharedPrefsDevicePassStore.ALL_KEYS.containsAll(prefs.all.keys))
         prefs.writes.forEach { assertTrue(SharedPrefsDevicePassStore.ALL_KEYS.containsAll(it.keys)) }
     }
+
+    // ---- A key that is gone for good (security review M3) --------------------------------------
+
+    @Test
+    fun `a sealed code under a key this process had to create is lost, and stays lost on the next launch`() {
+        val prefs = FakePrefs().put(KEY_CODE_SEALED to sealedFor(current))
+        val replacement = newKey()
+        val lost = SharedPrefsDevicePassStore(prefs, cipher(replacement)) { true }
+
+        try {
+            lost.code()
+            fail("expected DeviceCodeLostException")
+        } catch (e: DeviceCodeLostException) {
+            // expected: still a DeviceCodeUnreadableException to every caller
+        }
+        assertTrue(lost.codeLost())
+        assertNull("every read that can go without a code still does", lost.codeOrNull())
+        assertNotNull("the sealed copy is never deleted for failing to open", prefs.getString(KEY_CODE_SEALED, null))
+        assertTrue(prefs.getBoolean(SharedPrefsDevicePassStore.KEY_CODE_KEY_LOST, false))
+
+        // The next launch: the Keystore now holds the key this one created, so nothing is created
+        // again, and the record is what still says the code is lost.
+        val nextLaunch = SharedPrefsDevicePassStore(prefs, cipher(replacement)) { false }
+        assertTrue(nextLaunch.codeLost())
+    }
+
+    @Test
+    fun `a Keystore failing for now is not a lost key, and nothing can start over on it`() {
+        val prefs = FakePrefs().put(KEY_CODE_SEALED to sealedFor(current))
+        val failing = SharedPrefsDevicePassStore(prefs, cipher(broken = { true })) { false }
+        assertUnreadable { failing.code() }
+        assertFalse(failing.codeLost())
+        assertFalse("never replaced while it may still open", failing.startWithNewCode())
+        assertTrue("nothing was written", prefs.writes.isEmpty())
+        assertEquals("the right key opens it again", current, store(prefs).code())
+    }
+
+    @Test
+    fun `starting with a new code replaces a lost one, and every trace of the old one and its rekey, in one commit`() {
+        val prefs = FakePrefs().put(
+            KEY_CODE_SEALED to sealedFor(legacy),
+            KEY_PENDING_NEW_CODE_SEALED to sealedFor(current),
+            SharedPrefsDevicePassStore.KEY_REKEY_NOTE to SharedPrefsDevicePassStore.NOTE_SIGN_IN_AGAIN,
+        )
+        val replacement = newKey()
+        val lost = SharedPrefsDevicePassStore(prefs, cipher(replacement)) { true }
+        assertTrue(lost.codeLost())
+        prefs.writes.clear()
+
+        assertTrue(lost.startWithNewCode())
+        assertEquals("one commit", 1, prefs.writes.size)
+        val fresh = lost.code()
+        assertTrue(SharedPrefsDevicePassStore.isNewFormat(fresh))
+        assertFalse(fresh == current)
+        assertEquals(setOf(KEY_CODE_SEALED), prefs.all.keys)
+        assertNeverPlain(prefs, fresh)
+        assertFalse(lost.codeLost())
+        assertNull(lost.pendingNewCode())
+        assertNull(lost.rekeyNote())
+        assertFalse("done once, it is not offered again", lost.startWithNewCode())
+
+        val nextLaunch = SharedPrefsDevicePassStore(prefs, cipher(replacement)) { false }
+        assertEquals("the next launch opens the new code", fresh, nextLaunch.code())
+    }
+
+    @Test
+    fun `a key created for this install's own first code never reads as lost`() {
+        val prefs = FakePrefs()
+        val fresh = SharedPrefsDevicePassStore(prefs, cipher()) { true }
+        val code = fresh.code()
+        assertFalse(fresh.codeLost())
+        assertFalse(fresh.startWithNewCode())
+        assertEquals(code, fresh.code())
+        assertFalse(prefs.getBoolean(SharedPrefsDevicePassStore.KEY_CODE_KEY_LOST, false))
+    }
 }

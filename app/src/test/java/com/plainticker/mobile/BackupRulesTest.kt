@@ -89,6 +89,7 @@ class BackupRulesTest {
                 SharedPrefsDevicePassStore.KEY_REKEY_NOTE,
                 SharedPrefsDevicePassStore.KEY_CODE_SEALED,
                 SharedPrefsDevicePassStore.KEY_PENDING_NEW_CODE_SEALED,
+                SharedPrefsDevicePassStore.KEY_CODE_KEY_LOST,
             ),
             SharedPrefsDevicePassStore.ALL_KEYS,
         )
@@ -106,7 +107,7 @@ class BackupRulesTest {
         val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }.canonicalFile
         val container = File(module, "src/main/java/com/plainticker/mobile/AppContainer.kt").readText()
         assertTrue(
-            "AesGcmSessionCipher { AesGcmSessionCipher.androidKeystoreKey(SharedPrefsDevicePassStore.KEY_ALIAS) }" in container,
+            "AesGcmSessionCipher.androidKeystoreKey(SharedPrefsDevicePassStore.KEY_ALIAS) { deviceCodeKeyCreated.set(true) }" in container,
         )
         assertTrue(SharedPrefsDevicePassStore.KEY_ALIAS != com.plainticker.mobile.wallet.AesGcmSessionCipher.KEY_ALIAS)
         assertTrue(SharedPrefsDevicePassStore.KEY_CODE_SEALED in SharedPrefsDevicePassStore.ALL_KEYS)

@@ -316,7 +316,7 @@ class VoteScreenTest {
     @Test
     fun `the ballot row carries its own vote action, never only the header`() {
         val row = body(voteTabScreen, "private fun BallotRow(")
-        assertTrue("the vote action is drawn only when onVote is offered", "if (onVote != null) {" in row)
+        assertTrue("the vote action is drawn only when onVote is offered", "if (onVote != null && wonRound == null) {" in row)
         assertTrue("vote_action_row is the label, the same short one the list uses", "R.string.vote_action_row" in row)
         assertTrue("TextAction(" in row)
     }

@@ -296,4 +296,24 @@ class AccountSectionTest {
         assertFalse(ShippedCopy.strings.getValue("pro_entitlement_subscription").contains("subscription", ignoreCase = true))
         assertTrue("does not renew" in ShippedCopy.strings.getValue("you_plan_extend_subscription"))
     }
+
+    /**
+     * Security review M3: a code whose Keystore key is gone is offered one way out, explicit and
+     * warned. The first tap only asks again; nothing starts over without the second.
+     */
+    @Test
+    fun `a lost code offers to start with a new code, asked twice, and says what it costs`() {
+        val code = sectionScan.code
+        assertTrue("if (deviceCodeStatus == DeviceCodeStatus.LOST) {" in code)
+        assertTrue("the first tap only asks", "listOf(RowAction(startLabel, { asking = true }))" in code)
+        assertEquals("the new code is started from one place only", 1, code.split("onStartWithNewCode()").size - 1)
+        assertTrue("onStartWithNewCode = accountViewModel::startWithNewCode" in screenScan.code)
+        assertEquals(R.string.device_code_lost, deviceCodeNoticeRes(com.plainticker.mobile.data.auth.DeviceCodeStatus.LOST))
+        assertEquals(
+            "This phone lost the key that protected its code. A new code starts without the old code's Pro; " +
+                "Pro on your Google account comes back when you sign in.",
+            ShippedCopy.strings.getValue("device_code_lost"),
+        )
+        assertEquals("Start with a new code", ShippedCopy.strings.getValue("device_code_action_new"))
+    }
 }

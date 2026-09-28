@@ -72,6 +72,10 @@ internal fun AccountSection(
     colors: AmberColors,
     showMessage: Boolean = true,
     deviceCodeStatus: DeviceCodeStatus = DeviceCodeStatus.OK,
+    /** [DeviceCodeStatus.LOST]'s way out, asked for twice ([DeviceCodeLostRow]). */
+    onStartWithNewCode: () -> Unit = {},
+    /** The last start with a new code could not be saved. */
+    newCodeFailed: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(
@@ -80,13 +84,17 @@ internal fun AccountSection(
             colors = colors,
         )
         AmberTickerRowGroup(colors = colors) {
-            deviceCodeNoticeRes(deviceCodeStatus)?.let { notice ->
-                CabinetRow(
-                    colors = colors,
-                    value = stringResource(R.string.device_code_label),
-                    sub = stringResource(notice),
-                    subCaution = true,
-                )
+            if (deviceCodeStatus == DeviceCodeStatus.LOST) {
+                DeviceCodeLostRow(onStartWithNewCode = onStartWithNewCode, failed = newCodeFailed, colors = colors)
+            } else {
+                deviceCodeNoticeRes(deviceCodeStatus)?.let { notice ->
+                    CabinetRow(
+                        colors = colors,
+                        value = stringResource(R.string.device_code_label),
+                        sub = stringResource(notice),
+                        subCaution = true,
+                    )
+                }
             }
             GoogleRow(state = state, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors, showMessage = showMessage)
             (state as? AccountUiState.SignedIn)?.let { signedIn ->
@@ -94,6 +102,41 @@ internal fun AccountSection(
             }
         }
     }
+}
+
+/**
+ * This phone's code can never be read again (security review M3): the one row that says what
+ * that costs and offers the way out. Explicit and warned: the first "Start with a new code" only
+ * asks again, with what cannot be undone, and only the second one, or Cancel, answers. Nothing
+ * starts over without both taps.
+ */
+@Composable
+private fun DeviceCodeLostRow(onStartWithNewCode: () -> Unit, failed: Boolean, colors: AmberColors) {
+    var asking by rememberSaveable { mutableStateOf(false) }
+    val startLabel = stringResource(R.string.device_code_action_new)
+    CabinetRow(
+        colors = colors,
+        value = stringResource(R.string.device_code_label),
+        sub = stringResource(
+            when {
+                failed -> R.string.device_code_new_failed
+                asking -> R.string.device_code_lost_confirm
+                else -> R.string.device_code_lost
+            },
+        ),
+        subCaution = true,
+        actions = if (asking) {
+            listOf(
+                RowAction(startLabel, {
+                    asking = false
+                    onStartWithNewCode()
+                }),
+                RowAction(stringResource(R.string.you_action_cancel), { asking = false }),
+            )
+        } else {
+            listOf(RowAction(startLabel, { asking = true }))
+        },
+    )
 }
 
 @Composable

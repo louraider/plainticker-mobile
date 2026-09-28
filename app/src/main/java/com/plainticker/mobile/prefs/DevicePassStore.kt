@@ -81,6 +81,14 @@ import java.util.Base64
  *   [DeviceCodeUnreadableException] and You says so: a fresh code is never minted in its place,
  *   because the sealed one may open on the next launch, and a fresh code would orphan the pass
  *   bound to the old one. The sealed copy is never deleted for failing to open.
+ * - **A key that is gone for good** (security review M3): when the Keystore no longer holds the
+ *   key under [SharedPrefsDevicePassStore.KEY_ALIAS] (a cleared lock screen, a restore onto
+ *   another phone, a vendor Keystore wipe), the first read creates a new one, and the sealed copy
+ *   can then never open. That is told apart from a Keystore that fails for a moment: a sealed copy
+ *   that does not open under a key this process had to create is lost, recorded as such
+ *   ([SharedPrefsDevicePassStore.KEY_CODE_KEY_LOST]) so the next launch knows it too, and read as
+ *   [DeviceCodeLostException]. Nothing is replaced on its own even then: only the reader, told
+ *   what it costs, may start again with a new code ([DeviceCodeRekeyStore.startWithNewCode]).
  * - **Writing** (a first code, a pending code, a completed rekey): the code is sealed and opened
  *   again in memory before anything is written, and written sealed in the same single commit that
  *   removes any plain copy. When the Keystore cannot seal, it is written plain, removing any
@@ -122,7 +130,17 @@ interface DevicePassStore {
  * [DevicePassStore], "Sealed at rest"). An [IOException], so every call that sends the code treats
  * it as a call that could not be made; nothing mints a replacement.
  */
-class DeviceCodeUnreadableException : IOException("the device code is sealed and could not be opened")
+open class DeviceCodeUnreadableException(
+    message: String = "the device code is sealed and could not be opened",
+) : IOException(message)
+
+/**
+ * The sealed code can never be opened again: the Keystore key that sealed it is gone, and the
+ * key this phone holds now was created after it ([DevicePassStore], "A key that is gone for
+ * good"). Still a [DeviceCodeUnreadableException] to every call that sends the code; only You
+ * offers the way out, [DeviceCodeRekeyStore.startWithNewCode], and only when asked.
+ */
+class DeviceCodeLostException : DeviceCodeUnreadableException("the key that sealed the device code is gone")
 
 /**
  * The rekey half of [SharedPrefsDevicePassStore] (see [DevicePassStore], "Replacing a legacy
@@ -169,6 +187,21 @@ interface DeviceCodeRekeyStore {
 
     /** Replaces the note, or removes it when [note] is null. */
     fun setRekeyNote(note: String?)
+
+    /**
+     * True when the current code is sealed under a Keystore key that is gone for good
+     * ([DeviceCodeLostException]); false when it opens, or fails only for now.
+     */
+    fun codeLost(): Boolean = false
+
+    /**
+     * The reader's explicit choice on You, and only then: a code that is lost is replaced by a
+     * freshly minted 26-symbol one, in one commit that also clears the unreadable slot, any pending
+     * rekey code, the rekey note and the lost marker. Refuses (false, nothing written) unless
+     * [codeLost]. The old code's Pro does not come with it; Pro on a Google account comes back
+     * with the next sign-in.
+     */
+    fun startWithNewCode(): Boolean = false
 }
 
 class SharedPrefsDevicePassStore(
@@ -179,6 +212,12 @@ class SharedPrefsDevicePassStore(
      * the plain layout, where nothing is sealed and nothing is migrated.
      */
     private val cipher: AesGcmSessionCipher? = null,
+    /**
+     * True once this process had to create the Keystore key [cipher] seals under, because none was
+     * there: a sealed copy that then does not open was sealed under a key that is gone
+     * ([DeviceCodeLostException]). On the phone, set by [AesGcmSessionCipher.androidKeystoreKey].
+     */
+    private val keyCreatedThisProcess: () -> Boolean = { false },
 ) : DevicePassStore, DeviceCodeRekeyStore {
 
     /** What one slot (the current code, or the pending one) holds, read through the seal. */
@@ -189,7 +228,17 @@ class SharedPrefsDevicePassStore(
 
         /** A sealed copy that does not open, and no plain copy: never replaced, never deleted. */
         data object Unreadable : Slot
+
+        /** A sealed copy under a key that is gone for good: replaced only by [startWithNewCode]. */
+        data object Lost : Slot
     }
+
+    /**
+     * The key this process may have created is known to be this install's own: a value was sealed
+     * and opened with it ([seal]), or the reader started with a new code under it. A sealed copy
+     * that fails to open after that is a Keystore failing for now, not a lost key.
+     */
+    private var keyCreationSeen = false
 
     /** Slots whose migration this process already tried; a failed one is tried again next launch. */
     private val migrationTried = mutableSetOf<String>()
@@ -198,6 +247,7 @@ class SharedPrefsDevicePassStore(
     override fun code(): String = when (val slot = read(KEY_CODE, KEY_CODE_SEALED)) {
         is Slot.Value -> slot.code
         Slot.Unreadable -> throw DeviceCodeUnreadableException()
+        Slot.Lost -> throw DeviceCodeLostException()
         Slot.Empty -> generate().also { minted ->
             // Only a slot with no copy at all, sealed or plain, is ever given a fresh code.
             write(prefs.edit(), KEY_CODE, KEY_CODE_SEALED, minted).commit()
@@ -220,7 +270,7 @@ class SharedPrefsDevicePassStore(
             is Slot.Value -> if (isNewFormat(pending.code)) return pending.code
             // A replacement the server may already have heard of, that this phone cannot read
             // right now: nothing is sent, and no second replacement is minted over it.
-            Slot.Unreadable -> return null
+            Slot.Unreadable, Slot.Lost -> return null
             Slot.Empty -> Unit
         }
         val minted = generate()
@@ -248,6 +298,26 @@ class SharedPrefsDevicePassStore(
         prefs.edit().remove(KEY_PENDING_NEW_CODE).remove(KEY_PENDING_NEW_CODE_SEALED).commit()
     }
 
+    @Synchronized
+    override fun codeLost(): Boolean = read(KEY_CODE, KEY_CODE_SEALED) == Slot.Lost
+
+    @Synchronized
+    override fun startWithNewCode(): Boolean {
+        if (read(KEY_CODE, KEY_CODE_SEALED) != Slot.Lost) return false
+        val minted = generate()
+        // One commit: the new code (sealed under the key this phone holds now, or plain when the
+        // Keystore cannot seal), and every trace of the old one and of any rekey gone with it.
+        val edit = write(prefs.edit(), KEY_CODE, KEY_CODE_SEALED, minted)
+            .remove(KEY_PENDING_NEW_CODE)
+            .remove(KEY_PENDING_NEW_CODE_SEALED)
+            .remove(KEY_REKEY_NOTE)
+            .remove(KEY_CODE_KEY_LOST)
+        if (!edit.commit()) return false
+        keyCreationSeen = true
+        migrationTried.clear()
+        return true
+    }
+
     // ---- The seal -------------------------------------------------------------------------
 
     /**
@@ -267,13 +337,26 @@ class SharedPrefsDevicePassStore(
             }
             // The sealed copy does not open. The plain one, while it is still there, is the code;
             // the sealed copy is left in place, and replaced only by a verified seal of that code.
-            if (plain == null) return Slot.Unreadable
+            if (plain == null) return if (keyGone()) Slot.Lost else Slot.Unreadable
             migrate(plainKey, sealedKey, plain)
             return Slot.Value(plain)
         }
         if (plain == null) return Slot.Empty
         migrate(plainKey, sealedKey, plain)
         return Slot.Value(plain)
+    }
+
+    /**
+     * Whether the key a sealed copy that did not open was sealed under is gone for good: this
+     * process had to create the key (so the one before it is not in the Keystore any more), or an
+     * earlier launch found that and recorded it. The record is written the first time, so the
+     * launch after, whose key the Keystore now holds, still knows.
+     */
+    private fun keyGone(): Boolean {
+        if (prefs.getBoolean(KEY_CODE_KEY_LOST, false)) return true
+        if (keyCreationSeen || !keyCreatedThisProcess()) return false
+        prefs.edit().putBoolean(KEY_CODE_KEY_LOST, true).commit()
+        return true
     }
 
     /**
@@ -312,6 +395,9 @@ class SharedPrefsDevicePassStore(
         return try {
             val sealed = c.seal(value.toByteArray(Charsets.UTF_8))
             if (c.open(sealed).toString(Charsets.UTF_8) != value) return null
+            // This process sealed under the key it holds and opened it again: a key created for
+            // this write is this install's own, and a later failure to open is not a lost key.
+            if (!prefs.getBoolean(KEY_CODE_KEY_LOST, false)) keyCreationSeen = true
             // Remembered as opened: a Keystore that fails after this write (between a rekey's
             // begin and its completion) cannot make this process lose the code it just wrote.
             Base64.getEncoder().encodeToString(sealed).also { remember(it, value) }
@@ -378,6 +464,13 @@ class SharedPrefsDevicePassStore(
         /** What You says about the last rekey: [NOTE_SIGN_IN_AGAIN] or [NOTE_REPLACED]. */
         const val KEY_REKEY_NOTE = "device_pass_rekey_note"
 
+        /**
+         * Recorded once a sealed code was found under a Keystore key created after it: the code is
+         * lost ([DeviceCodeLostException]) on this launch and every later one, until the reader
+         * starts with a new code.
+         */
+        const val KEY_CODE_KEY_LOST = "device_pass_code_key_lost"
+
         /** The rekey landed on a signed-in phone; the new code is not bound to the account. */
         const val NOTE_SIGN_IN_AGAIN = "sign_in_again"
 
@@ -385,7 +478,14 @@ class SharedPrefsDevicePassStore(
         const val NOTE_REPLACED = "replaced"
 
         /** Every key this store writes: all of them live in the one preferences file backups exclude. */
-        val ALL_KEYS = setOf(KEY_CODE, KEY_PENDING_NEW_CODE, KEY_REKEY_NOTE, KEY_CODE_SEALED, KEY_PENDING_NEW_CODE_SEALED)
+        val ALL_KEYS = setOf(
+            KEY_CODE,
+            KEY_PENDING_NEW_CODE,
+            KEY_REKEY_NOTE,
+            KEY_CODE_SEALED,
+            KEY_PENDING_NEW_CODE_SEALED,
+            KEY_CODE_KEY_LOST,
+        )
 
         /** Length of every NEWLY minted code: 26 x log2(31) = 128.8 bits. */
         const val CODE_LENGTH = 26

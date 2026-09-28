@@ -392,6 +392,36 @@ class AccountViewModel(
         null
     }
 
+    private val _newCodeFailed = MutableStateFlow(false)
+
+    /** The last [startWithNewCode] could not save the new code; You says so on the same row. */
+    val newCodeFailed: StateFlow<Boolean> = _newCodeFailed.asStateFlow()
+
+    private var newCodeJob: Job? = null
+
+    /**
+     * The reader's explicit, twice-asked choice on You after [DeviceCodeStatus.LOST] (security
+     * review M3): a fresh device code replaces the one this phone can no longer read. Never called
+     * on its own. The rekeyer clears a signed-in account the new code is not bound to; every screen
+     * drawing Pro numbers reads them again under the new code.
+     */
+    fun startWithNewCode() {
+        val runner = rekeyer ?: return
+        if (newCodeJob?.isActive == true) return
+        newCodeJob = viewModelScope.launch {
+            val done = try {
+                runner.startWithNewCode()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugLog.raw("device code: start over failed ${e::class.simpleName}")
+                false
+            }
+            _newCodeFailed.value = !done
+            if (done) entitlement?.changed()
+        }
+    }
+
     /** Clears the message after the reader has seen it act; a new attempt clears it too. */
     fun dismissMessage() {
         _state.update { if (it is AccountUiState.SignedOut) AccountUiState.SignedOut() else it }
