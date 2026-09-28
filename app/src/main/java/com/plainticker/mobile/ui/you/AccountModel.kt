@@ -59,6 +59,7 @@ fun deviceCodeNoticeRes(status: DeviceCodeStatus): Int? = when (status) {
     DeviceCodeStatus.REPLACED -> R.string.device_code_replaced
     DeviceCodeStatus.RETIRED -> R.string.device_code_retired
     DeviceCodeStatus.UNREADABLE -> R.string.device_code_unreadable
+    DeviceCodeStatus.LOST -> R.string.device_code_lost
 }
 
 /** Who is signed in: the email, else the name, else a plain "Google account". */

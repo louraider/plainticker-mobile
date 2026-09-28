@@ -88,12 +88,22 @@ class CachedPriceRepository(
     private val ttlMillis: Long = TTL_MS,
 ) : PriceRepository {
 
-    /** [at] is when the answer arrived (the TTL runs from it); [asked] when its request left. */
-    private class Cached(val entry: PriceEntry?, val at: Long, val asked: Long)
+    /** [at] is when the answer arrived (the TTL runs from it). */
+    private class Cached(val entry: PriceEntry?, val at: Long)
 
     private val mutex = Mutex()
     private val cache = HashMap<String, Cached>()
     private val _latest = MutableStateFlow<Map<String, PriceEntry>>(emptyMap())
+
+    /**
+     * Request order, independent of the cache (security review L6). Each fetch takes the next
+     * number when it leaves; [landed] holds, per mint, the number of the request whose answer is
+     * the one on screen. [forget] empties the cache but never this, so an older request still in
+     * flight when a pull to refresh cleared the cache cannot land last and overwrite the newer
+     * quote. Both, and [_latest], change only under [mutex].
+     */
+    private var sequence = 0L
+    private val landed = HashMap<String, Long>()
 
     override val latest: StateFlow<Map<String, PriceEntry>> = _latest.asStateFlow()
 
@@ -112,7 +122,9 @@ class CachedPriceRepository(
         if (window.isEmpty()) return PriceFetch.EMPTY
 
         val asked = clock.nowMillis()
-        val missing = mutex.withLock { window.filter { expiredAt(asked, it) } }
+        val (missing, request) = mutex.withLock {
+            window.filter { expiredAt(asked, it) } to ++sequence
+        }
 
         // Outside the lock: this is the paced, retried, multi-second part, and no other screen
         // may be made to wait behind it.
@@ -125,19 +137,22 @@ class CachedPriceRepository(
             // left after it and landed before it is the newer quote, and the older answer landing
             // last used to overwrite it in the cache and in [latest], so every screen but the one
             // that pulled drew the quote from one refresh before.
-            val newest = mutex.withLock {
-                missing.filter { mint ->
-                    val held = cache[mint]
-                    (mint !in fetched.unfetched && (held == null || held.asked <= asked)).also { write ->
-                        if (write) cache[mint] = Cached(fetched.priced[mint], at, asked)
+            mutex.withLock {
+                val newest = missing.filter { mint ->
+                    (mint !in fetched.unfetched && (landed[mint] ?: 0L) < request).also { write ->
+                        if (write) {
+                            cache[mint] = Cached(fetched.priced[mint], at)
+                            landed[mint] = request
+                        }
                     }
                 }.toSet()
-            }
-            // Every screen observes this: what one screen fetched, all of them draw.
-            val priced = fetched.priced.filterKeys { it in newest }
-            val answeredWithoutPrice = newest - priced.keys
-            if (priced.isNotEmpty() || answeredWithoutPrice.isNotEmpty()) {
-                _latest.update { current -> (current - answeredWithoutPrice) + priced }
+                // Every screen observes this: what one screen fetched, all of them draw. Under the
+                // same lock as the choice above, so two answers cannot publish out of order.
+                val priced = fetched.priced.filterKeys { it in newest }
+                val answeredWithoutPrice = newest - priced.keys
+                if (priced.isNotEmpty() || answeredWithoutPrice.isNotEmpty()) {
+                    _latest.update { current -> (current - answeredWithoutPrice) + priced }
+                }
             }
         }
 

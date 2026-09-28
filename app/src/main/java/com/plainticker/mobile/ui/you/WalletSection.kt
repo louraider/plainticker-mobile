@@ -54,11 +54,13 @@ internal fun WalletSection(
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     colors: AmberColors,
+    /** This row's Connect found no wallet app on the phone: the shared sentence replaces the note. */
+    noWallet: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(title = stringResource(R.string.you_heading_wallet), colors = colors)
         AmberTickerRowGroup(colors = colors) {
-            WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)
+            WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors, noWallet = noWallet)
             // "Stays connected between launches... Disconnect forgets it" describes a session this
             // phone holds, so it is offered only while one is (device QA of 1.3.17: it sat under
             // "Not connected").
@@ -68,15 +70,25 @@ internal fun WalletSection(
 }
 
 @Composable
-private fun WalletRow(wallet: WalletAccount?, onConnect: () -> Unit, onDisconnect: () -> Unit, colors: AmberColors) {
+private fun WalletRow(
+    wallet: WalletAccount?,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    colors: AmberColors,
+    noWallet: Boolean = false,
+) {
     val label = stringResource(R.string.you_wallet_method)
     val note = stringResource(R.string.you_wallet_note_short)
     if (wallet == null) {
+        // Fresh-device QA of 1.3.23: Connect on a phone with no wallet app did nothing at all. It
+        // now says so here, in the sentence every wallet flow shares, and Connect stays for after
+        // one is installed.
         CabinetRow(
             colors = colors,
             label = label,
             value = stringResource(R.string.you_wallet_none),
-            sub = note,
+            sub = if (noWallet) stringResource(R.string.no_wallet_app) else note,
+            subCaution = noWallet,
             actions = listOf(RowAction(stringResource(R.string.you_action_connect), onConnect)),
         )
         return
@@ -105,6 +117,20 @@ private fun WalletRow(wallet: WalletAccount?, onConnect: () -> Unit, onDisconnec
             }),
             RowAction(stringResource(R.string.action_disconnect), onDisconnect),
         ),
+    )
+}
+
+/**
+ * The one no-wallet sentence ([R.string.no_wallet_app]), under the hero's Connect wallet when that
+ * is the action that found no wallet app. The same words the swap, vote and pay sheets say.
+ */
+@Composable
+internal fun NoWalletLine(colors: AmberColors, modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.no_wallet_app),
+        style = AmberType.context,
+        color = colors.stateCaution,
+        modifier = modifier.fillMaxWidth(),
     )
 }
 

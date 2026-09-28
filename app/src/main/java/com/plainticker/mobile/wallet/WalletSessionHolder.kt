@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The app-scoped [WalletSession] ViewModels depend on.
@@ -36,6 +37,9 @@ class WalletSessionHolder(
     /** One round trip, or one restore, at a time, across every session this holder binds. */
     private val mutex = Mutex()
 
+    /** Counts requests across sessions, so an abandoned one knows whether a newer one started. */
+    private val calls = AtomicLong()
+
     @Volatile
     private var current: WalletSession? = null
 
@@ -52,7 +56,7 @@ class WalletSessionHolder(
         inFront: StateFlow<Boolean> = MutableStateFlow(true),
         dismissGraceMillis: Long = MwaWalletSession.DISMISS_GRACE_MS,
     ): MwaWalletSession =
-        MwaWalletSession(transport, tokens, accounts, store, mutex, inFront, dismissGraceMillis).also { current = it }
+        MwaWalletSession(transport, tokens, accounts, store, mutex, inFront, dismissGraceMillis, calls).also { current = it }
 
     fun unbind(session: WalletSession) {
         if (current === session) current = null

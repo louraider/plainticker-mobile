@@ -134,7 +134,7 @@ class AccountSectionTest {
         assertFalse("the wallet row came back under Sign-in methods", "private fun WalletRow(" in sectionScan.code || " WalletRow(wallet" in sectionScan.code)
         assertFalse("R.string.you_wallet_method" in sectionScan.code)
         assertTrue("R.string.you_heading_wallet" in walletScan.code)
-        assertTrue("WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)" in walletScan.code)
+        assertTrue("WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors, noWallet = noWallet)" in walletScan.code)
         val screen = screenScan.code
         val body = screen.substring(screen.indexOf("internal fun YouContent("), screen.indexOf("private fun amberColors("))
         val account = body.indexOf("AccountSection(")
@@ -263,8 +263,11 @@ class AccountSectionTest {
         assertTrue("sub = if (keepNote) stringResource(R.string.promo_signin_first_hint) else null" in screen)
         assertTrue("if (signInHint) {" in screen)
         assertTrue("sub = if (keepNote) stringResource(R.string.promo_success_saved_to_phone) else null" in screen)
-        assertEquals("Sign in first to keep this Pro if you reinstall.", ShippedCopy.strings.getValue("promo_signin_first_hint"))
-        assertEquals("Saved to this phone.", ShippedCopy.strings.getValue("promo_success_saved_to_phone"))
+        assertEquals("Signing in with Google keeps this Pro if you reinstall.", ShippedCopy.strings.getValue("promo_signin_first_hint"))
+        assertEquals(
+            "Saved to this phone. Sign in with Google to keep it if you reinstall.",
+            ShippedCopy.strings.getValue("promo_success_saved_to_phone"),
+        )
         assertFalse(ShippedCopy.strings.containsKey("promo_success_keep_note"))
     }
 
@@ -292,5 +295,25 @@ class AccountSectionTest {
         assertFalse(source.contains("subscription", ignoreCase = true))
         assertFalse(ShippedCopy.strings.getValue("pro_entitlement_subscription").contains("subscription", ignoreCase = true))
         assertTrue("does not renew" in ShippedCopy.strings.getValue("you_plan_extend_subscription"))
+    }
+
+    /**
+     * Security review M3: a code whose Keystore key is gone is offered one way out, explicit and
+     * warned. The first tap only asks again; nothing starts over without the second.
+     */
+    @Test
+    fun `a lost code offers to start with a new code, asked twice, and says what it costs`() {
+        val code = sectionScan.code
+        assertTrue("if (deviceCodeStatus == DeviceCodeStatus.LOST) {" in code)
+        assertTrue("the first tap only asks", "listOf(RowAction(startLabel, { asking = true }))" in code)
+        assertEquals("the new code is started from one place only", 1, code.split("onStartWithNewCode()").size - 1)
+        assertTrue("onStartWithNewCode = accountViewModel::startWithNewCode" in screenScan.code)
+        assertEquals(R.string.device_code_lost, deviceCodeNoticeRes(com.plainticker.mobile.data.auth.DeviceCodeStatus.LOST))
+        assertEquals(
+            "This phone lost the key that protected its code. A new code starts without the old code's Pro; " +
+                "Pro on your Google account comes back when you sign in.",
+            ShippedCopy.strings.getValue("device_code_lost"),
+        )
+        assertEquals("Start with a new code", ShippedCopy.strings.getValue("device_code_action_new"))
     }
 }

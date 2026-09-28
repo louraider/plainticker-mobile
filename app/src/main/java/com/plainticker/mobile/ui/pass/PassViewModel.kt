@@ -20,6 +20,7 @@ import com.plainticker.mobile.data.receipts.PassReceipt
 import com.plainticker.mobile.data.receipts.PassReceiptStore
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.prefs.DevicePassStore
+import com.plainticker.mobile.repo.EntitlementChanges
 import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
@@ -128,6 +129,12 @@ class PassViewModel(
      * `rekey_required` (the pack's shared server contract, item 2). Null reads the code as stored.
      */
     private val rekeyer: DeviceRekeyer? = null,
+    /**
+     * Told of every change this class makes (a promo redeemed, a pass confirmed) and of every
+     * entitlement read, so Stocks, Today and Detail re-read their Pro numbers; and listened to, so
+     * a sign-in or sign-out on You re-reads the plan here too. Null tells nobody.
+     */
+    private val entitlement: EntitlementChanges? = null,
 ) : ViewModel() {
 
     private val _pro = MutableStateFlow(ProUiState(pendingSignature = pendingReceipt()?.signature))
@@ -171,6 +178,9 @@ class PassViewModel(
                 if (account != null) loadStake(account.address)
             }
         }
+        entitlement?.let { changes ->
+            viewModelScope.launch { changes.changes.collect { refreshEntitlement() } }
+        }
     }
 
     /** The one pending receipt this device holds, or null. At most one exists by construction. */
@@ -211,6 +221,7 @@ class PassViewModel(
     }
 
     private fun applyEntitlement(response: EntitlementResponse) {
+        entitlement?.observed(response.pro)
         _pro.update {
             it.copy(
                 entitlementLoading = false,
@@ -232,10 +243,12 @@ class PassViewModel(
     }
 
     /**
-     * The field's text changed. Normalized here, the same way the server normalizes before it
-     * checks a code ([PromoApi.normalize]), so what the field shows is exactly what [applyPromo]
-     * will send. Also the way a [PromoState.Failed] resumes editing: the reader touching the
-     * field again drops the error and keeps whatever they had typed, now normalized.
+     * The field's text changed. Kept exactly as typed or pasted (fresh-device QA of 1.3.23: this
+     * used to normalize on every change, so the field's text was rewritten under the keyboard,
+     * dashes removed and letters raised, and a fast `PT-AAAA-BBBB-CCCC` came out 12 to 14
+     * characters long). [applyPromo] normalizes once, for the request ([PromoApi.normalize]), so
+     * any mix of dashes, spaces and case is accepted. Also the way a [PromoState.Failed] resumes
+     * editing: the reader touching the field again drops the error and keeps what they typed.
      */
     fun promoInputChanged(raw: String) {
         val current = when (val s = _promo.value) {
@@ -243,9 +256,8 @@ class PassViewModel(
             is PromoState.Failed -> s.input
             else -> return
         }
-        val normalized = PromoApi.normalize(raw)
-        if (normalized == current && _promo.value is PromoState.Editing) return
-        _promo.value = PromoState.Editing(normalized)
+        if (raw == current && _promo.value is PromoState.Editing) return
+        _promo.value = PromoState.Editing(raw)
     }
 
     /** Collapses the field from any state; a redeem in flight is left to finish on its own. */
@@ -260,11 +272,12 @@ class PassViewModel(
      * reads as the server's own `invalid_code`, never a network call.
      */
     fun applyPromo() {
-        val input = when (val s = _promo.value) {
+        val typed = when (val s = _promo.value) {
             is PromoState.Editing -> s.input
             is PromoState.Failed -> s.input
             else -> return
         }
+        val input = PromoApi.normalize(typed)
         if (input.isBlank()) {
             _promo.value = PromoState.Failed(input, PromoRefusal.INVALID_CODE)
             return
@@ -277,17 +290,18 @@ class PassViewModel(
                     ?.withCode({ it is PromoError.RekeyRequired }) { code -> promoApi.redeem(input, code) }
                     ?: promoApi.redeem(input, devicePassStore.code())
                 _promo.value = PromoState.Success(response.untilEpochMillis())
-                // The hero and the Pro locks read ProUiState, not PromoState, so the fresh read
-                // this device just earned reaches them the one way anything else here does.
-                refreshEntitlement()
+                // Every screen drawing Pro numbers reads them again (fresh-device QA of 1.3.23:
+                // Stocks kept its "Pro" badges until a restart). The change also re-reads the plan
+                // here: the hero and the Pro locks read ProUiState, not PromoState.
+                entitlement?.changed(pro = true) ?: refreshEntitlement()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: PromoError) {
                 debugLog.raw("promo/redeem refused: status=${e.status} code=${e.code} ${e.detail ?: e.message}")
-                _promo.value = PromoState.Failed(input, promoRefusalOf(e))
+                _promo.value = PromoState.Failed(typed, promoRefusalOf(e))
             } catch (e: Exception) {
                 debugLog.raw("promo/redeem threw ${e::class.simpleName}: ${e.message}")
-                _promo.value = PromoState.Failed(input, PromoRefusal.UNAVAILABLE)
+                _promo.value = PromoState.Failed(typed, PromoRefusal.UNAVAILABLE)
             }
         }
     }
@@ -489,6 +503,7 @@ class PassViewModel(
         }
         if (entitlement != null) {
             withContext(ioDispatcher) { passReceiptStore.markConfirmed(receipt.signature) }
+            this.entitlement?.changed(pro = entitlement.pro)
             applyEntitlement(entitlement)
             _pro.update { it.copy(pendingSignature = pendingReceipt()?.signature) }
         }

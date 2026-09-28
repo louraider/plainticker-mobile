@@ -5,6 +5,7 @@ import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
 import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.DeviceCodeRekeyStore
+import com.plainticker.mobile.prefs.DeviceCodeLostException
 import com.plainticker.mobile.prefs.DeviceCodeUnreadableException
 import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import java.io.IOException
@@ -49,6 +50,14 @@ enum class DeviceCodeStatus {
      * open on the next launch. You says so plainly.
      */
     UNREADABLE,
+
+    /**
+     * The Keystore key that sealed this phone's code is gone for good (security review M3;
+     * [com.plainticker.mobile.prefs.DeviceCodeLostException]): the code can never be read again,
+     * and every call that needs it fails. You says so and offers, warned, to start with a new code
+     * ([DeviceRekeyer.startWithNewCode]); nothing starts over on its own.
+     */
+    LOST,
 }
 
 /** How one [DeviceRekeyer.rekeyIfNeeded] ended. */
@@ -136,6 +145,11 @@ class DeviceRekeyer(
         withContext(io) {
             try {
                 attempt(force)
+            } catch (e: DeviceCodeLostException) {
+                // Its key is gone for good: no retry can open it. You offers the way out.
+                note("rekey: device code key lost, nothing sent")
+                _status.value = DeviceCodeStatus.LOST
+                settled(RekeyOutcome.NOT_NEEDED)
             } catch (e: DeviceCodeUnreadableException) {
                 // The code is sealed and does not open: nothing is sent, nothing is minted, and
                 // You says so. The next attempt reads it afresh.
@@ -283,6 +297,24 @@ class DeviceRekeyer(
             if (outcome != RekeyOutcome.RETRY_LATER) return
             delay(wait)
             outcome = rekeyIfNeeded(force = true)
+        }
+    }
+
+    /**
+     * The reader chose, on You, to start with a new code after [DeviceCodeStatus.LOST] (security
+     * review M3). Only then: the store refuses unless the code is lost for good. The fresh code is
+     * bound to no account, so a signed-in account shown here is cleared, the way a rekey clears it;
+     * Pro on that Google account comes back with the next sign-in. True when the new code is on
+     * disk and current.
+     */
+    suspend fun startWithNewCode(): Boolean = mutex.withLock {
+        withContext(io) {
+            if (!store.startWithNewCode()) return@withContext false
+            note("device code: started over with a new code")
+            if (hasAccount()) clearAccount()
+            settled(RekeyOutcome.NOT_NEEDED)
+            _status.value = DeviceCodeStatus.OK
+            true
         }
     }
 

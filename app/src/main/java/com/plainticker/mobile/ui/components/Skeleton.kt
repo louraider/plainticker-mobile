@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -108,6 +109,18 @@ fun SkeletonChip(
                 .border(1.dp, colors.border, RoundedCornerShape(8.dp)),
         )
     }
+}
+
+/**
+ * A chip's slot held with nothing drawn in it: the same 48dp touch row and [width] the chip will
+ * take, so it lands without moving anything, and no shape a reader could take for a chip.
+ * Fresh-device QA of 1.3.23 (10b): beside real chips, even [SkeletonChip]'s outline read as an
+ * empty "Deep pool" chip for the seconds the price run takes. The whole-row cold state keeps its
+ * outlines, where every chip is a placeholder and none could be mistaken for a live one.
+ */
+@Composable
+fun ReservedChipSlot(width: Dp, modifier: Modifier = Modifier) {
+    Spacer(modifier.height(48.dp).width(width))
 }
 
 /** [count] placeholder list rows at 64dp with dividers; announced once as "Loading". */

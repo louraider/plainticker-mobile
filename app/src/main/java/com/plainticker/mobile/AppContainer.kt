@@ -45,6 +45,7 @@ import com.plainticker.mobile.repo.CachedCatalogRepository
 import com.plainticker.mobile.repo.CachedNextUpRepository
 import com.plainticker.mobile.repo.CachedPriceRepository
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.EntitlementChanges
 import com.plainticker.mobile.repo.ForwarderMintRepository
 import com.plainticker.mobile.repo.ForwarderRpcRepository
 import com.plainticker.mobile.repo.MintRepository
@@ -134,6 +135,9 @@ interface AppContainer {
      */
     val secondSource: SecondSource
     val snapshotRepository: SnapshotRepository
+
+    /** A promo, a pass, a sign-in or sign-out may have changed Pro: every screen re-reads its numbers. */
+    val entitlementChanges: EntitlementChanges
 
     val walletAdapter: MobileWalletAdapter
     val walletSession: WalletSessionHolder
@@ -241,6 +245,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
         BundledSnapshotRepository(AssetSource { path -> runCatching { app.assets.open(path) }.getOrNull() })
     }
 
+    override val entitlementChanges: EntitlementChanges = EntitlementChanges()
+
     override val walletAdapter: MobileWalletAdapter by lazy { MwaWalletSession.defaultAdapter() }
     // files/wallet_session.bin, sealed with a Keystore AES-GCM key and excluded from backup and
     // device transfer by name (res/xml): the wallet-issued auth token and the account, never a key.
@@ -280,8 +286,15 @@ class DefaultAppContainer(context: Context) : AppContainer {
     // backup rules exclude whole.
     // Both codes are sealed at rest with a Keystore AES-GCM key of their own (security review,
     // 2026-09-27; DevicePassStore, "Sealed at rest"), the same cipher the wallet session uses.
-    private val deviceCodeCipher = AesGcmSessionCipher { AesGcmSessionCipher.androidKeystoreKey(SharedPrefsDevicePassStore.KEY_ALIAS) }
-    private val sharedDevicePassStore: SharedPrefsDevicePassStore by lazy { SharedPrefsDevicePassStore(prefs, deviceCodeCipher) }
+    // A key the Keystore had to create is how a sealed code learns its own key is gone (security
+    // review M3): the store then offers, on You, to start with a new code, and never does it alone.
+    private val deviceCodeKeyCreated = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val deviceCodeCipher = AesGcmSessionCipher {
+        AesGcmSessionCipher.androidKeystoreKey(SharedPrefsDevicePassStore.KEY_ALIAS) { deviceCodeKeyCreated.set(true) }
+    }
+    private val sharedDevicePassStore: SharedPrefsDevicePassStore by lazy {
+        SharedPrefsDevicePassStore(prefs, deviceCodeCipher) { deviceCodeKeyCreated.get() }
+    }
     override val devicePassStore: DevicePassStore get() = sharedDevicePassStore
 
     override val deviceRekeyer: DeviceRekeyer by lazy {

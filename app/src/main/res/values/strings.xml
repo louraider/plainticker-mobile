@@ -369,7 +369,8 @@
     <string name="swap_sol_short">Short %1$s SOL, this wallet has %2$s</string>
     <string name="swap_back_to_amount">Back to the amount</string>
     <string name="swap_requote_approval">The quote went. Approving again lands a fresh one.</string>
-    <string name="swap_failed_no_wallet">No wallet on this device answers the app</string>
+    <!-- The one no-wallet sentence (fresh-device QA of 1.3.23): swap, vote, pay, Portfolio and You all say it. -->
+    <string name="no_wallet_app">No Solana wallet app on this phone. PlainTicker is built for the Solana Seeker, where Seed Vault Wallet signs. On another Android phone, install a wallet that supports Mobile Wallet Adapter, such as Solflare or Phantom, then try again.</string>
     <string name="swap_failed_chain_unread">This wallet could not be read, so nothing was quoted</string>
     <string name="swap_failed_quote_unavailable">No quote came back. Nothing was sent.</string>
     <string name="swap_failed_quote_refused">This pair cannot be quoted at this size right now</string>
@@ -506,6 +507,8 @@
     <!-- In place of the row's Vote once this wallet has voted for the token this round (device QA
          of 1.3.16): a quiet state word, not an action. -->
     <string name="vote_voted_row">Voted</string>
+    <!-- Where Vote would sit on the last round's winner, still on the ballot while its analysis is written. -->
+    <string name="vote_won_row">Won round %1$s, analysis coming</string>
     <string name="vote_title">Vote to cover %1$s</string>
     <string name="vote_lede">This asks for %1$s to be analyzed next. The vote is a transaction carrying a memo, so the wallet that signs it is the voter. It weighs the stake the server reads when it counts.</string>
     <string name="vote_gameable">Today the largest stake decides: one wallet staking more than the rest outweighs them all. The planned next change is one Seeker, one voice, checked through the Seeker Genesis Token.</string>
@@ -528,7 +531,6 @@
     <string name="vote_phase_signing">Waiting for the wallet to sign the vote and send it.</string>
 
     <!-- Why a vote did not land. The server's own error sentence never reaches a screen. -->
-    <string name="vote_no_wallet">No wallet on this device answers the adapter, so there is nothing to vote with.</string>
     <string name="vote_not_connected">No wallet was connected, so no stake was read and no vote was built.</string>
     <string name="vote_no_stake">This wallet has no stake in the SKR staking program. The vote is weighted by staked SKR, so it carries none.</string>
     <string name="vote_stake_unread">The stake of this wallet did not read as a figure this app can stand behind, so no figure is shown and no vote was built.</string>
@@ -635,7 +637,6 @@
     <string name="pass_phase_building">Asking the server to build the payment transfer.</string>
     <string name="pass_phase_signing">Waiting for the wallet to sign the payment and send it.</string>
     <string name="pass_phase_confirming">Asking the server to confirm the signature.</string>
-    <string name="pass_no_wallet">No wallet on this device answers the adapter, so there is nothing to pay with.</string>
     <string name="pass_not_connected">No wallet was connected, so nothing was signed and nothing was sent.</string>
     <string name="pass_not_open">Paying for Pro is not open yet. The server has nothing to build this payment with, so nothing was signed and nothing was sent.</string>
     <string name="pass_rate_limited">The server is taking payments more slowly than this. Nothing was signed. Try again shortly.</string>
@@ -849,8 +850,8 @@
     <!-- No Google account signed in (device QA of 1.3.17). The server ties a code to an account
          only at the moment it is redeemed, so signing in afterwards does not carry the grant: the
          hint comes before redemption, and after it the note says only where the Pro lives. -->
-    <string name="promo_signin_first_hint">Sign in first to keep this Pro if you reinstall.</string>
-    <string name="promo_success_saved_to_phone">Saved to this phone.</string>
+    <string name="promo_signin_first_hint">Signing in with Google keeps this Pro if you reinstall.</string>
+    <string name="promo_success_saved_to_phone">Saved to this phone. Sign in with Google to keep it if you reinstall.</string>
 
     <string name="you_heading_methods">Sign-in methods</string>
     <string name="you_method_google">Google</string>
@@ -963,6 +964,10 @@
     <string name="device_code_sign_in_again">This phone got a new, stronger code. Sign in with Google again to reconnect your account.</string>
     <string name="device_code_replaced">This phone\'s old code could not be moved. It now has a new code. If you paid for Pro on this phone, write to hi@plainticker.com.</string>
     <string name="device_code_unreadable">This phone could not open its saved code just now, so nothing was replaced. Close and reopen the app to try again. If this keeps happening, write to hi@plainticker.com.</string>
+    <string name="device_code_lost">This phone lost the key that protected its code. A new code starts without the old code\'s Pro; Pro on your Google account comes back when you sign in.</string>
+    <string name="device_code_action_new">Start with a new code</string>
+    <string name="device_code_lost_confirm">This cannot be undone. The old code stays unreadable on this phone either way.</string>
+    <string name="device_code_new_failed">The new code could not be saved on this phone. Try again.</string>
     <string name="device_code_retired">PlainTicker no longer accepts this phone\'s code, so it is signed out here. Write to hi@plainticker.com and we will sort it out.</string>
 
     <!-- Unlinking a wallet (GET /api/v1/account, POST /api/v1/account/wallets/unlink), built

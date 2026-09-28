@@ -120,4 +120,33 @@ class PassSheetModelTest {
         assertEquals(PassActionKind.Retry, content.primary?.kind)
         assertEquals("Connect again", render(content.primary?.label))
     }
+
+    /**
+     * Fresh-device QA of 1.3.23 (17, 30, 64): three flows said three different dead ends for one
+     * fact. One actionable sentence now, and the pay sheet also offers the one way to Pro that
+     * needs no wallet.
+     */
+    @Test
+    fun `a phone with no wallet app hears the one shared sentence, and the pay sheet offers a code`() {
+        val content = requireNotNull(PassState.Refused(PassRefusal.NO_WALLET).sheet())
+        assertEquals(
+            "No Solana wallet app on this phone. PlainTicker is built for the Solana Seeker, where Seed Vault Wallet " +
+                "signs. On another Android phone, install a wallet that supports Mobile Wallet Adapter, such as " +
+                "Solflare or Phantom, then try again.",
+            render(content.notice),
+        )
+        assertEquals(PassActionKind.HaveCode, content.primary?.kind)
+        assertEquals("Have a code?", render(content.primary?.label))
+        assertEquals(PassActionKind.Close, content.secondary?.kind)
+        assertEquals(
+            "one sentence for every wallet flow",
+            setOf(com.plainticker.mobile.R.string.no_wallet_app),
+            setOf(
+                PassRefusal.NO_WALLET.text,
+                com.plainticker.mobile.ui.vote.VoteRefusal.NO_WALLET.text,
+                com.plainticker.mobile.ui.swap.SwapFailure.NO_WALLET.text,
+                com.plainticker.mobile.ui.portfolio.WalletNote.NONE_ON_DEVICE.text,
+            ),
+        )
+    }
 }

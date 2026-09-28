@@ -21,6 +21,7 @@ import com.plainticker.mobile.data.auth.GoogleAuthResponse
 import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.SignedInAccount
+import com.plainticker.mobile.repo.EntitlementChanges
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -220,6 +221,12 @@ class AccountViewModel(
     private val rekeyer: DeviceRekeyer? = null,
     /** The process-wide sign-out, whose queued retry outlives this screen; null builds a local one. */
     signOutRunner: AccountSignOut? = null,
+    /**
+     * Told of a finished sign-in and a finished sign-out: either can change what this device is
+     * entitled to (Pro on the Google account), so every screen drawing Pro numbers reads them
+     * again. Null tells nobody.
+     */
+    private val entitlement: EntitlementChanges? = null,
 ) : ViewModel() {
 
     // The local fallback keeps its queue in memory and reads the code where this ViewModel always
@@ -310,6 +317,7 @@ class AccountViewModel(
                 is Outcome.Done -> {
                     _state.value = AccountUiState.SignedIn(outcome.account)
                     signedInEvents.trySend(Unit)
+                    entitlement?.changed()
                 }
                 is Outcome.Failed -> _state.value = AccountUiState.SignedOut(outcome.message)
             }
@@ -384,6 +392,36 @@ class AccountViewModel(
         null
     }
 
+    private val _newCodeFailed = MutableStateFlow(false)
+
+    /** The last [startWithNewCode] could not save the new code; You says so on the same row. */
+    val newCodeFailed: StateFlow<Boolean> = _newCodeFailed.asStateFlow()
+
+    private var newCodeJob: Job? = null
+
+    /**
+     * The reader's explicit, twice-asked choice on You after [DeviceCodeStatus.LOST] (security
+     * review M3): a fresh device code replaces the one this phone can no longer read. Never called
+     * on its own. The rekeyer clears a signed-in account the new code is not bound to; every screen
+     * drawing Pro numbers reads them again under the new code.
+     */
+    fun startWithNewCode() {
+        val runner = rekeyer ?: return
+        if (newCodeJob?.isActive == true) return
+        newCodeJob = viewModelScope.launch {
+            val done = try {
+                runner.startWithNewCode()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugLog.raw("device code: start over failed ${e::class.simpleName}")
+                false
+            }
+            _newCodeFailed.value = !done
+            if (done) entitlement?.changed()
+        }
+    }
+
     /** Clears the message after the reader has seen it act; a new attempt clears it too. */
     fun dismissMessage() {
         _state.update { if (it is AccountUiState.SignedOut) AccountUiState.SignedOut() else it }
@@ -416,6 +454,7 @@ class AccountViewModel(
             _state.value = AccountUiState.SignedOut(
                 if (result == SignOutResult.QUEUED) AccountMessage.SIGN_OUT_UNCONFIRMED else null,
             )
+            entitlement?.changed()
         }
     }
 

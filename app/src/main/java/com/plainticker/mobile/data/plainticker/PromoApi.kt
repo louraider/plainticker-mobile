@@ -70,7 +70,17 @@ class PromoApi(
          * checks a code, so `pt-xxxx xxxx-xxxx`, `PT-XXXX-XXXX-XXXX` and `PTXXXXXXXXXXXX` all reach
          * `redeem` as the identical string, and the field can show the reader whichever shape they
          * pasted without this app silently redeeming a differently-cased duplicate.
+         *
+         * Applied once, to what is sent, never to the field as it is typed (fresh-device QA of
+         * 1.3.23: rewriting the field on every keystroke raced the keyboard and dropped characters
+         * from a fast `PT-AAAA-BBBB-CCCC`). Tolerant of what a paste brings along: any whitespace,
+         * a line break, a no-break space, and the typographic dashes a chat or a note turns a
+         * hyphen into.
          */
-        fun normalize(raw: String): String = raw.uppercase().filterNot { it == ' ' || it == '-' }
+        fun normalize(raw: String): String =
+            raw.uppercase().filterNot { it.isWhitespace() || it in DASHES }
+
+        /** The hyphen, and every dash a paste can carry in its place. */
+        private const val DASHES = "-_\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D"
     }
 }

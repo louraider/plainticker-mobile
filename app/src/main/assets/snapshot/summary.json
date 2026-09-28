@@ -7,416 +7,312 @@
    "ticker": "NEM",
    "company": "Newmont Corp.",
    "sector": "Materials",
-   "composite": 82.37,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "BKNG",
    "company": "Booking Holdings Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 80.28,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "PGR",
    "company": "Progressive Corp.",
    "sector": "Financials",
-   "composite": 79.45,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "NVDA",
    "company": "NVIDIA Corporation",
    "sector": "Information Technology",
-   "composite": 77.28,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "DVN",
    "company": "Devon Energy Corp.",
    "sector": "Energy",
-   "composite": 76.45,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "APP",
    "company": "AppLovin Corporation",
    "sector": "Information Technology",
-   "composite": 75.03,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ABNB",
    "company": "Airbnb, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 71.81,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "EOG",
    "company": "EOG Resources, Inc.",
    "sector": "Energy",
-   "composite": 71.6,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "GILD",
    "company": "Gilead Sciences, Inc.",
    "sector": "Health Care",
-   "composite": 70.18,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ADBE",
    "company": "Adobe Inc.",
    "sector": "Information Technology",
-   "composite": 69.51,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "PM",
    "company": "Philip Morris International Inc.",
    "sector": "Consumer Staples",
-   "composite": 69.29,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "NVS",
    "company": "Novartis AG",
    "sector": "Health Care",
-   "composite": 68.8,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "GD",
    "company": "General Dynamics Corp.",
    "sector": "Industrials",
-   "composite": 68.44,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "FCX",
    "company": "Freeport-McMoRan Inc.",
    "sector": "Materials",
-   "composite": 67.7,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "PEG",
    "company": "Public Service Enterprise Group Inc.",
    "sector": "Utilities",
-   "composite": 67.16,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "MPC",
    "company": "Marathon Petroleum Corp.",
    "sector": "Energy",
-   "composite": 66.48,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "MO",
    "company": "Altria Group, Inc.",
    "sector": "Consumer Staples",
-   "composite": 66.16,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "META",
    "company": "Meta Platforms, Inc.",
    "sector": "Communication Services",
-   "composite": 66.05,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "SPG",
    "company": "Simon Property Group Inc.",
    "sector": "Real Estate",
-   "composite": 65.78,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "TJX",
    "company": "The TJX Companies, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 65.7,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "LMT",
    "company": "Lockheed Martin Corp.",
    "sector": "Industrials",
-   "composite": 65.2,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "MMM",
    "company": "3M Co.",
    "sector": "Industrials",
-   "composite": 65.17,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "ISRG",
    "company": "Intuitive Surgical, Inc.",
    "sector": "Health Care",
-   "composite": 65.01,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "MSFT",
    "company": "Microsoft Corporation",
    "sector": "Information Technology",
-   "composite": 64.87,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "YUM",
    "company": "Yum Brands Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 64.82,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "COP",
    "company": "ConocoPhillips",
    "sector": "Energy",
-   "composite": 64.8,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "TSM",
    "company": "Taiwan Semiconductor Manufacturing Company Limited",
    "sector": "Information Technology",
-   "composite": 64.71,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "UBER",
    "company": "Uber Technologies, Inc.",
    "sector": "Industrials",
-   "composite": 64.5,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "V",
    "company": "Visa Inc.",
    "sector": "Financials",
-   "composite": 64.45,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "LLY",
    "company": "Eli Lilly and Company",
    "sector": "Health Care",
-   "composite": 63.75,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "AVB",
    "company": "Avalonbay Communities Inc.",
    "sector": "Real Estate",
-   "composite": 63.53,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "PPG",
    "company": "PPG Industries Inc.",
    "sector": "Materials",
-   "composite": 63.5,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "GOOGL",
    "company": "Alphabet Inc.",
    "sector": "Communication Services",
-   "composite": 63.16,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "ROST",
    "company": "Ross Stores Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 62.71,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "INTU",
    "company": "Intuit Inc.",
    "sector": "Information Technology",
-   "composite": 62.35,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "NFLX",
    "company": "Netflix, Inc.",
    "sector": "Communication Services",
-   "composite": 62.23,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ES",
    "company": "Eversource Energy",
    "sector": "Utilities",
-   "composite": 61.88,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "CMCSA",
    "company": "Comcast Corporation",
    "sector": "Communication Services",
-   "composite": 61.72,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "ACN",
    "company": "Accenture plc",
    "sector": "Information Technology",
-   "composite": 61.68,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "USB",
    "company": "U.S. Bancorp",
    "sector": "Financials",
-   "composite": 61.09,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "BMY",
    "company": "Bristol-Myers Squibb Company",
    "sector": "Health Care",
-   "composite": 60.89,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ITW",
    "company": "Illinois Tool Works Inc.",
    "sector": "Industrials",
-   "composite": 60.79,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "VMC",
    "company": "Vulcan Materials Co.",
    "sector": "Materials",
-   "composite": 60.53,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ESS",
    "company": "Essex Property Trust Inc.",
    "sector": "Real Estate",
-   "composite": 60.35,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "MU",
    "company": "Micron Technology, Inc.",
    "sector": "Information Technology",
-   "composite": 60.14,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CHTR",
    "company": "Charter Communications, Inc.",
    "sector": "Communication Services",
-   "composite": 59.92,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "BABA",
    "company": "Alibaba Group Holding Limited",
    "sector": "Consumer Discretionary",
-   "composite": 59.75,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "HAL",
    "company": "Halliburton Co.",
    "sector": "Energy",
-   "composite": 59.59,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CB",
    "company": "Chubb Ltd.",
    "sector": "Financials",
-   "composite": 59.58,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "MS",
    "company": "Morgan Stanley",
    "sector": "Financials",
-   "composite": 59.5,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "TMUS",
    "company": "T-Mobile US, Inc.",
    "sector": "Communication Services",
-   "composite": 59.31,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "MCD",
    "company": "McDonald's Corporation",
    "sector": "Consumer Discretionary",
-   "composite": 59.03,
-   "tone": "caution",
    "stale": true,
    "age_days": 3
   },
@@ -424,264 +320,198 @@
    "ticker": "AEP",
    "company": "American Electric Power Co.",
    "sector": "Utilities",
-   "composite": 58.91,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "PG",
    "company": "The Procter & Gamble Company",
    "sector": "Consumer Staples",
-   "composite": 58.81,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "SCHW",
    "company": "Charles Schwab Corp.",
    "sector": "Financials",
-   "composite": 58.73,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "TGT",
    "company": "Target Corporation",
    "sector": "Consumer Staples",
-   "composite": 58.53,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "T",
    "company": "AT&T Inc.",
    "sector": "Communication Services",
-   "composite": 58.1,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "MLM",
    "company": "Martin Marietta Materials Inc.",
    "sector": "Materials",
-   "composite": 58.06,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "UPS",
    "company": "United Parcel Service Inc.",
    "sector": "Industrials",
-   "composite": 57.93,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "AMT",
    "company": "American Tower Corporation",
    "sector": "Real Estate",
-   "composite": 57.81,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "SLB",
    "company": "SLB",
    "sector": "Energy",
-   "composite": 57.67,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "HOOD",
    "company": "Robinhood Markets, Inc.",
    "sector": "Financials",
-   "composite": 57.32,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "PLTR",
    "company": "Palantir Technologies Inc.",
    "sector": "Information Technology",
-   "composite": 57.13,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "AVGO",
    "company": "Broadcom Inc.",
    "sector": "Information Technology",
-   "composite": 56.97,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "NUE",
    "company": "Nucor Corp.",
    "sector": "Materials",
-   "composite": 56.85,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "IBM",
    "company": "International Business Machines Corporation",
    "sector": "Information Technology",
-   "composite": 56.6,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "AEE",
    "company": "Ameren Corp.",
    "sector": "Utilities",
-   "composite": 56.28,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "GE",
    "company": "GE Aerospace",
    "sector": "Industrials",
-   "composite": 55.89,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "UNP",
    "company": "Union Pacific Corporation",
    "sector": "Industrials",
-   "composite": 55.88,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "D",
    "company": "Dominion Energy Inc.",
    "sector": "Utilities",
-   "composite": 55.86,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "EQR",
    "company": "Equity Residential",
    "sector": "Real Estate",
-   "composite": 55.85,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "SYY",
    "company": "Sysco Corp.",
    "sector": "Consumer Staples",
-   "composite": 55.73,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CL",
    "company": "Colgate-Palmolive Company",
    "sector": "Consumer Staples",
-   "composite": 55.44,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "KMB",
    "company": "Kimberly Clark Corp.",
    "sector": "Consumer Staples",
-   "composite": 55.09,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "PSX",
    "company": "Phillips 66",
    "sector": "Energy",
-   "composite": 54.99,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "HSY",
    "company": "Hershey Co.",
    "sector": "Consumer Staples",
-   "composite": 54.77,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "KO",
    "company": "The Coca-Cola Company",
    "sector": "Consumer Staples",
-   "composite": 54.77,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ORCL",
    "company": "Oracle Corporation",
    "sector": "Information Technology",
-   "composite": 54.7,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "ASML",
    "company": "ASML Holding NV",
    "sector": "Information Technology",
-   "composite": 54.29,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "DTE",
    "company": "DTE Energy Co.",
    "sector": "Utilities",
-   "composite": 54.03,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "SHW",
    "company": "The Sherwin-Williams Company",
    "sector": "Materials",
-   "composite": 53.78,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ED",
    "company": "Consolidated Edison Inc.",
    "sector": "Utilities",
-   "composite": 53.75,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "LIN",
    "company": "Linde plc",
    "sector": "Materials",
-   "composite": 53.74,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "MA",
    "company": "Mastercard Incorporated",
    "sector": "Financials",
-   "composite": 53.54,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "DIS",
    "company": "The Walt Disney Company",
    "sector": "Communication Services",
-   "composite": 53.45,
-   "tone": "danger",
    "stale": true,
    "age_days": 3
   },
@@ -689,32 +519,24 @@
    "ticker": "PEP",
    "company": "PepsiCo, Inc.",
    "sector": "Consumer Staples",
-   "composite": 53.29,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "STLD",
    "company": "Steel Dynamics Inc.",
    "sector": "Materials",
-   "composite": 53.21,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "ABT",
    "company": "Abbott Laboratories",
    "sector": "Health Care",
-   "composite": 52.75,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "GS",
    "company": "The Goldman Sachs Group, Inc.",
    "sector": "Financials",
-   "composite": 52.72,
-   "tone": "danger",
    "stale": true,
    "age_days": 3
   },
@@ -722,120 +544,90 @@
    "ticker": "RTX",
    "company": "RTX Corporation",
    "sector": "Industrials",
-   "composite": 52.47,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "KMI",
    "company": "Kinder Morgan Inc.",
    "sector": "Energy",
-   "composite": 52.28,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "GM",
    "company": "General Motors Co.",
    "sector": "Consumer Discretionary",
-   "composite": 52.15,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "UNH",
    "company": "UnitedHealth Group Incorporated",
    "sector": "Health Care",
-   "composite": 52.07,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "COST",
    "company": "Costco Wholesale Corporation",
    "sector": "Consumer Staples",
-   "composite": 52,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "AMGN",
    "company": "Amgen Inc.",
    "sector": "Health Care",
-   "composite": 51.99,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "VZ",
    "company": "Verizon Communications Inc.",
    "sector": "Communication Services",
-   "composite": 51.84,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "O",
    "company": "Realty Income Corp.",
    "sector": "Real Estate",
-   "composite": 51.84,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CAT",
    "company": "Caterpillar Inc.",
    "sector": "Industrials",
-   "composite": 51.79,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "WEC",
    "company": "WEC Energy Group Inc.",
    "sector": "Utilities",
-   "composite": 51.68,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "HON",
    "company": "Honeywell International Inc.",
    "sector": "Industrials",
-   "composite": 51.39,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "LOW",
    "company": "Lowe's Companies, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 51.24,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "DEO",
    "company": "Diageo plc",
    "sector": "Consumer Staples",
-   "composite": 51.15,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "TXN",
    "company": "Texas Instruments Incorporated",
    "sector": "Information Technology",
-   "composite": 50.86,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "JNJ",
    "company": "Johnson & Johnson",
    "sector": "Health Care",
-   "composite": 50.74,
-   "tone": "caution",
    "stale": true,
    "age_days": 3
   },
@@ -843,48 +635,36 @@
    "ticker": "DLR",
    "company": "Digital Realty Trust Inc.",
    "sector": "Real Estate",
-   "composite": 50.74,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "DUK",
    "company": "Duke Energy Corporation",
    "sector": "Utilities",
-   "composite": 50.64,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "EXC",
    "company": "Exelon Corp.",
    "sector": "Utilities",
-   "composite": 50.48,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "PSA",
    "company": "Public Storage",
    "sector": "Real Estate",
-   "composite": 50.18,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "AXP",
    "company": "American Express Company",
    "sector": "Financials",
-   "composite": 50.08,
-   "tone": "positive",
    "age_days": 3
   },
   {
    "ticker": "AMZN",
    "company": "Amazon.com, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 49.9,
-   "tone": "caution",
    "age_days": 3
   },
   {
@@ -899,400 +679,300 @@
    "ticker": "MRK",
    "company": "Merck & Co., Inc.",
    "sector": "Health Care",
-   "composite": 49.57,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "OXY",
    "company": "Occidental Petroleum Corp.",
    "sector": "Energy",
-   "composite": 49.08,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "CRM",
    "company": "Salesforce, Inc.",
    "sector": "Information Technology",
-   "composite": 48.78,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "HD",
    "company": "The Home Depot, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 48.77,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "JPM",
    "company": "JPMorgan Chase & Co.",
    "sector": "Financials",
-   "composite": 48.75,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "MAR",
    "company": "Marriott International Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 48.25,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "CVX",
    "company": "Chevron Corporation",
    "sector": "Energy",
-   "composite": 48.12,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "NKE",
    "company": "NIKE, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 47.37,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "CTVA",
    "company": "Corteva Inc.",
    "sector": "Materials",
-   "composite": 47.01,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "WMT",
    "company": "Walmart Inc.",
    "sector": "Consumer Staples",
-   "composite": 46.94,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "ABBV",
    "company": "AbbVie Inc.",
    "sector": "Health Care",
-   "composite": 46.93,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "WFC",
    "company": "Wells Fargo & Company",
    "sector": "Financials",
-   "composite": 46.28,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "MAA",
    "company": "Mid America Apartment Communities Inc.",
    "sector": "Real Estate",
-   "composite": 46.26,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "PPL",
    "company": "PPL Corp.",
    "sector": "Utilities",
-   "composite": 46.19,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "PKG",
    "company": "Packaging Corp. of America",
    "sector": "Materials",
-   "composite": 45.92,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "ETN",
    "company": "Eaton Corp. plc",
    "sector": "Industrials",
-   "composite": 45.76,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "ORLY",
    "company": "O'Reilly Automotive Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 45.71,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "XOM",
    "company": "Exxon Mobil Corporation",
    "sector": "Energy",
-   "composite": 45.45,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "FOXA",
    "company": "Fox Corp.",
    "sector": "Communication Services",
-   "composite": 45.45,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "PLD",
    "company": "Prologis, Inc.",
    "sector": "Real Estate",
-   "composite": 45.32,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "AMD",
    "company": "Advanced Micro Devices, Inc.",
    "sector": "Information Technology",
-   "composite": 45.26,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "KR",
    "company": "Kroger Co.",
    "sector": "Consumer Staples",
-   "composite": 43.83,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "ECL",
    "company": "Ecolab Inc.",
    "sector": "Materials",
-   "composite": 43.64,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "PFE",
    "company": "Pfizer Inc.",
    "sector": "Health Care",
-   "composite": 43.28,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "WMB",
    "company": "Williams Companies Inc.",
    "sector": "Energy",
-   "composite": 43.15,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "DASH",
    "company": "DoorDash, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 42.86,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "NEE",
    "company": "NextEra Energy, Inc.",
    "sector": "Utilities",
-   "composite": 42.65,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "VLO",
    "company": "Valero Energy Corp.",
    "sector": "Energy",
-   "composite": 42.58,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CCI",
    "company": "Crown Castle Inc.",
    "sector": "Real Estate",
-   "composite": 42.28,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "AMAT",
    "company": "Applied Materials, Inc.",
    "sector": "Information Technology",
-   "composite": 41.9,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "EQIX",
    "company": "Equinix, Inc.",
    "sector": "Real Estate",
-   "composite": 41.74,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "CSX",
    "company": "CSX Corp.",
    "sector": "Industrials",
-   "composite": 41.51,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CVS",
    "company": "CVS Health Corp.",
    "sector": "Health Care",
-   "composite": 41.28,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CSCO",
    "company": "Cisco Systems, Inc.",
    "sector": "Information Technology",
-   "composite": 41.24,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "DE",
    "company": "Deere & Co.",
    "sector": "Industrials",
-   "composite": 41.1,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "SO",
    "company": "The Southern Company",
    "sector": "Utilities",
-   "composite": 40.98,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "MMC",
    "company": "Marsh & McLennan Companies, Inc.",
    "sector": "Financials",
-   "composite": 40.94,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "TMO",
    "company": "Thermo Fisher Scientific Inc.",
    "sector": "Health Care",
-   "composite": 40.78,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "F",
    "company": "Ford Motor Co.",
    "sector": "Consumer Discretionary",
-   "composite": 39.58,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "DHR",
    "company": "Danaher Corporation",
    "sector": "Health Care",
-   "composite": 38.71,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "NOW",
    "company": "ServiceNow, Inc.",
    "sector": "Information Technology",
-   "composite": 38.59,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "BA",
    "company": "Boeing Co.",
    "sector": "Industrials",
-   "composite": 38.54,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "SPGI",
    "company": "S&P Global Inc.",
    "sector": "Financials",
-   "composite": 38.5,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "FANG",
    "company": "Diamondback Energy Inc.",
    "sector": "Energy",
-   "composite": 38.06,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "OMC",
    "company": "Omnicom Group Inc.",
    "sector": "Communication Services",
-   "composite": 37.68,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "NWSA",
    "company": "News Corp.",
    "sector": "Communication Services",
-   "composite": 37.63,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "EMR",
    "company": "Emerson Electric Co.",
    "sector": "Industrials",
-   "composite": 37.02,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "EA",
    "company": "Electronic Arts Inc.",
    "sector": "Communication Services",
-   "composite": 36.75,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "CRWD",
    "company": "CrowdStrike Holdings, Inc.",
    "sector": "Information Technology",
-   "composite": 35.69,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "BAC",
    "company": "Bank of America Corporation",
    "sector": "Financials",
-   "composite": 35.14,
-   "tone": "caution",
    "stale": true,
    "age_days": 3
   },
@@ -1300,72 +980,54 @@
    "ticker": "C",
    "company": "Citigroup Inc.",
    "sector": "Financials",
-   "composite": 34.38,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "TTWO",
    "company": "Take-Two Interactive Software Inc.",
    "sector": "Communication Services",
-   "composite": 33.88,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "DD",
    "company": "DuPont de Nemours Inc.",
    "sector": "Materials",
-   "composite": 33.36,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "MDLZ",
    "company": "Mondelez International, Inc.",
    "sector": "Consumer Staples",
-   "composite": 32.71,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "BLK",
    "company": "BlackRock, Inc.",
    "sector": "Financials",
-   "composite": 32.61,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "SBUX",
    "company": "Starbucks Corporation",
    "sector": "Consumer Discretionary",
-   "composite": 31.77,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "GIS",
    "company": "General Mills Inc.",
    "sector": "Consumer Staples",
-   "composite": 30.17,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "XEL",
    "company": "Xcel Energy Inc.",
    "sector": "Utilities",
-   "composite": 29.93,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "TSLA",
    "company": "Tesla, Inc.",
    "sector": "Consumer Discretionary",
-   "composite": 29.1,
-   "tone": "danger",
    "stale": true,
    "age_days": 3
   },
@@ -1373,64 +1035,48 @@
    "ticker": "WELL",
    "company": "Welltower Inc.",
    "sector": "Real Estate",
-   "composite": 28.81,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "VTR",
    "company": "Ventas Inc.",
    "sector": "Real Estate",
-   "composite": 27.98,
-   "tone": "caution",
    "age_days": 3
   },
   {
    "ticker": "COIN",
    "company": "Coinbase Global, Inc.",
    "sector": "Financials",
-   "composite": 27.41,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "MSTR",
    "company": "Strategy Inc.",
    "sector": "Information Technology",
-   "composite": 27.08,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "DOW",
    "company": "Dow Inc.",
    "sector": "Materials",
-   "composite": 25.97,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "ARE",
    "company": "Alexandria Real Estate Equities Inc.",
    "sector": "Real Estate",
-   "composite": 24.73,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "APD",
    "company": "Air Products & Chemicals Inc.",
    "sector": "Materials",
-   "composite": 23.91,
-   "tone": "danger",
    "age_days": 3
   },
   {
    "ticker": "INTC",
    "company": "Intel Corporation",
    "sector": "Information Technology",
-   "composite": 23.63,
-   "tone": "danger",
    "stale": true,
    "age_days": 3
   },
@@ -1438,8 +1084,6 @@
    "ticker": "SRE",
    "company": "Sempra",
    "sector": "Utilities",
-   "composite": 22.88,
-   "tone": "danger",
    "age_days": 3
   }
  ]

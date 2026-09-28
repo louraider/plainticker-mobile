@@ -23,6 +23,7 @@ import com.plainticker.mobile.repo.CatalogUpdate
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SnapshotRepository
+import com.plainticker.mobile.repo.EntitlementChanges
 import com.plainticker.mobile.repo.SummaryRepository
 import com.plainticker.mobile.watchlist.DigestStore
 import com.plainticker.mobile.watchlist.WatchedReport
@@ -383,6 +384,12 @@ class ListViewModel(
     private val watchlist: WatchlistStore,
     private val digests: DigestStore,
     private val clock: Clock = WallClock,
+    /**
+     * Where a promo redeemed, a pass confirmed, a sign-in or sign-out, or a fresh entitlement read
+     * that flipped says the entitlement may have changed; each one re-reads `/summary`
+     * ([reloadAnalysis]). Null never re-reads.
+     */
+    private val entitlement: EntitlementChanges? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -426,6 +433,7 @@ class ListViewModel(
     private var priceJob: Job? = null
     private var bannerJob: Job? = null
     private var repriceJob: Job? = null
+    private var analysisJob: Job? = null
 
     /** When the last price run finished, by [clock]; null until one has. */
     private var pricedAtMillis: Long? = null
@@ -476,6 +484,36 @@ class ListViewModel(
         // the hours banner holds its slot instead of arriving late and pushing the list down.
         marketClock.tick()
         load(userAsked = false)
+        // Fresh-device QA of 1.3.23: a code redeemed on You left every "Pro" badge here until a
+        // restart. The rows are re-read, not reloaded: nothing else on screen goes away.
+        entitlement?.let { changes ->
+            viewModelScope.launch { changes.changes.collect { reloadAnalysis() } }
+        }
+    }
+
+    /**
+     * The entitlement changed: `/summary` is asked again with the same device code, and its rows
+     * replace the ones on screen in place, the way a load's own answer does. The catalog, the
+     * prices and the banner are left as they are. A failed read keeps what is drawn.
+     */
+    private fun reloadAnalysis() {
+        analysisJob?.cancel()
+        analysisJob = viewModelScope.launch {
+            val answer = try {
+                summaries.summary()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch
+            }
+            liveRows = Coverage.rows(answer)
+            liveBare = Coverage.bare(answer)
+            generatedAt = answer.generatedAt
+            summarySettled = true
+            holdingSnapshot = false
+            republish()
+            schedulePrices()
+        }
     }
 
     /**

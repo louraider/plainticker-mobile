@@ -33,7 +33,14 @@ data class PassCell(val label: Copy, val value: Copy, val span: Int = 1, val cop
 
 data class PassAction(val label: Copy, val kind: PassActionKind)
 
-enum class PassActionKind { Confirm, Retry, Close }
+enum class PassActionKind {
+    Confirm,
+    Retry,
+    Close,
+
+    /** A phone with no wallet can still get Pro: close the sheet and open You's code field. */
+    HaveCode,
+}
 
 /** USDC and USDT both carry six decimals. */
 private const val USDC_DECIMALS = 6
@@ -103,7 +110,13 @@ fun PassState.sheet(): PassSheetContent? = when (this) {
         notice = why?.takeIf { reason == PassRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text),
         // The same two labels the swap and vote sheets use (QA of 1.3.20): "Connect again" when no
         // wallet was connected, "Try again" for every other retry.
-        primary = if (reason.retryable) PassAction(words(retryLabel(reason)), PassActionKind.Retry) else null,
+        primary = when {
+            reason.retryable -> PassAction(words(retryLabel(reason)), PassActionKind.Retry)
+            // Fresh-device QA of 1.3.23: "nothing to pay with" was a dead end. A promo code needs
+            // no wallet at all, so the one way on from here is the code field.
+            reason == PassRefusal.NO_WALLET -> PassAction(words(R.string.promo_action_have_code), PassActionKind.HaveCode)
+            else -> null
+        },
         secondary = PassAction(words(R.string.action_close), PassActionKind.Close),
     )
 }

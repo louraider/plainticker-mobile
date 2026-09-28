@@ -58,7 +58,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -156,6 +160,7 @@ fun YouScreen(
     val pass by passViewModel.state.collectAsStateWithLifecycle()
     val account by accountViewModel.state.collectAsStateWithLifecycle()
     val deviceCodeStatus by accountViewModel.deviceCodeStatus.collectAsStateWithLifecycle()
+    val newCodeFailed by accountViewModel.newCodeFailed.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // An Activity context: Credential Manager draws Google's sheet over it.
     val credentials = remember(context) { CredentialManagerGoogleSource(context, BuildConfig.GOOGLE_SERVER_CLIENT_ID) }
@@ -204,6 +209,8 @@ fun YouScreen(
             onOpenDigest = onOpenDigest,
             account = account,
             deviceCodeStatus = deviceCodeStatus,
+            onStartWithNewCode = accountViewModel::startWithNewCode,
+            newCodeFailed = newCodeFailed,
             onSignIn = { accountViewModel.signIn(credentials) },
             onSignOut = accountViewModel::signOut,
             onUnlink = accountViewModel::unlink,
@@ -230,6 +237,10 @@ fun YouScreen(
                 onConfirm = passViewModel::confirm,
                 onRetry = passViewModel::retry,
                 onClose = passViewModel::close,
+                onHaveCode = {
+                    passViewModel.close()
+                    passViewModel.openPromo()
+                },
             ),
         )
     }
@@ -239,7 +250,8 @@ fun YouScreen(
 internal fun YouContent(
     state: YouUiState,
     pro: ProUiState,
-    onConnect: () -> Unit,
+    /** Connect, told where it was tapped, so a phone with no wallet app hears it right there. */
+    onConnect: (ConnectPlace) -> Unit,
     onDisconnect: () -> Unit,
     onRefreshEntitlement: () -> Unit,
     onPay: () -> Unit,
@@ -254,6 +266,8 @@ internal fun YouContent(
     onOpenDigest: (() -> Unit)? = null,
     account: AccountUiState = AccountUiState.Restoring,
     deviceCodeStatus: DeviceCodeStatus = DeviceCodeStatus.OK,
+    onStartWithNewCode: () -> Unit = {},
+    newCodeFailed: Boolean = false,
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onUnlink: (String) -> Unit = {},
@@ -307,7 +321,14 @@ internal fun YouContent(
                 label = "you-hero-reveal",
             )
             Box(Modifier.graphicsLayer { this.alpha = alpha }) {
-                Hero(hero = hero, message = heroMessage, onSignIn = onSignIn, onConnect = onConnect, onPay = onPay, colors = colors)
+                Hero(hero = hero,
+                    message = heroMessage,
+                    onSignIn = onSignIn,
+                    onConnect = { onConnect(ConnectPlace.HERO) },
+                    onPay = onPay,
+                    colors = colors,
+                    noWallet = state.noWalletAt == ConnectPlace.HERO,
+                )
             }
         }
         item(key = "plan") {
@@ -335,10 +356,18 @@ internal fun YouContent(
                 colors = colors,
                 showMessage = heroMessage == null,
                 deviceCodeStatus = deviceCodeStatus,
+                onStartWithNewCode = onStartWithNewCode,
+                newCodeFailed = newCodeFailed,
             )
         }
         item(key = "wallet") {
-            WalletSection(wallet = state.account, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)
+            WalletSection(
+                wallet = state.account,
+                onConnect = { onConnect(ConnectPlace.WALLET) },
+                onDisconnect = onDisconnect,
+                colors = colors,
+                noWallet = state.noWalletAt == ConnectPlace.WALLET,
+            )
         }
         item(key = "device") { DeviceGroup(state = state, onOpenTab = onOpenTab, colors = colors) }
         item(key = "notifications") {
@@ -379,6 +408,8 @@ private fun Hero(
     onConnect: () -> Unit,
     onPay: () -> Unit,
     colors: AmberColors,
+    /** The hero's Connect wallet found no wallet app: the shared sentence stands under it. */
+    noWallet: Boolean = false,
 ) {
     val shape = RoundedCornerShape(HeroRadius)
     Column(
@@ -438,6 +469,7 @@ private fun Hero(
                             contentPadding = CenteredTextActionPadding,
                         )
                     }
+                    if (noWallet) NoWalletLine(colors = colors, modifier = Modifier.padding(top = 6.dp))
                 }
             }
         }
@@ -511,9 +543,10 @@ private fun planRowAction(action: PlanAction, onPay: () -> Unit, onRefresh: () -
 // ---- Promo code redemption -------------------------------------------------------------------
 
 /**
- * "Have a code?" (task: promo-redeem): a plain text action that opens an inline field, uppercase
- * and normalized as it is typed ([com.plainticker.mobile.data.plainticker.PromoApi.normalize],
- * mirrored by [com.plainticker.mobile.ui.pass.PassViewModel.promoInputChanged]), with Apply and
+ * "Have a code?" (task: promo-redeem): a plain text action that opens an inline field, drawn in
+ * capitals and kept exactly as typed or pasted, normalized only when it is sent
+ * ([com.plainticker.mobile.data.plainticker.PromoApi.normalize], from
+ * [com.plainticker.mobile.ui.pass.PassViewModel.applyPromo]), with Apply and
  * Cancel beside it. Shown even when this device is already Pro, so a judge's second code can
  * extend or stack it, and always in full [AmberColors.actionText] (judges' round 2: the dimmed
  * grey it used to take on a Pro device read as disabled).
@@ -608,6 +641,11 @@ private fun PromoEditingRow(
  * identifiers only, and a promo code is not one. Paste works the way every [BasicTextField] on
  * Android already supports it, through the system's own context menu; nothing here disables it.
  *
+ * The text is never rewritten as it is typed (fresh-device QA of 1.3.23: normalizing on every
+ * change raced the keyboard and a fast `PT-AAAA-BBBB-CCCC` lost characters). The capitals are
+ * drawn by [UppercaseCodeTransformation], one character for one, so the cursor never moves under
+ * the reader and the value the keyboard edits is the one it typed.
+ *
  * The field takes focus as it appears (judges' round 2), whether "Have a code?" opened it here or
  * Detail's "Have a code? Get Pro" did, so the keyboard is up and the next thing typed is the code.
  * A request the node cannot take yet is dropped rather than thrown.
@@ -626,6 +664,7 @@ private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: A
         onValueChange = onValueChange,
         singleLine = true,
         textStyle = style,
+        visualTransformation = UppercaseCodeTransformation,
         // Codes are ASCII capitals and digits: no autocorrect rewriting "PT" into a word, no
         // suggestions strip, and the keyboard opens on capitals (device QA of 1.3.16).
         keyboardOptions = KeyboardOptions(
@@ -661,6 +700,20 @@ private fun PromoField(value: String, onValueChange: (String) -> Unit, colors: A
         },
     )
 }
+
+/**
+ * Draws a promo code in capitals without changing what was typed: each character is raised on
+ * its own ([Char.uppercaseChar]), so the drawn text is exactly as long as the typed one and the
+ * identity offset mapping holds for every input, a German sharp s included.
+ */
+internal object UppercaseCodeTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText =
+        TransformedText(AnnotatedString(uppercaseCode(text.text)), OffsetMapping.Identity)
+}
+
+/** The drawn form of a typed promo code: one capital per character, never a longer string. */
+internal fun uppercaseCode(typed: String): String =
+    String(CharArray(typed.length) { typed[it].uppercaseChar() }) // lint-allow uppercase: a typed promo code, drawn in capitals
 
 // ---- On this device ------------------------------------------------------------------------
 
@@ -1013,7 +1066,7 @@ private fun YouSignedOutPreview() {
         YouContent(
             state = PreviewDevice,
             pro = PreviewFree,
-            onConnect = {},
+            onConnect = { _ -> },
             onDisconnect = {},
             onRefreshEntitlement = {},
             onPay = {},
@@ -1031,7 +1084,7 @@ private fun YouProPassPreview() {
         YouContent(
             state = PreviewDevice.copy(account = PreviewAccount, notificationsOn = true),
             pro = PreviewProPass,
-            onConnect = {},
+            onConnect = { _ -> },
             onDisconnect = {},
             onRefreshEntitlement = {},
             onPay = {},

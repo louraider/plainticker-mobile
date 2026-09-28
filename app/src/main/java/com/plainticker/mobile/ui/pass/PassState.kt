@@ -97,7 +97,7 @@ enum class PassPhase(@StringRes val text: Int) {
  */
 enum class PassRefusal(@StringRes val text: Int, val retryable: Boolean = false) {
     /** No wallet on this device speaks the adapter. */
-    NO_WALLET(R.string.pass_no_wallet),
+    NO_WALLET(R.string.no_wallet_app),
 
     /** The authorize round-trip ended without an account: closed, declined, or no answer. */
     NOT_CONNECTED(R.string.pass_not_connected, retryable = true),

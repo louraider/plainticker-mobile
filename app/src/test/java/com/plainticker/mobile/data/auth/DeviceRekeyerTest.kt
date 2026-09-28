@@ -469,4 +469,32 @@ class DeviceRekeyerTest {
         assertTrue(map(401, "who_knows") is DeviceRekeyError.Unavailable)
         assertTrue(map(500, null) is DeviceRekeyError.Unavailable)
     }
+
+    // ---- A key that is gone for good (security review M3) --------------------------------------
+
+    @Test
+    fun `a code whose key is gone says so, retries nothing, and starts over only when asked`() = runTest {
+        val prefs = FakePrefs()
+        prefs.edit().putString(
+            SharedPrefsDevicePassStore.KEY_CODE_SEALED,
+            java.util.Base64.getEncoder().encodeToString(sealing().seal(legacy.toByteArray())),
+        ).commit()
+        val newKey = javax.crypto.KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val api = MockApi(dispatcher) { error("nothing may be sent without the code") }
+        val store = SharedPrefsDevicePassStore(prefs, sealing(newKey)) { true }
+        val account = InMemoryAccountStore(ann)
+        val rekeyer = DeviceRekeyer(store, DeviceRekeyApi(api.client), FakeClock(), RecordingLog(), dispatcher, account)
+
+        assertEquals(RekeyOutcome.NOT_NEEDED, rekeyer.rekeyIfNeeded(force = true))
+        assertEquals(DeviceCodeStatus.LOST, rekeyer.status.value)
+        assertTrue(api.requests.isEmpty())
+        assertTrue("never started over on its own", store.codeLost())
+
+        assertTrue(rekeyer.startWithNewCode())
+        assertEquals(DeviceCodeStatus.OK, rekeyer.status.value)
+        assertTrue(SharedPrefsDevicePassStore.isNewFormat(store.code()))
+        assertEquals("the new code is bound to no account, so the one shown is cleared", 1, account.clears)
+        assertFalse("done once, it is not offered again", rekeyer.startWithNewCode())
+    }
 }

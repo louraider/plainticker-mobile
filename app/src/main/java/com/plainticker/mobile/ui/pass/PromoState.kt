@@ -12,7 +12,7 @@ import com.plainticker.mobile.R
  *      |                  |  +---apply() again--+---4xx/5xx--> Failed
  *      +------dismiss()---+----------------------------------------+
  *
- * [Editing] and [Failed] both carry the normalized text the field shows, so a reader who typed a
+ * [Editing] and [Failed] both carry the text the field shows, as typed, so a reader who typed a
  * bad code keeps it on screen to fix rather than losing it; [inputChanged] moves a [Failed] state
  * back to [Editing], clearing the error the instant they touch the field again.
  */
@@ -21,10 +21,13 @@ sealed interface PromoState {
     /** The field is closed; only the "Have a code?" text action shows. */
     data object Idle : PromoState
 
-    /** The field is open. [input] is already normalized (uppercase, no spaces or dashes). */
+    /**
+     * The field is open. [input] is exactly what was typed or pasted; it is normalized
+     * (uppercase, no spaces or dashes) only when it is sent.
+     */
     data class Editing(val input: String) : PromoState
 
-    /** The redeem call is in flight. [input] is what was sent, so the field can stay disabled on it. */
+    /** The redeem call is in flight. [input] is what was sent, normalized. */
     data class Applying(val input: String) : PromoState
 
     /** Redeemed. [untilMillis] is when this device's Pro (through this code) ends, if the server said. */

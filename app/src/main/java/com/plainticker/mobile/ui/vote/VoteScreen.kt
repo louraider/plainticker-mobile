@@ -358,6 +358,7 @@ internal fun VoteTabContent(
                             voted = votedFor(entry.ticker),
                             onOpenDetail = onOpenDetail,
                             onVote = onVote,
+                            wonRound = state.wonRound(entry.ticker),
                         )
                     }
                 }
@@ -615,6 +616,8 @@ private fun BallotRow(
     voted: Boolean,
     onOpenDetail: (String) -> Unit,
     onVote: ((ticker: String, symbol: String) -> Unit)?,
+    /** The last round chose this one and its analysis is on its way ([VoteTabUiState.wonRound]). */
+    wonRound: Int? = null,
 ) {
     val colors = defaultAmberColors()
     AmberRowDivider(last = last) {
@@ -622,6 +625,10 @@ private fun BallotRow(
             AmberTickerRow(
                 ticker = entry.display,
                 company = entry.company,
+                // Fresh-device QA of 1.3.23: the last round's winner kept a Vote, as if the round
+                // had not chosen it. It says so on its own meta line instead, in the quiet type,
+                // so the sentence never sits over the company name the way a trailing word would.
+                context = wonRound?.let { stringResource(R.string.vote_won_row, Fmt.count(it)) }, // lint-allow count: a round's number, not a quantity
                 onClick = { onOpenDetail(entry.ticker) },
                 onClickLabel = stringResource(R.string.action_open_ticker, entry.display),
             )
@@ -633,7 +640,7 @@ private fun BallotRow(
                     color = colors.textTertiary(AmberSurface.RAISED),
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
                 )
-            } else if (onVote != null) {
+            } else if (onVote != null && wonRound == null) {
                 TextAction(
                     label = stringResource(R.string.vote_action_row),
                     onClick = { onVote(entry.ticker, entry.display) },

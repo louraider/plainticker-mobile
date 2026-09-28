@@ -85,6 +85,43 @@ class CachedPriceRepositoryTest {
         assertEquals("a mint only the slow run asked for still lands", 2.0, repo.latest.value.getValue("MintB").usdPrice, 0.0)
     }
 
+    /**
+     * Security review L6: forget() used to drop the stamp that told an older answer from a newer
+     * one. A slow run still out when the newer quote landed and a pull then cleared the cache
+     * wrote its older figure over the newer one, because nothing held said which was newer.
+     */
+    @Test
+    fun `an older answer landing after a forget still never overwrites the newer quote`() = runTest {
+        val reached = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val mock = MockApi { request ->
+            val ids = request.ids()
+            if (ids.size > 1) {
+                reached.complete(Unit)
+                release.await()
+                respondJson(ids.joinToString(",", "{", "}") { "\"$it\": {\"usdPrice\": 2.0}" })
+            } else {
+                respondJson(ids.joinToString(",", "{", "}") { "\"$it\": {\"usdPrice\": 3.0}" })
+            }
+        }
+        // The same clock reading for every request: order must come from the request sequence,
+        // not from two timestamps that can be equal.
+        val repo = repo(mock, FakeClock())
+
+        val slow = launch { repo.pricesFirst(listOf("MintA", "MintB")) }
+        reached.await()
+        repo.forget()
+        assertEquals(3.0, repo.prices(listOf("MintA")).getValue("MintA").usdPrice, 0.0)
+        repo.forget() // a pull on another screen, while the slow run is still out
+
+        release.complete(Unit)
+        slow.join()
+
+        assertEquals("the shared flow keeps the newer quote", 3.0, repo.latest.value.getValue("MintA").usdPrice, 0.0)
+        assertEquals("the next ask reaches Jupiter, not the older answer", 3.0, repo.prices(listOf("MintA")).getValue("MintA").usdPrice, 0.0)
+        assertEquals("a mint only the slow run asked for still lands", 2.0, repo.latest.value.getValue("MintB").usdPrice, 0.0)
+    }
+
     /** Final QA of 1.3.19: a pull inside the 30 s window drew the same figure again. */
     @Test
     fun `a pull forgets the cached answers, so the next ask reaches Jupiter inside the window`() = runTest {

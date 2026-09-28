@@ -308,4 +308,37 @@ class VoteTabModelTest {
         assertTrue(line.startsWith("No wallet is connected right now."))
         assertFalse("never an order that ignores the votes listed below it", line.startsWith("Connect a wallet"))
     }
+
+    // ---- The last round's winner on the ballot (fresh-device QA of 1.3.23) ---------------------
+
+    private fun won(status: PreviousRoundStatus = PreviousRoundStatus.CLOSED, research: Boolean = false) = VoteTabUiState(
+        round = null,
+        previous = PreviousRoundDisplay(
+            roundId = 2,
+            ticker = "AAL",
+            display = "AALx",
+            company = "American Airlines",
+            status = status,
+            weightRaw = BigInteger.valueOf(879_000_000L),
+            voters = 1,
+            closedAtText = null,
+            researchPublished = research,
+        ),
+    )
+
+    @Test
+    fun `the last round's winner awaiting analysis says it won instead of offering a vote`() {
+        assertEquals(2, won().wonRound("AAL"))
+        assertEquals("case does not matter", 2, won().wonRound("aal"))
+        assertEquals(2, won(PreviousRoundStatus.PENDING).wonRound("AAL"))
+        assertNull("any other row keeps its Vote", won().wonRound("NFLX"))
+        assertNull("published research leaves nothing to wait for", won(research = true).wonRound("AAL"))
+        assertNull(won(PreviousRoundStatus.PUBLISHED).wonRound("AAL"))
+        assertNull("no analysis is coming for a winner that could not be covered", won(PreviousRoundStatus.UNCOVERABLE).wonRound("AAL"))
+        assertNull("no last round, nothing won", VoteTabUiState().wonRound("AAL"))
+        assertEquals(
+            "Won round 2, analysis coming",
+            com.plainticker.mobile.ui.ShippedCopy.strings.getValue("vote_won_row").replace("%1\$s", "2"),
+        )
+    }
 }

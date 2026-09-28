@@ -16,6 +16,7 @@ import com.plainticker.mobile.repo.MarketClock
 import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
+import com.plainticker.mobile.repo.EntitlementChanges
 import com.plainticker.mobile.repo.SummaryRepository
 import com.plainticker.mobile.ui.today.ClosedMover
 import com.plainticker.mobile.ui.today.CoveredQuote
@@ -194,6 +195,12 @@ class WatchlistViewModel(
      * the system dialog comes once, at the first watch, wherever that happens. Null never asks.
      */
     private val prompts: NotificationPromptStore? = null,
+    /**
+     * A promo redeemed, a pass confirmed, a sign-in or sign-out, or an entitlement read that
+     * flipped: the watched rows and Today's join read `/summary` again, so Pro numbers follow the
+     * entitlement without a restart (fresh-device QA of 1.3.23). Null never re-reads.
+     */
+    private val entitlement: EntitlementChanges? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -272,6 +279,14 @@ class WatchlistViewModel(
         // Today's other blocks: a second, unrelated join that the watched set does not drive and
         // does not re-run for.
         loadToday()
+        entitlement?.let { changes ->
+            viewModelScope.launch {
+                changes.changes.collect {
+                    load(watchlist.tickers.value)
+                    loadToday()
+                }
+            }
+        }
     }
 
     /**

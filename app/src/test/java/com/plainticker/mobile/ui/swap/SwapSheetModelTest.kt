@@ -752,7 +752,7 @@ class SwapSheetModelTest {
     @Test
     fun `a failure before the wallet was read has nowhere to go back to`() {
         val content = SwapState.Failed(leg, funds = null, input = null, reason = SwapFailure.NO_WALLET).shown()
-        assertEquals(R.string.swap_failed_no_wallet, id(content.notice))
+        assertEquals(R.string.no_wallet_app, id(content.notice))
         assertNull(content.primary)
         assertEquals(SheetActionKind.Close, content.secondary?.kind)
         assertTrue("no quote, so no cost block", content.cells.isEmpty())

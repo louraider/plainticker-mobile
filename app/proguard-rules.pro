@@ -52,3 +52,11 @@
 -keep class androidx.credentials.playservices.** {
   *;
 }
+
+# ---- Mobile Wallet Adapter ---------------------------------------------------------------------
+# MwaTransport.kt snapshots and restores the adapter's private `walletUriBase` by reflection, so a
+# request the person walked away from leaves the adapter as it was (security review L2). Keep the
+# field under its own name; if it is ever missing the snapshot covers the auth token alone.
+-keepclassmembers class com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter {
+    private android.net.Uri walletUriBase;
+}

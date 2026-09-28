@@ -84,10 +84,15 @@ class AesGcmSessionCipher(private val key: () -> SecretKey) {
 
         const val KEY_ALIAS = "plainticker.wallet_session.v1"
 
-        /** The Keystore key under [alias], created on first use: AES-256, GCM, no user auth. */
-        fun androidKeystoreKey(alias: String = KEY_ALIAS): SecretKey {
+        /**
+         * The Keystore key under [alias], created on first use: AES-256, GCM, no user auth.
+         * [onCreated] runs when there was none and one was just made, which is how a sealed value
+         * learns that the key it was sealed under is gone (security review M3).
+         */
+        fun androidKeystoreKey(alias: String = KEY_ALIAS, onCreated: () -> Unit = {}): SecretKey {
             val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             (store.getKey(alias, null) as? SecretKey)?.let { return it }
+            onCreated()
             val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
             generator.init(
                 KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)

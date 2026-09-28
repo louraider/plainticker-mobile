@@ -189,6 +189,8 @@ class ListAgainstProductionTest {
         state.analyzed.filter { it.priceUsd != null }.forEach {
             assertEquals("+0.50%", Fmt.percent(it.premiumPct!!))
         }
-        assertTrue("the rest keep their analysis", state.analyzed.all { it.composite != null })
+        // The snapshot is read under the Pro-numbers lock (security review M2): its rows keep their
+        // analysis as a locked row, the open example as its composite.
+        assertTrue("the rest keep their analysis", state.analyzed.all { it.composite != null || it.locked })
     }
 }

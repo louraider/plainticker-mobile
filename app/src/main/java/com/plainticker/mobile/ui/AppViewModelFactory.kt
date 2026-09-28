@@ -31,6 +31,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.watchlistStore,
             container.digestStore,
             container.clock,
+            entitlement = container.entitlementChanges,
         )
     }
     initializer {
@@ -49,6 +50,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.clock,
             container.readApi,
             container.devicePassStore,
+            entitlement = container.entitlementChanges,
         )
     }
     initializer {
@@ -90,6 +92,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             // Today's first-open Watch asks for notifications once, after the first watch, through
             // the same store Detail's Watch reads.
             prompts = container.notificationPromptStore,
+            entitlement = container.entitlementChanges,
         )
     }
     initializer {
@@ -126,6 +129,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.passReceiptStore,
             container.clock,
             rekeyer = container.deviceRekeyer,
+            entitlement = container.entitlementChanges,
         )
     }
     initializer {
@@ -154,6 +158,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             container.devicePassStore,
             rekeyer = container.deviceRekeyer,
             signOutRunner = container.accountSignOut,
+            entitlement = container.entitlementChanges,
         )
     }
 }
