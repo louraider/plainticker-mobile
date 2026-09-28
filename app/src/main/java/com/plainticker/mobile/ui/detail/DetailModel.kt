@@ -233,8 +233,12 @@ private const val F_SCORE_OUT_OF = 9
 /** The hero: the token's symbol once the catalog names it, the plain ticker until then. */
 val DetailUiState.heroTicker: String get() = symbol ?: ticker
 
-/** The company, from the analysis first because it is the registrant's own name. */
-val DetailUiState.heroCompany: String? get() = analysis?.company ?: asset?.name
+/**
+ * The company, from the analysis first because it is the registrant's own name; before it lands,
+ * the name a covered company's page carries ([DetailUiState.known]), so the hero does not swap
+ * "Meta xStock" for "Meta Platforms, Inc." under the reader.
+ */
+val DetailUiState.heroCompany: String? get() = analysis?.company ?: known?.company ?: asset?.name
 
 /**
  * The sector line under the hero's company name, in the approved Amber Detail frame (`AAPLx /
@@ -243,7 +247,8 @@ val DetailUiState.heroCompany: String? get() = analysis?.company ?: asset?.name
  * PlainTicker does not classify, in which case the hero simply carries two lines instead of
  * three rather than a heading over nothing.
  */
-val DetailUiState.heroSector: String? get() = analysis?.sector
+val DetailUiState.heroSector: String?
+    get() = analysis?.sector ?: known?.sector?.takeIf { analysisState is AnalysisState.Loading || analysis != null }
 
 // ---- The verdict (task app-verdict) ------------------------------------------------------------
 

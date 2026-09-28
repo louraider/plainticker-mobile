@@ -14,6 +14,7 @@ import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.Coverage
 import com.plainticker.mobile.repo.MintRepository
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
@@ -70,7 +71,7 @@ class DetailViewModel(
     private val ticker = ticker.trim().uppercase() // lint-allow uppercase: API ticker key
 
     private val _state = MutableStateFlow(
-        DetailUiState(ticker = this.ticker, watched = this.ticker in watchlist.tickers.value),
+        DetailUiState(ticker = this.ticker, watched = this.ticker in watchlist.tickers.value, known = Coverage.company(this.ticker)),
     )
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
@@ -127,7 +128,7 @@ class DetailViewModel(
         refreshJob = viewModelScope.launch {
             val now = clock.nowMillis()
             _state.update {
-                DetailUiState(ticker = ticker, watched = it.watched, nowMillis = now)
+                DetailUiState(ticker = ticker, watched = it.watched, nowMillis = now, known = it.known)
             }
 
             // The analysis does not wait for the chain and the chain does not wait for the

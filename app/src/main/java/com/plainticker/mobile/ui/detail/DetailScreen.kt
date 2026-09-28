@@ -333,7 +333,25 @@ private fun VerdictSection(state: DetailUiState, onGetPro: (() -> Unit)?) {
             color = colors.textTertiary(AmberSurface.GROUND),
         )
         when (block) {
-            VerdictBlock.Loading -> SkeletonBar(width = VerdictPlaceholderWidth, height = VerdictPlaceholderHeight)
+            // The shape the answer lands in, not one bar (final QA of 1.3.19: the block grew by
+            // a word and a two-line qualifier when the analysis answered, pushing the price down).
+            VerdictBlock.Loading -> {
+                // Each bar centred in the line of text it stands in for.
+                SkeletonBar(
+                    modifier = Modifier.padding(vertical = (VerdictWordLine - VerdictPlaceholderHeight) / 2),
+                    width = VerdictPlaceholderWidth,
+                    height = VerdictPlaceholderHeight,
+                )
+                Column {
+                    repeat(VerdictQualifierLines) { line ->
+                        SkeletonBar(
+                            modifier = Modifier.padding(vertical = (VerdictQualifierLine - VerdictQualifierBar) / 2),
+                            width = if (line == 0) 280.dp else 140.dp,
+                            height = VerdictQualifierBar,
+                        )
+                    }
+                }
+            }
 
             is VerdictBlock.Unlocked -> {
                 // A word, never a colour: DESIGN.md section 7 keeps colour for direction and
@@ -1065,6 +1083,14 @@ private val VerdictTop = 28.dp
 /** The placeholder that stands in for a locked or not-yet-loaded classification, never real text. */
 private val VerdictPlaceholderWidth = 120.dp
 private val VerdictPlaceholderHeight = 22.dp
+
+/** One [AmberType.sectionHead] line: the classification word the skeleton stands in for. */
+private val VerdictWordLine = 27.dp
+
+/** The qualifier under the word wraps to two [AmberType.context] lines on a phone. */
+private const val VerdictQualifierLines = 2
+private val VerdictQualifierLine = 18.dp
+private val VerdictQualifierBar = 12.dp
 private val PriceTop = 28.dp
 /** Between the floor's sentence and the pair it governs: close enough to read as one block. */
 private val LeadGap = 14.dp
