@@ -10,12 +10,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -205,7 +209,12 @@ internal fun ListContent(
     // codes clipped and meant nothing to a first-time reader, and it took 48dp off every line,
     // the hours banner included. The list takes the full width; a sector chip narrows to one sector.
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        // The viewport starts below the status bar (final QA of 1.3.19): a pinned sector head
+        // sticks to the top of the viewport whatever the content padding says, and with the
+        // viewport under the clock it sat behind the scrim with its title cut off. Consuming the
+        // inset here also zeroes the TopBar's own status-bar padding in the header item, so the
+        // first frame is where it was. The scrim still fades the rows as they leave.
+        modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top)),
         // The tab content ends above the navigation bar; the padding is part of the scroll.
         contentPadding = WindowInsets.navigationBars.asPaddingValues(),
     ) {
