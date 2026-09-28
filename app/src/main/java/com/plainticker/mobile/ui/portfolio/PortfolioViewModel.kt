@@ -101,7 +101,7 @@ enum class WalletPhase { DISCONNECTED, CONNECTING, CONNECTED }
  * instead, and this screen keeps the same rule.
  */
 enum class WalletNote(@StringRes val text: Int) {
-    NONE_ON_DEVICE(R.string.swap_failed_no_wallet),
+    NONE_ON_DEVICE(R.string.no_wallet_app),
     CANCELLED(R.string.portfolio_wallet_cancelled),
     REFUSED(R.string.portfolio_wallet_refused),
 }

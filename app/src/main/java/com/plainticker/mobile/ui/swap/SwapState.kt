@@ -637,7 +637,7 @@ enum class SwapFailure(
     val next: FailureNext,
 ) {
     /** No wallet that speaks the adapter is installed at all. */
-    NO_WALLET(R.string.swap_failed_no_wallet, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
+    NO_WALLET(R.string.no_wallet_app, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
 
     /** The wallet is connected but its lamports or its balances could not be read. */
     CHAIN_UNREAD(R.string.swap_failed_chain_unread, FailureOutcome.NOTHING_SENT, FailureNext.NONE),

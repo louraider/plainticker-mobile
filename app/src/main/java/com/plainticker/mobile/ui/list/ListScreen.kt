@@ -52,6 +52,7 @@ import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberChip
+import com.plainticker.mobile.ui.components.ReservedChipSlot
 import com.plainticker.mobile.ui.components.SkeletonChip
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberSectionHead
@@ -504,10 +505,11 @@ private fun StocksFilterRow(
     ) {
         // The count is not final until the first price run has settled: the visible window lands
         // first, and a chip drawn then read "Deep pool 6" and a second later "Deep pool 17" (QA of
-        // 1.3.20). The slot's outline stands until the run is done; a chip the reader has already
-        // chosen stays, so a selection never vanishes under a finger.
+        // 1.3.20). The slot is held, with nothing drawn in it (fresh-device QA of 1.3.23: its outline
+        // read as an empty chip), until the run is done; a chip the reader has already chosen
+        // stays, so a selection never vanishes under a finger.
         if (holdDeepPoolSlot && active != StocksFilter.Tracked) {
-            SkeletonChip(width = DeepPoolSlotWidth, colors = colors)
+            ReservedChipSlot(width = DeepPoolSlotWidth)
         } else if (showsDeepPoolChip(trackedCount, active)) {
             AmberChip(
                 // Deep pool and Watched read as a label plus a count, not a sentence a plural has

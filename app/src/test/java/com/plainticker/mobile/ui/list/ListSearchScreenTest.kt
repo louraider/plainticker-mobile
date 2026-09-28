@@ -119,7 +119,8 @@ class ListSearchScreenTest {
 
     @Test
     fun `the cold chip slots are outlines, never filled empty boxes`() {
-        assertTrue("SkeletonChip(width = DeepPoolSlotWidth" in listScreen)
+        assertTrue("the cold row's slots are outlines", "SkeletonChip(width = width, colors = colors)" in listScreen)
+        assertTrue("the Deep pool slot beside live chips is held empty", "ReservedChipSlot(width = DeepPoolSlotWidth)" in listScreen)
         assertTrue("the filter row holds its place while cold", "if (sectors.isEmpty() && cold) ColdFilterRow(" in listScreen)
         assertTrue("the cold list sits in the card its rows will fill", "SkeletonTickerRows(count = SkeletonRowCount" in listScreen)
         assertTrue("no filled bar stands for a chip", "SkeletonBar(" !in listScreen)

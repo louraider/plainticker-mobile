@@ -154,7 +154,7 @@ enum class VotePhase(@StringRes val text: Int) {
  */
 enum class VoteRefusal(@StringRes val text: Int, val retryable: Boolean = false) {
     /** No wallet on this device speaks the adapter, so there is nothing to vote with. */
-    NO_WALLET(R.string.vote_no_wallet),
+    NO_WALLET(R.string.no_wallet_app),
 
     /**
      * The authorize round-trip ended without an account: closed, declined, or the wallet did not

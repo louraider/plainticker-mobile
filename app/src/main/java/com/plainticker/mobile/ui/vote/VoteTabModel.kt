@@ -277,4 +277,21 @@ data class VoteTabUiState(
      */
     fun votedFor(ticker: String): Boolean =
         round != null && myVotes.any { it.ticker.equals(ticker, ignoreCase = true) }
+
+    /**
+     * The round [ticker] won, when it is the last round's winner and its analysis is still being
+     * written, or null. Fresh-device QA of 1.3.23 (29): "Round 2 closed. AALx had the most stake"
+     * sat right above AALx, first on the ballot, with a Vote beside it, as if the round had not
+     * already chosen it. The row now says so quietly where Vote would sit. The server does not
+     * refuse such a vote (`POST /api/v1/vote/build` refuses only a covered ticker and a second vote
+     * in one round, server/vote/README.md in the web repo), so nothing else about the ticker
+     * changes: once its analysis is published it leaves the ballot, and a winner that could not be
+     * covered keeps its Vote, because no analysis is coming.
+     */
+    fun wonRound(ticker: String): Int? {
+        val last = previous ?: return null
+        if (!last.ticker.equals(ticker, ignoreCase = true)) return null
+        if (last.opensResearch || last.status == PreviousRoundStatus.UNCOVERABLE) return null
+        return last.roundId
+    }
 }

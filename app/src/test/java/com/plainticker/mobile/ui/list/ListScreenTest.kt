@@ -175,7 +175,9 @@ class ListScreenTest {
         // whatever the partial count, unless the reader has already chosen the chip.
         val slot = row.indexOf("if (holdDeepPoolSlot && active != StocksFilter.Tracked) {")
         assertTrue("the placeholder comes first, in the chip's own slot", slot >= 0 && slot < row.indexOf("AmberChip("))
-        assertTrue("SkeletonChip(width = DeepPoolSlotWidth, colors = colors)" in row)
+        // Fresh-device QA of 1.3.23: the held slot draws nothing, so it cannot read as an empty chip.
+        assertTrue("ReservedChipSlot(width = DeepPoolSlotWidth)" in row)
+        assertFalse("no outline in the held slot beside live chips", "SkeletonChip(" in row)
         assertTrue("holdDeepPoolSlot = pricesPending" in source)
     }
 }

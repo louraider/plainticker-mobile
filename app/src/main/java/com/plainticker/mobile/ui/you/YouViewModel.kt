@@ -6,7 +6,9 @@ import com.plainticker.mobile.data.receipts.ReceiptStore
 import com.plainticker.mobile.data.receipts.VoteReceiptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.wallet.WalletAccount
+import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
+import kotlinx.coroutines.Job
 import com.plainticker.mobile.watchlist.DigestNotifier
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +29,17 @@ data class YouUiState(
     val votesCast: Int = 0,
     val stocksWatched: Int = 0,
     val notificationsOn: Boolean = false,
+    /**
+     * The last Connect found no wallet app on this phone (fresh-device QA of 1.3.23: both Connect
+     * actions on You did nothing on a phone without one), and where it was tapped, so the one
+     * shared sentence stands under that action. Null once a wallet connects or nothing was found
+     * wanting.
+     */
+    val noWalletAt: ConnectPlace? = null,
 )
+
+/** Where on You a Connect was tapped: the hero's text action, or the Wallet group's row. */
+enum class ConnectPlace { HERO, WALLET }
 
 /**
  * The identity summary and this device's own counts (task U1). The entitlement, the stake and
@@ -77,10 +89,24 @@ class YouViewModel(
 
     private data class Counts(val account: WalletAccount?, val swaps: Int, val votes: Int, val watched: Int)
 
-    /** Authorize only; the wallet session is shared, so Portfolio and Pro read the same account. */
-    fun connect() {
-        viewModelScope.launch { wallet.connect() }
+    /**
+     * Authorize only; the wallet session is shared, so Portfolio and Pro read the same account.
+     * A phone with no wallet app answers at once, and says so under the action tapped, in the
+     * same sentence the swap, vote and pay sheets use; a cancel is the reader's own answer and
+     * says nothing.
+     */
+    fun connect(place: ConnectPlace = ConnectPlace.WALLET) {
+        if (connectJob?.isActive == true) return
+        connectJob = viewModelScope.launch {
+            when (wallet.connect()) {
+                is WalletOutcome.NoWallet -> _state.update { it.copy(noWalletAt = place) }
+                is WalletOutcome.Success -> _state.update { it.copy(noWalletAt = null) }
+                is WalletOutcome.Cancelled, is WalletOutcome.Error -> Unit
+            }
+        }
     }
+
+    private var connectJob: Job? = null
 
     fun disconnect() {
         viewModelScope.launch { wallet.disconnect() }

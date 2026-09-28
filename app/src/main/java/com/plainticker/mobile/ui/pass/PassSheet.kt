@@ -67,6 +67,8 @@ data class PassActions(
     val onConfirm: () -> Unit,
     val onRetry: () -> Unit,
     val onClose: () -> Unit,
+    /** "Have a code?" on the no-wallet refusal: close the sheet and open You's code field. */
+    val onHaveCode: () -> Unit = onClose,
 )
 
 @Composable
@@ -148,6 +150,7 @@ private fun PassActions.of(kind: PassActionKind): () -> Unit = when (kind) {
     PassActionKind.Confirm -> onConfirm
     PassActionKind.Retry -> onRetry
     PassActionKind.Close -> onClose
+    PassActionKind.HaveCode -> onHaveCode
 }
 
 @Composable
