@@ -88,6 +88,7 @@ import com.plainticker.mobile.ui.components.Gauge
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.SignalRow
+import com.plainticker.mobile.ui.components.LiveBarSkeleton
 import com.plainticker.mobile.ui.components.SkeletonBar
 import com.plainticker.mobile.ui.components.SkeletonSwitch
 import com.plainticker.mobile.ui.components.TextAction
@@ -666,7 +667,9 @@ private fun PriceBlock(state: DetailUiState) {
 private fun LiveBlock(state: DetailUiState) {
     val line = state.liveLine
     if (line == null) {
-        SkeletonBar(width = 200.dp, height = 20.dp, modifier = Modifier.padding(horizontal = Side))
+        // The loaded bar's own two lines, not one 20dp bar (QA of 1.3.22: the block grew about
+        // 48 px when the read landed and pushed "Backing and controls" down).
+        LiveBarSkeleton()
         return
     }
     LiveBar(

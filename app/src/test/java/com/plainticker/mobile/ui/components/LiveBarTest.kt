@@ -94,4 +94,36 @@ class LiveBarTest {
             worstMetaWidthDp * scale <= columnBudgetDp,
         )
     }
+
+    // ---- QA of 1.3.22: the placeholder is the loaded bar's height ---------------------------------
+
+    private fun body(code: String, function: String): String {
+        val start = code.indexOf(function)
+        assertTrue("no $function", start >= 0)
+        val end = code.indexOf("
+}", start)
+        assertTrue("$function never closes", end > start)
+        return code.substring(start, end)
+    }
+
+    @Test
+    fun `the skeleton keeps the loaded bar's two lines, so Backing and controls does not drop`() {
+        val bar = body(source, "fun LiveBar(")
+        val skeleton = body(source, "fun LiveBarSkeleton(")
+        // The loaded bar is a context line, the gap, and a meta line: 18 + 2 + 16 = 36dp at 1x,
+        // where the old placeholder was one 20dp bar (about 48 px short on the Seeker).
+        assertTrue("the bar's own gap", "Arrangement.spacedBy(LiveBarLineGap)" in bar)
+        assertTrue("the same gap in the skeleton", "Arrangement.spacedBy(LiveBarLineGap)" in skeleton)
+        assertTrue("the label line, read off the label's own style", "AmberType.context.lineHeight.toDp()" in skeleton)
+        assertTrue("the meta line, read off the meta's own style", "AmberType.meta.lineHeight.toDp()" in skeleton)
+        assertEquals("one bar in each line", 2, skeleton.split("SkeletonBar(").size - 1)
+        assertTrue("each bar sits inside its line's own height", "Modifier.height(labelLine)" in skeleton && "Modifier.height(metaLine)" in skeleton)
+
+        val detail = KotlinScan(
+            File(module, "src/main/java/com/plainticker/mobile/ui/detail/DetailScreen.kt").readText(),
+        ).code
+        val live = body(detail, "private fun LiveBlock(")
+        assertTrue("Detail's live block waits on this skeleton", "LiveBarSkeleton()" in live)
+        assertTrue("not the single 20dp bar", "SkeletonBar(" !in live)
+    }
 }
