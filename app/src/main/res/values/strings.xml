@@ -357,6 +357,7 @@
     <string name="swap_failed_no_transaction">The quote carried nothing to approve</string>
     <string name="swap_failed_no_route">Swap unavailable: Jupiter has no route for this token right now</string>
     <string name="swap_failed_connect_refused">The wallet did not answer, so nothing was connected</string>
+    <string name="swap_failed_not_connected">Connect a wallet to swap.</string>
     <string name="swap_failed_submit_unavailable">The result did not come back. Check Portfolio before trying again.</string>
     <string name="swap_failed_quote_gone">The quote went twice over. Start again from the amount.</string>
     <string name="swap_failed_swap_refused">The swap did not land. Nothing was swapped.</string>
@@ -372,6 +373,7 @@
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
     <string name="swap_try_again">Try again</string>
+    <string name="swap_connect_again">Connect again</string>
     <string name="swap_new_quote">Get a new quote</string>
     <string name="swap_landing_note">Signed and sent. Waiting for the network to confirm it.</string>
     <string name="swap_no_balance">No %1$s in this wallet</string>
@@ -398,6 +400,7 @@
     <string name="result_landed_a11y">Received %1$s %2$s</string>
     <string name="result_landed_unreported_a11y">The amount of %1$s received was not reported</string>
     <string name="result_nothing_swapped">Nothing was swapped</string>
+    <string name="result_not_connected">No wallet connected</string>
     <string name="result_not_landed">The swap did not land</string>
     <string name="result_pending">Sent, not confirmed yet</string>
 

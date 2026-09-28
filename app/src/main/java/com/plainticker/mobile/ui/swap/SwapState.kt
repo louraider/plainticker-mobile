@@ -729,7 +729,15 @@ enum class SwapFailure(
      * This is the connect step only. An approval that comes back without a signature is not a
      * failure at all: it is [SwapNote.NOT_APPROVED], and it goes back to the amount step.
      */
-    CONNECT_REFUSED(R.string.swap_failed_connect_refused, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
+    CONNECT_REFUSED(R.string.swap_failed_connect_refused, FailureOutcome.NOT_CONNECTED, FailureNext.CONNECT),
+
+    /**
+     * The connect ended with no account: the person backed out of the wallet's Connect sheet,
+     * closed the chooser, or came back to the app before the wallet answered (QA of 1.3.19: the
+     * sheet used to count "Reading the wallet" past 87 s). The sheet stays, says so, and offers
+     * the connect again beside Close.
+     */
+    NOT_CONNECTED(R.string.swap_failed_not_connected, FailureOutcome.NOT_CONNECTED, FailureNext.CONNECT),
 
     /**
      * POST /execute did not answer, answered with no structured code, or answered with a code
@@ -765,6 +773,9 @@ enum class FailureOutcome {
 
     /** It was signed and handed on, and no answer says whether it landed. */
     UNKNOWN,
+
+    /** No wallet was connected, so nothing was read, asked or sent. */
+    NOT_CONNECTED,
 }
 
 /** The one forward action a failure offers. [NONE] leaves Close on its own. */
@@ -782,6 +793,9 @@ enum class FailureNext {
 
     /** Portfolio, to see whether it landed. Never a retry. */
     PORTFOLIO,
+
+    /** The connect again, from the top of the same leg: "Connect again". */
+    CONNECT,
 }
 
 /** A neutral word about a round-trip that is not a failure. */

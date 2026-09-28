@@ -39,11 +39,20 @@ class WalletSessionHolder(
     @Volatile
     private var current: WalletSession? = null
 
-    fun bind(sender: ActivityResultSender): MwaWalletSession = attach(transportFor(sender))
+    /**
+     * @param inFront whether the Activity that owns [sender] is resumed: how a request learns the
+     *   person came back from the wallet without an answer ([MwaWalletSession]).
+     */
+    fun bind(sender: ActivityResultSender, inFront: StateFlow<Boolean>): MwaWalletSession =
+        attach(transportFor(sender), inFront)
 
     /** [bind] without a sender, for a transport that needs none. */
-    internal fun attach(transport: MwaTransport): MwaWalletSession =
-        MwaWalletSession(transport, tokens, accounts, store, mutex).also { current = it }
+    internal fun attach(
+        transport: MwaTransport,
+        inFront: StateFlow<Boolean> = MutableStateFlow(true),
+        dismissGraceMillis: Long = MwaWalletSession.DISMISS_GRACE_MS,
+    ): MwaWalletSession =
+        MwaWalletSession(transport, tokens, accounts, store, mutex, inFront, dismissGraceMillis).also { current = it }
 
     fun unbind(session: WalletSession) {
         if (current === session) current = null
