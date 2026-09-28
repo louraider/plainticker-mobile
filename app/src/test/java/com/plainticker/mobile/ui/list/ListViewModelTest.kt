@@ -27,6 +27,7 @@ import com.plainticker.mobile.repo.HeldCatalogRepository
 import com.plainticker.mobile.repo.HeldPriceRepository
 import com.plainticker.mobile.repo.HeldSummaryRepository
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.VenueHours
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SnapshotRepository
@@ -269,6 +270,66 @@ class ListViewModelTest {
         assertEquals(ListBanner.MarketClosedLocal, vm.state.value.banner)
     }
 
+    // ---- Final QA of 1.3.19: the cold-start banner flap --------------------------------
+
+    /** Closed by the calendar at [marketShut]: the block cached while open ran out at the 16:00 close. */
+    private val expiredOpen = Trading(currentPeriod = TradingPeriod.MARKET, openNow = true, nextChangeAt = "2026-09-14T20:00:00Z")
+
+    @Test
+    fun `a stale block with its live read still out never says the hours did not load`() = runTest {
+        val live = Gate()
+        val inner = FakeCatalogRepository(Result.success(catalog(expiredOpen)))
+        val catalog = object : CatalogRepository by inner {
+            override suspend fun liveTrading(symbol: String): Trading? {
+                live.await()
+                return null
+            }
+        }
+        val vm = viewModel(catalog = catalog, clock = marketShut)
+        advanceUntilIdle()
+        assertEquals(MarketSource.LOCAL_SCHEDULE, vm.state.value.market?.source)
+        assertEquals("the live read is still out: said plainly", ListBanner.MarketClosed, vm.state.value.banner)
+
+        live.release() // and it failed: only now did the live hours not load
+        advanceUntilIdle()
+        assertEquals(ListBanner.MarketClosedLocal, vm.state.value.banner)
+    }
+
+    @Test
+    fun `Stocks reads the live hours another screen already read, and follows the next one`() = runTest {
+        val shared = VenueHours()
+        shared.offer(Trading(currentPeriod = TradingPeriod.CLOSED, openNow = false, nextChangeAt = "2026-09-14T22:00:00Z"))
+        val inner = FakeCatalogRepository(Result.success(catalog(expiredOpen)))
+        val catalog = object : CatalogRepository by inner {
+            override val venueHours: VenueHours = shared
+        }
+        val vm = viewModel(catalog = catalog, clock = marketShut)
+        advanceUntilIdle()
+        assertEquals("Today's live block, not the stale one", MarketSource.VENUE, vm.state.value.market?.source)
+        assertEquals(ListBanner.MarketClosed, vm.state.value.banner)
+
+        shared.offer(Trading(currentPeriod = TradingPeriod.EXTENDED, openNow = true, nextChangeAt = "2026-09-15T00:00:00Z"))
+        advanceUntilIdle()
+        assertEquals(com.plainticker.mobile.data.xstocks.MarketState.EXTENDED, vm.state.value.market?.state)
+    }
+
+    @Test
+    fun `a live analysis inside the grace means the bundled snapshot is never drawn`() = runTest {
+        val network = Gate()
+        val vm = viewModel(
+            summaries = HeldSummaryRepository(network, FakeSummaryRepository(Result.success(summary()))),
+            snapshots = FakeSnapshotRepository(olderCoverage()),
+        )
+        val seen = mutableListOf<ListUiState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { seen += it } }
+        advanceTimeBy(3_000L) // a cold TLS start
+        network.release()
+        advanceUntilIdle()
+        assertTrue("never the 19 Sep list", seen.none { it.analysisFromSnapshot && it.analyzed.isNotEmpty() })
+        assertTrue(seen.none { it.banner is ListBanner.SnapshotRefreshing })
+        assertEquals(listOf("AAPL", "JPM"), vm.state.value.analyzed.map { it.ticker })
+    }
+
     // ---- The join ----------------------------------------------------------------------
 
     @Test
@@ -390,6 +451,50 @@ class ListViewModelTest {
         vm.state.test {
             val state = awaitUntil { !it.refreshing }
             assertEquals(listOf("84", "1"), state.analyzed.map { Fmt.decimal(it.composite!!, decimals = 0) })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Final QA of 1.3.19: ABBV has a full page (composite, F-Score, The read) and no `/summary`
+     * row, and was listed as "AbbVie xStock" under Without analysis with a Vote button, in search
+     * and in the Health Care chip.
+     */
+    @Test
+    fun `a covered company with no summary row is analysed, in its own sector, never offered a vote`() = runTest {
+        val abbv = xStockTrading("ABBVx", "ABBV", "ABBV-mint", Trading(currentPeriod = TradingPeriod.MARKET, openNow = true), "AbbVie xStock")
+        val vm = viewModel(catalog = FakeCatalogRepository(Result.success(catalog() + abbv)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.ticker == "ABBV" } }
+            val row = state.analyzed.single { it.ticker == "ABBV" }
+            assertTrue(row.analyzed)
+            assertEquals("Health Care", row.sector)
+            assertEquals("AbbVie Inc.", row.company)
+            assertNull("no classification is claimed for it", row.state)
+            assertTrue("never under Without analysis", state.withoutAnalysis.none { it.ticker == "ABBV" })
+            assertEquals(listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        vm.search("abbv")
+        vm.state.test {
+            val searched = awaitUntil { it.query == "abbv" }
+            assertEquals(listOf("ABBV"), searched.analyzed.map { it.ticker })
+            assertTrue(searched.withoutAnalysis.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the server's covered list, once sent, is the covered set`() = runTest {
+        val withCovered = summary().copy(covered = listOf("AAPL", "JPM", "TSLA"))
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(withCovered)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.ticker == "TSLA" } }
+            assertTrue(state.withoutAnalysis.isEmpty())
+            assertEquals("Consumer Discretionary", state.analyzed.single { it.ticker == "TSLA" }.sector)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1637,7 +1742,7 @@ class ListViewModelTest {
 
     @Test
     fun `a refresh the reader is left waiting on still says the list is a snapshot`() = runTest {
-        val vm = slowly(afterMillis = 5_000)
+        val vm = slowly(afterMillis = 8_000)
 
         advanceTimeBy(800)
         // Inside the grace the live analysis may still land, so skeletons stand and the snapshot is
@@ -1645,7 +1750,7 @@ class ListViewModelTest {
         assertTrue("skeletons, not the snapshot, in the first second", vm.state.value.isLoading)
         assertNull("and nothing flashed in the first second", vm.state.value.banner)
 
-        advanceTimeBy(3_000)
+        advanceTimeBy(ListViewModel.SNAPSHOT_BANNER_GRACE_MS)
         assertEquals(
             "a refresh this long is worth a line",
             ListBanner.SnapshotRefreshing(LocalDate.of(2026, 9, 12)),
@@ -1709,5 +1814,23 @@ class ListViewModelTest {
             catalog = FakeCatalogRepository(Result.success(assets)),
             prices = prices,
         )
+    }
+
+    // ---- Pull to refresh (final QA of 1.3.19) ---------------------------------------------
+
+    @Test
+    fun `a pull draws the indicator until fresh figures land, asking past the price cache`() = runTest {
+        val prices = FakePriceRepository()
+        val vm = viewModel(prices = prices)
+        advanceUntilIdle()
+        val asked = prices.requested.size
+        assertFalse(vm.state.value.pulling)
+
+        vm.pull()
+        assertTrue(vm.state.value.pulling)
+        advanceUntilIdle()
+        assertFalse(vm.state.value.pulling)
+        assertEquals("every cached figure is dropped first", listOf<Collection<String>?>(null), prices.forgotten)
+        assertTrue("and the rows are priced again", prices.requested.size > asked)
     }
 }

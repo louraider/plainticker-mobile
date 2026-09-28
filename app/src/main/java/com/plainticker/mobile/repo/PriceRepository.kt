@@ -46,6 +46,14 @@ interface PriceRepository {
      */
     val latest: StateFlow<Map<String, PriceEntry>> get() = NO_QUOTES
 
+    /**
+     * Drops the cached answers for [mints], or for every mint when null, so the next ask goes to
+     * Jupiter: a pull to refresh is a reader asking for a new figure, and the 30 s window would
+     * otherwise hand back the one already on screen (final QA of 1.3.19: a pull on Stocks left
+     * every figure where it was). [latest] keeps what it holds until the new answer replaces it.
+     */
+    suspend fun forget(mints: Collection<String>? = null) {}
+
     companion object {
         /** Price every mint given, with no leading window. */
         const val NO_LIMIT = -1
@@ -139,6 +147,12 @@ class CachedPriceRepository(
         // A mint another screen priced while this fetch was out is priced, not unknown: no mint
         // may be in both halves of the answer.
         return PriceFetch(out, fetched.unfetched - out.keys, fetched.failure)
+    }
+
+    override suspend fun forget(mints: Collection<String>?) {
+        mutex.withLock {
+            if (mints == null) cache.clear() else mints.forEach { cache.remove(it.trim()) }
+        }
     }
 
     /** Caller must own [mutex]. True when [mint] carries no answer newer than [asked]. */

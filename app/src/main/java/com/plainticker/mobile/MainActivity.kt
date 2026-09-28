@@ -15,6 +15,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.plainticker.mobile.ui.nav.AppNavHost
 import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberLightColors
@@ -51,6 +53,12 @@ class MainActivity : ComponentActivity() {
     private var walletSession: MwaWalletSession? = null
 
     /**
+     * Resumed or not: a wallet request that sees this leave for the wallet and come back without
+     * an answer ends as a cancel instead of waiting out the adapter's timeouts.
+     */
+    private val inFront = MutableStateFlow(true)
+
+    /**
      * The tab an intent asked for, or null. The digest notification names the Watchlist, and a
      * notification that opens something other than what it named is worse than no notification;
      * this is a flow rather than a start argument because the Activity is single top and the
@@ -76,7 +84,16 @@ class MainActivity : ComponentActivity() {
         val container = appContainer
         // Must be created before the Activity starts: it registers for an activity result.
         val sender = ActivityResultSender(this)
-        walletSession = container.walletSession.bind(sender)
+        lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> inFront.value = true
+                    Lifecycle.Event.ON_PAUSE -> inFront.value = false
+                    else -> Unit
+                }
+            },
+        )
+        walletSession = container.walletSession.bind(sender, inFront)
 
         setContent {
             val tab by openTab.collectAsState()

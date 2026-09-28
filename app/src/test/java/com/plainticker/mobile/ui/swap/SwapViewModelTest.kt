@@ -282,18 +282,28 @@ class SwapViewModelTest {
     }
 
     @Test
-    fun `cancelling the connect closes the sheet with a neutral note and no failure`() = runTest {
+    fun `a cancelled connect keeps the sheet on no wallet connected, and Connect again asks once more`() = runTest {
+        // QA of 1.3.19: back from the wallet's Connect sheet left "Reading the wallet" counting.
         val mock = jupiter()
-        val wallet = FakeWalletSession().apply { enqueue(WalletOutcome.Cancelled) }
+        val wallet = FakeWalletSession().apply { enqueue(WalletOutcome.Cancelled, WalletOutcome.Cancelled) }
         val vm = viewModel(mock, wallet)
 
         vm.state.test {
             awaitItem()
             vm.open(tslax)
-            val closed = awaitUntil { it is SwapState.Closed && it.note != null } as SwapState.Closed
-            assertEquals(SwapNote.CANCELLED_IN_WALLET, closed.note)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.NOT_CONNECTED, failed.reason)
+            assertEquals(FailureNext.CONNECT, failed.reason.next)
+            assertNull("the wallet was never read", failed.funds)
             assertTrue(mock.requests.isEmpty())
             assertEquals(0, wallet.callCount)
+            assertEquals(1, wallet.connectCount)
+
+            vm.retry()
+            awaitUntil { it is SwapState.Opening }
+            val again = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.NOT_CONNECTED, again.reason)
+            assertEquals("Connect again is one more connect", 2, wallet.connectCount)
             cancelAndIgnoreRemainingEvents()
         }
     }

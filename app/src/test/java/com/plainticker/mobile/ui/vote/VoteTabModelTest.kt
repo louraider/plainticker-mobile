@@ -196,6 +196,24 @@ class VoteTabModelTest {
         assertEquals(listOf("ASML"), mine.map { it.ticker })
     }
 
+    /** Final QA of 1.3.19: You counted a round 2 vote "Listed under Vote", which listed only round 3's. */
+    @Test
+    fun `earlier rounds' votes are listed by round, most recent first, never repeating this round's`() {
+        val receipts = listOf(
+            receipt("TSM", alice, round = 1, landedAtMillis = 1_000L),
+            receipt("ASML", alice, round = 2, landedAtMillis = 2_000L),
+            receipt("MDT", alice, round = 2, landedAtMillis = 3_000L),
+            receipt("NKE", alice, round = null, landedAtMillis = 500L),
+            receipt("ABF", bob, round = 1),
+            receipt("CRWD", alice, round = 3, landedAtMillis = 9_000L),
+        )
+        val past = pastVotesFor(receipts, VoteRound(3, "", ""), connectedVoter = alice)
+        assertEquals(listOf(2, 1, null), past.map { it.round })
+        assertEquals(listOf("MDT", "ASML"), past[0].votes.map { it.ticker })
+        assertTrue("the open round's vote is under Your votes, not here", past.none { g -> g.votes.any { it.ticker == "CRWD" } })
+        assertTrue("another wallet's vote is not yours", past.none { g -> g.votes.any { it.ticker == "ABF" } })
+    }
+
     @Test
     fun `no round at all is the minimum-slice case, and nothing is scoped to a round that does not exist`() {
         val receipts = listOf(receipt("TSM", alice, round = 1), receipt("ASML", alice, round = null))
@@ -266,11 +284,18 @@ class VoteTabModelTest {
     @Test
     fun `the round closes in the reader's own zone and words`() {
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
-        val berlin = roundClosesLocal(round, java.time.ZoneId.of("Europe/Berlin"))!!
+        val weekBefore = java.time.Instant.parse("2026-09-21T06:00:00Z").toEpochMilli()
+        val berlin = roundClosesLocal(round, java.time.ZoneId.of("Europe/Berlin"), weekBefore)!!
         assertEquals("Closes Monday 28 Sep at 02:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(berlin))
-        val newYork = roundClosesLocal(round, java.time.ZoneId.of("America/New_York"))!!
+        val newYork = roundClosesLocal(round, java.time.ZoneId.of("America/New_York"), weekBefore)!!
         assertEquals("Closes Sunday 27 Sep at 20:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(newYork))
-        assertEquals(null, roundClosesLocal(round.copy(closesAt = "not-a-date"), java.time.ZoneOffset.UTC))
+        assertEquals(null, roundClosesLocal(round.copy(closesAt = "not-a-date"), java.time.ZoneOffset.UTC, weekBefore))
+        // Inside the last day the weekday is enough: the same rule Today's lede keeps.
+        val lastDay = java.time.Instant.parse("2026-09-27T12:00:00Z").toEpochMilli()
+        assertEquals(
+            "Closes Monday at 02:00 your time",
+            com.plainticker.mobile.ui.ShippedCopy.render(roundClosesLocal(round, java.time.ZoneId.of("Europe/Berlin"), lastDay)!!),
+        )
     }
 
     /**

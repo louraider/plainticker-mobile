@@ -14,6 +14,7 @@ import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.Coverage
 import com.plainticker.mobile.repo.MintRepository
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
@@ -70,7 +71,7 @@ class DetailViewModel(
     private val ticker = ticker.trim().uppercase() // lint-allow uppercase: API ticker key
 
     private val _state = MutableStateFlow(
-        DetailUiState(ticker = this.ticker, watched = this.ticker in watchlist.tickers.value),
+        DetailUiState(ticker = this.ticker, watched = this.ticker in watchlist.tickers.value, known = Coverage.company(this.ticker)),
     )
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
@@ -127,7 +128,7 @@ class DetailViewModel(
         refreshJob = viewModelScope.launch {
             val now = clock.nowMillis()
             _state.update {
-                DetailUiState(ticker = ticker, watched = it.watched, nowMillis = now)
+                DetailUiState(ticker = ticker, watched = it.watched, nowMillis = now, known = it.known)
             }
 
             // The analysis does not wait for the chain and the chain does not wait for the
@@ -137,6 +138,37 @@ class DetailViewModel(
             // Independent of both: a server that cannot answer this call, or has not turned the
             // route on yet, must never delay a single block this screen drew before task A6.
             launch { loadRead() }
+        }
+    }
+
+    /**
+     * Pull to refresh (final QA of 1.3.19: a pull drew nothing and changed nothing). Unlike
+     * [refresh] nothing on screen goes back to a skeleton: each source is asked again, the price
+     * past the 30 s cache, and replaces its own piece when it answers. The indicator stands until
+     * the analysis, the read, the quote and the mint have answered, and at least [PULL_MIN_MS].
+     */
+    fun pull() {
+        if (_state.value.pulling) return
+        _state.update { it.copy(pulling = true) }
+        viewModelScope.launch {
+            try {
+                coroutineScope {
+                    launch { delay(PULL_MIN_MS) }
+                    launch { loadAnalysis() }
+                    launch { loadRead() }
+                    val mint = _state.value.mint
+                    val symbol = _state.value.symbol
+                    if (mint != null) {
+                        launch {
+                            prices.forget(listOf(mint))
+                            loadQuote(mint)
+                        }
+                        if (symbol != null) launch { loadChainThenSplit(mint, symbol) }
+                    }
+                }
+            } finally {
+                _state.update { it.copy(pulling = false, nowMillis = clock.nowMillis()) }
+            }
         }
     }
 
@@ -337,6 +369,9 @@ class DetailViewModel(
     companion object {
         /** How often the wall clock is re-read while the screen is observed. */
         internal const val TICK_MILLIS = 1_000L
+
+        /** How long a pull's indicator stands at the least, however fast the sources answer. */
+        const val PULL_MIN_MS = 600L
     }
 }
 

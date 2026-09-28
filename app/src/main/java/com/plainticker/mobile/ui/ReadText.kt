@@ -21,7 +21,12 @@ import java.time.LocalDate
  *    not [currentYear]. A string that is not a real calendar day is left as it was.
  * 3. **References to what this app does not have** (device QA of 1.3.18): the web page numbers its
  *    sections and draws a same-sector table; the app has neither. "(see section 06)" and "in
- *    section 06" are dropped, and "same-sector table" reads "sector comparison".
+ *    section 06" are dropped, and "same-sector table" reads "sector comparison". So do the other
+ *    names the web gives that table (final QA of 1.3.19): "the sector table", "the table
+ *    comparison", and a sector's own name before "table" ("the Information Technology table"
+ *    reads "the Information Technology sector comparison").
+ * 4. **"has beat"** reads "has beaten" (final QA of 1.3.19: "The company has beat consensus in 7
+ *    of 7 recent quarters").
  *
  * A pair of dashes is found across an abbreviation: "AbbVie Inc. beat" is one sentence, so a stop
  * counts as a sentence end only before a capital or the end of the text (device QA of 1.3.18: the
@@ -35,6 +40,12 @@ import java.time.LocalDate
  * Pure: no Android, no clock; the caller passes the year.
  */
 object ReadText {
+
+    /** The eleven GICS sectors, the names `/summary` and the analysis carry. */
+    private val GICS_SECTORS = listOf(
+        "Communication Services", "Consumer Discretionary", "Consumer Staples", "Energy", "Financials",
+        "Health Care", "Industrials", "Information Technology", "Materials", "Real Estate", "Utilities",
+    )
 
     private val EM: Char = Char(0x2014)
     private val EN: Char = Char(0x2013)
@@ -71,10 +82,28 @@ object ReadText {
     /** "same-sector table": a table the web page draws beside the read and the app does not. */
     private val sectorTable = Regex("\\b[Ss]ame[- ]sector table\\b")
 
+    /** "sector table", "Sector table": the same table, named without "same". */
+    private val plainSectorTable = Regex("\\b([Ss])ector table\\b")
+
+    /** "the table comparison": the web's third name for it. */
+    private val tableComparison = Regex("\\btable comparison\\b")
+
+    /** A GICS sector's own name before "table": "the Information Technology table". */
+    private val namedSectorTable = Regex(
+        "\\b(" + GICS_SECTORS.joinToString("|") { Regex.escape(it) } + ") table\\b",
+    )
+
+    /** "has beat": the past participle is "beaten". Only this exact pair, so nothing else moves. */
+    private val hasBeat = Regex("\\bhas beat\\b")
+
     private fun references(text: String): String = text
         .replace(sectionAside, "")
         .replace(sectionClause, "")
         .replace(sectorTable) { if (it.value.first().isUpperCase()) "Sector comparison" else "sector comparison" }
+        .replace(plainSectorTable) { it.groupValues[1] + "ector comparison" }
+        .replace(tableComparison, "sector comparison")
+        .replace(namedSectorTable) { it.groupValues[1] + " sector comparison" }
+        .replace(hasBeat, "has beaten")
 
     // ---- Sentence case for step titles ---------------------------------------------------------
 

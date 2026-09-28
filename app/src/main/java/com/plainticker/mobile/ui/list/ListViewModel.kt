@@ -17,6 +17,7 @@ import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.Coverage
 import com.plainticker.mobile.repo.MarketClock
 import com.plainticker.mobile.repo.CatalogUpdate
 import com.plainticker.mobile.repo.NextUpRepository
@@ -33,9 +34,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
 /** The one word right of the composite. Never a verdict: it describes the classification. */
@@ -275,6 +278,11 @@ data class ListUiState(
      * close is a live price or last night's.
      */
     val market: MarketStatus? = null,
+    /**
+     * A pull to refresh is running: the indicator stands until the analysis, the catalog and the
+     * first screenful of fresh prices have answered ([ListViewModel.pull]).
+     */
+    val pulling: Boolean = false,
 ) {
     val isEmpty: Boolean get() = !isLoading && !failed && analyzed.isEmpty() && withoutAnalysis.isEmpty()
 
@@ -381,6 +389,10 @@ class ListViewModel(
     // source replace an earlier one in place, without either having to know about the other.
 
     private var snapshotRows: List<SummaryRow> = emptyList()
+
+    /** Covered tickers with no row of their own, added bare by [Coverage.rows], per source. */
+    private var snapshotBare: Set<String> = emptySet()
+    private var liveBare: Set<String> = emptySet()
     private var snapshotAssets: List<XStockAsset> = emptyList()
     private var snapshotCapturedOn: LocalDate? = null
     private var haveSnapshot = false
@@ -412,8 +424,15 @@ class ListViewModel(
      * and neither keeps showing the status the catalog cache was fetched under.
      */
     private val marketClock = MarketClock(clock, catalog, viewModelScope, localUntilKnown = true) { market ->
-        _state.update { it.copy(market = market) }
+        _state.update { it.copy(market = market, hoursPending = hoursPending()) }
     }
+
+    /**
+     * The live hours are still on their way: the catalog has not settled, or a live block is being
+     * read (by this screen or Today). Never "did not load" while a load is in flight (final QA of
+     * 1.3.19: the line appeared mid-load, while Today already said "Opens today at 16:30").
+     */
+    private fun hoursPending(): Boolean = !catalogSettled || marketClock.loading
 
     /**
      * True while a first load holds the bundled snapshot back for the live analysis (device QA of
@@ -453,6 +472,36 @@ class ListViewModel(
      * this morning could not be seen at all until tomorrow, whatever the reader did.
      */
     fun refresh() = load(userAsked = true)
+
+    /** Counts the first-screenful price answers, so a pull knows when fresh figures are drawn. */
+    private val windowsPriced = MutableStateFlow(0)
+
+    /**
+     * Pull to refresh (final QA of 1.3.19: Stocks had none, and a figure never changed). Asks the
+     * analysis and the catalog again the way a load does, and Jupiter past the 30 s price cache,
+     * with the indicator up until the first screenful of new figures is drawn (at least
+     * [PULL_MIN_MS], at most [PULL_MAX_MS]). The catalog is not fetched whole again: its hours are
+     * the part that goes stale, and [MarketClock] reads those live on its own.
+     */
+    fun pull() {
+        if (_state.value.pulling) return
+        _state.update { it.copy(pulling = true) }
+        viewModelScope.launch {
+            val least = launch { delay(PULL_MIN_MS) }
+            try {
+                prices.forget()
+                val before = windowsPriced.value
+                load(userAsked = false)
+                refreshJob?.join()
+                if (priceableMints().isNotEmpty()) {
+                    withTimeoutOrNull(PULL_MAX_MS) { windowsPriced.first { it > before } }
+                }
+                least.join()
+            } finally {
+                _state.update { it.copy(pulling = false) }
+            }
+        }
+    }
 
     /**
      * Stocks came back to the foreground: recompute the venue now and at every boundary after, and
@@ -534,7 +583,9 @@ class ListViewModel(
                 // No per-row age: the banner names the day the snapshot was captured, and a row
                 // saying "3 days old" beside "snapshot of 19 Sep" counted from a day the reader
                 // cannot see (device QA of 1.3.18). One age statement, the banner's.
-                snapshotRows = snapshot.rows.map { it.toSummaryRow().copy(ageDays = null) }
+                val bundledRows = snapshot.rows.map { it.toSummaryRow().copy(ageDays = null) }
+                snapshotRows = Coverage.rows(bundledRows)
+                snapshotBare = Coverage.bare(bundledRows)
                 snapshotAssets = snapshot.assets.map { it.toXStockAsset() }
                 snapshotCapturedOn = snapshot.capturedOn
                 haveSnapshot = true
@@ -549,7 +600,9 @@ class ListViewModel(
                 // A refresh that failed takes nothing away: the rows it could not replace are
                 // still the best answer this screen has.
                 answer.getOrNull()?.let {
-                    liveRows = it.rows
+                    // Every covered company, a row or not (QA of 1.3.19: ABBV has a page and no row).
+                    liveRows = Coverage.rows(it)
+                    liveBare = Coverage.bare(it)
                     generatedAt = it.generatedAt
                 }
                 summarySettled = true
@@ -730,10 +783,13 @@ class ListViewModel(
         // from /summary, which such a row can never be, and the device pass caught BKNG sitting
         // inside Analyzed with no token behind it. While the catalog is unavailable nothing is
         // known about any token, so the rows are kept rather than silently dropped.
+        // A covered company added bare (no row of its own) is listed only once its token is known:
+        // with the catalog down there is nothing to say about it beyond its name.
+        val bare = if (liveRows != null) liveBare else snapshotBare
         val analyzed = unique
             .mapNotNull { row ->
                 val asset = byTicker[row.ticker.uppercase()] // lint-allow uppercase: map key
-                if (asset == null && catalogKnown) null else row.toListRow(asset, asFraction)
+                if (asset == null && (catalogKnown || row.ticker.uppercase() in bare)) null else row.toListRow(asset, asFraction) // lint-allow uppercase: map key
             }
             .sortedWith(compareBy<ListRow, Double?>(nullsLast(reverseOrder())) { it.composite }.thenBy { it.ticker })
 
@@ -768,7 +824,7 @@ class ListViewModel(
                 generatedAt = generatedAt,
                 snapshotBannerDue = bannerGracePassed,
                 analysisFromSnapshot = haveSnapshot && liveRows == null,
-                hoursPending = !catalogSettled && liveAssets.isEmpty(),
+                hoursPending = hoursPending(),
             )
         }
     }
@@ -833,6 +889,7 @@ class ListViewModel(
     private suspend fun fetchPrices(mints: List<String>) {
         val window = prices.pricesFirst(mints, FIRST_SCREENFUL)
         applyPrices(window, asked = mints.take(FIRST_SCREENFUL))
+        windowsPriced.update { it + 1 }
         if (mints.size > FIRST_SCREENFUL) {
             applyPrices(window.mergedWith(prices.pricesFirst(mints)), asked = mints)
         }
@@ -1001,8 +1058,18 @@ class ListViewModel(
          * so no refresh that behaves like a warm launch can reach it, and it costs the honest
          * case almost nothing: the first ever launch settles at 12.4 s, so the line still stands
          * for about eleven of them.
+         *
+         * 1.5 s until 1.3.20. Final QA of 1.3.19 caught a cold start whose `/summary` answered
+         * just past it: the snapshot of 19 Sep was drawn (Communication Services 11, METAx 66),
+         * then replaced by the live list (5, METAx 59) and a two-line banner, a jump of about
+         * 50 px. The snapshot is for offline and slow networks; 4 s holds the skeletons through
+         * a cold TLS start and still draws the snapshot early on a network that is really slow.
          */
-        const val SNAPSHOT_BANNER_GRACE_MS = 1_500L
+        const val SNAPSHOT_BANNER_GRACE_MS = 4_000L
+
+        /** The pull indicator's least and most stay (see [pull]). */
+        const val PULL_MIN_MS = 600L
+        const val PULL_MAX_MS = 15_000L
 
         /**
          * How old the list's prices may get while Stocks is on screen: the price cache's own

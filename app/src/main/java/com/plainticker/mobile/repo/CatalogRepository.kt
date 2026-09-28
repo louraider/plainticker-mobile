@@ -82,6 +82,13 @@ interface CatalogRepository {
      * so a repository with no network (a fake, a preview) simply never refreshes.
      */
     suspend fun liveTrading(symbol: String): Trading? = null
+
+    /**
+     * The venue's hours as the newest read of any screen left them, shared by every [MarketClock]
+     * built on this repository ([VenueHours]). Null (the default, fakes and previews) gives each
+     * clock its own.
+     */
+    val venueHours: VenueHours? get() = null
 }
 
 /**
@@ -115,6 +122,9 @@ class CachedCatalogRepository(
     private val multiplierTtlMillis: Long = MULTIPLIER_TTL_MS,
     private val reservesTtlMillis: Long = RESERVES_TTL_MS,
 ) : CatalogRepository {
+
+    /** One venue for every screen's [MarketClock] (final QA of 1.3.19). */
+    override val venueHours: VenueHours = VenueHours()
 
     private class Cached<T>(val value: T, val at: Long)
 

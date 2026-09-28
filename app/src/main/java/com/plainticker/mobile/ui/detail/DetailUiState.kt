@@ -11,6 +11,7 @@ import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.PriceLabel
 import com.plainticker.mobile.data.xstocks.Reserves
 import com.plainticker.mobile.data.xstocks.XStockAsset
+import com.plainticker.mobile.repo.Coverage
 
 /**
  * One independently loaded piece of the Detail screen.
@@ -136,6 +137,16 @@ data class DetailUiState(
      * turned on for this feature, must never keep the rest of this screen on its skeleton.
      */
     val read: ReadState = ReadState.Loading,
+    /**
+     * The company and sector this ticker's page shows, known before any call answers when it is
+     * a covered company ([com.plainticker.mobile.repo.Coverage]). Final QA of 1.3.19: Detail opened
+     * on "Meta xStock" and became "Meta Platforms, Inc." with a sector line under it once the
+     * analysis landed, a jump of about 207 px; the hero now stands in its final shape from the
+     * first frame.
+     */
+    val known: Coverage.CoveredCompany? = null,
+    /** A pull to refresh is running ([DetailViewModel.pull]); the indicator stands meanwhile. */
+    val pulling: Boolean = false,
 ) {
     val asset: XStockAsset? get() = catalogAsset.valueOrNull
     val symbol: String? get() = asset?.symbol

@@ -165,4 +165,50 @@ class ReadTextTest {
         val plain = "ROIC of 82.3% runs above the sector median by 62.4 pp."
         assertEquals(plain, norm(plain))
     }
+
+    /** Final QA of 1.3.19 (aapl_p6, aapl_p7, abbv_p7, jef_p7): the exact strings the device drew. */
+    @Test
+    fun `every name the web gives its sector table reads sector comparison`() {
+        assertEquals(
+            "Compare peers in the sector comparison by ROE and operating margin",
+            norm("Compare peers in the sector table by ROE and operating margin"),
+        )
+        assertEquals(
+            "Compare Jefferies against peers in the sector comparison by ROE and operating margin",
+            norm("Compare Jefferies against peers in the sector table by ROE and operating margin"),
+        )
+        assertEquals(
+            "Compare peers from the sector comparison by F-Score, ROE, and operating margin",
+            norm("Compare peers from the sector table by F-Score, ROE, and operating margin"),
+        )
+        assertEquals(
+            "Pick two or three companies from the Information Technology sector comparison and line them up by ROE and Op. margin. " +
+                "Apple's ROE of 171.4% stands 140.9 pp above the sector median, so the comparison will show how far that spread extends across the peer set.",
+            norm(
+                "Pick two or three companies from the Information Technology table and line them up by ROE and Op. margin. " +
+                    "Apple's ROE of 171.4% stands 140.9 pp above the sector median, so the comparison will show how far that spread extends across the peer set.",
+            ),
+        )
+        assertEquals(
+            "Jefferies' P/B of 0.9x against a sector median of 2.6x suggests the market is pricing in lower returns, " +
+                "and the sector comparison can show whether that gap is sector-wide or specific to this firm.",
+            norm(
+                "Jefferies' P/B of 0.9x against a sector median of 2.6x suggests the market is pricing in lower returns, " +
+                    "and the table comparison can show whether that gap is sector-wide or specific to this firm.",
+            ),
+        )
+        assertEquals("Sector comparison first.", norm("Sector table first."))
+        // Nothing else about a table moves.
+        assertEquals("The table below is not drawn here.", norm("The table below is not drawn here."))
+    }
+
+    @Test
+    fun `has beat reads has beaten, and nothing else moves`() {
+        assertEquals(
+            "The company has beaten consensus in 7 of 7 recent quarters, yet consensus models faster EPS growth.",
+            norm("The company has beat consensus in 7 of 7 recent quarters, yet consensus models faster EPS growth."),
+        )
+        assertEquals("It has beaten estimates.", norm("It has beaten estimates."))
+        assertEquals("AbbVie beat estimates in 6 of 6 quarters.", norm("AbbVie beat estimates in 6 of 6 quarters."))
+    }
 }

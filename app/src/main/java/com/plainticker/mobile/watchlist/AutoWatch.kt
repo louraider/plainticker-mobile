@@ -1,5 +1,6 @@
 package com.plainticker.mobile.watchlist
 
+import com.plainticker.mobile.repo.Coverage
 import com.plainticker.mobile.repo.researchPublished
 import android.content.SharedPreferences
 import com.plainticker.mobile.data.receipts.SwapReceipt
@@ -137,7 +138,7 @@ class AutoWatch(
         (analysed != null && key in analysed) || summaries.researchPublished(key)
 
     private suspend fun analysedTickers(): Set<String>? = try {
-        summaries.summary().rows.mapNotNull { normalize(it.ticker) }.toSet()
+        Coverage.tickers(summaries.summary())
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failed: Exception) {

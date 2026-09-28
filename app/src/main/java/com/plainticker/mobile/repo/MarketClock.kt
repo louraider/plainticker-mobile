@@ -9,6 +9,8 @@ import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -31,6 +33,12 @@ import kotlinx.coroutines.launch
  *
  * Owned by a ViewModel and run on its scope; [publish] is how each ViewModel writes the status
  * into its own state.
+ *
+ * **One venue for every screen** (final QA of 1.3.19: Today had the live hours while Stocks, on
+ * the same launch, said they did not load). Every block a clock reads, from a catalog or a live
+ * refresh, is offered to [hours], shared app-wide through the catalog repository; every clock
+ * reads the freshest block there, and ticks when it changes. [loading] says a live read is still
+ * out anywhere, so no screen calls the hours missing while they are on their way.
  */
 class MarketClock(
     private val clock: Clock,
@@ -46,6 +54,7 @@ class MarketClock(
      * is known about the venue, and the old rule, no status at all, applies again.
      */
     localUntilKnown: Boolean = false,
+    private val hours: VenueHours = catalog.venueHours ?: VenueHours(),
     private val publish: (MarketStatus?) -> Unit,
 ) {
     /** See the constructor's `localUntilKnown`. */
@@ -68,13 +77,32 @@ class MarketClock(
     var status: MarketStatus? = null
         private set
 
+    /** A live block is being asked for, by this clock or another screen's. */
+    val loading: Boolean get() = hours.loading.value
+
+    init {
+        // Another screen's read lands here too: a fresher block, or a read starting or ending.
+        scope.launch {
+            combine(hours.block, hours.loading) { block, loading -> block to loading }
+                .drop(1)
+                .collect { tick() }
+        }
+    }
+
     /** A catalog arrived: keep its block (not a finished status) and publish a fresh reading. */
     fun setAssets(assets: List<XStockAsset>): MarketStatus? {
         if (assets.isEmpty()) return if (known) status else recompute()
         known = true
-        snapshot = MarketHours.snapshotOf(assets)
+        val block = MarketHours.snapshotOf(assets)
+        // The same block again (Stocks republishes on every catalog page) keeps its one refresh:
+        // a live read that failed is not asked again per page, only at the next tick or resume.
+        if (block != snapshot) refreshedFor = null
+        snapshot = block
+        hours.offer(snapshot)
         refreshSymbol = assets.firstOrNull { it.trading != null }?.symbol ?: assets.first().symbol
-        refreshedFor = null
+        // A block already past its own change (a catalog from disk, the bundled snapshot) asks for
+        // the live one now, not at the next tick: until it lands the hours are loading, not lost.
+        refreshIfExpired()
         return recompute()
     }
 
@@ -114,22 +142,33 @@ class MarketClock(
     }
 
     private fun recompute(): MarketStatus? {
-        if (!known) {
+        val now = clock.nowMillis()
+        val block = effective(now)
+        if (!known && block?.let { VenueHours.isFresh(it, now) } != true) {
             if (!calendarUntilKnown) return null.also { status = null }
-            return MarketHours.sessionAt(clock.nowMillis(), null).also { status = it }
+            return MarketHours.sessionAt(now, null).also { status = it }
         }
-        return MarketHours.sessionAt(clock.nowMillis(), snapshot).also { status = it }
+        return MarketHours.sessionAt(now, block).also { status = it }
+    }
+
+    /** This clock's own block, or the shared one when that is fresh and at least as new. */
+    private fun effective(nowMillis: Long): Trading? {
+        val own = snapshot
+        val shared = hours.block.value ?: return own
+        if (!VenueHours.isFresh(shared, nowMillis)) return own
+        if (own == null || !VenueHours.isFresh(own, nowMillis)) return shared
+        return if (VenueHours.changeAt(shared) >= VenueHours.changeAt(own)) shared else own
     }
 
     private fun refreshIfExpired() {
         val symbol = refreshSymbol ?: return
-        val held = snapshot ?: return
+        val held = effective(clock.nowMillis()) ?: return
         val changeAt = held.nextChangeAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: return
         if (clock.nowMillis() < changeAt || refreshedFor == changeAt || refreshJob?.isActive == true) return
         refreshedFor = changeAt
         refreshJob = scope.launch {
-            val live = catalog.liveTrading(symbol) ?: return@launch
-            snapshot = live.copy(isTradingHalted = false)
+            val live = hours.read { catalog.liveTrading(symbol) }
+            if (live != null) snapshot = live.copy(isTradingHalted = false)
             tick()
         }
     }

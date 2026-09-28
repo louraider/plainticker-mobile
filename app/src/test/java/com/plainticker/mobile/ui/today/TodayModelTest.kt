@@ -539,15 +539,33 @@ class TodayModelTest {
 
     @Test
     fun `the round lede is undrawn when there is no round, or the round names no close`() {
-        assertNull(nextUpLede(null, kyiv))
-        assertNull(nextUpLede(VoteRound(id = 2, opensAt = "2026-09-21T00:00:00Z", closesAt = "not a date"), kyiv))
+        assertNull(nextUpLede(null, kyiv, 0L))
+        assertNull(nextUpLede(VoteRound(id = 2, opensAt = "2026-09-21T00:00:00Z", closesAt = "not a date"), kyiv, 0L))
     }
 
     @Test
     fun `the round lede names the close in the reader's own time, not UTC`() {
         val round = VoteRound(id = 2, opensAt = "2026-09-21T00:00:00Z", closesAt = "2026-09-28T00:00:00.000Z")
-        assertEquals("Chosen by staked SKR. Round closes Monday at 03:00 your time.", ShippedCopy.render(nextUpLede(round, kyiv)!!))
-        assertEquals("Chosen by staked SKR. Round closes Sunday at 20:00 your time.", ShippedCopy.render(nextUpLede(round, newYork)!!))
+        // Saturday 27 Sep, 12:00 UTC: inside the last day, the weekday says it.
+        val lastDay = java.time.Instant.parse("2026-09-27T12:00:00Z").toEpochMilli()
+        assertEquals("Chosen by staked SKR. Round 2 closes Monday at 03:00 your time.", ShippedCopy.render(nextUpLede(round, kyiv, lastDay)!!))
+        assertEquals("Chosen by staked SKR. Round 2 closes Sunday at 20:00 your time.", ShippedCopy.render(nextUpLede(round, newYork, lastDay)!!))
+    }
+
+    /** Final QA of 1.3.19: on Monday 28 Sep, "Round closes Monday at 03:00" meant Monday 5 Oct. */
+    @Test
+    fun `a close more than a day away carries its date`() {
+        val round = VoteRound(id = 3, opensAt = "2026-09-28T00:00:00Z", closesAt = "2026-10-05T00:00:00.000Z")
+        val mondayMorning = java.time.Instant.parse("2026-09-28T05:30:00Z").toEpochMilli()
+        assertEquals(
+            "Chosen by staked SKR. Round 3 closes Monday 5 Oct at 03:00 your time.",
+            ShippedCopy.render(nextUpLede(round, kyiv, mondayMorning)!!),
+        )
+        val sundayNoon = java.time.Instant.parse("2026-10-04T09:00:00Z").toEpochMilli()
+        assertEquals(
+            "Chosen by staked SKR. Round 3 closes Monday at 03:00 your time.",
+            ShippedCopy.render(nextUpLede(round, kyiv, sundayNoon)!!),
+        )
     }
 
     @Test

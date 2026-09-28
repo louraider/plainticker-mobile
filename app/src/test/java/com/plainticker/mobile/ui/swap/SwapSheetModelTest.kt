@@ -715,10 +715,24 @@ class SwapSheetModelTest {
                 FailureNext.EDIT -> SheetActionKind.Edit
                 FailureNext.RETRY, FailureNext.NEW_QUOTE -> SheetActionKind.Retry
                 FailureNext.PORTFOLIO -> SheetActionKind.ViewPortfolio
+                FailureNext.CONNECT -> SheetActionKind.Retry
             }
             assertEquals(reason.name, expected, content.primary?.kind)
             assertEquals(reason.name, SheetActionKind.Close, content.secondary?.kind)
         }
+    }
+
+    @Test
+    fun `a connect that ended without a wallet says so and offers Connect again beside Close`() {
+        // QA of 1.3.19: before anything was read, so there are no funds on the state.
+        val content = SwapState.Failed(leg, funds = null, input = null, reason = SwapFailure.NOT_CONNECTED).shown()
+        val result = requireNotNull(content.result)
+        assertEquals("No wallet connected", ShippedCopy.render(result.headline))
+        assertEquals("Connect a wallet to swap.", ShippedCopy.render(requireNotNull(result.detail)))
+        assertEquals("Connect again", ShippedCopy.render(requireNotNull(content.primary).label))
+        assertEquals(SheetActionKind.Retry, content.primary?.kind)
+        assertEquals(SheetActionKind.Close, content.secondary?.kind)
+        assertNull("no phase is left counting", content.phase)
     }
 
     @Test
@@ -875,6 +889,7 @@ class SwapSheetModelTest {
                 FailureOutcome.NOTHING_SENT -> ResultTone.Failed to "Nothing was swapped"
                 FailureOutcome.NOT_LANDED -> ResultTone.Failed to "The swap did not land"
                 FailureOutcome.UNKNOWN -> ResultTone.Pending to "Sent, not confirmed yet"
+                FailureOutcome.NOT_CONNECTED -> ResultTone.Failed to "No wallet connected"
             }
             assertEquals(reason.name, tone, result.tone)
             assertEquals(reason.name, headline, ShippedCopy.render(result.headline))

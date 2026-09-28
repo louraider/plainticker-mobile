@@ -19,6 +19,8 @@ import java.util.concurrent.ExecutionException
  *   [ProtocolContract.ERROR_AUTHORIZATION_FAILED];
  * - the calling coroutine is cancelled: the adapter swallows the [CancellationException]
  *   and reports "Request was cancelled".
+ * - the person came back to the app with no answer from the wallet: [WalletDismissedException],
+ *   raised by [MwaWalletSession] itself.
  * Everything else, including the adapter's own timeouts, is a [WalletOutcome.Error].
  */
 fun <T> TransactionResult<T>.toWalletOutcome(): WalletOutcome<T> = when (this) {
@@ -30,6 +32,7 @@ fun <T> TransactionResult<T>.toWalletOutcome(): WalletOutcome<T> = when (this) {
 internal fun isUserCancel(error: Throwable): Boolean {
     val cause = if (error is ExecutionException) error.cause ?: error else error
     return when (cause) {
+        is WalletDismissedException -> true
         is TimeoutCancellationException -> false
         is InterruptedException -> true
         is CancellationException -> true
@@ -38,3 +41,9 @@ internal fun isUserCancel(error: Throwable): Boolean {
         else -> false
     }
 }
+
+/**
+ * The person left the wallet and came back to the app with no answer from it: a back press on
+ * the wallet's Connect sheet, a closed chooser, a wallet that never associated. Read as a cancel.
+ */
+class WalletDismissedException : Exception("The wallet was left without an answer")

@@ -467,6 +467,8 @@ private fun reviewCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> {
  * [SwapFailure.SUBMIT_UNAVAILABLE] offers Portfolio, where the answer will be.
  */
 private fun SwapState.Failed.failurePrimary(): SheetAction? {
+    // Before any funds were read, and still the one way on: nothing was connected yet.
+    if (reason.next == FailureNext.CONNECT) return SheetAction(words(R.string.swap_connect_again), SheetActionKind.Retry)
     if (funds == null) return null
     return when (reason.next) {
         FailureNext.NONE -> null
@@ -478,6 +480,7 @@ private fun SwapState.Failed.failurePrimary(): SheetAction? {
             if (input?.isUsable == true) SheetAction(words(R.string.swap_new_quote), SheetActionKind.Retry)
             else SheetAction(words(R.string.swap_back_to_amount), SheetActionKind.Edit)
         FailureNext.PORTFOLIO -> SheetAction(words(R.string.receipt_view_portfolio), SheetActionKind.ViewPortfolio)
+        FailureNext.CONNECT -> SheetAction(words(R.string.swap_connect_again), SheetActionKind.Retry)
     }
 }
 
@@ -509,6 +512,7 @@ private fun SwapState.Failed.failedResult(): SheetResult {
         FailureOutcome.NOTHING_SENT -> ResultTone.Failed to words(R.string.result_nothing_swapped)
         FailureOutcome.NOT_LANDED -> ResultTone.Failed to words(R.string.result_not_landed)
         FailureOutcome.UNKNOWN -> ResultTone.Pending to words(R.string.result_pending)
+        FailureOutcome.NOT_CONNECTED -> ResultTone.Failed to words(R.string.result_not_connected)
     }
     val detail = sentence
     return SheetResult(tone = tone, headline = headline, detail = detail, announcement = listOf(headline, detail))

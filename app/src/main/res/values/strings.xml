@@ -357,6 +357,7 @@
     <string name="swap_failed_no_transaction">The quote carried nothing to approve</string>
     <string name="swap_failed_no_route">Swap unavailable: Jupiter has no route for this token right now</string>
     <string name="swap_failed_connect_refused">The wallet did not answer, so nothing was connected</string>
+    <string name="swap_failed_not_connected">Connect a wallet to swap.</string>
     <string name="swap_failed_submit_unavailable">The result did not come back. Check Portfolio before trying again.</string>
     <string name="swap_failed_quote_gone">The quote went twice over. Start again from the amount.</string>
     <string name="swap_failed_swap_refused">The swap did not land. Nothing was swapped.</string>
@@ -372,6 +373,7 @@
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
     <string name="swap_try_again">Try again</string>
+    <string name="swap_connect_again">Connect again</string>
     <string name="swap_new_quote">Get a new quote</string>
     <string name="swap_landing_note">Signed and sent. Waiting for the network to confirm it.</string>
     <string name="swap_no_balance">No %1$s in this wallet</string>
@@ -398,6 +400,7 @@
     <string name="result_landed_a11y">Received %1$s %2$s</string>
     <string name="result_landed_unreported_a11y">The amount of %1$s received was not reported</string>
     <string name="result_nothing_swapped">Nothing was swapped</string>
+    <string name="result_not_connected">No wallet connected</string>
     <string name="result_not_landed">The swap did not land</string>
     <string name="result_pending">Sent, not confirmed yet</string>
 
@@ -533,6 +536,7 @@
     <!-- The top card (judges' round 2): the round's close in the reader's own time, the
          connected wallet's stake, and the one action that leads to the ballot. -->
     <string name="vote_tab_round_closes_local">Closes %1$s %2$s at %3$s your time</string>
+    <string name="vote_tab_round_closes_local_near">Closes %1$s at %2$s your time</string>
     <string name="vote_tab_stake_no_wallet">No wallet is connected right now. To vote, connect one with staked SKR: the stake is the weight each vote carries.</string>
     <string name="vote_tab_stake_reading">Reading what this wallet has staked.</string>
     <string name="vote_tab_stake">This wallet has %1$s SKR staked. That is the weight each vote from it carries.</string>
@@ -544,6 +548,9 @@
          that state and never in vote_tab_not_open, which is a different thing already said. -->
     <string name="vote_tab_no_votes_yet">No votes in this round yet. The first vote leads.</string>
     <string name="vote_tab_heading_your_votes">Your votes</string>
+    <string name="vote_tab_heading_your_votes_earlier">Your votes in earlier rounds</string>
+    <string name="vote_tab_past_round">Round %1$s</string>
+    <string name="vote_tab_past_round_unknown">Before rounds were numbered</string>
     <string name="vote_tab_your_votes_note">Counted within about 20 minutes.</string>
     <string name="vote_tab_your_vote_meta">Voted %1$s</string>
     <!-- A date and time in the reader's own zone, named as such, like the round's close (device QA of 1.3.17). -->
@@ -693,7 +700,8 @@
     <string name="action_read_it">Read it</string>
     <string name="action_read">Read</string>
     <string name="today_next_up_title">Next up for analysis</string>
-    <string name="today_next_up_lede">Chosen by staked SKR. Round closes %1$s at %2$s your time.</string>
+    <string name="today_next_up_lede">Chosen by staked SKR. Round %1$s closes %2$s at %3$s your time.</string>
+    <string name="today_next_up_lede_dated">Chosen by staked SKR. Round %1$s closes %2$s %3$s at %4$s your time.</string>
     <!-- An open round nobody has voted in yet: the block still draws, because this is when one vote matters most. -->
     <string name="today_next_up_empty">Round %1$s is open. No votes yet: one vote decides it.</string>
     <!-- While the NYSE is closed (Toly's weekend idea): the covered tokens whose onchain price sits

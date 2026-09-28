@@ -170,10 +170,8 @@ class SwapViewModel(
             val owner = wallet.account.value?.address ?: when (val outcome = wallet.connect()) {
                 is WalletOutcome.Success -> outcome.value.address
                 is WalletOutcome.NoWallet -> return@launch failOpen(requested, SwapFailure.NO_WALLET)
-                is WalletOutcome.Cancelled -> {
-                    _state.value = SwapState.Closed(SwapNote.CANCELLED_IN_WALLET)
-                    return@launch
-                }
+                // The sheet stays, with the reason and the connect again (QA of 1.3.19).
+                is WalletOutcome.Cancelled -> return@launch failOpen(requested, SwapFailure.NOT_CONNECTED)
                 is WalletOutcome.Error -> {
                     debugLog.raw("connect: ${outcome.message}")
                     return@launch failOpen(requested, SwapFailure.CONNECT_REFUSED)
@@ -273,6 +271,8 @@ class SwapViewModel(
      */
     fun retry() {
         val failed = _state.value as? SwapState.Failed ?: return
+        // "Connect again": the same leg from the top, the wallet asked to connect once more.
+        if (failed.reason.next == FailureNext.CONNECT) return openLeg(failed.leg)
         if (failed.reason.next != FailureNext.RETRY && failed.reason.next != FailureNext.NEW_QUOTE) return
         val funds = failed.funds ?: return
         val input = failed.input?.takeIf { it.isUsable } ?: return

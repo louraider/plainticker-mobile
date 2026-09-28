@@ -148,6 +148,26 @@ fun myVotesFor(receipts: List<VoteReceipt>, round: VoteRound?, connectedVoter: S
     return byRound.sortedByDescending { it.landedAtMillis }
 }
 
+/** One earlier round's votes, for "Your votes": [round] is null for votes cast before rounds were stamped. */
+data class PastRoundVotes(val round: Int?, val votes: List<VoteReceipt>)
+
+/**
+ * The wallet's votes from earlier rounds, by round, most recent round first (final QA of 1.3.19:
+ * You said "Votes cast 1, Listed under Vote" while the Vote tab showed only the open round's
+ * votes, so a vote from round 2 was listed nowhere). The same voter scoping as [myVotesFor]; a
+ * receipt [myVotesFor] already shows is never repeated here, and votes the device cannot place in
+ * a round come last, under no round number.
+ */
+fun pastVotesFor(receipts: List<VoteReceipt>, round: VoteRound?, connectedVoter: String?): List<PastRoundVotes> {
+    val shown = myVotesFor(receipts, round, connectedVoter).mapTo(HashSet()) { it.signature }
+    val byVoter = if (connectedVoter == null) receipts else receipts.filter { it.voter == connectedVoter }
+    return byVoter
+        .filter { it.signature !in shown }
+        .groupBy { it.round }
+        .map { (id, votes) -> PastRoundVotes(id, votes.sortedByDescending { it.landedAtMillis }) }
+        .sortedWith(compareByDescending<PastRoundVotes, Int?>(nullsFirst()) { it.round })
+}
+
 /**
  * The connected wallet's own stake, the one figure the Vote tab's top card leads with (judges'
  * round 2: the vote action and the weight it carries belong at the top, not under an explainer).
@@ -179,20 +199,36 @@ val TabStake.sentence: Copy
     }
 
 /**
- * When the round closes, in the reader's own zone and words ("Closes Monday 29 Sep at 02:00 your
- * time"), where the header used to print a UTC stamp nobody converts in their head. Null when the
- * server stamped no close, or one that does not parse.
+ * When a round closes, in the reader's own zone: the weekday, the clock, and the day of the month
+ * whenever the close is more than a day away. The one rule Today and the Vote tab both print by
+ * (final QA of 1.3.19: on Monday 28 Sep Today said "Round closes Monday at 03:00" for a round
+ * closing Monday 5 Oct). Null when the server stamped no close, or one that does not parse.
  */
-fun roundClosesLocal(round: VoteRound, zone: ZoneId): Copy? {
+data class RoundClose(val weekday: String, val dayMonth: String?, val clock: String)
+
+fun roundClose(round: VoteRound, zone: ZoneId, nowMillis: Long): RoundClose? {
     val closes = round.closesAtInstant() ?: return null
     val millis = closes.toEpochMilli()
-    val day = closes.atZone(zone).toLocalDate()
-    return words(
-        R.string.vote_tab_round_closes_local,
-        Fmt.weekday(millis, zone),
-        Fmt.dayMonth(day),
-        Fmt.clock(millis, zone),
+    val near = millis - nowMillis <= DAY_MILLIS
+    return RoundClose(
+        weekday = Fmt.weekday(millis, zone),
+        dayMonth = if (near) null else Fmt.dayMonth(closes.atZone(zone).toLocalDate()),
+        clock = Fmt.clock(millis, zone),
     )
+}
+
+private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+
+/**
+ * When the round closes, in the reader's own zone and words ("Closes Monday 29 Sep at 02:00 your
+ * time"), where the header used to print a UTC stamp nobody converts in their head; inside the
+ * last day, "Closes Monday at 02:00 your time" ([roundClose]). Null when the server stamped no
+ * close, or one that does not parse.
+ */
+fun roundClosesLocal(round: VoteRound, zone: ZoneId, nowMillis: Long): Copy? {
+    val close = roundClose(round, zone, nowMillis) ?: return null
+    val day = close.dayMonth ?: return words(R.string.vote_tab_round_closes_local_near, close.weekday, close.clock)
+    return words(R.string.vote_tab_round_closes_local, close.weekday, day, close.clock)
 }
 
 /**
@@ -211,6 +247,8 @@ data class VoteTabUiState(
     val previous: PreviousRoundDisplay? = null,
     val leaders: List<NextUpLeader> = emptyList(),
     val myVotes: List<VoteReceipt> = emptyList(),
+    /** This wallet's votes from earlier rounds, most recent round first ([pastVotesFor]). */
+    val pastVotes: List<PastRoundVotes> = emptyList(),
     val query: String = "",
     /** Already filtered by [query]; the unfiltered set is not this screen's concern. */
     val ballot: List<BallotEntry> = emptyList(),

@@ -578,7 +578,7 @@ private fun TodayNextUpBlock(
     Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp).amberBlockEntrance(step = NextUpEntranceStep)) {
         AmberSectionHead(
             title = stringResource(R.string.today_next_up_title),
-            lede = nextUpLede(round, zone)?.text(),
+            lede = nextUpLede(round, zone, state.nowMillis)?.text(),
         )
         if (leader != null) {
             AmberTickerRowGroup {
