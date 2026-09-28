@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.onboarding
 import com.plainticker.mobile.lint.KotlinScan
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -54,13 +55,17 @@ class OnboardingScreenTest {
             "onboarding_body_disclaimer", "onboarding_certify", "onboarding_consent_continue",
             "onboarding_continue", "onboarding_pick_title", "onboarding_pick_body",
             "onboarding_pick_skip_example", "onboarding_pick_skip",
-            "today_status_closed_tomorrow", "today_heading_reports", "today_reports_watched",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
             assertTrue("OnboardingScreen.kt does not read R.string.$name", "R.string.$name" in scan.code)
         }
         listOf("onboarding_body_chain", "onboarding_body_fundamentals", "onboarding_body_map").forEach { name ->
             assertTrue("$name described the retired app and should be gone", """name="$name"""" !in stringsXml)
+        }
+        // Fresh-device QA of 1.3.24 (B6): the backdrop no longer reads Today's venue line, section
+        // head or Watched marker; a first-time reader took them for real facts about their own list.
+        listOf("today_status_closed_tomorrow", "today_heading_reports", "today_reports_watched").forEach { name ->
+            assertFalse("the backdrop still reads R.string.$name", "R.string.$name" in scan.code)
         }
         // What is left in Kotlin is sample data, not copy: tickers, company names and the state
         // word the server assigns. Nothing that a translator would ever be handed.
@@ -103,7 +108,7 @@ class OnboardingScreenTest {
 
     @Test
     fun `the backdrop is drawn with Amber components in Bricolage, never Instrument's`() {
-        listOf("AmberBottomNav(", "AmberDestination.TODAY", "AmberTickerRow(", "AmberTickerRowGroup", "TopBar(").forEach {
+        listOf("AmberBottomNav(", "AmberDestination.TODAY", "SkeletonTickerRows(", "SkeletonBar(", "TopBar(").forEach {
             assertTrue("the backdrop does not draw $it", it in scan.code)
         }
         listOf("TopTabs", "TodayStrip", "PlainTickerType", "Outfit").forEach {
@@ -141,5 +146,19 @@ class OnboardingScreenTest {
             listOf("onContinue", "actions", "actions"),
             handlers,
         )
+    }
+
+    @Test
+    fun `the backdrop names no stock and claims nothing about the market`() {
+        // Fresh-device QA of 1.3.24 (B6): TSLAx "Watched" and "NYSE closed. Opens tomorrow" sat behind
+        // the first sheet, sample data a new reader could take for their own list.
+        val raw = screenFile.readText()
+        val backdrop = raw.substring(raw.indexOf("private fun TodayBackdrop("), raw.indexOf("private fun ConsentPanel("))
+        assertFalse("the backdrop draws ticker rows", "AmberTickerRow" in backdrop)
+        assertFalse("the backdrop draws a venue line", "today_status" in backdrop)
+        assertFalse("the backdrop draws text of its own", "Text(" in backdrop)
+        listOf("TSLAx", "NVDAx", "AAPLx", "MSFTx").forEach { assertFalse("the backdrop names $it", it in backdrop) }
+        listOf("BackdropRows", "BackdropOpensAt", "LocalDate").forEach { assertFalse("the sample data is still here: $it", it in raw) }
+        assertTrue("SkeletonTickerRows(count = BackdropRowCount" in backdrop)
     }
 }
