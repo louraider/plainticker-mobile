@@ -52,7 +52,7 @@ import org.junit.Test
  * the reference is the last US price" while Today said "NYSE open. Closes at 23:00 your time".
  * Detail took its venue from the catalog's cached block, which still said CLOSED past its own
  * `nextChangeAt`; Today and Stocks read the shared [VenueHours] through their clocks. These run
- * the three screens on one shared state, inside the regular session, and hold them to one answer.
+ * the three screens on one shared state, inside the regular session, and require one answer from all three.
  */
 class OneVenueOpenSessionTest {
 
