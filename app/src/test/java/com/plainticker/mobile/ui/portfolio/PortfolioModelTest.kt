@@ -56,7 +56,7 @@ class PortfolioModelTest {
     // ---- The holding row -------------------------------------------------------------------
 
     @Test
-    fun `a holding reads as shares held and the premium against the NYSE close`() {
+    fun `a holding reads as shares held and the premium against its share's US price`() {
         val row = holdingRow(position())
 
         assertEquals("TSLAx", row.symbol)

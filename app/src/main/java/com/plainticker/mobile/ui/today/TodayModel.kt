@@ -423,9 +423,37 @@ fun closedMovers(
 /** How many rows "While New York is closed" draws. */
 const val ClosedMoversCount: Int = 3
 
+/** What "While New York is closed" draws, when it draws at all ([closedBlock]). */
+sealed interface ClosedBlock {
+    /** The prices have not answered yet: the heading and a row group of skeletons keep the slot. */
+    data object Loading : ClosedBlock
+
+    data class Movers(val movers: List<ClosedMover>) : ClosedBlock
+
+    /** The prices answered and nothing sits far enough to name: one quiet line in the same slot. */
+    data object Quiet : ClosedBlock
+}
+
 /**
  * The block draws only while the NYSE is known to be closed: an unknown venue is not a closed one,
  * and during the session the watched rows already carry the live figure.
+ *
+ * Once the venue is known closed the block keeps its place (QA of 1.3.20): it used to be inserted
+ * only after the prices answered, a few seconds into a cold start, and push Next up down.
+ * Skeletons stand while the first prices are out, and a quiet night gets one line, which a later
+ * refresh keeps rather than swapping back to skeletons. [pricesKnown] is whether any price read
+ * has answered on this screen: with none (Jupiter failed), nothing is known about the gaps, so the
+ * block says nothing rather than claim a quiet night.
  */
-fun closedMoversShown(market: MarketStatus?, movers: List<ClosedMover>): Boolean =
-    market != null && !market.regularSession && movers.isNotEmpty()
+fun closedBlock(
+    market: MarketStatus?,
+    movers: List<ClosedMover>,
+    pricesLoading: Boolean,
+    pricesKnown: Boolean,
+): ClosedBlock? = when {
+    market == null || market.regularSession -> null
+    movers.isNotEmpty() -> ClosedBlock.Movers(movers)
+    pricesKnown -> ClosedBlock.Quiet
+    pricesLoading -> ClosedBlock.Loading
+    else -> null
+}

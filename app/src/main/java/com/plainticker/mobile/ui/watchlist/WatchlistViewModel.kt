@@ -224,7 +224,10 @@ class WatchlistViewModel(
      * recomputed on every resume and at every boundary while Today is on screen, never only once
      * at load.
      */
-    private val marketClock = MarketClock(clock, catalog, viewModelScope) { market ->
+    // The exchange calendar stands in until a catalog answers (QA of 1.3.20, the same rule Stocks
+    // keeps): the venue line used to arrive with the catalog about 2.9 s into a cold start and
+    // push the whole screen down by its own height.
+    private val marketClock = MarketClock(clock, catalog, viewModelScope, localUntilKnown = true) { market ->
         _state.update { it.copy(market = market, nowMillis = clock.nowMillis()) }
     }
 
@@ -263,6 +266,9 @@ class WatchlistViewModel(
                 }
             }
         }
+        // The venue from the first frame, off the exchange calendar (or the hours another screen
+        // already read) until this screen's own catalog answers, so the status line holds its slot.
+        marketClock.tick()
         // Today's other blocks: a second, unrelated join that the watched set does not drive and
         // does not re-run for.
         loadToday()
@@ -509,6 +515,10 @@ class WatchlistViewModel(
             val generatedAtMillis = summaryResult.getOrNull()?.generatedAt?.let { stamp ->
                 runCatching { Instant.parse(stamp).toEpochMilli() }.getOrNull()
             }
+
+            // A catalog that answered with nothing names no venue, so the calendar stops standing
+            // in, the rule Stocks keeps (ListViewModel.republish).
+            if (assets.isEmpty()) marketClock.calendarUntilKnown = false
 
             // The fast half settles here, before prices are ever asked for: the venue line,
             // "Reports this week", Next up and the footer need nothing below this point.

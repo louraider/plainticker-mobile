@@ -505,7 +505,11 @@ private fun StocksFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (holdDeepPoolSlot && !showsDeepPoolChip(trackedCount, active)) {
+        // The count is not final until the first price run has settled: the visible window lands
+        // first, and a chip drawn then read "Deep pool 6" and a second later "Deep pool 17" (QA of
+        // 1.3.20). The slot's outline stands until the run is done; a chip the reader has already
+        // chosen stays, so a selection never vanishes under a finger.
+        if (holdDeepPoolSlot && active != StocksFilter.Tracked) {
             SkeletonChip(width = DeepPoolSlotWidth, colors = colors)
         } else if (showsDeepPoolChip(trackedCount, active)) {
             AmberChip(
@@ -640,15 +644,18 @@ private fun AnalyzedRow(
     // What the scale ranks against, the sector, is said once above the rows
     // (list_row_score_legend). Widest real value "100 of 100", figureRow 18sp/600 tnum: 92.538dp
     // at 1.0x, 120.299dp at 1.3x (fontTools, AmberTickerRowTest), still under the price figure.
-    val figure = if (row.locked) {
-        stringResource(R.string.pro_locked_value)
-    } else {
-        row.composite?.let { stringResource(R.string.list_row_score, Fmt.decimal(it, decimals = 0)) }
+    // A covered company with no classification (QA of 1.3.20) has no score behind the slot, so it
+    // says so in the quiet type rather than in the amber "Pro" a withheld score draws.
+    val figure = when {
+        row.locked -> stringResource(R.string.pro_locked_value)
+        row.unclassified -> stringResource(R.string.list_row_not_classified)
+        else -> row.composite?.let { stringResource(R.string.list_row_score, Fmt.decimal(it, decimals = 0)) }
     }
     AmberTickerRow(
         ticker = row.display,
         company = row.company,
         figure = figure,
+        figureQuiet = row.unclassified && !row.locked,
         context = rowMeta(row, pricesPending),
         colors = colors,
         onClick = { onOpenDetail(row.ticker) },

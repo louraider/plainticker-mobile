@@ -142,7 +142,8 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         notice = why?.takeIf { reason == VoteRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text),
         disclosure = null,
         primary = if (reason.retryable) {
-            VoteAction(words(R.string.action_retry), VoteActionKind.Retry)
+            // The same two labels the swap and pass sheets use (QA of 1.3.20).
+            VoteAction(words(retryLabel(reason)), VoteActionKind.Retry)
         } else {
             null
         },
@@ -197,3 +198,8 @@ private fun weightCell(stakeRaw: Long) =
 
 /** The principal, exactly as the staking program counts it: six decimals, trimmed, grouped. */
 private fun skr(stakeRaw: Long): String = Fmt.tokenAmount(stakeRaw, SkrStakeBound.SKR_DECIMALS)
+
+/** The retry label every wallet flow shares: "Connect again" when no wallet was connected. */
+@androidx.annotation.StringRes
+internal fun retryLabel(reason: VoteRefusal): Int =
+    if (reason == VoteRefusal.NOT_CONNECTED) R.string.action_connect_again else R.string.action_try_again

@@ -385,8 +385,13 @@ private fun ResultBlock(result: SheetResult, pair: Copy, lead: Modifier, colors:
 
 /**
  * The mark beside the headline, drawn, never a glyph: a ring that closes and fills for a
- * landing, an open caution ring for a failure, a broken amber ring for an answer still to come.
- * Decorative: the block's own description already says what it means.
+ * landing, a closed caution ring with a caution bar and dot inside for a failure, a broken amber
+ * ring for an answer still to come. Decorative: the block's own description already says what it
+ * means.
+ *
+ * The failure ring used to be open (a 300 degree arc), and a static open ring is what a spinner
+ * looks like: on "No wallet connected" it read as a load that had frozen (QA of 1.3.20). Closed,
+ * with the caution sign inside, it reads as a notice and nothing else.
  */
 @Composable
 private fun ResultMark(tone: ResultTone, progress: Float, colors: AmberColors) {
@@ -412,15 +417,27 @@ private fun ResultMark(tone: ResultTone, progress: Float, colors: AmberColors) {
                 drawCircle(color = live, radius = size.minDimension * FILL_RATIO * progress * progress)
             }
 
-            ResultTone.Failed -> drawArc(
-                color = caution,
-                startAngle = -60f,
-                sweepAngle = 300f,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
-            )
+            ResultTone.Failed -> {
+                drawArc(
+                    color = caution,
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+                // The caution sign: a bar above the centre and a dot below it.
+                val cx = size.width / 2f
+                drawLine(
+                    color = caution,
+                    start = Offset(cx, size.height * CAUTION_BAR_TOP),
+                    end = Offset(cx, size.height * CAUTION_BAR_BOTTOM),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+                drawCircle(color = caution, radius = stroke * 0.75f, center = Offset(cx, size.height * CAUTION_DOT))
+            }
 
             ResultTone.Pending -> repeat(PENDING_SEGMENTS) { i ->
                 drawArc(
@@ -600,6 +617,11 @@ private const val QUICK_MILLIS = 150
 
 /** How far the settled fill reaches inside the ring, as a share of the mark's size. */
 private const val FILL_RATIO = 0.22f
+
+/** Where the failure mark's caution bar and dot sit, as fractions of the mark's height. */
+private const val CAUTION_BAR_TOP = 0.28f
+private const val CAUTION_BAR_BOTTOM = 0.56f
+private const val CAUTION_DOT = 0.72f
 
 private const val PENDING_SEGMENTS = 4
 private const val PENDING_GAP_DEGREES = 28f

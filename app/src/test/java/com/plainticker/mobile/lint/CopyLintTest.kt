@@ -361,13 +361,13 @@ class CopyLintTest {
         assertEquals("Depth %1\$s behind this price", byName["detail_liquidity_line"])
         assertEquals("Depth not reported", byName["list_row_meta_pool_unknown"])
         assertEquals(
-            "Jupiter reports %1\$s behind this price. That is too little for the token to follow the NYSE close, " +
+            "Jupiter reports %1\$s behind this price. That is too little for the token to follow its share, " +
                 "so the premium is left out.",
             byName["detail_gauge_thin"],
         )
         assertEquals(
             "Jupiter priced this token but did not report how much stands behind the price, so whether it " +
-                "follows the NYSE close cannot be checked.",
+                "follows its share cannot be checked.",
             byName["detail_gauge_pool_unknown"],
         )
         // The wrong truth the Seeker drew on 2026-09-13 (docs/data-map.md): a wallet sheet closed

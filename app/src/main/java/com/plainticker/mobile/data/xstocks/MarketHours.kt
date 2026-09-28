@@ -33,7 +33,10 @@ enum class PriceLabel {
     /** The exchange is trading: the gauge reads "tracking within {n}%". */
     TRACKING_WITHIN,
 
-    /** The exchange is shut: the gauge reads against the NYSE close. */
+    /**
+     * The exchange is shut: the gauge reads against the share's last US price (Jupiter
+     * `stockData.price`, which follows pre-market and after-hours trades; see [com.plainticker.mobile.data.jupiter.StockData.price]).
+     */
     VS_NYSE_CLOSE,
 }
 

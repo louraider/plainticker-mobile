@@ -44,7 +44,7 @@ import com.plainticker.mobile.ui.theme.PlainTickerType
  *
  * [description] is what the merged item says instead of its parts read end to end. Without it a
  * reader hears the row's cells in order, punctuation and all ("TSLAx Tesla, Inc. 2.01364 TSLAx
- * · +0.09% vs NYSE close"); with it the row is one spoken sentence, which is what plan section 13
+ * · +0.09% vs US price"); with it the row is one spoken sentence, which is what plan section 13
  * Pass 6 asks of a list row. The caller composes it, because only the caller knows which cell is
  * which; [com.plainticker.mobile.ui.components.spoken] is what turns a numeral into words.
  *
@@ -244,7 +244,7 @@ private fun ListRowPreview() {
             ListRow(
                 ticker = "NVDAx",
                 company = "NVIDIA Corporation",
-                meta = "-0.95% vs NYSE close · 7 d old",
+                meta = "-0.95% vs US price · 7 d old",
                 valueRight = "79",
                 valueSub = "fair",
                 onClick = {},
@@ -261,7 +261,7 @@ private fun ListRowPreview() {
             ListRow(
                 ticker = "TSLAx",
                 company = "Tesla, Inc.",
-                meta = "+0.09% vs NYSE close · 2 d old",
+                meta = "+0.09% vs US price · 2 d old",
                 valueRight = "71",
                 valueSub = "strong",
                 onClick = {},
@@ -269,7 +269,7 @@ private fun ListRowPreview() {
             ListRow(
                 ticker = "AAPLx",
                 company = "Apple Inc.",
-                meta = "Reports Oct 30 · +0.01% vs NYSE close",
+                meta = "Reports Oct 30 · +0.01% vs US price",
                 trailingAction = "Unwatch",
                 onTrailingAction = {},
                 onClick = {},
@@ -277,7 +277,7 @@ private fun ListRowPreview() {
             ListRow(
                 ticker = "ASMLx",
                 company = "ASML Holding",
-                meta = "-0.01% vs NYSE close",
+                meta = "-0.01% vs US price",
                 valueRight = "\$812.40",
                 muted = true,
                 divider = false,

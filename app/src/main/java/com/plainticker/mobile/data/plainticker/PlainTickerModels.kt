@@ -259,7 +259,11 @@ data class Verdict(
      * are still returned) or `locked`. Absent on an older server, which then reads as before.
      */
     @SerialName("class_state") val classState: String? = null,
-    /** Why a class is unavailable: `sector-model-pending` (banks, brokers, insurers) or `insufficient-data`. */
+    /**
+     * Why a class is unavailable: `sector-model-pending` (banks, brokers, insurers), `thin-cohort`
+     * (too few peers or ranked metrics to compare against, live on ABBV, V and NKE on 28 Sep 2026)
+     * or `insufficient-data`.
+     */
     @SerialName("class_reason") val classReason: String? = null,
 ) {
     /** The method gives no class for this company; every caller sees it, there is nothing to unlock. */
@@ -268,5 +272,6 @@ data class Verdict(
     companion object {
         const val CLASS_STATE_UNAVAILABLE = "unavailable"
         const val REASON_SECTOR_MODEL_PENDING = "sector-model-pending"
+        const val REASON_THIN_COHORT = "thin-cohort"
     }
 }

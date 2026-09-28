@@ -34,7 +34,7 @@ class DigestScreenTest {
     private fun utc(text: String): Long = Instant.parse(text).toEpochMilli()
 
     private val digest = DigestRecord(
-        text = "1 stock watched. METAx moved from -0.13% to +0.63% against the NYSE close.",
+        text = "1 stock watched. METAx moved from -0.13% to +0.63% against its share's US price.",
         producedAtMillis = utc("2026-09-24T06:49:00Z"),
         lastCheckedAtMillis = utc("2026-09-24T06:49:00Z"),
     )

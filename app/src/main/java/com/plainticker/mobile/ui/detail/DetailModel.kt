@@ -289,10 +289,12 @@ val DetailUiState.verdictBlock: VerdictBlock?
             if (verdict.unavailable) {
                 VerdictBlock.Unavailable(
                     words(
-                        if (verdict.classReason == Verdict.REASON_SECTOR_MODEL_PENDING) {
-                            R.string.detail_verdict_unavailable_sector
-                        } else {
-                            R.string.detail_verdict_unavailable_data
+                        when (verdict.classReason) {
+                            Verdict.REASON_SECTOR_MODEL_PENDING -> R.string.detail_verdict_unavailable_sector
+                            // QA of 1.3.20: ABBVx read "Not enough data" beside a composite and a
+                            // full read. The data is there; the sector is too small to compare.
+                            Verdict.REASON_THIN_COHORT -> R.string.detail_verdict_unavailable_thin
+                            else -> R.string.detail_verdict_unavailable_data
                         },
                     ),
                 )

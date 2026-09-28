@@ -243,7 +243,9 @@ class VoteSheetModelTest {
         retryable.forEach {
             val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", it))
             assertEquals("$it offers no retry", VoteActionKind.Retry, content.primary?.kind)
-            assertEquals("Retry", render(content.primary?.label))
+            // One wording across swap, pass and vote (QA of 1.3.20).
+            val label = if (it == VoteRefusal.NOT_CONNECTED) "Connect again" else "Try again"
+            assertEquals(label, render(content.primary?.label))
         }
         answers.forEach {
             assertNull("$it is an answer and must not be dressed as a retry", sheetOf(VoteState.Refused("NFLX", "NFLXx", it)).primary)

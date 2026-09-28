@@ -303,8 +303,8 @@ private fun TodayList(
                 colors = colors,
             )
         }
-        if (closedMoversShown(state.market, state.closedMovers)) {
-            item(key = "closed-movers") { TodayClosedBlock(state = state, onOpenDetail = onOpenDetail, colors = colors) }
+        closedBlock(state.market, state.closedMovers, state.pricesLoading, pricesKnown = state.pricesFetchedAtMillis != null)?.let { block ->
+            item(key = "closed-movers") { TodayClosedBlock(block = block, onOpenDetail = onOpenDetail, colors = colors) }
         }
         if (!firstOpen) {
             item(key = "next-up") { TodayNextUpBlock(state = state, zone = zone, onOpenVote = onOpenVote, votedTickers = votedTickers) }
@@ -530,20 +530,39 @@ private fun TodayReportsBlock(
 
 /**
  * "While New York is closed" (Toly's weekend idea): up to three covered tokens whose onchain price
- * sits furthest from the last NYSE close, deep pools only, each opening its own page. Drawn only
- * while the exchange is closed ([closedMoversShown]); the figure is the same signed premium the
- * watched rows print, so the two can never disagree.
+ * sits furthest from their share's last US price, deep pools only, each opening its own page.
+ * Drawn only while the exchange is closed ([closedBlock]), from the first frame the venue is known
+ * closed: skeletons while the prices are out, one quiet line when nothing sits far. The figure is
+ * the same signed premium the watched rows print, so the two can never disagree.
  */
 @Composable
-private fun TodayClosedBlock(state: WatchlistUiState, onOpenDetail: (String) -> Unit, colors: AmberColors) {
+private fun TodayClosedBlock(block: ClosedBlock, onOpenDetail: (String) -> Unit, colors: AmberColors) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = SectionGap)) {
         AmberSectionHead(
             title = stringResource(R.string.today_closed_title),
             lede = stringResource(R.string.today_closed_lede),
             colors = colors,
         )
+        val movers = when (block) {
+            ClosedBlock.Loading -> {
+                SkeletonTickerRows(count = ClosedMoversCount, colors = colors)
+                return@Column
+            }
+
+            ClosedBlock.Quiet -> {
+                Text(
+                    text = stringResource(R.string.today_closed_quiet),
+                    style = AmberType.body,
+                    color = colors.textSecondary,
+                    modifier = Modifier.padding(horizontal = Side),
+                )
+                return@Column
+            }
+
+            is ClosedBlock.Movers -> block.movers
+        }
         AmberTickerRowGroup(colors = colors) {
-            state.closedMovers.forEach { mover ->
+            movers.forEach { mover ->
                 AmberTickerRow(
                     ticker = mover.symbol,
                     company = mover.company,

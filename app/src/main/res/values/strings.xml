@@ -89,7 +89,7 @@
     <!-- The trailing chapter for an analyzed row /summary sent no sector for (task A1). -->
     <string name="list_heading_no_sector">No sector</string>
     <!-- The row meta halves and the source banners below are shared with the Portfolio -->
-    <string name="list_row_meta_premium">%1$s vs NYSE close</string>
+    <string name="list_row_meta_premium">%1$s vs US price</string>
     <string name="list_row_meta_thin">Depth %1$s, too thin</string>
     <!-- A row with no figure says why (device QA of 1.3.17): Jupiter answered with no price, or the price is still being read. -->
     <string name="list_row_meta_unpriced">No Jupiter price yet</string>
@@ -120,6 +120,9 @@
          "62 of 100" replaced "score 62" (judges' round 2, 2026-09-27): "score" named no scale.
          What the scale ranks against is said once above the rows, in list_row_score_legend. -->
     <string name="list_row_score">%1$s of 100</string>
+    <!-- A covered company with a full page and no classification against its sector (QA of 1.3.20:
+         ABBVx, Vx): no score to show and none to lock, so not "Pro". -->
+    <string name="list_row_not_classified">Not classified</string>
     <string name="list_row_score_legend">Each number ranks the stock against the others in its sector, from 0 to 100.</string>
     <string name="list_state_strong">strong</string>
     <string name="list_state_fair">fair</string>
@@ -171,6 +174,9 @@
     <string name="detail_verdict_unavailable">Unavailable</string>
     <string name="detail_verdict_unavailable_sector">Banks, capital-markets firms, brokers and insurers need their own sector model, which is in progress. The general method\'s debt and cash-flow checks do not read them fairly. The available financial figures are below.</string>
     <string name="detail_verdict_unavailable_data">Not enough data to classify this company against its sector. The available figures are below.</string>
+    <!-- class_reason thin-cohort: the web's "The sector comparison is too narrow to classify"
+         (lib/methodology/decision-copy.ts thinCohortCopy), in plain words (QA of 1.3.20). -->
+    <string name="detail_verdict_unavailable_thin">Too few companies in this sector to compare fairly. This is not a judgement of the business. The figures and the read below still apply.</string>
     <!-- The lock's one action: You, Plan, with the promo code field open and focused, where the
          hero's Get Pro sits too. -->
     <string name="detail_action_get_pro">Have a code? Get Pro</string>
@@ -178,15 +184,15 @@
     <!-- What the token's own figure is called below the liquidity floor, where the quote is a
          reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->
     <string name="detail_pool_quote">Pool quote</string>
-    <string name="detail_nyse_close">NYSE close</string>
+    <string name="detail_nyse_close">Last US price</string>
     <string name="detail_nyse_price">NYSE price</string>
     <string name="detail_gauge_caption">%1$s, scale %2$s</string>
     <!-- The premium runs past the end of the stated scale, so the tick is a cap and not a value. -->
     <string name="detail_gauge_caption_off">%1$s, past the %2$s scale</string>
-    <string name="detail_gauge_reference_close">Token vs NYSE close</string>
+    <string name="detail_gauge_reference_close">Token vs last US price</string>
     <string name="detail_gauge_reference_live">Token vs NYSE price</string>
-    <string name="detail_gauge_thin">Jupiter reports %1$s behind this price. That is too little for the token to follow the NYSE close, so the premium is left out.</string>
-    <string name="detail_gauge_pool_unknown">Jupiter priced this token but did not report how much stands behind the price, so whether it follows the NYSE close cannot be checked.</string>
+    <string name="detail_gauge_thin">Jupiter reports %1$s behind this price. That is too little for the token to follow its share, so the premium is left out.</string>
+    <string name="detail_gauge_pool_unknown">Jupiter priced this token but did not report how much stands behind the price, so whether it follows its share cannot be checked.</string>
     <string name="detail_live_label">Live from the mint</string>
     <string name="detail_live_meta">slot %1$s · %2$s</string>
     <!-- Spoken by the live bar's screen reader region (device QA of 1.3.18: "updated 451,097,516"
@@ -278,7 +284,7 @@
     <string name="signal_asset_turnover_improving">Asset turnover improving</string>
     <string name="detail_heading_method">Method</string>
     <string name="detail_method_body">We classify the company against its sector by a fixed rule. This is not a price forecast or investment advice.</string>
-    <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close.</string>
+    <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Token prices and the share\'s last US price from Jupiter.</string>
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
     <string name="detail_swap_out_button">Swap %1$s to USDC</string>
     <string name="detail_cost_line">Est. all-in cost %1$s · depth %2$s</string>
@@ -301,7 +307,7 @@
     <string name="detail_analysis_unavailable">Analysis unavailable</string>
     <string name="detail_no_xstock">This ticker has no xStock on Solana</string>
     <string name="detail_analysis_age">Analysis from %1$s</string>
-    <string name="banner_market_closed">The NYSE is closed, the reference is the last close</string>
+    <string name="banner_market_closed">The NYSE is closed, the reference is the last US price</string>
     <string name="banner_market_closed_local">The NYSE looks closed by its usual hours. Its live hours did not load.</string>
     <string name="banner_market_open_local">The NYSE looks open by its usual hours. Its live hours did not load.</string>
     <string name="banner_market_halted">Trading in this asset is halted by the issuer</string>
@@ -372,8 +378,9 @@
     <string name="swap_failed_sign_only_unsupported">This wallet only signs by sending, and a swap needs it to sign first. Use Seed Vault Wallet. Nothing was signed.</string>
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>
-    <string name="swap_try_again">Try again</string>
-    <string name="swap_connect_again">Connect again</string>
+    <!-- The retry labels every wallet flow shares (swap, pass, vote; QA of 1.3.20). -->
+    <string name="action_try_again">Try again</string>
+    <string name="action_connect_again">Connect again</string>
     <string name="swap_new_quote">Get a new quote</string>
     <string name="swap_landing_note">Signed and sent. Waiting for the network to confirm it.</string>
     <string name="swap_no_balance">No %1$s in this wallet</string>
@@ -681,7 +688,7 @@
     <string name="action_find_stock">Find a stock</string>
     <!-- The figure's meaning, said once above the watched rows instead of on every row. -->
     <string name="today_figure_live">The figure is how far each token sits from the share price now.</string>
-    <string name="today_figure_close">The figure is how far each token sits from the last NYSE close.</string>
+    <string name="today_figure_close">The figure is how far each token sits from its share\'s last US price, which still moves before the open and after the close.</string>
     <!-- Reports this week (founder's pick of option B, 2026-09-26, replacing Tracked today). -->
     <string name="today_heading_reports">Reports this week</string>
     <!-- Saturday and Sunday: the window moves to next Monday through next Sunday, so the heading says so too. -->
@@ -707,7 +714,9 @@
     <!-- While the NYSE is closed (Toly's weekend idea): the covered tokens whose onchain price sits
          furthest from the last close, only where the pool clears the liquidity floor. -->
     <string name="today_closed_title">While New York is closed</string>
-    <string name="today_closed_lede">The tokens furthest from the last NYSE close, only where the pool is deep enough for the price to mean something.</string>
+    <string name="today_closed_lede">The tokens furthest from their share\'s last US price, only where the pool is deep enough for the price to mean something.</string>
+    <!-- The block holds its place while the NYSE is closed (QA of 1.3.20), so a quiet night says so. -->
+    <string name="today_closed_quiet">No token with a deep pool sits more than half a percent from its share right now.</string>
     <string name="today_closed_pool">Depth %1$s</string>
     <!-- The digest screen, under You. -->
     <string name="digest_screen_lede">One short check a day on the stocks you watch.</string>
@@ -730,7 +739,7 @@
 
     <!-- The daily digest: one sentence per clause, assembled by com.plainticker.mobile.watchlist.digest.
          News first: the first sentence is also the notification's title, without its period. -->
-    <string name="digest_moved">%1$s moved from %2$s to %3$s against the NYSE close.</string>
+    <string name="digest_moved">%1$s moved from %2$s to %3$s against its share\'s US price.</string>
     <string name="digest_reports_today">%1$s reports today.</string>
     <string name="digest_reports_tomorrow">%1$s reports tomorrow.</string>
     <plurals name="digest_reports_in_days">
@@ -747,7 +756,9 @@
          live analysis exists for it (never the server's own status word, which the live contract
          still sends as closed rather than published). %1$s is the round's own number, never a
          quantity: it does not pluralise anything after it. -->
-    <string name="digest_vote_round_closes">Round %1$s closes %2$s.</string>
+    <!-- The shared round rule (ui/vote roundClose): the date whenever the close is more than a day away. -->
+    <string name="digest_vote_round_closes">Round %1$s closes %2$s at %3$s your time.</string>
+    <string name="digest_vote_round_closes_dated">Round %1$s closes %2$s %3$s at %4$s your time.</string>
     <string name="digest_vote_winner_analysed">%1$s, last round\'s winner, is now analyzed.</string>
     <!-- The reader's own pick (a vote receipt on this device names it), said once, then left out. -->
     <string name="digest_vote_pick_analysed">%1$s, which you voted for, is now analyzed.</string>

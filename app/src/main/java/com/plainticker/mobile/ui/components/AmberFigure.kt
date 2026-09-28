@@ -100,7 +100,7 @@ private fun AmberFigurePreview() {
     AmberPreviewCanvas {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AmberFigure(figure = "22", context = "22 of 160 analyzed can be tracked today")
-            AmberFigure(label = "Token price", figure = "\$334.54", context = "+0.12% vs NYSE close \$334.14")
+            AmberFigure(label = "Token price", figure = "\$334.54", context = "+0.12% vs US price \$334.14")
             AmberFigure(figure = "50", context = "of 100, sector median 55", card = false)
         }
     }

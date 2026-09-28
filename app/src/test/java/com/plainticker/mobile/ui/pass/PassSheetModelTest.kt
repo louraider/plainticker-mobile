@@ -88,6 +88,7 @@ class PassSheetModelTest {
             render(refused.notice),
         )
         assertEquals(PassActionKind.Retry, refused.primary?.kind)
+        assertEquals("the retry wording every wallet flow shares", "Try again", render(refused.primary?.label))
         val price = requireNotNull(PassState.Refused(PassRefusal.GUARD_REFUSED, TransactionGuard.Why.ABOVE_PASS_PRICE).sheet())
         assertEquals(
             "This phone refused the transaction before your wallet saw it: it asks more than 12 USDC, the most a pass costs in this app. Nothing was signed or sent.",
@@ -110,5 +111,13 @@ class PassSheetModelTest {
         val sig = "5".repeat(88)
         assertEquals(sig, requireNotNull(PassState.Landed(sig, null).sheet()).signature)
         assertEquals(null, requireNotNull(PassState.Ready(payer, build(5_000L)).sheet()).signature)
+    }
+
+    /** QA of 1.3.20: swap said "Connect again", pass and vote said "Retry" for the same moment. */
+    @Test
+    fun `a connect that brought no wallet offers Connect again, as the swap and vote sheets do`() {
+        val content = requireNotNull(PassState.Refused(PassRefusal.NOT_CONNECTED).sheet())
+        assertEquals(PassActionKind.Retry, content.primary?.kind)
+        assertEquals("Connect again", render(content.primary?.label))
     }
 }

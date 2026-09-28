@@ -97,6 +97,14 @@ data class ListRow(
      */
     val locked: Boolean = false,
     /**
+     * True for a covered company `/summary` sent no row for ([com.plainticker.mobile.repo.Coverage]
+     * added it bare): it has a full page but no classification against its sector (QA of 1.3.20:
+     * ABBVx, CMCSAx, MAx, NKEx and Vx, `class_state` "unavailable", thin cohort). There is no score
+     * to show and none to lock, so the row says so in neutral words instead of "Pro", which it drew
+     * even for a Pro reader. Never true together with [locked].
+     */
+    val unclassified: Boolean = false,
+    /**
      * False for a price-only row whose underlying is not US-listed ([XStockAsset.isUsUnderlying]):
      * the server refuses a vote for it, so the row offers no Vote action. True on every analyzed
      * row, which offers no vote anyway.
@@ -789,7 +797,8 @@ class ListViewModel(
         val analyzed = unique
             .mapNotNull { row ->
                 val asset = byTicker[row.ticker.uppercase()] // lint-allow uppercase: map key
-                if (asset == null && (catalogKnown || row.ticker.uppercase() in bare)) null else row.toListRow(asset, asFraction) // lint-allow uppercase: map key
+                val isBare = row.ticker.uppercase() in bare // lint-allow uppercase: map key
+                if (asset == null && (catalogKnown || isBare)) null else row.toListRow(asset, asFraction, isBare)
             }
             .sortedWith(compareBy<ListRow, Double?>(nullsLast(reverseOrder())) { it.composite }.thenBy { it.ticker })
 
@@ -1001,7 +1010,7 @@ class ListViewModel(
 
     // `headline` is deliberately never read: it is Ukrainian, and docs/data-map.md says it is
     // not rendered in the app. Nothing on a row can carry it because no row field holds it.
-    private fun SummaryRow.toListRow(asset: XStockAsset?, asFraction: Boolean) = ListRow(
+    private fun SummaryRow.toListRow(asset: XStockAsset?, asFraction: Boolean, bare: Boolean = false) = ListRow(
         ticker = ticker,
         symbol = asset?.symbol,
         mint = asset?.solanaMint,
@@ -1015,7 +1024,10 @@ class ListViewModel(
         poolUsd = null,
         analyzed = true,
         sector = sector,
-        locked = isProLocked(),
+        // A bare row carries no composite because the company has no row on /summary, not because
+        // the Pro lock withheld one: there is nothing to unlock (QA of 1.3.20).
+        locked = !bare && isProLocked(),
+        unclassified = bare && composite == null,
     )
 
     private fun XStockAsset.toPriceOnlyRow() = ListRow(
