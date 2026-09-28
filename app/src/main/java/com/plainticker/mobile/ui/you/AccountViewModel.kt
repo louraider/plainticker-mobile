@@ -21,6 +21,7 @@ import com.plainticker.mobile.data.auth.GoogleAuthResponse
 import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.SignedInAccount
+import com.plainticker.mobile.repo.EntitlementChanges
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -220,6 +221,12 @@ class AccountViewModel(
     private val rekeyer: DeviceRekeyer? = null,
     /** The process-wide sign-out, whose queued retry outlives this screen; null builds a local one. */
     signOutRunner: AccountSignOut? = null,
+    /**
+     * Told of a finished sign-in and a finished sign-out: either can change what this device is
+     * entitled to (Pro on the Google account), so every screen drawing Pro numbers reads them
+     * again. Null tells nobody.
+     */
+    private val entitlement: EntitlementChanges? = null,
 ) : ViewModel() {
 
     // The local fallback keeps its queue in memory and reads the code where this ViewModel always
@@ -310,6 +317,7 @@ class AccountViewModel(
                 is Outcome.Done -> {
                     _state.value = AccountUiState.SignedIn(outcome.account)
                     signedInEvents.trySend(Unit)
+                    entitlement?.changed()
                 }
                 is Outcome.Failed -> _state.value = AccountUiState.SignedOut(outcome.message)
             }
@@ -416,6 +424,7 @@ class AccountViewModel(
             _state.value = AccountUiState.SignedOut(
                 if (result == SignOutResult.QUEUED) AccountMessage.SIGN_OUT_UNCONFIRMED else null,
             )
+            entitlement?.changed()
         }
     }
 

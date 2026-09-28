@@ -45,6 +45,7 @@ import com.plainticker.mobile.repo.CachedCatalogRepository
 import com.plainticker.mobile.repo.CachedNextUpRepository
 import com.plainticker.mobile.repo.CachedPriceRepository
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.EntitlementChanges
 import com.plainticker.mobile.repo.ForwarderMintRepository
 import com.plainticker.mobile.repo.ForwarderRpcRepository
 import com.plainticker.mobile.repo.MintRepository
@@ -134,6 +135,9 @@ interface AppContainer {
      */
     val secondSource: SecondSource
     val snapshotRepository: SnapshotRepository
+
+    /** A promo, a pass, a sign-in or sign-out may have changed Pro: every screen re-reads its numbers. */
+    val entitlementChanges: EntitlementChanges
 
     val walletAdapter: MobileWalletAdapter
     val walletSession: WalletSessionHolder
@@ -240,6 +244,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val snapshotRepository: SnapshotRepository by lazy {
         BundledSnapshotRepository(AssetSource { path -> runCatching { app.assets.open(path) }.getOrNull() })
     }
+
+    override val entitlementChanges: EntitlementChanges = EntitlementChanges()
 
     override val walletAdapter: MobileWalletAdapter by lazy { MwaWalletSession.defaultAdapter() }
     // files/wallet_session.bin, sealed with a Keystore AES-GCM key and excluded from backup and

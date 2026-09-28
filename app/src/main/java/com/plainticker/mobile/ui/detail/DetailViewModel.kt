@@ -20,6 +20,7 @@ import com.plainticker.mobile.repo.MarketClock
 import com.plainticker.mobile.repo.MintRepository
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
+import com.plainticker.mobile.repo.EntitlementChanges
 import com.plainticker.mobile.repo.SummaryRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -68,6 +69,12 @@ class DetailViewModel(
      */
     private val readApi: ReadApi? = null,
     private val devicePassStore: DevicePassStore? = null,
+    /**
+     * An entitlement change re-reads the analysis and the read, the two entitlement-aware blocks,
+     * in place: a Detail left on the back stack while a code was redeemed opens unlocked. Null
+     * never re-reads.
+     */
+    private val entitlement: EntitlementChanges? = null,
 ) : ViewModel() {
 
     private val ticker = ticker.trim().uppercase() // lint-allow uppercase: API ticker key
@@ -114,6 +121,14 @@ class DetailViewModel(
         // The venue from the first frame: the hours another screen already read, or the calendar.
         marketClock.tick()
         refresh()
+        entitlement?.let { changes ->
+            viewModelScope.launch {
+                changes.changes.collect {
+                    launch { loadAnalysis() }
+                    launch { loadRead() }
+                }
+            }
+        }
     }
 
     /** Detail came back: recompute the venue now and at every boundary while it stays on screen. */

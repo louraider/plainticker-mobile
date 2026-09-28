@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.list
 import app.cash.turbine.test
 import com.plainticker.mobile.MainDispatcherRule
 import com.plainticker.mobile.awaitUntil
+import com.plainticker.mobile.repo.EntitlementChanges
 import com.plainticker.mobile.data.Fixtures
 import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.data.net.ApiException
@@ -62,6 +63,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -138,7 +140,8 @@ class ListViewModelTest {
         watchlist: WatchlistStore = InMemoryWatchlistStore(),
         digests: DigestStore = InMemoryDigestStore(),
         clock: Clock = marketOpen,
-    ) = ListViewModel(summaries, catalog, prices, snapshots, nextUp, watchlist, digests, clock)
+        entitlement: EntitlementChanges? = null,
+    ) = ListViewModel(summaries, catalog, prices, snapshots, nextUp, watchlist, digests, clock, entitlement)
 
     /** The bundled snapshot as the assets carry it: a whole list, dated, and with no price. */
     private fun bundled() = snapshot(
@@ -242,7 +245,10 @@ class ListViewModelTest {
         advanceTimeBy(ListViewModel.SNAPSHOT_BANNER_GRACE_MS + 1)
         val state = vm.state.value
         assertFalse(state.isLoading)
-        assertEquals(listOf("TSLA", "AAPL"), state.analyzed.map { it.ticker })
+        // Under the Pro-numbers lock the snapshot carries AAPL's composite only (security review
+        // M2), so the open example leads and the locked rows follow by ticker.
+        assertEquals(listOf("AAPL", "TSLA"), state.analyzed.map { it.ticker })
+        assertTrue(state.analyzed.single { it.ticker == "TSLA" }.locked)
         assertTrue(state.banner is ListBanner.SnapshotRefreshing)
         // The banner names the capture day; a row counting days from it would be a second, silent
         // age statement (the snapshot's rows carry age_days 3).
@@ -752,6 +758,52 @@ class ListViewModelTest {
             assertEquals(71.0, aapl.composite!!, 1e-9)
             assertTrue("composite, tone and headline all null on a served row is the lock's own shape", jpm.locked)
             assertNull(jpm.composite)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Fresh-device QA of 1.3.23 (27 against 28): after a promo code was redeemed on You, Stocks
+     * kept its "Pro" badges until a restart. An entitlement change re-reads `/summary` in place.
+     */
+    @Test
+    fun `an entitlement change re-reads the rows, so the Pro badges go without a restart`() = runTest {
+        val free = summary().let { it.copy(rows = listOf(it.rows[0], it.rows[1].locked())) }
+        val summaries = FakeSummaryRepository(Result.success(free))
+        val changes = EntitlementChanges()
+        val vm = viewModel(summaries = summaries, entitlement = changes)
+
+        vm.state.test {
+            val before = awaitUntil { !it.refreshing }
+            assertTrue(before.analyzed.single { it.ticker == "JPM" }.locked)
+            val calls = summaries.summaryCalls
+
+            // The code is redeemed: the server now answers this device's code with the whole body.
+            summaries.summaryResult = Result.success(summary())
+            changes.changed(pro = true)
+
+            val after = awaitUntil { row -> row.analyzed.none { it.locked } }
+            assertEquals("one more read, not a reload of every source", calls + 1, summaries.summaryCalls)
+            assertFalse(after.analyzed.single { it.ticker == "JPM" }.locked)
+            assertNotNull(after.analyzed.single { it.ticker == "JPM" }.composite)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an entitlement change whose read fails keeps the rows on screen`() = runTest {
+        val summaries = FakeSummaryRepository(Result.success(summary()))
+        val changes = EntitlementChanges()
+        val vm = viewModel(summaries = summaries, entitlement = changes)
+
+        vm.state.test {
+            val before = awaitUntil { !it.refreshing }
+            summaries.summaryResult = Result.failure(IOException("offline"))
+            changes.changed()
+            runCurrent()
+            val after = vm.state.value.analyzed
+            assertEquals(before.analyzed.map { it.ticker to it.composite }, after.map { it.ticker to it.composite })
+            assertFalse(vm.state.value.failed)
             cancelAndIgnoreRemainingEvents()
         }
     }
