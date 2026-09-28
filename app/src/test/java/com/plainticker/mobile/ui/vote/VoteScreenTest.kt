@@ -510,6 +510,17 @@ class VoteScreenTest {
         assertFalse("nothing is counted between the index and the search item", "position" in between || "item(key" !in between)
     }
 
+    /** QA of 1.3.21: landing on the field left "Without analysis" and its count under the status bar. */
+    @Test
+    fun `the card's action lands the ballot's heading below the status bar, with the field under it`() {
+        val pick = voteTabScreen.substringAfter("onPick = {").substringBefore("position++")
+        assertTrue("the target is the heading above the field", "animateScrollToItem(ballotHeadingIndex(ballotSearchIndex[0])" in pick)
+        assertEquals(6, ballotHeadingIndex(7))
+        assertEquals("never before the list's own start", 0, ballotHeadingIndex(0))
+        val heading = voteTabScreen.substringAfter("R.string.list_heading_without_analysis").substringBefore("ballotSearchIndex[0] = position")
+        assertEquals("the heading is exactly one item above the field", 1, heading.split("position++").size - 1)
+    }
+
     /**
      * Device QA of 1.3.16: scrolled to offset 0 the search field sat half under the status bar,
      * which this screen draws under (edge to edge, Insets.kt). The field lands below the status

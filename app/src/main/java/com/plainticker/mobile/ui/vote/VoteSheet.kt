@@ -7,6 +7,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -47,6 +49,7 @@ import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
+import com.plainticker.mobile.ui.components.CautionMark
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.SolscanAction
 import com.plainticker.mobile.ui.rememberShareText
@@ -156,7 +159,26 @@ internal fun ColumnScope.VoteSheetBody(
         )
     }
 
-    content.notice?.let { Sentence(it.text(), AmberType.body, colors.textSecondary, NoticeTop) }
+    content.notice?.let { notice ->
+        if (content.caution) {
+            // A refusal reads beside the swap sheet's own failure mark (QA of 1.3.21).
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = NoticeTop),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MarkGap),
+            ) {
+                CautionMark()
+                Text(
+                    text = notice.text(),
+                    style = AmberType.body,
+                    color = colors.textSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        } else {
+            Sentence(notice.text(), AmberType.body, colors.textSecondary, NoticeTop)
+        }
+    }
 
     // The weakness of a balance-weighted vote, set in the metadata face under the figure it is
     // about. It is never [colors.stateCaution]: DESIGN.md section 7 keeps that colour
@@ -266,6 +288,7 @@ private val TitleTop = 14.dp
 private val PhaseTop = 12.dp
 private val GridTop = 20.dp
 private val NoticeTop = 16.dp
+private val MarkGap = 12.dp
 private val DisclosureTop = 12.dp
 private val ActionsTop = 24.dp
 private val ActionGap = 10.dp

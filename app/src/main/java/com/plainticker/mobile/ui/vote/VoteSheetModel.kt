@@ -49,6 +49,11 @@ data class VoteSheetContent(
     val shareText: Copy? = null,
     /** The landed vote's signature, for "View on Solscan". Landed only. */
     val signature: String? = null,
+    /**
+     * The attempt ended without a vote: the notice is drawn beside the same caution mark the swap
+     * sheet's failures carry ([com.plainticker.mobile.ui.components.CautionMark]; QA of 1.3.21).
+     */
+    val caution: Boolean = false,
 )
 
 /** The label and the mono fragment of the bar over a landed vote. */
@@ -148,6 +153,7 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
             null
         },
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),
+        caution = true,
     )
 }
 
