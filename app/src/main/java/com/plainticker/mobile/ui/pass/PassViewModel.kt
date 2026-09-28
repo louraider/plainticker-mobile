@@ -236,9 +236,14 @@ class PassViewModel(
 
     // ---- Promo code -----------------------------------------------------------------------
 
-    /** "Have a code?": opens the inline field, empty, from [PromoState.Idle]. */
+    /**
+     * "Have a code?": opens the inline field, empty, from [PromoState.Idle], or from a
+     * [PromoState.Success] that is still on screen (fresh-device QA of 1.3.24: right after a redeem
+     * the row said to enter another code and offered no way to until a restart).
+     */
     fun openPromo() {
-        if (_promo.value !is PromoState.Idle) return
+        val now = _promo.value
+        if (now !is PromoState.Idle && now !is PromoState.Success) return
         _promo.value = PromoState.Editing("")
     }
 

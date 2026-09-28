@@ -187,6 +187,35 @@ class YouScreenTest {
     }
 
     @Test
+    fun `the pay sheet's have a code closes the sheet, opens the field and brings it into view`() {
+        // Fresh-device QA of 1.3.24 (B1): from the sheet the field and hint sat above the top edge.
+        val screen = body("fun YouScreen(", "internal fun YouContent(")
+        val haveCode = screen.substring(screen.indexOf("onHaveCode = {"))
+        assertOrder("the sheet's Have a code", haveCode, listOf("passViewModel.close()", "passViewModel.openPromo()", "promoReveal++"))
+        assertTrue("promoReveal = promoReveal," in screen)
+
+        val content = body("internal fun YouContent(", "private fun amberColors(")
+        val reveal = content.substring(content.indexOf("LaunchedEffect(promoReveal, revealRequest)"), content.indexOf("LazyColumn("))
+        assertOrder(
+            "the reveal waits for the keyboard, then measures, then scrolls",
+            reveal,
+            listOf("withTimeoutOrNull(ImeSettleMillis)", "imeTarget.getBottom(density)", "withFrameNanos", "promoRevealScroll(", "scrollBy(delta)"),
+        )
+        assertTrue("clear of the status bar and its scrim", "statusBars.getTop(density)" in reveal && "ScrimFade" in reveal)
+        assertTrue("Detail's request ends in the same reveal", "revealRequest++" in content)
+        val plan = body("private fun PlanGroup(", "private fun planRowAction(")
+        assertTrue("the promo row reports where it stands", "promoBounds.top = top" in plan)
+    }
+
+    @Test
+    fun `the closed promo row reads the entitlement and always offers have a code`() {
+        val promo = body("private fun PromoRow(", "private fun PromoEditingRow(")
+        assertTrue("promoLine(promo, pro, signedOut = keepNote)" in promo)
+        assertEquals("one Have a code? action, drawn for every closed state", 1, Regex("""R\.string\.promo_action_have_code""").findAll(promo).count())
+        assertTrue("pro = pro," in body("private fun PlanGroup(", "private fun planRowAction("))
+    }
+
+    @Test
     fun `the notifications group keeps enable and the digest`() {
         val group = body("private fun NotificationsGroup(", "private fun AboutGroup(")
         assertTrue("notificationLine(notificationsOn)" in group)

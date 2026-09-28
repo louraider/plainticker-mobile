@@ -196,6 +196,14 @@ sealed interface ListBanner {
     data object PricesPartial : ListBanner
 }
 
+/**
+ * The two banners a finished price run raises, seconds after the first frame (fresh-device QA of
+ * 1.3.24, B5): Stocks draws them over the bottom of the list, not in the slot above the search
+ * field, so their arrival never pushes the field and the chips down.
+ */
+val ListBanner.isPriceNotice: Boolean
+    get() = this == ListBanner.PricesPartial || this == ListBanner.PricesUnavailable
+
 data class ListUiState(
     val isLoading: Boolean = false,
     val query: String = "",
@@ -940,10 +948,11 @@ class ListViewModel(
     /** The visible window first, then the rest; the repository serves the window from cache. */
     private suspend fun fetchPrices(mints: List<String>) {
         val window = prices.pricesFirst(mints, FIRST_SCREENFUL)
-        applyPrices(window, asked = mints.take(FIRST_SCREENFUL))
+        val more = mints.size > FIRST_SCREENFUL
+        applyPrices(window, asked = mints.take(FIRST_SCREENFUL), settles = !more)
         windowsPriced.update { it + 1 }
-        if (mints.size > FIRST_SCREENFUL) {
-            applyPrices(window.mergedWith(prices.pricesFirst(mints)), asked = mints)
+        if (more) {
+            applyPrices(window.mergedWith(prices.pricesFirst(mints)), asked = mints, settles = true)
         }
     }
 
@@ -957,8 +966,13 @@ class ListViewModel(
      * before it had already drawn: on a cold start the snapshot's mints are priced first, and
      * the live set then starts a second run whose window would otherwise empty the rest of the
      * list for the seconds Jupiter's pacing costs. A row nobody asked about keeps what it had.
+     *
+     * The prices banners are decided only by the call that [settles] the run, never by the window
+     * ahead of it (fresh-device QA of 1.3.24, B5): the window's refused chunk is asked again by the
+     * call for the rest, and a banner raised in between arrived over the search field and left
+     * again seconds later. Until then whatever the last settled run said stands.
      */
-    private fun applyPrices(fetch: PriceFetch, asked: Collection<String>) {
+    private fun applyPrices(fetch: PriceFetch, asked: Collection<String>, settles: Boolean) {
         val covered = asked.toHashSet()
         // The shared source has the last word (QA of 1.3.21): a quote another screen fetched while
         // this run was out is newer than the run's own answer, so a row never steps back to it.
@@ -970,8 +984,8 @@ class ListViewModel(
             it.copy(
                 analyzed = allAnalyzed.matching(it.query),
                 withoutAnalysis = allWithoutAnalysis.matching(it.query),
-                pricesUnavailable = fetch.isPartial && nothingPriced,
-                pricesPartial = fetch.isPartial && !nothingPriced,
+                pricesUnavailable = if (settles) fetch.isPartial && nothingPriced else it.pricesUnavailable,
+                pricesPartial = if (settles) fetch.isPartial && !nothingPriced else it.pricesPartial,
             )
         }
     }

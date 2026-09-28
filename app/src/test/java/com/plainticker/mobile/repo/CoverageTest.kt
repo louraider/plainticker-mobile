@@ -2,6 +2,7 @@ package com.plainticker.mobile.repo
 
 import com.plainticker.mobile.data.plainticker.SummaryResponse
 import com.plainticker.mobile.data.plainticker.SummaryRow
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -12,6 +13,22 @@ class CoverageTest {
 
     private fun summary(rows: List<SummaryRow>, covered: List<String>? = null) =
         SummaryResponse(schema = "v1", generatedAt = "2026-09-28T00:00:00Z", rows = rows, covered = covered)
+
+    @Test
+    fun `a covered company's bundled symbol is the one the bundled catalog lists for it`() {
+        // Fresh-device QA of 1.3.24 (B7): Detail's hero names the xStock before the catalog
+        // answers, so the rule ticker plus "x" must be true of every covered company the bundled
+        // catalog carries (a London listing like AAFL is AAFx, which is why it is pinned here).
+        val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }
+        val catalog = File(module, "src/main/assets/snapshot/xstocks.json").readText()
+        val symbols = Regex(""""symbol":\s*"([^"]+)",\s*"ticker":\s*"([^"]+)"""").findAll(catalog)
+            .associate { it.groupValues[2] to it.groupValues[1] }
+        assertTrue("the bundled catalog was not read", symbols.size > 500)
+        val checked = Coverage.BUNDLED.filter { it.ticker in symbols }
+        assertTrue("most covered companies are in the bundled catalog", checked.size >= 50)
+        checked.forEach { assertEquals(it.ticker, symbols.getValue(it.ticker), it.symbol) }
+        assertEquals("AAPLx", Coverage.company("aapl")?.symbol)
+    }
 
     /**
      * QA of 1.3.20: the web covers BABA, but xStocks issues no BABAx on any network (the asset list

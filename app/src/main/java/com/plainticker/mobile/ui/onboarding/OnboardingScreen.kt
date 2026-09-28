@@ -41,33 +41,30 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
-import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.components.AmberBottomNav
 import com.plainticker.mobile.ui.components.AmberChip
 import com.plainticker.mobile.ui.components.AmberDestination
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
-import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberSheetSurface
-import com.plainticker.mobile.ui.components.AmberTickerRow
-import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.InstrumentPreviews
+import com.plainticker.mobile.ui.components.SkeletonBar
+import com.plainticker.mobile.ui.components.SkeletonTickerRows
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.TopBar
 import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.focusOutline
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberType
-import java.time.LocalDate
 
 /**
  * The one-time onboarding (DT11), rewritten for the app as it ships (the pre-freeze audit,
  * 2026-09-26): the first frame is the product, not a form. A picture of Today sits behind at 25
- * percent, drawn with the real Amber pieces (the top bar, a section head, ticker rows in their
- * tonal group, the five-destination bottom bar), and the panel over it carries the promise, the
- * self-certification and the one action. "Continue" renders disabled until the box is checked;
- * checking writes nothing, the flag is persisted only when the button is pressed, and AppNavHost
- * then starts at home, on Today, for good.
+ * percent, drawn with the real Amber pieces (the top bar, skeleton rows in their tonal group, the
+ * five-destination bottom bar) and no sample ticker or market claim, and the panel over it
+ * carries the promise, the self-certification and the one action. "Continue" renders disabled
+ * until the box is checked; checking writes nothing, the flag is persisted only when the button
+ * is pressed, and AppNavHost then starts at home, on Today, for good.
  *
  * Step two (judges' round 2) replaced the five-line tab map that ended on an empty Today: the
  * reader picks stocks to watch from real analysed chips and lands on a Today that already has
@@ -162,35 +159,33 @@ private fun Modifier.swallowTouches(): Modifier = pointerInput(Unit) {
 }
 
 /**
- * Today as a picture of itself: the top bar, the venue line, "Reports this week" with four sample
- * rows in [AmberTickerRowGroup] (one marked Watched the way Today marks it), and the bottom bar
- * with Today selected. Every piece is the component the real screen draws; nothing here has a
- * handler of its own, and [swallowTouches] stops the bar's.
+ * Today's shape, with nothing in it a reader could take for a fact: the top bar, a bar where the
+ * venue line goes, one where a section head goes, four skeleton rows in their tonal group
+ * ([SkeletonTickerRows], the same placeholder Today draws while it loads), and the bottom bar with
+ * Today selected. Fresh-device QA of 1.3.24 (B6): the picture used to carry sample rows, TSLAx
+ * "Watched" and "NYSE closed. Opens tomorrow", which a new reader could read as their own list and
+ * a real market claim before anything had been read. Nothing here has a handler of its own, and
+ * [swallowTouches] stops the bar's.
  */
 @Composable
 private fun TodayBackdrop(modifier: Modifier = Modifier) {
+    val colors = defaultAmberColors()
     Column(modifier) {
         TopBar()
-        Text(
-            text = stringResource(R.string.today_status_closed_tomorrow, BackdropOpensAt),
-            style = AmberType.body,
-            color = defaultAmberColors().textPrimary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        // Where the venue line and the section head stand on Today, with nothing written in either.
+        SkeletonBar(
+            width = 240.dp,
+            height = 16.dp,
+            colors = colors,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         )
-        AmberSectionHead(
-            title = stringResource(R.string.today_heading_reports),
-            meta = Fmt.count(BackdropRows.size),
+        SkeletonBar(
+            width = 180.dp,
+            height = 24.dp,
+            colors = colors,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp),
         )
-        AmberTickerRowGroup {
-            BackdropRows.forEach { row ->
-                AmberTickerRow(
-                    ticker = row.symbol,
-                    company = row.company,
-                    figure = if (row.watched) stringResource(R.string.today_reports_watched) else null,
-                    context = "${Fmt.weekday(row.reportsOn)} ${Fmt.dayMonth(row.reportsOn)}",
-                )
-            }
-        }
+        SkeletonTickerRows(count = BackdropRowCount, colors = colors)
         Spacer(Modifier.weight(1f))
         AmberBottomNav(selected = AmberDestination.TODAY, onSelect = {})
     }
@@ -385,29 +380,8 @@ private val PanelGap: Dp = 20.dp
 private val BodyGap: Dp = 10.dp
 private val CheckboxSize: Dp = 20.dp
 
-// ---- The backdrop snapshot ---------------------------------------------------------------------
-
-/** One row of the backdrop's "Reports this week"; the date goes through Fmt like Today's own. */
-private data class BackdropRow(
-    val symbol: String,
-    val company: String,
-    val reportsOn: LocalDate,
-    val watched: Boolean = false,
-)
-
-/**
- * Illustrative sample data, so the first frame is full before any network call returns. Nothing
- * here is read from the chain or the API, and nothing here is a real report calendar.
- */
-private val BackdropRows = listOf(
-    BackdropRow("TSLAx", "Tesla, Inc.", LocalDate.of(2026, 10, 20), watched = true),
-    BackdropRow("NVDAx", "NVIDIA Corp.", LocalDate.of(2026, 10, 21)),
-    BackdropRow("AAPLx", "Apple Inc.", LocalDate.of(2026, 10, 22)),
-    BackdropRow("MSFTx", "Microsoft Corp.", LocalDate.of(2026, 10, 23)),
-)
-
-/** The venue line's sample time, in the reader's own clock as Today prints it. */
-private const val BackdropOpensAt = "15:30"
+/** How many skeleton rows the backdrop draws: Today's first screenful, and no ticker in any. */
+private const val BackdropRowCount = 4
 
 // ---- Previews ----------------------------------------------------------------------------------
 

@@ -7,6 +7,7 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.pass.ProUiState
+import com.plainticker.mobile.ui.pass.PromoState
 import com.plainticker.mobile.ui.portfolio.payOffered
 import com.plainticker.mobile.ui.portfolio.pendingPaymentLine
 import com.plainticker.mobile.ui.portfolio.stakeLine
@@ -183,6 +184,69 @@ private fun utcDay(epochMillis: Long): String = Fmt.day(Instant.ofEpochMilli(epo
  */
 fun promoSuccessLine(untilMillis: Long?): Copy =
     untilMillis?.let { words(R.string.you_hero_pro_until, utcDay(it)) } ?: words(R.string.you_hero_pro)
+
+/**
+ * What the Plan group's first row says while the code field is closed: [PromoState.Idle] and
+ * [PromoState.Success]; null for the open field's own states, which draw the field instead.
+ * "Have a code?" stays beside it in every case this returns (fresh-device QA of 1.3.24, B4: right
+ * after a redeem the row said "Enter another code to add more time" with no way to).
+ *
+ * The Pro this row describes is read from the entitlement ([ProUiState]), not only from the
+ * redeem that just ran (fresh-device QA of 1.3.24, B3: after a restart the row went back to "A
+ * promo code adds Pro time" under a hero that said "Pro until"). [signedOut] is the only reason
+ * for a second line: before a redeem it says signing in first keeps the Pro past a reinstall, and
+ * once a promo Pro is on this phone it says where that Pro lives.
+ */
+data class PromoLine(val value: Copy, val sub: Copy?, val quiet: Boolean)
+
+fun promoLine(promo: PromoState, pro: ProUiState, signedOut: Boolean): PromoLine? {
+    val promoUntil = pro.untilMillis.takeIf { promoPro(pro) }
+    return when {
+        promo is PromoState.Success -> held(promo.untilMillis ?: promoUntil, signedOut)
+        promo !is PromoState.Idle -> null
+        promoPro(pro) -> held(promoUntil, signedOut)
+        else -> PromoLine(
+            value = words(R.string.promo_prompt),
+            sub = if (signedOut) words(R.string.promo_signin_first_hint) else null,
+            quiet = true,
+        )
+    }
+}
+
+/**
+ * How far You's list scrolls so the open promo row (label, field, hint, error, Apply and Cancel)
+ * stands whole between the status bar band and the keyboard, for a field opened from somewhere
+ * other than its own row: the Pay sheet's "Have a code?" and Detail's "Have a code? Get Pro"
+ * (fresh-device QA of 1.3.24, B1: from the sheet the field and hint sat above the top edge, and
+ * only Apply and Cancel showed).
+ *
+ * Every figure is in pixels in the list viewport's own coordinates, measured once the keyboard has
+ * finished rising: [rowTop] and [rowBottom] the row's edges, [clearTop] where the band the clock
+ * and its scrim cover ends, [viewportBottom] the list's bottom edge (the keyboard's top while it
+ * is up). The answer is what [androidx.compose.foundation.lazy.LazyListState.scrollBy] takes:
+ * positive moves the content up, negative brings it down, 0 leaves a row already in view alone.
+ * A row taller than the room between the two edges keeps its top (the label and the field) in
+ * view rather than its buttons.
+ */
+fun promoRevealScroll(rowTop: Float, rowBottom: Float, clearTop: Float, viewportBottom: Float): Float {
+    val room = viewportBottom - clearTop
+    return when {
+        rowTop < clearTop -> rowTop - clearTop
+        rowBottom - rowTop > room -> rowTop - clearTop
+        rowBottom > viewportBottom -> rowBottom - viewportBottom
+        else -> 0f
+    }
+}
+
+/** This device's plan, as the server last answered it, is Pro through a promo code. */
+private fun promoPro(pro: ProUiState): Boolean =
+    pro.entitlementKnown && pro.pro && pro.source == EntitlementSource.PROMO
+
+private fun held(untilMillis: Long?, signedOut: Boolean) = PromoLine(
+    value = promoSuccessLine(untilMillis),
+    sub = if (signedOut) words(R.string.promo_success_saved_to_phone) else null,
+    quiet = false,
+)
 
 // ---- The Plan group ------------------------------------------------------------------------
 

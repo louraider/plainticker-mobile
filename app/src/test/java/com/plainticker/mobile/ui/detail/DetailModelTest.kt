@@ -153,6 +153,18 @@ class DetailModelTest {
         assertEquals("Tesla xStock", catalogOnly.heroCompany)
     }
 
+    @Test
+    fun `a covered company's page names its xStock from the first frame`() {
+        // Fresh-device QA of 1.3.24 (B7): "Skip and read AAPLx" landed on a bare "AAPL" for the
+        // seconds a slow catalog took.
+        val known = com.plainticker.mobile.repo.Coverage.company("AAPL")
+        val first = DetailUiState(ticker = "AAPL", nowMillis = now, known = known)
+        assertEquals("AAPLx", first.heroTicker)
+        assertEquals("a catalog that could not be read keeps it", "AAPLx", first.copy(catalogAsset = Piece.Failed).heroTicker)
+        assertEquals("a catalog that lists no such token names none", "AAPL", first.copy(catalogAsset = Piece.Absent).heroTicker)
+        assertEquals("the catalog's own symbol wins", "TSLAx", first.copy(catalogAsset = Piece.Ready(asset)).heroTicker)
+    }
+
     // ---- The verdict (task app-verdict) --------------------------------------------------------
 
     @Test

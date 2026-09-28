@@ -20,13 +20,19 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationTarget
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,7 +46,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -52,7 +61,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -81,6 +93,7 @@ import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSectionHead
 import com.plainticker.mobile.ui.components.AmberTickerRowGroup
 import com.plainticker.mobile.ui.components.InstrumentPreviews
+import com.plainticker.mobile.ui.components.ScrimFade
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.focusOutline
 import com.plainticker.mobile.ui.components.rememberMotionEnabled
@@ -100,7 +113,9 @@ import com.plainticker.mobile.ui.theme.AmberType
 import com.plainticker.mobile.ui.theme.JetBrainsMono
 import com.plainticker.mobile.wallet.WalletAccount
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * You, the account cabinet (2026-09-25). The founder asked for the app's cabinet to match the one
@@ -190,6 +205,9 @@ fun YouScreen(
         onPauseOrDispose { }
     }
 
+    // Bumped by the Pay sheet's "Have a code?": YouContent brings the opened field into view.
+    var promoReveal by remember { mutableIntStateOf(0) }
+
     // A sibling of the LazyColumn: the sheet is a modal surface and draws in its own window, so
     // where it sits in this tree does not matter, only that it outlives the row that opened it.
     Box(modifier.fillMaxSize()) {
@@ -230,6 +248,7 @@ fun YouScreen(
             header = header,
             openPromo = openPromo,
             onPromoOpened = onPromoOpened,
+            promoReveal = promoReveal,
         )
         PassSheet(
             state = pass,
@@ -237,9 +256,12 @@ fun YouScreen(
                 onConfirm = passViewModel::confirm,
                 onRetry = passViewModel::retry,
                 onClose = passViewModel::close,
+                // The sheet closes and the field opens where it stands in Plan; once the keyboard has
+                // risen, the list brings the whole row into view (fresh-device QA of 1.3.24, B1).
                 onHaveCode = {
                     passViewModel.close()
                     passViewModel.openPromo()
+                    promoReveal++
                 },
             ),
         )
@@ -284,23 +306,68 @@ internal fun YouContent(
      */
     openPromo: Boolean = false,
     onPromoOpened: () -> Unit = {},
+    /**
+     * Bumped each time the Pay sheet's "Have a code?" opened the field (fresh-device QA of 1.3.24,
+     * B1): once the keyboard has finished rising, the list scrolls just enough for the whole open
+     * row to stand below the status bar band and above the keyboard ([promoRevealScroll]). The
+     * field's own "Have a code?" needs none of this: the row is on screen when it is tapped.
+     */
+    promoReveal: Int = 0,
 ) {
     val colors = amberColors()
     val listState = rememberLazyListState()
     val motion = rememberMotionEnabled()
+    // Detail's request lands here too, after its scroll to the top, so both outside ways in end
+    // with the field in view whatever the keyboard covers.
+    var revealRequest by remember { mutableIntStateOf(0) }
     LaunchedEffect(openPromo) {
         if (!openPromo) return@LaunchedEffect
         if (promo is PromoState.Success) onDismissPromo()
         onOpenPromo()
         // Cleared last: clearing it recomposes this effect's key and cancels whatever is left of it.
         if (motion) listState.animateScrollToItem(0) else listState.scrollToItem(0)
+        revealRequest++
         onPromoOpened()
+    }
+    val promoBounds = remember { PromoRowBounds() }
+    val density = LocalDensity.current
+    val statusBars = WindowInsets.statusBars
+    val imeNow = WindowInsets.ime
+    @OptIn(ExperimentalLayoutApi::class)
+    val imeTarget = WindowInsets.imeAnimationTarget
+    LaunchedEffect(promoReveal, revealRequest) {
+        if (promoReveal == 0 && revealRequest == 0) return@LaunchedEffect
+        // The keyboard rises over a few hundred milliseconds after the field takes focus, and the
+        // list's viewport shrinks with it (HomeScreen's imePadding): measured any earlier, the row
+        // would be placed against a viewport about to lose a third of its height. A phone whose
+        // keyboard never rises (a hardware one) waits out the timeout and is placed all the same.
+        withTimeoutOrNull(ImeSettleMillis) {
+            snapshotFlow { imeNow.getBottom(density) to imeTarget.getBottom(density) }
+                .first { (now, target) -> target > 0 && now == target }
+        }
+        // The row is measured only while Plan is composed; a list scrolled far past it comes back.
+        if (listState.layoutInfo.visibleItemsInfo.none { it.key == PlanItemKey }) listState.scrollToItem(PlanItemIndex)
+        // Two frames: the resized viewport lays out, then the row reports where it now stands.
+        withFrameNanos { }
+        withFrameNanos { }
+        if (promoBounds.top.isNaN()) return@LaunchedEffect
+        val clearTop = statusBars.getTop(density) + with(density) { (ScrimFade + RevealGap).toPx() } - promoBounds.listTop
+        val delta = promoRevealScroll(
+            rowTop = promoBounds.top - promoBounds.listTop,
+            rowBottom = promoBounds.bottom - promoBounds.listTop,
+            clearTop = clearTop.coerceAtLeast(0f),
+            viewportBottom = listState.layoutInfo.viewportSize.height.toFloat(),
+        )
+        if (delta != 0f) {
+            if (motion) listState.animateScrollBy(delta) else listState.scrollBy(delta)
+        }
     }
     val hero = youHero(account, state.account, pro, nowMillis)
     val plan = planRows(pro, hero.action, nowMillis)
     val heroMessage = (account as? AccountUiState.SignedOut)?.message?.takeIf { hero.action == HeroAction.SIGN_IN }
     LazyColumn(
-        modifier = modifier.fillMaxSize().background(colors.surfaceGround),
+        modifier = modifier.fillMaxSize().background(colors.surfaceGround)
+            .onGloballyPositioned { promoBounds.listTop = it.positionInRoot().y },
         state = listState,
         // The tab content ends above the navigation bar; the padding is part of the scroll.
         contentPadding = WindowInsets.navigationBars.asPaddingValues(),
@@ -331,9 +398,11 @@ internal fun YouContent(
                 )
             }
         }
-        item(key = "plan") {
+        item(key = PlanItemKey) {
             PlanGroup(
                 rows = plan,
+                pro = pro,
+                promoBounds = promoBounds,
                 onPay = onPay,
                 onRefresh = onRefreshEntitlement,
                 promo = promo,
@@ -505,21 +574,39 @@ private fun PlanGroup(
     onDismissPromo: () -> Unit,
     colors: AmberColors,
     promoKeepNote: Boolean = false,
+    pro: ProUiState = ProUiState(),
+    /** Where the promo row stands on screen, for the Pay sheet's bring-into-view. */
+    promoBounds: PromoRowBounds? = null,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(title = stringResource(R.string.you_heading_plan), colors = colors)
         AmberTickerRowGroup(colors = colors) {
             // First, not last (judges' round 2): a judge holding a code found "Have a code?" only
             // after scrolling past the fold, under every Plan row.
-            PromoRow(
-                promo = promo,
-                onOpen = onOpenPromo,
-                onInputChanged = onPromoInputChanged,
-                onApply = onApplyPromo,
-                onDismiss = onDismissPromo,
-                colors = colors,
-                keepNote = promoKeepNote,
-            )
+            Box(
+                Modifier.fillMaxWidth().then(
+                    if (promoBounds == null) {
+                        Modifier
+                    } else {
+                        Modifier.onGloballyPositioned {
+                            val top = it.positionInRoot().y
+                            promoBounds.top = top
+                            promoBounds.bottom = top + it.size.height
+                        }
+                    },
+                ),
+            ) {
+                PromoRow(
+                    promo = promo,
+                    onOpen = onOpenPromo,
+                    onInputChanged = onPromoInputChanged,
+                    onApply = onApplyPromo,
+                    onDismiss = onDismissPromo,
+                    colors = colors,
+                    keepNote = promoKeepNote,
+                    pro = pro,
+                )
+            }
             rows.forEach { row ->
                 CabinetRow(
                     colors = colors,
@@ -564,18 +651,24 @@ private fun PromoRow(
     onDismiss: () -> Unit,
     colors: AmberColors,
     keepNote: Boolean = false,
+    /** This device's entitlement: a promo Pro is drawn from it on every launch, not from a redeem. */
+    pro: ProUiState = ProUiState(),
 ) {
-    when (promo) {
-        // Signed out (device QA of 1.3.17): the server ties a code to an account only at the moment
-        // it is redeemed, so the way to keep Pro past a reinstall is to sign in first. Said before
-        // redemption, where it can still be acted on, and never promised after it.
-        PromoState.Idle -> CabinetRow(
+    // Closed (Idle, or a redeem that just landed): the entitlement decides what the row says
+    // ([promoLine], fresh-device QA of 1.3.24: after a restart the row forgot the redeem), and
+    // "Have a code?" stays beside it, so a second code can always be entered.
+    val closed = promoLine(promo, pro, signedOut = keepNote)
+    if (closed != null) {
+        CabinetRow(
             colors = colors,
-            value = stringResource(R.string.promo_prompt),
-            valueKind = RowValueKind.QUIET,
-            sub = if (keepNote) stringResource(R.string.promo_signin_first_hint) else null,
+            value = closed.value.text(),
+            valueKind = if (closed.quiet) RowValueKind.QUIET else RowValueKind.WORDS,
+            sub = closed.sub?.text(),
             actions = listOf(RowAction(stringResource(R.string.promo_action_have_code), onOpen)),
         )
+        return
+    }
+    when (promo) {
         is PromoState.Editing -> PromoEditingRow(promo.input, error = null, onInputChanged, onApply, onDismiss, colors, keepNote)
         is PromoState.Failed -> PromoEditingRow(promo.input, error = promo.reason, onInputChanged, onApply, onDismiss, colors, keepNote)
         is PromoState.Applying -> CabinetRow(
@@ -583,11 +676,8 @@ private fun PromoRow(
             value = stringResource(R.string.promo_field_label),
             sub = stringResource(R.string.promo_field_checking),
         )
-        is PromoState.Success -> CabinetRow(
-            colors = colors,
-            value = promoSuccessLine(promo.untilMillis).text(),
-            sub = if (keepNote) stringResource(R.string.promo_success_saved_to_phone) else null,
-        )
+        // Drawn above, from promoLine.
+        PromoState.Idle, is PromoState.Success -> Unit
     }
 }
 
@@ -1026,6 +1116,29 @@ private val CenteredTextActionPadding = PaddingValues(horizontal = 16.dp, vertic
 
 /** A text action under the hero's message line: flush with the line's own start edge. */
 private val MessageTextActionPadding = PaddingValues(start = 0.dp, top = 14.dp, end = 16.dp, bottom = 14.dp)
+
+// ---- Bringing the promo row into view (fresh-device QA of 1.3.24, B1) --------------------------
+
+/**
+ * Where the promo row and the list stand, in root pixels, written by their own placement and read
+ * only by the bring-into-view effect: plain fields rather than state, so a scroll that moves them
+ * never recomposes anything.
+ */
+internal class PromoRowBounds {
+    var top: Float = Float.NaN
+    var bottom: Float = Float.NaN
+    var listTop: Float = 0f
+}
+
+/** The Plan group's list item: header, heading and hero come before it. */
+private const val PlanItemKey = "plan"
+private const val PlanItemIndex = 3
+
+/** The longest the effect waits for the keyboard to finish rising before it places the row anyway. */
+private const val ImeSettleMillis = 2_000L
+
+/** Air between the scrim's fade and the row's top edge once it is brought into view. */
+private val RevealGap = 8.dp
 
 /** AmberTickerRowGroup's own 16dp side inset, shared by the hero so every block lines up. */
 private val GroupSide = 16.dp

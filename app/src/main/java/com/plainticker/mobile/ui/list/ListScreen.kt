@@ -231,139 +231,151 @@ internal fun ListContent(
     // No jump rail beside the list any more (judges' round 2, 2026-09-27): its "Com", "Dis", "Sta"
     // codes clipped and meant nothing to a first-time reader, and it took 48dp off every line,
     // the hours banner included. The list takes the full width; a sector chip narrows to one sector.
-    LazyColumn(
-        // The viewport starts below the status bar (final QA of 1.3.19): a pinned sector head
-        // sticks to the top of the viewport whatever the content padding says, and with the
-        // viewport under the clock it sat behind the scrim with its title cut off. Consuming the
-        // inset here also zeroes the TopBar's own status-bar padding in the header item, so the
-        // first frame is where it was. The scrim still fades the rows as they leave.
-        modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top)),
-        // The tab content ends above the navigation bar; the padding is part of the scroll.
-        contentPadding = WindowInsets.navigationBars.asPaddingValues(),
-    ) {
-        item(key = "header") { header() }
-        item(key = "chrome") {
-            StocksChrome(
-                state = state,
-                onQueryChange = onQueryChange,
-                onClearSearch = onClearSearch,
-                onRetry = onRetry,
-                colors = colors,
-                trackedCount = trackedCount,
-                sectors = allSectors,
-                activeFilter = activeFilter,
-                onFilterSelect = { tapped -> filterKey = if (activeFilter == tapped) null else tapped.toSaveKey() },
-                pricesPending = pricesPending,
-                cold = cold,
-            )
-        }
-
-        when {
-            cold -> item(key = "skeleton") {
-                Column(Modifier.fillMaxWidth()) {
-                    AmberSectionHead(title = stringResource(R.string.list_heading_analyzed), colors = colors)
-                    SkeletonTickerRows(count = SkeletonRowCount, colors = colors)
-                }
-            }
-
-            // A token listed this morning is on neither the bundled snapshot nor the catalog
-            // kept on disk for the day, and the reader who searched for it is the one person
-            // who knows to look. This action is why a settled list has a way to reach the
-            // network at all: it goes to the same [ListViewModel.refresh] the banners offer,
-            // which asks the catalog for the network rather than for whichever cache still
-            // answers.
-            state.searchMiss -> item(key = "miss") {
-                EmptyLine(
-                    text = stringResource(R.string.list_search_empty, state.query),
-                    action = stringResource(R.string.list_search_look_again),
-                    onAction = onRetry,
+    // The prices notice is not in the chrome's banner slot (fresh-device QA of 1.3.24, B5): it can
+    // only arrive once the price run is over, seconds after the first frame, and in the slot it
+    // pushed the search field and the chips down under the reader's thumb. It stands over the
+    // bottom of the list instead, above the tab bar, and the list gains the same room at its end
+    // so the last row can still be scrolled clear of it.
+    val priceNotice = state.banner?.takeIf { it.isPriceNotice }
+    val listEnd = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Box(modifier.fillMaxSize()) {
+        LazyColumn(
+            // The viewport starts below the status bar (final QA of 1.3.19): a pinned sector head
+            // sticks to the top of the viewport whatever the content padding says, and with the
+            // viewport under the clock it sat behind the scrim with its title cut off. Consuming the
+            // inset here also zeroes the TopBar's own status-bar padding in the header item, so the
+            // first frame is where it was. The scrim still fades the rows as they leave.
+            modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top)),
+            // The tab content ends above the navigation bar; the padding is part of the scroll.
+            contentPadding = PaddingValues(bottom = listEnd + if (priceNotice != null) PriceNoticeRoom else 0.dp),
+        ) {
+            item(key = "header") { header() }
+            item(key = "chrome") {
+                StocksChrome(
+                    state = state,
+                    onQueryChange = onQueryChange,
+                    onClearSearch = onClearSearch,
+                    onRetry = onRetry,
                     colors = colors,
+                    trackedCount = trackedCount,
+                    sectors = allSectors,
+                    activeFilter = activeFilter,
+                    onFilterSelect = { tapped -> filterKey = if (activeFilter == tapped) null else tapped.toSaveKey() },
+                    pricesPending = pricesPending,
+                    cold = cold,
                 )
             }
 
-            // Both sources answered and neither had a row. Rare, but the screen was otherwise
-            // a wordmark, a search field and nothing else, with no banner to explain it.
-            state.emptyResult -> item(key = "empty") { EmptyLine(stringResource(R.string.list_empty), colors = colors) }
-
-            // Browsing: analyzed rows chaptered by sector as sticky headers, then the Next up
-            // strip. Search draws a different shape (see below), so this branch runs only
-            // while the query is blank.
-            state.query.isBlank() -> {
-                visibleChapters.forEach { chapter ->
-                    stickyHeader(key = "chapter:${chapter.sector ?: NoSectorKey}") {
-                        AmberSectionHead(
-                            title = chapter.sector ?: stringResource(R.string.list_heading_no_sector),
-                            meta = Fmt.count(chapter.rows.size),
-                            colors = colors,
-                        )
-                    }
-                    itemsIndexed(chapter.rows, key = { _, row -> "a:" + row.ticker }) { index, row ->
-                        AnalyzedRow(
-                            row = row,
-                            pricesPending = pricesPending,
-                            modifier = groupedRowModifier(colors, isFirst = index == 0, isLast = index == chapter.rows.lastIndex),
-                            colors = colors,
-                            onOpenDetail = onOpenDetail,
-                        )
+            when {
+                cold -> item(key = "skeleton") {
+                    Column(Modifier.fillMaxWidth()) {
+                        AmberSectionHead(title = stringResource(R.string.list_heading_analyzed), colors = colors)
+                        SkeletonTickerRows(count = SkeletonRowCount, colors = colors)
                     }
                 }
 
-                // The roughly 672 uncovered rows no longer tail the list (task A1): they left
-                // for a Vote tab in an earlier pass. Only the leaders staked SKR has voted to
-                // cover next still lead here, exactly where "Without analysis" used to.
-                val leaders = state.nextUpStrip
-                if (leaders.isNotEmpty()) {
-                    item(key = "without") {
-                        AmberSectionHead(title = stringResource(R.string.list_heading_without_analysis), colors = colors)
+                // A token listed this morning is on neither the bundled snapshot nor the catalog
+                // kept on disk for the day, and the reader who searched for it is the one person
+                // who knows to look. This action is why a settled list has a way to reach the
+                // network at all: it goes to the same [ListViewModel.refresh] the banners offer,
+                // which asks the catalog for the network rather than for whichever cache still
+                // answers.
+                state.searchMiss -> item(key = "miss") {
+                    EmptyLine(
+                        text = stringResource(R.string.list_search_empty, state.query),
+                        action = stringResource(R.string.list_search_look_again),
+                        onAction = onRetry,
+                        colors = colors,
+                    )
+                }
+
+                // Both sources answered and neither had a row. Rare, but the screen was otherwise
+                // a wordmark, a search field and nothing else, with no banner to explain it.
+                state.emptyResult -> item(key = "empty") { EmptyLine(stringResource(R.string.list_empty), colors = colors) }
+
+                // Browsing: analyzed rows chaptered by sector as sticky headers, then the Next up
+                // strip. Search draws a different shape (see below), so this branch runs only
+                // while the query is blank.
+                state.query.isBlank() -> {
+                    visibleChapters.forEach { chapter ->
+                        stickyHeader(key = "chapter:${chapter.sector ?: NoSectorKey}") {
+                            AmberSectionHead(
+                                title = chapter.sector ?: stringResource(R.string.list_heading_no_sector),
+                                meta = Fmt.count(chapter.rows.size),
+                                colors = colors,
+                            )
+                        }
+                        itemsIndexed(chapter.rows, key = { _, row -> "a:" + row.ticker }) { index, row ->
+                            AnalyzedRow(
+                                row = row,
+                                pricesPending = pricesPending,
+                                modifier = groupedRowModifier(colors, isFirst = index == 0, isLast = index == chapter.rows.lastIndex),
+                                colors = colors,
+                                onOpenDetail = onOpenDetail,
+                            )
+                        }
                     }
-                    item(key = "next-up-label") { NextUpLabel(colors = colors) }
-                    itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
-                        NextUpLeaderRow(
-                            leader = leader,
-                            modifier = groupedRowModifier(colors, isFirst = index == 0, isLast = index == leaders.lastIndex),
-                            colors = colors,
-                            onOpenDetail = onOpenDetail,
-                            onVote = onVote,
-                            voted = votedTickers.hasVoted(leader.ticker),
-                        )
+
+                    // The roughly 672 uncovered rows no longer tail the list (task A1): they left
+                    // for a Vote tab in an earlier pass. Only the leaders staked SKR has voted to
+                    // cover next still lead here, exactly where "Without analysis" used to.
+                    val leaders = state.nextUpStrip
+                    if (leaders.isNotEmpty()) {
+                        item(key = "without") {
+                            AmberSectionHead(title = stringResource(R.string.list_heading_without_analysis), colors = colors)
+                        }
+                        item(key = "next-up-label") { NextUpLabel(colors = colors) }
+                        itemsIndexed(leaders, key = { _, leader -> "n:" + leader.ticker }) { index, leader ->
+                            NextUpLeaderRow(
+                                leader = leader,
+                                modifier = groupedRowModifier(colors, isFirst = index == 0, isLast = index == leaders.lastIndex),
+                                colors = colors,
+                                onOpenDetail = onOpenDetail,
+                                onVote = onVote,
+                                voted = votedTickers.hasVoted(leader.ticker),
+                            )
+                        }
+                    }
+                }
+
+                // Searching: one flat list across both sets, unchaptered. An uncovered hit draws
+                // exactly as it does under "Without analysis", price and vote action included, and
+                // opens the same Detail an analyzed hit does. After this pass, search is the only
+                // way to reach an uncovered ticker that is not one of the Next-up leaders.
+                else -> {
+                    // Clear of the search field's underline (device QA of 1.3.18: the first result sat
+                    // on it when no chip row stood between them).
+                    item(key = "search-gap") { Spacer(Modifier.height(SearchResultsGap)) }
+                    // One order across both sets, the exact ticker first (QA of 1.3.22: "MA" drew four
+                    // companies whose names contain "ma" above MAx), see [searchResults].
+                    val results = searchResults(state.analyzed, state.withoutAnalysis, state.query)
+                    itemsIndexed(results, key = { _, row -> (if (row.analyzed) "a:" else "p:") + row.ticker }) { index, row ->
+                        val grouped = groupedRowModifier(colors, isFirst = index == 0, isLast = index == results.lastIndex)
+                        if (row.analyzed) {
+                            AnalyzedRow(
+                                row = row,
+                                pricesPending = pricesPending,
+                                modifier = grouped,
+                                colors = colors,
+                                onOpenDetail = onOpenDetail,
+                            )
+                        } else {
+                            PriceOnlyRow(
+                                row = row,
+                                pricesPending = pricesPending,
+                                modifier = grouped,
+                                colors = colors,
+                                onOpenDetail = onOpenDetail,
+                                onVote = onVote,
+                                voted = votedTickers.hasVoted(row.ticker),
+                            )
+                        }
                     }
                 }
             }
-
-            // Searching: one flat list across both sets, unchaptered. An uncovered hit draws
-            // exactly as it does under "Without analysis", price and vote action included, and
-            // opens the same Detail an analyzed hit does. After this pass, search is the only
-            // way to reach an uncovered ticker that is not one of the Next-up leaders.
-            else -> {
-                // Clear of the search field's underline (device QA of 1.3.18: the first result sat
-                // on it when no chip row stood between them).
-                item(key = "search-gap") { Spacer(Modifier.height(SearchResultsGap)) }
-                // One order across both sets, the exact ticker first (QA of 1.3.22: "MA" drew four
-                // companies whose names contain "ma" above MAx), see [searchResults].
-                val results = searchResults(state.analyzed, state.withoutAnalysis, state.query)
-                itemsIndexed(results, key = { _, row -> (if (row.analyzed) "a:" else "p:") + row.ticker }) { index, row ->
-                    val grouped = groupedRowModifier(colors, isFirst = index == 0, isLast = index == results.lastIndex)
-                    if (row.analyzed) {
-                        AnalyzedRow(
-                            row = row,
-                            pricesPending = pricesPending,
-                            modifier = grouped,
-                            colors = colors,
-                            onOpenDetail = onOpenDetail,
-                        )
-                    } else {
-                        PriceOnlyRow(
-                            row = row,
-                            pricesPending = pricesPending,
-                            modifier = grouped,
-                            colors = colors,
-                            onOpenDetail = onOpenDetail,
-                            onVote = onVote,
-                            voted = votedTickers.hasVoted(row.ticker),
-                        )
-                    }
-                }
-            }
+        }
+        priceNotice?.let {
+            PriceNotice(banner = it, onRetry = onRetry, colors = colors, modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
 }
@@ -399,7 +411,8 @@ private fun StocksChrome(
         )
         // No Today strip here any more (audit 2026-09-26): "Today: 1 stock watched" repeated
         // Today's own screen one tab away, above this screen's own banner.
-        state.banner?.let { StateBanner(banner = it, onRetry = onRetry) }
+        // The prices notice stands over the bottom of the list instead (ListContent's PriceNotice).
+        state.banner?.takeUnless { it.isPriceNotice }?.let { StateBanner(banner = it, onRetry = onRetry) }
         Spacer(Modifier.height(SearchTopGap))
         SearchField(query = state.query, onQueryChange = onQueryChange, onClearSearch = onClearSearch)
         if (sectors.isNotEmpty()) {
@@ -906,6 +919,23 @@ private fun StateBanner(banner: ListBanner, onRetry: () -> Unit) {
             Banner(text = stringResource(R.string.list_prices_partial), action = retry, onAction = onRetry)
     }
 }
+
+/**
+ * The prices notice ([isPriceNotice]), anchored over the bottom of the list just above the tab bar
+ * rather than in the chrome's slot, so its arrival moves nothing a reader is looking at. The same
+ * [Banner] and words as the slot draws, with a 1dp [AmberColors.border] top edge so it reads as
+ * standing over the rows rather than as one of them.
+ */
+@Composable
+private fun PriceNotice(banner: ListBanner, onRetry: () -> Unit, colors: AmberColors, modifier: Modifier = Modifier) {
+    Column(modifier.fillMaxWidth().background(colors.surfaceRaised)) {
+        Spacer(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+        StateBanner(banner = banner, onRetry = onRetry)
+    }
+}
+
+/** The room the list keeps at its end while [PriceNotice] stands over it. */
+private val PriceNoticeRoom = 56.dp
 
 /** The state word a row shows beside its composite; shared with the onboarding backdrop. */
 internal val RowState.label: Int

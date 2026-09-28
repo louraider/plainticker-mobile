@@ -30,7 +30,15 @@ import com.plainticker.mobile.data.plainticker.SummaryRow
  */
 object Coverage {
 
-    data class CoveredCompany(val ticker: String, val company: String, val sector: String)
+    data class CoveredCompany(val ticker: String, val company: String, val sector: String) {
+        /**
+         * The xStock's symbol ("AAPLx"), before the catalog has answered: every covered company
+         * is a US listing, and xStocks names a US listing's token as its ticker plus "x"
+         * (CoverageTest pins it against the bundled catalog). Detail's hero shows it from the
+         * first frame (fresh-device QA of 1.3.24, B7) and the catalog's own symbol replaces it.
+         */
+        val symbol: String get() = ticker + "x"
+    }
 
     /**
      * plainticker.com's covered companies on 28 Sep 2026 (web `SERVED_TICKERS`, 57), less BABA,

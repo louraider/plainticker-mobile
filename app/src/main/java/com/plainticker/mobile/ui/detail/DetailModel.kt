@@ -230,8 +230,15 @@ internal val F_SCORE_SIGNALS: List<Int> = listOf(
 /** The default F-Score scale when the payload does not state one. */
 private const val F_SCORE_OUT_OF = 9
 
-/** The hero: the token's symbol once the catalog names it, the plain ticker until then. */
-val DetailUiState.heroTicker: String get() = symbol ?: ticker
+/**
+ * The hero: the token's symbol once the catalog names it. Until then a covered company's bundled
+ * symbol ("AAPLx", fresh-device QA of 1.3.24, B7: "Skip and read AAPLx" landed on a bare "AAPL"
+ * for the seconds a slow catalog takes), else the plain ticker. A catalog that answered without
+ * this ticker leaves the plain ticker, so no token is named that the catalog does not list; one
+ * that could not be read keeps the bundled symbol rather than stepping back to the bare ticker.
+ */
+val DetailUiState.heroTicker: String
+    get() = symbol ?: known?.symbol?.takeUnless { catalogAsset.isAbsent } ?: ticker
 
 /**
  * The company, from the analysis first because it is the registrant's own name; before it lands,
