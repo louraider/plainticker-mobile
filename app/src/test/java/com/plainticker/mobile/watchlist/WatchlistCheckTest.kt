@@ -195,7 +195,7 @@ class WatchlistCheckTest {
 
         assertEquals(
             CheckOutcome.Produced(
-                "NVDAx moved from -0.04% to -0.61% against the NYSE close. NVDAx reports in 66 days.",
+                "NVDAx moved from -0.04% to -0.61% against its share's US price. NVDAx reports in 66 days.",
             ),
             check.run(),
         )
@@ -252,7 +252,7 @@ class WatchlistCheckTest {
 
         val outcome = votingCheck.run()
 
-        val full = "JEF, last round's winner, is now analyzed. Round 2 closes Monday."
+        val full = "JEF, last round's winner, is now analyzed. Round 2 closes Monday at 00:00 your time."
         assertEquals(CheckOutcome.Produced(full), outcome)
         assertEquals(full, digests.record.value.text)
         assertEquals(

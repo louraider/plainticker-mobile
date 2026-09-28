@@ -7,6 +7,8 @@ import com.plainticker.mobile.data.plainticker.VoteRound
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
+import com.plainticker.mobile.ui.vote.RoundClose
+import com.plainticker.mobile.ui.vote.roundClose
 import com.plainticker.mobile.ui.words
 import java.time.Instant
 import java.time.LocalDate
@@ -101,7 +103,13 @@ sealed interface DigestLine {
      */
     data class RoundCloses(
         val roundId: Int,
-        val closesOn: LocalDate,
+        /**
+         * When it closes in the reader's own zone, by the one rule Today and the Vote tab print by
+         * ([roundClose]): the day of the month whenever the close is more than a day away. QA of
+         * 1.3.20: on Monday 28 Sep, the day round 3 opened, the digest said "Round 3 closes
+         * Monday." for a round closing Monday 5 Oct.
+         */
+        val close: RoundClose,
         /**
          * The close in the reader's own clock ("02:00") when the round closes later on the
          * reader's own today; null otherwise. A round closing tonight is worth the title.
@@ -110,10 +118,14 @@ sealed interface DigestLine {
     ) : DigestLine {
         override val copy: Copy
             // The round's own number, never a quantity: it does not pluralise anything after it.
-            get() = if (todayAt != null) {
-                words(R.string.digest_vote_round_closes_today, Fmt.count(roundId), todayAt) // lint-allow count: a round's number, not a quantity
-            } else {
-                words(R.string.digest_vote_round_closes, Fmt.count(roundId), Fmt.weekday(closesOn)) // lint-allow count: a round's number, not a quantity
+            get() {
+                val round = Fmt.count(roundId) // lint-allow count: a round's number, not a quantity
+                val day = close.dayMonth
+                return when {
+                    todayAt != null -> words(R.string.digest_vote_round_closes_today, round, todayAt)
+                    day != null -> words(R.string.digest_vote_round_closes_dated, round, close.weekday, day, close.clock)
+                    else -> words(R.string.digest_vote_round_closes, round, close.weekday, close.clock)
+                }
             }
 
         override val opensVote: Boolean get() = true
@@ -276,10 +288,14 @@ fun digest(input: DigestInput): Digest {
     weekReportCount(input.coveredReportDates, input.today)
         .takeIf { it > 0 }
         ?.let { lines += DigestLine.WeekReports(it) }
-    input.voteRound?.closesAtInstant()?.let { closes ->
+    input.voteRound?.let { round ->
+        val closes = round.closesAtInstant() ?: return@let
+        // No clock for the check (a caller that passes none): counted from the epoch, the close is
+        // always more than a day away, so the line keeps its date rather than guessing "near".
+        val close = roundClose(round, input.readerZone, input.nowMillis ?: 0L) ?: return@let
         lines += DigestLine.RoundCloses(
-            input.voteRound.id,
-            closes.atZone(ZoneOffset.UTC).toLocalDate(),
+            round.id,
+            close,
             todayAt = closesLaterToday(closes, input.nowMillis, input.readerZone),
         )
     }

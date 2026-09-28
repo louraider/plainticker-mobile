@@ -34,7 +34,7 @@ class DigestTest {
 
         assertEquals(first, second)
         assertEquals(
-            "NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.",
+            "NVDAx moved from -0.04% to -0.61% against its share's US price. TSLAx reports in 41 days.",
             first,
         )
     }
@@ -212,7 +212,18 @@ class DigestTest {
         val rows = listOf(watched("AAPL"))
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
         val result = digest(DigestInput(today, rows, voteRound = round))
-        assertEquals("Round 3 closes Monday.", result.text(RealStrings.strings))
+        assertEquals("Round 3 closes Monday 28 Sep at 00:00 your time.", result.text(RealStrings.strings))
+    }
+
+    /** QA of 1.3.20: on Monday 28 Sep, the day round 3 opened, the digest said "Round 3 closes Monday." */
+    @Test
+    fun `a round closing a week out names its date and the reader's clock, by the shared round rule`() {
+        val rows = listOf(watched("AAPL"))
+        val round = VoteRound(id = 3, opensAt = "2026-09-28T00:00:00.000Z", closesAt = "2026-10-05T00:00:00.000Z")
+        val now = java.time.Instant.parse("2026-09-28T08:34:00Z").toEpochMilli()
+        val kyiv = java.time.ZoneId.of("Europe/Kyiv")
+        val result = digest(DigestInput(LocalDate.of(2026, 9, 28), rows, voteRound = round, nowMillis = now, readerZone = kyiv))
+        assertEquals("Round 3 closes Monday 5 Oct at 03:00 your time.", result.text(RealStrings.strings))
     }
 
     @Test
@@ -221,7 +232,7 @@ class DigestTest {
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
         val result = digest(DigestInput(today, rows, voteRound = round, analysedWinner = "JEF"))
         assertEquals(
-            "JEF, last round's winner, is now analyzed. Round 3 closes Monday.",
+            "JEF, last round's winner, is now analyzed. Round 3 closes Monday 28 Sep at 00:00 your time.",
             result.text(RealStrings.strings),
         )
     }
@@ -270,7 +281,7 @@ class DigestTest {
         val full = result.text(RealStrings.strings)
         assertEquals("the fuller reading carries all five clauses", 5, full.split(". ").size)
         val notice = result.notice(RealStrings.strings)!!
-        assertEquals("NVDAx moved from -0.04% to -0.61% against the NYSE close", notice.title)
+        assertEquals("NVDAx moved from -0.04% to -0.61% against its share's US price", notice.title)
         assertEquals("NVDAx reports in 3 days. JEF, last round's winner, is now analyzed.", notice.body)
         assertEquals("a move opens the stock that moved", "NVDA", notice.ticker)
         assertFalse("no digest ever opens on a count of what is watched", full.contains("watched"))
@@ -291,7 +302,7 @@ class DigestTest {
         val notice = result.notice(RealStrings.strings)!!
         assertEquals("AAPLx reports tomorrow", notice.title)
         assertEquals("AAPL", notice.ticker)
-        assertEquals("NVDAx moved from 0.00% to +3.00% against the NYSE close.", notice.body)
+        assertEquals("NVDAx moved from 0.00% to +3.00% against its share's US price.", notice.body)
     }
 
     // ---- The reader's own pick ----------------------------------------------------------------
@@ -362,7 +373,7 @@ class DigestTest {
             ),
         )
         assertEquals(
-            "NVDAx moved from 0.00% to +3.00% against the NYSE close. Round 3 closes Monday.",
+            "NVDAx moved from 0.00% to +3.00% against its share's US price. Round 3 closes Monday at 02:00 your time.",
             result.text(RealStrings.strings),
         )
     }

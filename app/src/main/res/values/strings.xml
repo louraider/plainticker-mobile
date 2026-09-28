@@ -738,7 +738,7 @@
 
     <!-- The daily digest: one sentence per clause, assembled by com.plainticker.mobile.watchlist.digest.
          News first: the first sentence is also the notification's title, without its period. -->
-    <string name="digest_moved">%1$s moved from %2$s to %3$s against the NYSE close.</string>
+    <string name="digest_moved">%1$s moved from %2$s to %3$s against its share\'s US price.</string>
     <string name="digest_reports_today">%1$s reports today.</string>
     <string name="digest_reports_tomorrow">%1$s reports tomorrow.</string>
     <plurals name="digest_reports_in_days">
@@ -755,7 +755,9 @@
          live analysis exists for it (never the server's own status word, which the live contract
          still sends as closed rather than published). %1$s is the round's own number, never a
          quantity: it does not pluralise anything after it. -->
-    <string name="digest_vote_round_closes">Round %1$s closes %2$s.</string>
+    <!-- The shared round rule (ui/vote roundClose): the date whenever the close is more than a day away. -->
+    <string name="digest_vote_round_closes">Round %1$s closes %2$s at %3$s your time.</string>
+    <string name="digest_vote_round_closes_dated">Round %1$s closes %2$s %3$s at %4$s your time.</string>
     <string name="digest_vote_winner_analysed">%1$s, last round\'s winner, is now analyzed.</string>
     <!-- The reader's own pick (a vote receipt on this device names it), said once, then left out. -->
     <string name="digest_vote_pick_analysed">%1$s, which you voted for, is now analyzed.</string>
