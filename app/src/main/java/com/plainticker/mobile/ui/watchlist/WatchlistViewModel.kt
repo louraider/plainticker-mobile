@@ -274,10 +274,25 @@ class WatchlistViewModel(
      */
     fun refresh(userAsked: Boolean = false) {
         notificationsChanged()
-        if (userAsked) _state.update { it.copy(refreshing = true) }
-        load(watchlist.tickers.value)
-        loadToday()
+        if (!userAsked) {
+            load(watchlist.tickers.value)
+            loadToday()
+            return
+        }
+        // A pull (final QA of 1.3.19: no indicator, and the figures stayed put). The prices are
+        // asked of Jupiter again, past the 30 s cache, and the indicator stands at least
+        // [PULL_MIN_MS], so a fast answer is still seen to have happened.
+        _state.update { it.copy(refreshing = true) }
+        pullHold = viewModelScope.launch { delay(PULL_MIN_MS) }
+        viewModelScope.launch {
+            prices.forget()
+            load(watchlist.tickers.value)
+            loadToday()
+        }
     }
+
+    /** The pull indicator's minimum stay; null when no pull has run. */
+    private var pullHold: Job? = null
 
     /** Takes one ticker off the list. The rows follow from the store, so nothing is removed here. */
     fun unwatch(ticker: String) = watchlist.remove(ticker)
@@ -541,6 +556,7 @@ class WatchlistViewModel(
         val movers = moversFrom(analyzed)
 
         pricedAtMillis = clock.nowMillis()
+        pullHold?.join()
         _state.update { current ->
             current.copy(
                 pricesLoading = false,
@@ -572,6 +588,9 @@ class WatchlistViewModel(
     }
 
     companion object {
+        /** How long a pull's indicator stands at the least, however fast the sources answer. */
+        const val PULL_MIN_MS = 600L
+
         /** Same cap `ListViewModel` prices at once: a few paced Jupiter chunks, not the whole catalog. */
         private const val TODAY_PRICE_BUDGET = 200
 

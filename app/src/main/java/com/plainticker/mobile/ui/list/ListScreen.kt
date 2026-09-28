@@ -25,6 +25,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -136,17 +139,36 @@ fun ListScreen(
         // this boundary means it goes on reading whatever theme the host (still PlainTickerTheme,
         // DESIGN.md section 11) already provides, exactly as it did before this file changed.
         AmberTheme(useDarkTheme = colors === AmberDarkColors) {
-            ListContent(
-                state = state,
-                onQueryChange = viewModel::search,
-                onClearSearch = viewModel::clearSearch,
-                onRetry = viewModel::refresh,
-                onOpenDetail = onOpenDetail,
-                onVote = { ticker, symbol -> voteViewModel.vote(ticker, symbol) },
-                votedTickers = voted,
-                header = header,
-                colors = colors,
-            )
+            // Pull to refresh (final QA of 1.3.19: a pull on Stocks drew nothing and changed no
+            // figure). The indicator stands until fresh figures are drawn (ListViewModel.pull).
+            val pullState = rememberPullToRefreshState()
+            PullToRefreshBox(
+                isRefreshing = state.pulling,
+                onRefresh = viewModel::pull,
+                state = pullState,
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = pullState,
+                        isRefreshing = state.pulling,
+                        // Below the clock, where the list's own viewport starts.
+                        modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars),
+                        containerColor = colors.surfaceHigh,
+                        color = colors.actionText,
+                    )
+                },
+            ) {
+                ListContent(
+                    state = state,
+                    onQueryChange = viewModel::search,
+                    onClearSearch = viewModel::clearSearch,
+                    onRetry = viewModel::refresh,
+                    onOpenDetail = onOpenDetail,
+                    onVote = { ticker, symbol -> voteViewModel.vote(ticker, symbol) },
+                    votedTickers = voted,
+                    header = header,
+                    colors = colors,
+                )
+            }
         }
         VoteSheet(
             state = vote,

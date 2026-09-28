@@ -141,6 +141,37 @@ class DetailViewModel(
         }
     }
 
+    /**
+     * Pull to refresh (final QA of 1.3.19: a pull drew nothing and changed nothing). Unlike
+     * [refresh] nothing on screen goes back to a skeleton: each source is asked again, the price
+     * past the 30 s cache, and replaces its own piece when it answers. The indicator stands until
+     * the analysis, the read, the quote and the mint have answered, and at least [PULL_MIN_MS].
+     */
+    fun pull() {
+        if (_state.value.pulling) return
+        _state.update { it.copy(pulling = true) }
+        viewModelScope.launch {
+            try {
+                coroutineScope {
+                    launch { delay(PULL_MIN_MS) }
+                    launch { loadAnalysis() }
+                    launch { loadRead() }
+                    val mint = _state.value.mint
+                    val symbol = _state.value.symbol
+                    if (mint != null) {
+                        launch {
+                            prices.forget(listOf(mint))
+                            loadQuote(mint)
+                        }
+                        if (symbol != null) launch { loadChainThenSplit(mint, symbol) }
+                    }
+                }
+            } finally {
+                _state.update { it.copy(pulling = false, nowMillis = clock.nowMillis()) }
+            }
+        }
+    }
+
     // ---- The read and What to check next (task A6) ---------------------------------------
 
     private suspend fun loadRead() {
@@ -338,6 +369,9 @@ class DetailViewModel(
     companion object {
         /** How often the wall clock is re-read while the screen is observed. */
         internal const val TICK_MILLIS = 1_000L
+
+        /** How long a pull's indicator stands at the least, however fast the sources answer. */
+        const val PULL_MIN_MS = 600L
     }
 }
 

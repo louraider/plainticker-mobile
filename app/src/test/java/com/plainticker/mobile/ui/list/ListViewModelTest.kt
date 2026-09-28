@@ -1815,4 +1815,22 @@ class ListViewModelTest {
             prices = prices,
         )
     }
+
+    // ---- Pull to refresh (final QA of 1.3.19) ---------------------------------------------
+
+    @Test
+    fun `a pull draws the indicator until fresh figures land, asking past the price cache`() = runTest {
+        val prices = FakePriceRepository()
+        val vm = viewModel(prices = prices)
+        advanceUntilIdle()
+        val asked = prices.requested.size
+        assertFalse(vm.state.value.pulling)
+
+        vm.pull()
+        assertTrue(vm.state.value.pulling)
+        advanceUntilIdle()
+        assertFalse(vm.state.value.pulling)
+        assertEquals("every cached figure is dropped first", listOf<Collection<String>?>(null), prices.forgotten)
+        assertTrue("and the rows are priced again", prices.requested.size > asked)
+    }
 }

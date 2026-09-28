@@ -10,14 +10,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -201,6 +207,7 @@ fun DetailScreen(
         // (task A6). It used to lead to Portfolio, which neither sells Pro nor takes a code; since
         // the judges' round 2 it leads to You's Plan with the code field open.
         onGetPro = onGetPro,
+        onPull = viewModel::pull,
         modifier = modifier,
     )
 }
@@ -228,13 +235,36 @@ internal fun DetailContent(
     holding: SwapHolding? = null,
     /** "Swap to USDC"; null in the previews and the gallery. */
     onSwapOut: (() -> Unit)? = null,
+    /**
+     * Pull to refresh (final QA of 1.3.19: a pull on Detail drew nothing). Null, in the previews
+     * and the gallery, draws no indicator and asks nothing.
+     */
+    onPull: (() -> Unit)? = null,
 ) {
     val colors = defaultAmberColors()
+    val pullState = rememberPullToRefreshState()
     // The only Box on Detail, and the only thing in it that does not scroll is the scrim: the
     // 64sp hero used to draw in the same pixels as the white system clock, because the content
     // scrolls under a transparent status bar and nothing stood between them (Insets.kt). Nothing
     // here is sticky and the section order below is unchanged.
-    Box(modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = state.pulling,
+        onRefresh = { onPull?.invoke() },
+        modifier = modifier.fillMaxSize(),
+        state = pullState,
+        indicator = {
+            if (onPull != null) {
+                PullToRefreshDefaults.Indicator(
+                    state = pullState,
+                    isRefreshing = state.pulling,
+                    // Below the clock: the content runs edge to edge under the status bar.
+                    modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars),
+                    containerColor = colors.surfaceHigh,
+                    color = colors.actionText,
+                )
+            }
+        },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

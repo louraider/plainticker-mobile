@@ -49,6 +49,7 @@ import com.plainticker.mobile.repo.xStock
 import com.plainticker.mobile.repo.xStockTrading
 import com.plainticker.mobile.ui.Copy
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -901,5 +902,33 @@ class DetailViewModelTest {
             assertNull(state.nextStepsBlock)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ---- Final QA of 1.3.19 ------------------------------------------------------------------
+
+    @Test
+    fun `a covered company opens on its own name and sector, before any call answers`() = runTest {
+        val vm = viewModel(ticker = "META")
+        val first = vm.state.value
+        assertEquals("Meta Platforms, Inc.", first.heroCompany)
+        assertEquals("Communication Services", first.heroSector)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `a pull asks the price past the cache, keeps the screen drawn, and holds the indicator until it lands`() = runTest {
+        val prices = FakePriceRepository(Result.success(mapOf(aaplMint to price(232.5, reference = 232.4))))
+        val vm = viewModel(prices = prices)
+        advanceUntilIdle()
+        assertEquals(232.5, vm.state.value.price!!.usdPrice, 0.0)
+
+        prices.result = Result.success(mapOf(aaplMint to price(233.0, reference = 232.4)))
+        vm.pull()
+        assertTrue(vm.state.value.pulling)
+        assertTrue("nothing goes back to a skeleton", vm.state.value.analysisState is AnalysisState.Served)
+        advanceUntilIdle()
+        assertFalse(vm.state.value.pulling)
+        assertEquals(listOf(listOf(aaplMint)), prices.forgotten)
+        assertEquals(233.0, vm.state.value.price!!.usdPrice, 0.0)
     }
 }

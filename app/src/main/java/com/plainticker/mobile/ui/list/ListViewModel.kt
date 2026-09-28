@@ -34,9 +34,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
 /** The one word right of the composite. Never a verdict: it describes the classification. */
@@ -276,6 +278,11 @@ data class ListUiState(
      * close is a live price or last night's.
      */
     val market: MarketStatus? = null,
+    /**
+     * A pull to refresh is running: the indicator stands until the analysis, the catalog and the
+     * first screenful of fresh prices have answered ([ListViewModel.pull]).
+     */
+    val pulling: Boolean = false,
 ) {
     val isEmpty: Boolean get() = !isLoading && !failed && analyzed.isEmpty() && withoutAnalysis.isEmpty()
 
@@ -465,6 +472,36 @@ class ListViewModel(
      * this morning could not be seen at all until tomorrow, whatever the reader did.
      */
     fun refresh() = load(userAsked = true)
+
+    /** Counts the first-screenful price answers, so a pull knows when fresh figures are drawn. */
+    private val windowsPriced = MutableStateFlow(0)
+
+    /**
+     * Pull to refresh (final QA of 1.3.19: Stocks had none, and a figure never changed). Asks the
+     * analysis and the catalog again the way a load does, and Jupiter past the 30 s price cache,
+     * with the indicator up until the first screenful of new figures is drawn (at least
+     * [PULL_MIN_MS], at most [PULL_MAX_MS]). The catalog is not fetched whole again: its hours are
+     * the part that goes stale, and [MarketClock] reads those live on its own.
+     */
+    fun pull() {
+        if (_state.value.pulling) return
+        _state.update { it.copy(pulling = true) }
+        viewModelScope.launch {
+            val least = launch { delay(PULL_MIN_MS) }
+            try {
+                prices.forget()
+                val before = windowsPriced.value
+                load(userAsked = false)
+                refreshJob?.join()
+                if (priceableMints().isNotEmpty()) {
+                    withTimeoutOrNull(PULL_MAX_MS) { windowsPriced.first { it > before } }
+                }
+                least.join()
+            } finally {
+                _state.update { it.copy(pulling = false) }
+            }
+        }
+    }
 
     /**
      * Stocks came back to the foreground: recompute the venue now and at every boundary after, and
@@ -852,6 +889,7 @@ class ListViewModel(
     private suspend fun fetchPrices(mints: List<String>) {
         val window = prices.pricesFirst(mints, FIRST_SCREENFUL)
         applyPrices(window, asked = mints.take(FIRST_SCREENFUL))
+        windowsPriced.update { it + 1 }
         if (mints.size > FIRST_SCREENFUL) {
             applyPrices(window.mergedWith(prices.pricesFirst(mints)), asked = mints)
         }

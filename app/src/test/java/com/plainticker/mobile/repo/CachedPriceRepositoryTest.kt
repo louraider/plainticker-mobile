@@ -47,6 +47,30 @@ class CachedPriceRepositoryTest {
 
     // ---- The shared source every screen observes (device QA of 1.3.18) ------------------------
 
+    /** Final QA of 1.3.19: a pull inside the 30 s window drew the same figure again. */
+    @Test
+    fun `a pull forgets the cached answers, so the next ask reaches Jupiter inside the window`() = runTest {
+        var usd = 2.0
+        val mock = MockApi { request ->
+            respondJson(request.ids().joinToString(",", "{", "}") { "\"$it\": {\"usdPrice\": $usd}" })
+        }
+        val repo = repo(mock)
+        repo.prices(listOf("MintA", "MintB"))
+        usd = 2.5
+        repo.prices(listOf("MintA"))
+        assertEquals("inside the window the cache answers", 1, mock.requests.size)
+
+        repo.forget(listOf("MintA"))
+        assertEquals(2.5, repo.prices(listOf("MintA")).getValue("MintA").usdPrice, 0.0)
+        assertEquals(2, mock.requests.size)
+        repo.prices(listOf("MintB"))
+        assertEquals("a mint not forgotten is still cached", 2, mock.requests.size)
+
+        repo.forget()
+        repo.prices(listOf("MintB"))
+        assertEquals("forget() drops every mint", 3, mock.requests.size)
+    }
+
     @Test
     fun `every fetch lands in the shared latest quotes, whichever screen asked`() = runTest {
         var usd = 2.0

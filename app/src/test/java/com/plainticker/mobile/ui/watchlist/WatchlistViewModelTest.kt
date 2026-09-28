@@ -710,6 +710,8 @@ class WatchlistViewModelTest {
         advanceUntilIdle()
         assertFalse("and clears once the prices have answered", vm.state.value.refreshing)
         assertEquals(748.0, vm.state.value.rows.single().priceUsd!!, 0.0)
+        // Final QA of 1.3.19: the pull asks Jupiter past the 30 s cache, not the cache again.
+        assertEquals(listOf<Collection<String>?>(null), prices.forgotten)
 
         vm.refresh()
         assertFalse("a banner Retry does not draw the pull indicator", vm.state.value.refreshing)

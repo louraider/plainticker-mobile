@@ -137,6 +137,13 @@ class FakePriceRepository(
         return answer
     }
 
+    /** How many times a pull asked the cache to forget, and what (null is every mint). */
+    val forgotten = mutableListOf<Collection<String>?>()
+
+    override suspend fun forget(mints: Collection<String>?) {
+        forgotten += mints
+    }
+
     override suspend fun pricesFirst(mints: List<String>, limit: Int): PriceFetch {
         val window = if (limit >= 0) mints.take(limit) else mints
         requested += window
