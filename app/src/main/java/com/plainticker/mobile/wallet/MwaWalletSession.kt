@@ -20,11 +20,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ExecutionException
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The real [WalletSession]: Mobile Wallet Adapter through one Activity's [transport].
@@ -52,9 +54,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * RESULT_CANCELED, but launches that into a scope that has already finished, so the request
  * waits out the adapter's own timeouts (10 s with no association, 90 s once the wallet has
  * associated and been asked to authorize). [inFront] is the Activity's resumed state: once it
- * has left the front for the wallet and come back, and [dismissGraceMillis] later the wallet has
- * still not been asked anything past the authorization, the request is over and reads as
- * [WalletOutcome.Cancelled]. A request whose block has started (a signature asked for) is never
+ * has left the front for the wallet, come back, and stayed in front for [dismissGraceMillis]
+ * while the wallet has still not been asked anything past the authorization, the request is over
+ * and reads as [WalletOutcome.Cancelled]. "Given up" and "asked" are one atomic decision
+ * ([Ask]), and an abandoned round trip puts the adapter's token and wallet URI back as they were. A request whose block has started (a signature asked for) is never
  * given up on this way: the wallet may be sending it, so only the wallet's own answer or the
  * adapter's timeout ends it. The abandoned round trip finishes in the background and its result
  * is dropped, so it can neither save nor clear a session a newer request made.
@@ -67,6 +70,7 @@ class MwaWalletSession(
     private val mutex: Mutex = Mutex(),
     private val inFront: StateFlow<Boolean> = MutableStateFlow(true),
     private val dismissGraceMillis: Long = DISMISS_GRACE_MS,
+    private val calls: AtomicLong = AtomicLong(),
 ) : WalletSession {
 
     override val account: StateFlow<WalletAccount?> = accounts.asStateFlow()
@@ -93,7 +97,7 @@ class MwaWalletSession(
      * wallet's own answer is still returned, so a screen can say the wallet was not reached.
      */
     override suspend fun disconnect(): WalletOutcome<Unit> = mutex.withLock {
-        val outcome = untilDismissed(asked = { false }) { transport.disconnect() }.toWalletOutcome()
+        val outcome = untilDismissed(ask = Ask()) { transport.disconnect() }.toWalletOutcome()
         tokens.authToken = null
         accounts.value = null
         clearStore()
@@ -103,18 +107,26 @@ class MwaWalletSession(
     /** One request, with the single fallback from a rejected saved token to a fresh authorize. */
     private suspend fun <T> transact(block: suspend (AdapterOperations) -> T): TransactionResult<T> {
         val hadToken = tokens.authToken != null
-        val asked = AtomicBoolean(false)
-        val result = untilDismissed(asked = { asked.get() }) {
-            val first = transport.transact { ops ->
-                asked.set(true)
-                block(ops)
-            }
-            if (hadToken && !asked.get() && authorizationRejected(first)) {
+        val ask = Ask()
+        val before = tokens.snapshot()
+        val generation = calls.incrementAndGet()
+        // The only way into the wallet past the authorization: once the request was given up
+        // (the UI already said Cancelled) a late authorize can never go on to ask for a signature.
+        val guarded: suspend (AdapterOperations) -> T = { ops ->
+            if (!ask.claim()) throw WalletDismissedException()
+            block(ops)
+        }
+        val result = untilDismissed(
+            ask = ask,
+            // The adapter writes its token and wallet URI during the authorization, whatever the
+            // block does next; an abandoned round trip must leave both as they were, unless a
+            // newer request has started since and owns them now.
+            onAbandonedEnd = { if (calls.get() == generation) tokens.restore(before) },
+        ) {
+            val first = transport.transact(guarded)
+            if (hadToken && ask.notAsked && authorizationRejected(first)) {
                 tokens.authToken = null
-                transport.transact { ops ->
-                    asked.set(true)
-                    block(ops)
-                }
+                transport.transact(guarded)
             } else {
                 first
             }
@@ -127,21 +139,38 @@ class MwaWalletSession(
 
     /**
      * Runs [request] outside the caller's job, and answers with it, or with a dismissal once the
-     * person is back in the app and the wallet has not been [asked] anything. Outside the caller's
-     * job because the adapter blocks a thread on its futures, which no cancellation interrupts: a
-     * child would keep the caller waiting until the adapter's own timeout.
+     * person is back in the app, has stayed in front for [dismissGraceMillis], and the wallet has
+     * not been asked anything ([Ask.abandon] wins). Outside the caller's job because the adapter
+     * blocks a thread on its futures, which no cancellation interrupts: a child would keep the
+     * caller waiting until the adapter's own timeout.
+     *
+     * The grace re-arms: the rejected-token fallback in [transact] opens a second association (the
+     * wallet's Connect sheet) moments after the first one returned the app to the front, and that
+     * live prompt must not be read as walked away from (security review M1). The request is only
+     * given up once the app has been in front for the whole grace.
      */
     private suspend fun <T> untilDismissed(
-        asked: () -> Boolean,
+        ask: Ask,
+        onAbandonedEnd: () -> Unit = {},
         request: suspend () -> TransactionResult<T>,
     ): TransactionResult<T> = coroutineScope {
         val detached = CoroutineScope(coroutineContext.minusKey(Job) + SupervisorJob())
-        val pending = detached.async { request() }
+        val pending = detached.async {
+            try {
+                request()
+            } catch (e: WalletDismissedException) {
+                TransactionResult.Failure("The request was given up before the wallet was asked", e)
+            } finally {
+                if (ask.abandoned) onAbandonedEnd()
+            }
+        }
         val dismissed = async {
-            inFront.first { !it }
-            inFront.first { it }
-            delay(dismissGraceMillis)
-            if (asked()) awaitCancellation()
+            while (true) {
+                inFront.first { !it }
+                inFront.first { it }
+                withTimeoutOrNull(dismissGraceMillis) { inFront.first { !it } } ?: break
+            }
+            if (!ask.abandon()) awaitCancellation()
             TransactionResult.Failure<T>("The person came back without choosing", WalletDismissedException())
         }
         try {
@@ -197,6 +226,31 @@ class MwaWalletSession(
         if (result !is TransactionResult.Failure) return false
         val cause = (result.e as? ExecutionException)?.cause ?: result.e
         return cause is JsonRpc20Client.JsonRpc20RemoteException && cause.code == ProtocolContract.ERROR_AUTHORIZATION_FAILED
+    }
+
+    /**
+     * Whether one request has asked the wallet anything past the authorization, decided once
+     * (security review L1): [claim] (the block is about to run) and [abandon] (the person walked
+     * away) race on a single compare-and-set from NOT_ASKED, so either the block runs and the
+     * request is never given up, or the request is given up and the block never runs.
+     */
+    internal class Ask {
+        private val state = AtomicInteger(NOT_ASKED)
+
+        /** True when the block may run: this call moved NOT_ASKED to ASKED, or it was ASKED already. */
+        fun claim(): Boolean = state.compareAndSet(NOT_ASKED, ASKED) || state.get() == ASKED
+
+        /** True when this call gave the request up: NOT_ASKED to ABANDONED. */
+        fun abandon(): Boolean = state.compareAndSet(NOT_ASKED, ABANDONED)
+
+        val notAsked: Boolean get() = state.get() == NOT_ASKED
+        val abandoned: Boolean get() = state.get() == ABANDONED
+
+        private companion object {
+            const val NOT_ASKED = 0
+            const val ASKED = 1
+            const val ABANDONED = 2
+        }
     }
 
     companion object {

@@ -3,7 +3,12 @@ package com.plainticker.mobile.wallet
 import com.solana.mobilewalletadapter.clientlib.AdapterOperations
 import com.solana.mobilewalletadapter.clientlib.TransactionResult
 import com.solana.mobilewalletadapter.clientlib.protocol.MobileWalletAdapterClient
+import com.solana.mobilewalletadapter.clientlib.MobileWalletAdapter
+import com.solana.mobilewalletadapter.clientlib.protocol.JsonRpc20Client
+import com.solana.mobilewalletadapter.common.ProtocolContract
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceTimeBy
@@ -195,6 +200,154 @@ class MwaDismissTest {
         assertSame(WalletOutcome.Cancelled, disconnect.await())
         assertNull(slot.authToken)
         assertEquals(1, store.clears)
+    }
+
+    /**
+     * Stands in for the real adapter on the security review's paths: its authorization cannot be
+     * cancelled (the adapter blocks a thread on a future), it writes the token into the slot as
+     * soon as the wallet authorizes, before the block runs, and the first association can be
+     * scripted to reject the saved token so the fallback opens a second one.
+     */
+    private class AdapterLikeTransport(private val slot: Slot, private val rejectFirst: Boolean = false) : MwaTransport {
+        val firstAnswered = CompletableDeferred<Unit>()
+        val authorized = CompletableDeferred<Unit>()
+        var transacts = 0
+        var blockFailure: Throwable? = null
+
+        override suspend fun <T> transact(block: suspend (AdapterOperations) -> T): TransactionResult<T> {
+            transacts++
+            if (rejectFirst && transacts == 1) {
+                withContext(NonCancellable) { firstAnswered.await() }
+                return TransactionResult.Failure(
+                    "Auth token invalid",
+                    JsonRpc20Client.JsonRpc20RemoteException(ProtocolContract.ERROR_AUTHORIZATION_FAILED, "rejected", null),
+                )
+            }
+            withContext(NonCancellable) { authorized.await() }
+            slot.authToken = "token-late"
+            val value = try {
+                withContext(NonCancellable) { block(FakeAdapterOperations()) }
+            } catch (e: Exception) {
+                blockFailure = e
+                throw e
+            }
+            return TransactionResult.Success(
+                value,
+                MobileWalletAdapterClient.AuthorizationResult.create("token-late", testAccount(fill = 4, label = "Seeker").publicKey, "Seeker", null),
+            )
+        }
+
+        override suspend fun disconnect(): TransactionResult<Unit> = TransactionResult.Success(Unit)
+    }
+
+    @Test
+    fun `the fallback's second Connect prompt is not cancelled by the grace from the first return`() = runTest {
+        // Security review M1: the saved token is rejected, the app is briefly in front, then the
+        // fallback opens the wallet's Connect sheet again. The grace that started on that brief
+        // return must not end the live prompt.
+        val slot = Slot("stale-token")
+        val inFront = MutableStateFlow(true)
+        val transport = AdapterLikeTransport(slot, rejectFirst = true)
+        val holder = WalletSessionHolder(slot, MemoryStore()) { transport }.also { it.attach(transport, inFront, 3_000L) }
+
+        val call = async { holder.call { "signed" } }
+        runCurrent()
+        inFront.value = false // the wallet opens to reauthorize
+        runCurrent()
+        transport.firstAnswered.complete(Unit) // and rejects the saved token
+        inFront.value = true // the app is back for a moment
+        runCurrent()
+        assertEquals("the fallback opened a second association", 2, transport.transacts)
+        advanceTimeBy(1_000L)
+        inFront.value = false // the second association's Connect sheet is up
+        runCurrent()
+        advanceTimeBy(20_000L)
+        runCurrent()
+        assertFalse("a live Connect prompt is not a dismissal", call.isCompleted)
+
+        transport.authorized.complete(Unit)
+        runCurrent()
+        inFront.value = true
+        runCurrent()
+        assertEquals(WalletOutcome.Success("signed"), call.await())
+    }
+
+    @Test
+    fun `the re-armed grace still ends a request once the app stays in front`() = runTest {
+        val slot = Slot("stale-token")
+        val inFront = MutableStateFlow(true)
+        val transport = AdapterLikeTransport(slot, rejectFirst = true)
+        val holder = WalletSessionHolder(slot, MemoryStore()) { transport }.also { it.attach(transport, inFront, 3_000L) }
+
+        val call = async { holder.call { "signed" } }
+        runCurrent()
+        inFront.value = false
+        runCurrent()
+        transport.firstAnswered.complete(Unit)
+        inFront.value = true
+        runCurrent()
+        advanceTimeBy(1_000L)
+        inFront.value = false // Connect sheet
+        runCurrent()
+        inFront.value = true // back pressed on it
+        runCurrent()
+        advanceTimeBy(2_500L)
+        runCurrent()
+        assertFalse(call.isCompleted)
+        advanceTimeBy(1_000L)
+        runCurrent()
+        assertSame(WalletOutcome.Cancelled, call.await())
+    }
+
+    @Test
+    fun `a late authorize after the UI said Cancelled never runs the block, and leaves the slot as it was`() = runTest {
+        // Security review L1 and L2: the wallet authorizes after the request was given up. The
+        // block (the signature request) must not run, and the token the adapter wrote during
+        // that authorization must not outlive the abandoned call.
+        val slot = Slot("token-1")
+        val store = MemoryStore()
+        val inFront = MutableStateFlow(true)
+        val transport = AdapterLikeTransport(slot)
+        val holder = WalletSessionHolder(slot, store) { transport }.also { it.attach(transport, inFront, 3_000L) }
+        var signed = 0
+
+        val call = async { holder.call { signed++; "signed" } }
+        runCurrent()
+        inFront.value = false
+        runCurrent()
+        inFront.value = true
+        advanceTimeBy(3_500L)
+        runCurrent()
+        assertSame(WalletOutcome.Cancelled, call.await())
+
+        transport.authorized.complete(Unit) // the wallet answers late
+        runCurrent()
+        assertEquals("nothing was asked to be signed", 0, signed)
+        assertTrue(transport.blockFailure is WalletDismissedException)
+        assertEquals("the abandoned call's token was put back", "token-1", slot.authToken)
+        assertNull(holder.account.value)
+        assertEquals(0, store.saves)
+    }
+
+    @Test
+    fun `the asked and abandoned decision is taken once`() {
+        val claimedFirst = MwaWalletSession.Ask()
+        assertTrue(claimedFirst.claim())
+        assertFalse("a request that asked is never given up", claimedFirst.abandon())
+        assertTrue("the fallback's second association may still run the block", claimedFirst.claim())
+
+        val abandonedFirst = MwaWalletSession.Ask()
+        assertTrue(abandonedFirst.abandon())
+        assertFalse("a given-up request never asks", abandonedFirst.claim())
+        assertTrue(abandonedFirst.abandoned)
+    }
+
+    @Test
+    fun `the adapter still keeps the wallet URI where the slot snapshot reads it`() {
+        // tokenSlot() restores MobileWalletAdapter's private walletUriBase by reflection; a
+        // clientlib upgrade that renames it fails here, not silently on a phone.
+        val field = MobileWalletAdapter::class.java.getDeclaredField("walletUriBase")
+        assertEquals(android.net.Uri::class.java, field.type)
     }
 
     @Test
