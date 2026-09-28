@@ -166,6 +166,11 @@ fun AmberTickerRow(
     figure: String? = null,
     context: String? = null,
     /**
+     * [figure] is a state word, not a number ("Not classified"): drawn in the context type and the
+     * secondary colour instead of the amber figure, so it never reads as a score or a lock.
+     */
+    figureQuiet: Boolean = false,
+    /**
      * An optional label sharing the meta line with [figure] and [context] (see this function's own
      * doc comment, "The leader row, unblocked"): a real, frequently used affordance on the same row
      * as the weight it acts on, drawn through [TextAction] exactly as every other trailing action in
@@ -275,14 +280,25 @@ fun AmberTickerRow(
                         )
                     }
                     if (figure != null) {
-                        Text(
-                            text = figure,
-                            style = AmberType.figureRow,
-                            color = colors.actionText,
-                            maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.alignByBaseline(),
-                        )
+                        if (figureQuiet) {
+                            Text(
+                                text = figure,
+                                style = AmberType.context,
+                                color = colors.textSecondary,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.alignByBaseline(),
+                            )
+                        } else {
+                            Text(
+                                text = figure,
+                                style = AmberType.figureRow,
+                                color = colors.actionText,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.alignByBaseline(),
+                            )
+                        }
                     }
                 }
                 // TextAction's own 16dp start padding is the gap; this Row adds no second one, the
@@ -358,21 +374,21 @@ private fun AmberTickerRowPreview() {
                     ticker = "METAx",
                     company = "Meta Platforms, Inc.",
                     figure = "66",
-                    context = "-0.03% vs NYSE close · 2 d old",
+                    context = "-0.03% vs US price · 2 d old",
                     onClick = {},
                 )
                 AmberTickerRow(
                     ticker = "NVDAx",
                     company = "NVIDIA Corporation",
                     figure = "-1.01%",
-                    context = "vs NYSE close",
+                    context = "vs US price",
                     onClick = {},
                 )
                 AmberTickerRow(
                     ticker = "AUTO.GBx",
                     company = "SPDR S&P Oil & Gas Exploration & Production ETF xStock",
                     figure = "+0.09%",
-                    context = "vs NYSE close",
+                    context = "vs US price",
                     onClick = {},
                 )
             }

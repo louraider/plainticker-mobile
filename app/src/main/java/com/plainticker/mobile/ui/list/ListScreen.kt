@@ -640,15 +640,18 @@ private fun AnalyzedRow(
     // What the scale ranks against, the sector, is said once above the rows
     // (list_row_score_legend). Widest real value "100 of 100", figureRow 18sp/600 tnum: 92.538dp
     // at 1.0x, 120.299dp at 1.3x (fontTools, AmberTickerRowTest), still under the price figure.
-    val figure = if (row.locked) {
-        stringResource(R.string.pro_locked_value)
-    } else {
-        row.composite?.let { stringResource(R.string.list_row_score, Fmt.decimal(it, decimals = 0)) }
+    // A covered company with no classification (QA of 1.3.20) has no score behind the slot, so it
+    // says so in the quiet type rather than in the amber "Pro" a withheld score draws.
+    val figure = when {
+        row.locked -> stringResource(R.string.pro_locked_value)
+        row.unclassified -> stringResource(R.string.list_row_not_classified)
+        else -> row.composite?.let { stringResource(R.string.list_row_score, Fmt.decimal(it, decimals = 0)) }
     }
     AmberTickerRow(
         ticker = row.display,
         company = row.company,
         figure = figure,
+        figureQuiet = row.unclassified && !row.locked,
         context = rowMeta(row, pricesPending),
         colors = colors,
         onClick = { onOpenDetail(row.ticker) },

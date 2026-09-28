@@ -472,6 +472,10 @@ class ListViewModelTest {
             assertEquals("Health Care", row.sector)
             assertEquals("AbbVie Inc.", row.company)
             assertNull("no classification is claimed for it", row.state)
+            // QA of 1.3.20: the bare row drew an amber "Pro", even for a Pro reader. There is no
+            // score behind it to withhold, so it is not locked; it says it is not classified.
+            assertFalse("nothing to unlock on a company /summary has no row for", row.locked)
+            assertTrue(row.unclassified)
             assertTrue("never under Without analysis", state.withoutAnalysis.none { it.ticker == "ABBV" })
             assertEquals(listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
             cancelAndIgnoreRemainingEvents()
@@ -482,6 +486,19 @@ class ListViewModelTest {
             val searched = awaitUntil { it.query == "abbv" }
             assertEquals(listOf("ABBV"), searched.analyzed.map { it.ticker })
             assertTrue(searched.withoutAnalysis.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a served row is never read as unclassified, locked or not`() = runTest {
+        val payload = summary().let { it.copy(rows = listOf(it.rows[0], it.rows[1].locked())) }
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(payload)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size >= 2 }
+            assertTrue(state.analyzed.none { it.unclassified })
+            assertTrue("the lock still reads on a row the server withheld", state.analyzed.single { it.ticker == "JPM" }.locked)
             cancelAndIgnoreRemainingEvents()
         }
     }
