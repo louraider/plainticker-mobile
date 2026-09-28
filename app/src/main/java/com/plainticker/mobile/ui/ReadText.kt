@@ -21,10 +21,12 @@ import java.time.LocalDate
  *    not [currentYear]. A string that is not a real calendar day is left as it was.
  * 3. **References to what this app does not have** (device QA of 1.3.18): the web page numbers its
  *    sections and draws a same-sector table; the app has neither. "(see section 06)" and "in
- *    section 06" are dropped, and "same-sector table" reads "sector comparison". So do the other
- *    names the web gives that table (final QA of 1.3.19): "the sector table", "the table
+ *    section 06" are dropped, and "same-sector table" reads "sector list in Stocks". So do the
+ *    other names the web gives that table (final QA of 1.3.19): "the sector table", "the table
  *    comparison", and a sector's own name before "table" ("the Information Technology table"
- *    reads "the Information Technology sector comparison").
+ *    reads "the Information Technology list in Stocks"). Until 1.3.21 they read "sector
+ *    comparison", which is no section of this app either (QA of 1.3.20, AAPL: "Compare peers in
+ *    the sector comparison"); the sector's companies are what the Stocks tab lists, chip by chip.
  * 4. **"has beat"** reads "has beaten" (final QA of 1.3.19: "The company has beat consensus in 7
  *    of 7 recent quarters").
  *
@@ -79,6 +81,10 @@ object ReadText {
     /** " in section 06", ", see section 06" inside a sentence. */
     private val sectionClause = Regex(",?\\s+(?:in|see|from)\\s+section\\s+\\d+\\b", RegexOption.IGNORE_CASE)
 
+    /** What the web's sector table is called here: the place the app does list a sector's companies. */
+    private const val SECTOR_LIST = "sector list in Stocks"
+    private const val SECTOR_LIST_CAP = "Sector list in Stocks"
+
     /** "same-sector table": a table the web page draws beside the read and the app does not. */
     private val sectorTable = Regex("\\b[Ss]ame[- ]sector table\\b")
 
@@ -99,10 +105,10 @@ object ReadText {
     private fun references(text: String): String = text
         .replace(sectionAside, "")
         .replace(sectionClause, "")
-        .replace(sectorTable) { if (it.value.first().isUpperCase()) "Sector comparison" else "sector comparison" }
-        .replace(plainSectorTable) { it.groupValues[1] + "ector comparison" }
-        .replace(tableComparison, "sector comparison")
-        .replace(namedSectorTable) { it.groupValues[1] + " sector comparison" }
+        .replace(sectorTable) { if (it.value.first().isUpperCase()) SECTOR_LIST_CAP else SECTOR_LIST }
+        .replace(plainSectorTable) { it.groupValues[1] + "ector list in Stocks" }
+        .replace(tableComparison, SECTOR_LIST)
+        .replace(namedSectorTable) { it.groupValues[1] + " list in Stocks" }
         .replace(hasBeat, "has beaten")
 
     // ---- Sentence case for step titles ---------------------------------------------------------
@@ -111,6 +117,8 @@ object ReadText {
         "January", "February", "March", "April", "May", "June", "July", "August", "September",
         "October", "November", "December", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
         "Saturday", "Sunday",
+        // The tab the sector-table rewrite points at: a name, kept in a sentence-case title.
+        "Stocks",
     )
 
     /** A plain capitalised word: one capital, then lower case, with an optional possessive. */

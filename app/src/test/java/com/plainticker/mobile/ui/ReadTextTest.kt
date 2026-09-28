@@ -65,11 +65,11 @@ class ReadTextTest {
     @Test
     fun `references to sections and tables the app does not have are rewritten`() {
         assertEquals(
-            "From the sector comparison, pick two or three companies yourself and line them up by F-Score, ROE, and Op. margin.",
+            "From the sector list in Stocks, pick two or three companies yourself and line them up by F-Score, ROE, and Op. margin.",
             norm("From the same-sector table in section 06, pick two or three companies yourself and line them up by F-Score, ROE, and Op. margin."),
         )
         assertEquals(
-            "In the sector comparison, pick two or three companies and line them up by ROE.",
+            "In the sector list in Stocks, pick two or three companies and line them up by ROE.",
             norm("In the same-sector table, pick two or three companies and line them up by ROE."),
         )
         assertEquals("Compare the margins with the median.", norm("Compare the margins (see section 06) with the median."))
@@ -168,21 +168,21 @@ class ReadTextTest {
 
     /** Final QA of 1.3.19 (aapl_p6, aapl_p7, abbv_p7, jef_p7): the exact strings the device drew. */
     @Test
-    fun `every name the web gives its sector table reads sector comparison`() {
+    fun `every name the web gives its sector table points at the sector list in Stocks`() {
         assertEquals(
-            "Compare peers in the sector comparison by ROE and operating margin",
+            "Compare peers in the sector list in Stocks by ROE and operating margin",
             norm("Compare peers in the sector table by ROE and operating margin"),
         )
         assertEquals(
-            "Compare Jefferies against peers in the sector comparison by ROE and operating margin",
+            "Compare Jefferies against peers in the sector list in Stocks by ROE and operating margin",
             norm("Compare Jefferies against peers in the sector table by ROE and operating margin"),
         )
         assertEquals(
-            "Compare peers from the sector comparison by F-Score, ROE, and operating margin",
+            "Compare peers from the sector list in Stocks by F-Score, ROE, and operating margin",
             norm("Compare peers from the sector table by F-Score, ROE, and operating margin"),
         )
         assertEquals(
-            "Pick two or three companies from the Information Technology sector comparison and line them up by ROE and Op. margin. " +
+            "Pick two or three companies from the Information Technology list in Stocks and line them up by ROE and Op. margin. " +
                 "Apple's ROE of 171.4% stands 140.9 pp above the sector median, so the comparison will show how far that spread extends across the peer set.",
             norm(
                 "Pick two or three companies from the Information Technology table and line them up by ROE and Op. margin. " +
@@ -191,13 +191,15 @@ class ReadTextTest {
         )
         assertEquals(
             "Jefferies' P/B of 0.9x against a sector median of 2.6x suggests the market is pricing in lower returns, " +
-                "and the sector comparison can show whether that gap is sector-wide or specific to this firm.",
+                "and the sector list in Stocks can show whether that gap is sector-wide or specific to this firm.",
             norm(
                 "Jefferies' P/B of 0.9x against a sector median of 2.6x suggests the market is pricing in lower returns, " +
                     "and the table comparison can show whether that gap is sector-wide or specific to this firm.",
             ),
         )
-        assertEquals("Sector comparison first.", norm("Sector table first."))
+        assertEquals("Sector list in Stocks first.", norm("Sector table first."))
+        // QA of 1.3.20: the app has no "sector comparison" section, so no rewrite may name one.
+        assertFalse("sector comparison" in norm("Compare peers in the sector table by ROE and operating margin"))
         // Nothing else about a table moves.
         assertEquals("The table below is not drawn here.", norm("The table below is not drawn here."))
     }

@@ -172,7 +172,7 @@ class DetailReadModelTest {
         val items = s.nextStepsBlock!!.items
         assertEquals("Watch the September 2026 earnings for ROE recovery", items[0].title)
         assertEquals("Compare Jefferies against sector peers by ROE and operating margin", items[1].title)
-        assertEquals("In the sector comparison, pick two peers.", items[1].detail)
+        assertEquals("In the sector list in Stocks, pick two peers.", items[1].detail)
     }
 
     /** `pro: true` but no full field sent yet: the excerpt still stands rather than a blank block. */
@@ -243,7 +243,7 @@ class DetailReadModelTest {
         assertTrue(steps.full)
         // As ReadText normalises it: the app calls the web's "sector table" its sector comparison.
         assertEquals(
-            payload.nextSteps!!.stepsEn!!.map { it.body.replace("The sector table", "The sector comparison") },
+            payload.nextSteps!!.stepsEn!!.map { it.body.replace("The sector table", "The sector list in Stocks") },
             steps.items.map { it.detail },
         )
     }
