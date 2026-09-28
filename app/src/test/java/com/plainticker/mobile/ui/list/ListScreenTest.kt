@@ -44,8 +44,26 @@ class ListScreenTest {
         val lazyColumnStart = fn.indexOf("LazyColumn(")
         assertTrue("ListContent has no LazyColumn", lazyColumnStart >= 0)
         val lazyColumnCall = fn.substring(lazyColumnStart, fn.indexOf("contentPadding", lazyColumnStart))
-        assertTrue("the list must fill the screen's full width", "modifier.fillMaxSize()" in lazyColumnCall)
+        // The list fills a Box that fills the screen: the Box carries the prices notice over it.
+        assertTrue("the list must fill the screen's full width", "Modifier.fillMaxSize()" in lazyColumnCall)
+        assertTrue("Box(modifier.fillMaxSize())" in fn.substring(0, lazyColumnStart))
         assertFalse("nothing shares the row with the list any more", "weight(1f)" in lazyColumnCall)
+    }
+
+    // ---- The prices notice moves nothing (fresh-device QA of 1.3.24, B5) ----------------------
+
+    @Test
+    fun `the prices notice stands over the list's end, never in the slot above the search field`() {
+        val chrome = body("private fun StocksChrome(", "private fun SearchField(")
+        assertTrue(
+            "the chrome's slot skips the prices notice",
+            "state.banner?.takeUnless { it.isPriceNotice }?.let { StateBanner(banner = it, onRetry = onRetry) }" in chrome,
+        )
+        val fn = body("internal fun ListContent(", "private fun StocksChrome(")
+        assertTrue("val priceNotice = state.banner?.takeIf { it.isPriceNotice }" in fn)
+        assertTrue("anchored at the bottom, over the list", "PriceNotice(banner = it, onRetry = onRetry, colors = colors, modifier = Modifier.align(Alignment.BottomCenter))" in fn)
+        assertTrue("the list keeps room at its end for it", "if (priceNotice != null) PriceNoticeRoom else 0.dp" in fn)
+        assertTrue("drawn after the list, so over it", fn.indexOf("PriceNotice(banner") > fn.indexOf("LazyColumn("))
     }
 
     // ---- The filter row: one scrolling line, not four wrapped ones ----------------------------

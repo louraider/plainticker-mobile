@@ -1448,6 +1448,67 @@ class ListViewModelTest {
     }
 
     @Test
+    fun `a window chunk the rest of the run prices after all never raises a banner`() = runTest {
+        // Fresh-device QA of 1.3.24 (B5): the window's refused chunk raised "Some prices are
+        // unavailable" over the search field, and the call for the rest priced it seconds later.
+        val mints = (1..40).map { "Mint$it".padEnd(44, 'z') }
+        val fake = FakePriceRepository(
+            result = Result.success(mints.associateWith { price(10.0, reference = 10.0) }),
+            unfetched = mints.take(ListViewModel.FIRST_SCREENFUL).takeLast(4).toSet(),
+        )
+        // The first call (the window) is refused for four mints; every later call answers them.
+        val prices = object : PriceRepository by fake {
+            override suspend fun pricesFirst(mints: List<String>, limit: Int): PriceFetch =
+                fake.pricesFirst(mints, limit).also { fake.unfetched = emptySet() }
+        }
+        val vm = wide(mints, prices)
+        val seen = mutableListOf<ListUiState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { seen += it } }
+        advanceUntilIdle()
+
+        assertEquals("two calls, the window then the rest", 2, fake.requested.size)
+        assertTrue("every row is priced in the end", (vm.state.value.analyzed + vm.state.value.withoutAnalysis).all { it.priceUsd != null })
+        assertTrue("no frame drew a prices banner", seen.none { it.pricesPartial || it.pricesUnavailable })
+        assertNull(vm.state.value.banner)
+    }
+
+    @Test
+    fun `a chunk still refused when the run ends raises the banner then, and not before`() = runTest {
+        val mints = (1..40).map { "Mint$it".padEnd(44, 'z') }
+        val refused = mints.take(ListViewModel.FIRST_SCREENFUL).takeLast(4).toSet()
+        val prices = FakePriceRepository(
+            result = Result.success((mints - refused).associateWith { price(10.0, reference = 10.0) }),
+            unfetched = refused,
+        )
+        val vm = wide(mints, prices)
+        val seen = mutableListOf<ListUiState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { seen += it } }
+        advanceUntilIdle()
+
+        assertEquals(ListBanner.PricesPartial, vm.state.value.banner)
+        val first = seen.indexOfFirst { it.pricesPartial }
+        assertTrue("the banner came up", first >= 0)
+        // The window's rows are priced in an earlier frame than the one that raises the banner:
+        // the rows past the window (priced only by the second call) are already priced there.
+        val raised = seen[first]
+        val pastWindow = (raised.analyzed + raised.withoutAnalysis).filter { it.mint !in mints.take(ListViewModel.FIRST_SCREENFUL) }
+        assertTrue("raised only by the call that ends the run", pastWindow.isNotEmpty() && pastWindow.all { it.priceUsd != null })
+    }
+
+    @Test
+    fun `the prices banners are the ones stocks draws over the list's end`() {
+        assertTrue(ListBanner.PricesPartial.isPriceNotice)
+        assertTrue(ListBanner.PricesUnavailable.isPriceNotice)
+        listOf(
+            ListBanner.Unavailable,
+            ListBanner.MarketClosed,
+            ListBanner.CatalogUnavailable,
+            ListBanner.AnalysisUnavailable,
+            ListBanner.Stale(3),
+        ).forEach { assertFalse("$it stays in the slot", it.isPriceNotice) }
+    }
+
+    @Test
     fun `nothing priced at all raises the prices banner and the rows stay`() = runTest {
         val mints = (1..40).map { "Mint$it".padEnd(44, 'z') }
         val prices = FakePriceRepository(
@@ -2045,7 +2106,7 @@ class ListViewModelTest {
     // ---- Support -----------------------------------------------------------------------
 
     /** A list wide enough to have a window and a rest: half analyzed, half catalog only. */
-    private fun wide(mints: List<String>, prices: FakePriceRepository): ListViewModel {
+    private fun wide(mints: List<String>, prices: PriceRepository): ListViewModel {
         val analyzed = mints.take(mints.size / 2)
         val assets = mints.mapIndexed { index, mint -> openAsset("T${index}x", "T$index", mint) }
         val rows = analyzed.mapIndexed { index, _ ->
