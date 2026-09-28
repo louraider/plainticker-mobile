@@ -204,6 +204,17 @@ class DetailModelTest {
         val thinBlock = served(analysis = AnalysisState.Served(payload(verdict = thin))).verdictBlock as VerdictBlock.Unavailable
         assertEquals(R.string.detail_verdict_unavailable_data, label(thinBlock.reason))
 
+        // QA of 1.3.20: ABBV, V and NKE come back thin-cohort, with a composite and a full read.
+        // "Not enough data" beside them read as a contradiction; the reason is the sector's size.
+        val cohort = Verdict(classState = "unavailable", classReason = "thin-cohort")
+        val cohortBlock = served(analysis = AnalysisState.Served(payload(verdict = cohort))).verdictBlock as VerdictBlock.Unavailable
+        assertEquals(R.string.detail_verdict_unavailable_thin, label(cohortBlock.reason))
+        assertEquals(
+            "Too few companies in this sector to compare fairly. This is not a judgement of the business. " +
+                "The figures and the read below still apply.",
+            com.plainticker.mobile.ui.ShippedCopy.strings.getValue("detail_verdict_unavailable_thin"),
+        )
+
         val alsoLocked = Verdict(classState = "unavailable", classReason = "sector-model-pending", locked = true)
         assertTrue(
             "no class exists, so there is nothing to lock",
