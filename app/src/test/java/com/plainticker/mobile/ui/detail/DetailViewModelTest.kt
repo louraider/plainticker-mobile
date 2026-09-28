@@ -832,7 +832,12 @@ class DetailViewModelTest {
             val steps = state.nextStepsBlock
             assertNotNull(steps)
             assertTrue(steps!!.full)
-            assertEquals(payload.nextSteps!!.stepsEn!!.map { it.body }, steps.items.map { it.detail })
+            // Each step's text as ReadText normalises it: the fixture names the web's "sector table",
+            // which the app calls its sector comparison (final QA of 1.3.19).
+            assertEquals(
+                payload.nextSteps!!.stepsEn!!.map { it.body.replace("The sector table", "The sector comparison") },
+                steps.items.map { it.detail },
+            )
             cancelAndIgnoreRemainingEvents()
         }
     }

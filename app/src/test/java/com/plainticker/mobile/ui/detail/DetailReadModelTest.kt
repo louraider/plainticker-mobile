@@ -241,6 +241,10 @@ class DetailReadModelTest {
 
         val steps = s.nextStepsBlock!!
         assertTrue(steps.full)
-        assertEquals(payload.nextSteps!!.stepsEn!!.map { it.body }, steps.items.map { it.detail })
+        // As ReadText normalises it: the app calls the web's "sector table" its sector comparison.
+        assertEquals(
+            payload.nextSteps!!.stepsEn!!.map { it.body.replace("The sector table", "The sector comparison") },
+            steps.items.map { it.detail },
+        )
     }
 }
