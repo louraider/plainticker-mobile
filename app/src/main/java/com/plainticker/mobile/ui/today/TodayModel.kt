@@ -112,8 +112,12 @@ fun statusLine(market: MarketStatus?, nowMillis: Long, zone: ZoneId): Copy? {
         val venueClose = m.nextChangeAtMillis.takeIf { m.source == MarketSource.VENUE }
         val closeAt = venueClose ?: session.nextCloseMillis ?: return words(R.string.today_status_open_untimed)
         val time = Fmt.clock(closeAt, zone)
+        // The calendar's open reads exactly as the venue's (QA of 1.3.21): on a cold start the
+        // line stood on the calendar for about a second, on two lines ("NYSE open by the exchange
+        // calendar..."), then the live hours swapped in one line and the screen jumped up 54 px.
+        // Both name the same close from the same calendar, so the swap is now invisible; the
+        // market hours sheet still says when the line is the calendar's ([statusFromCalendar]).
         return when {
-            m.source == MarketSource.LOCAL_SCHEDULE -> words(R.string.today_status_open_calendar, time)
             session.earlyClose -> words(R.string.today_status_open_short_day, time)
             else -> words(R.string.today_status_open, time)
         }

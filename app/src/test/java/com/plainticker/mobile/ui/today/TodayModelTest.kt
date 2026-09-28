@@ -59,12 +59,17 @@ class TodayModelTest {
     }
 
     @Test
-    fun `open by the calendar says so, the seeker's own moment with the stale snapshot`() {
+    fun `open by the calendar reads exactly as the live hours will, so the cold-start swap is invisible`() {
+        // QA of 1.3.21: "NYSE open by the exchange calendar..." on two lines, then "NYSE open."
+        // on one a second later, and the screen jumped up 54 px. The two now read the same.
         val stale = Trading(currentPeriod = TradingPeriod.CLOSED, openNow = false, nextChangeAt = "2026-09-24T13:30:00Z")
-        assertEquals(
-            "NYSE open by the exchange calendar. Closes at 23:00 your time",
-            line("2026-09-24T19:22:00Z", kyiv, stale),
-        )
+        val live = Trading(currentPeriod = TradingPeriod.MARKET, openNow = true, nextChangeAt = "2026-09-24T20:00:00Z")
+        val fromCalendar = line("2026-09-24T19:22:00Z", kyiv, stale)
+        assertEquals("NYSE open. Closes at 23:00 your time", fromCalendar)
+        assertEquals(line("2026-09-24T19:22:00Z", kyiv, live), fromCalendar)
+        assertEquals("with no block at all, the same line", fromCalendar, line("2026-09-24T19:22:00Z", kyiv))
+        // The sheet is where the calendar is still named.
+        assertTrue(statusFromCalendar(at("2026-09-24T19:22:00Z", stale).first))
     }
 
     @Test
