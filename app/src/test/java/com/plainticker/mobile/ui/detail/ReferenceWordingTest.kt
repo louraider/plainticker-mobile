@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * QA of 1.3.22: Method said "the share's last US price" while the NYSE was open, and the Stocks
- * row said "vs US price" while Detail said "NYSE price". One wording now holds in both states:
+ * row said "vs US price" while Detail said "NYSE price". One wording is now true in both states:
  * Jupiter's `stockData` is the share's latest US trade, which is neither only a close nor an NYSE
  * print. Only the shut state keeps "last", where it is true.
  */

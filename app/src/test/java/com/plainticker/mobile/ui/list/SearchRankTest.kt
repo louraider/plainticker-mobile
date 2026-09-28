@@ -32,7 +32,7 @@ class SearchRankTest {
         assertEquals("inside a ticker is a name-tier match", SEARCH_NAME, searchTier("V", "NVDA", "NVDAx", "NVIDIA"))
         assertEquals(SEARCH_NAME, searchTier("ma", "GS", "GSx", "The Goldman Sachs Group, Inc."))
         assertNull(searchTier("zzz", "GS", "GSx", "The Goldman Sachs Group, Inc."))
-        assertNull("no symbol and no company, and the ticker does not hold it", searchTier("MA", "GS", null, null))
+        assertNull("no symbol and no company, and the ticker does not contain it", searchTier("MA", "GS", null, null))
     }
 
     @Test

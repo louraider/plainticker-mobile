@@ -338,7 +338,7 @@ internal fun ListContent(
                 // on it when no chip row stood between them).
                 item(key = "search-gap") { Spacer(Modifier.height(SearchResultsGap)) }
                 // One order across both sets, the exact ticker first (QA of 1.3.22: "MA" drew four
-                // companies whose names hold "ma" above MAx), see [searchResults].
+                // companies whose names contain "ma" above MAx), see [searchResults].
                 val results = searchResults(state.analyzed, state.withoutAnalysis, state.query)
                 itemsIndexed(results, key = { _, row -> (if (row.analyzed) "a:" else "p:") + row.ticker }) { index, row ->
                     val grouped = groupedRowModifier(colors, isFirst = index == 0, isLast = index == results.lastIndex)

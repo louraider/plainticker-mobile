@@ -100,8 +100,7 @@ class LiveBarTest {
     private fun body(code: String, function: String): String {
         val start = code.indexOf(function)
         assertTrue("no $function", start >= 0)
-        val end = code.indexOf("
-}", start)
+        val end = code.indexOf("\n}", start)
         assertTrue("$function never closes", end > start)
         return code.substring(start, end)
     }
