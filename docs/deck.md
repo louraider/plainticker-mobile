@@ -1,6 +1,6 @@
 # PlainTicker Mobile: deck
 
-Ten slides. Written 2026-09-27 and checked against build 1.3.18, the next release, and the number set in
+Ten slides. Written 2026-09-27, checked 2026-09-28 against build 1.3.21, on main and the latest release, and the number set in
 `docs/submission-answers.md` ("The one number set"). The Align coach reads the deck's text, so each
 slide's text carries its point without the speaker notes, and nothing on a slide talks to the
 reader about scoring or judging.
@@ -60,9 +60,11 @@ not in a browser. Say "a classification by a fixed rule, not advice" once here, 
 > 1. **Morning:** one digest notification on the stocks you watch.
 > 2. **Today:** the NYSE state in your own time, your watched stocks, the reports due next week.
 > 3. **A stock page:** issuer controls and supply read live from the mint, reserves as xStocks
->    reports them, the company against its sector, the token price against the NYSE close.
-> 4. **A swap:** Jupiter routes it, the Seed Vault signs it, *Swap landed*, a receipt with the
->    executed fill plus estimated network costs. **Swap to USDC** for the way back.
+>    reports them, the company against its sector, the token's gap to the last US price of the
+>    share.
+> 4. **A swap:** Jupiter routes it, a Review step shows what the phone checked, **Continue to
+>    wallet**, the Seed Vault signs it, *Swap landed*, a receipt with the executed fill plus
+>    estimated network costs. **Swap to USDC** for the way back.
 > 5. **Vote:** staked SKR chooses the next stock to be analysed.
 > 6. **You:** Pro, Google sign-in, one account with plainticker.com. The wallet connects to sign.
 
@@ -84,11 +86,11 @@ a day and nothing else.
 >   `assetlinks.json`, so the wallet names the app before anything is approved.
 > - **Token-2022 read on the device.** Mint extensions and Scaled UI Amount balances, parsed in
 >   Kotlin, with the slot and its age on screen.
-> - **Native Kotlin and Jetpack Compose.** Five tabs, dark and light themes, about 1,850 unit tests.
+> - **Native Kotlin and Jetpack Compose.** Five tabs, dark and light themes, 1,967 unit tests.
 >   Not a port, not a web wrapper.
 
 **Speaker notes.** The analysis engine predates the hackathon and is the backend. Everything on
-the phone is new: 405 commits since 10 September. The web product has no chain read, no swap and
+the phone is new: 444 commits since 10 September. The web product has no chain read, no swap and
 no notification. The verified identity is the one line a Seeker owner reads before
 approving: it says www.plainticker.com with a verification mark.
 
@@ -98,7 +100,8 @@ approving: it says www.plainticker.com with a verification mark.
 
 **Slide text**
 
-> **Coverage is the scarce thing.** 57 companies covered, 1,124 xStocks on Solana.
+> **Coverage is the scarce thing.** 57 companies analysed on plainticker.com, 56 of them with an
+> xStock, against 1,124 xStocks on Solana.
 >
 > Every week, Seeker owners vote for one of the 898 uncovered US xStocks. A vote is a transaction
 > with a `PT-VOTE` memo, weighted by staked SKR read on chain by the server. The winner is
@@ -112,7 +115,7 @@ approving: it says www.plainticker.com with a verification mark.
 > 7,500 SKR staked also opens Pro.
 
 **Speaker notes.** Honest numbers: round 1 had one voter, the founder's demo wallet, with 878.98
-SKR. The ledger publishes each vote's weight with the time and slot the server read the stake at
+SKR, and round 2, won by AAL, had the same one voter. The ledger publishes each vote's weight with the time and slot the server read the stake at
 tally time; standard RPC cannot re-read a past balance, so the weight is published, not
 re-derivable later. The mechanism is proven end to end on mainnet; participation is what launch has to build. The
 tab says in plain words that a stake-weighted vote is decided by the largest stake, and the weight
@@ -129,10 +132,12 @@ is stored raw so a one-Seeker-one-voice rule can be applied in the tally alone.
 >   do more than the screen shows, or that the guard cannot parse, is refused.
 > - Swaps: exactly one Jupiter instruction of a known layout; tokens must leave from and land in
 >   the wallet's own accounts; token accounts opened only for the wallet; slippage at most 300
->   bps and Jupiter's platform fee at most 400 bps; no authority handed to anyone else. A pass
->   can never exceed 12 USDC.
+>   bps and Jupiter's platform fee at most 400 bps; no authority handed to anyone else; the
+>   network fee read from the bytes and capped at 0.01 SOL. A Review step shows the checked
+>   figures, and **Continue to wallet** is the only way on. A pass can never exceed 12 USDC.
 > - **The app and server never hold a user's wallet signing keys.** No secrets in the APK. RPC
->   goes through a read-only five-method forwarder.
+>   goes through a read-only five-method forwarder. The device code is sealed with an Android
+>   Keystore key.
 > - **What it cannot see:** Jupiter's routing inside its own program, and swap accounts loaded
 >   from a lookup table. Stated in the README, with what stands in for each.
 
@@ -140,6 +145,8 @@ is stored raw so a one-Seeker-one-voice rule can be applied in the tally alone.
 a compromised server could show "12 USDC to the treasury" over a transaction that drains an
 account. The guard closes that gap, and its limits are written down rather than implied. A
 redaction guard hashes every base58 string in the tree and the whole history against a denylist.
+Releases are signed only from a commit on main, and only after the founder approves the run in
+the protected release environment.
 
 ---
 
@@ -157,7 +164,7 @@ redaction guard hashes every base58 string in the tree and the whole history aga
 > | 24 Sep | Swap, 1 USDC into TSLAx |
 > | 24 Sep | Swap to USDC, the whole position |
 >
-> 405 commits · 65 pull requests · about 1,850 unit tests · 57 companies covered
+> 444 commits · 69 pull requests · 1,967 unit tests · 57 companies analysed, 56 with an xStock
 >
 > **Usage so far is the founder's.** Round 3 runs 28 Sep to 5 Oct: [ROUND3_VOTERS] wallets have
 > voted.
@@ -169,7 +176,7 @@ redaction guard hashes every base58 string in the tree and the whole history aga
 *Screenshot: `docs/img/05-recent-swaps.png`.*
 
 **Speaker notes.** Every signature is in the README and checkable on Solscan; the demo wallet is
-public. Rounds 1 and 2 each have one vote, both from the demo wallet. There is no
+public. Rounds 1 and 2 each had one vote, both from the demo wallet. There is no
 user traction beyond that yet, and the slide says so. What exists is proof that each flow
 works on mainnet, on the device, including the reverse swap and the paid pass.
 
