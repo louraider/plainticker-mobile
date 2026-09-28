@@ -134,7 +134,7 @@ class AccountSectionTest {
         assertFalse("the wallet row came back under Sign-in methods", "private fun WalletRow(" in sectionScan.code || " WalletRow(wallet" in sectionScan.code)
         assertFalse("R.string.you_wallet_method" in sectionScan.code)
         assertTrue("R.string.you_heading_wallet" in walletScan.code)
-        assertTrue("WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors)" in walletScan.code)
+        assertTrue("WalletRow(wallet = wallet, onConnect = onConnect, onDisconnect = onDisconnect, colors = colors, noWallet = noWallet)" in walletScan.code)
         val screen = screenScan.code
         val body = screen.substring(screen.indexOf("internal fun YouContent("), screen.indexOf("private fun amberColors("))
         val account = body.indexOf("AccountSection(")
@@ -263,8 +263,11 @@ class AccountSectionTest {
         assertTrue("sub = if (keepNote) stringResource(R.string.promo_signin_first_hint) else null" in screen)
         assertTrue("if (signInHint) {" in screen)
         assertTrue("sub = if (keepNote) stringResource(R.string.promo_success_saved_to_phone) else null" in screen)
-        assertEquals("Sign in first to keep this Pro if you reinstall.", ShippedCopy.strings.getValue("promo_signin_first_hint"))
-        assertEquals("Saved to this phone.", ShippedCopy.strings.getValue("promo_success_saved_to_phone"))
+        assertEquals("Signing in with Google keeps this Pro if you reinstall.", ShippedCopy.strings.getValue("promo_signin_first_hint"))
+        assertEquals(
+            "Saved to this phone. Sign in with Google to keep it if you reinstall.",
+            ShippedCopy.strings.getValue("promo_success_saved_to_phone"),
+        )
         assertFalse(ShippedCopy.strings.containsKey("promo_success_keep_note"))
     }
 

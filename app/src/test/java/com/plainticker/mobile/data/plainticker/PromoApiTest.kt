@@ -156,6 +156,27 @@ class PromoApiTest {
         assertEquals("", PromoApi.normalize("   -- -- "))
     }
 
+    /**
+     * Fresh-device QA of 1.3.23: the field no longer rewrites itself as it is typed, so whatever
+     * a keyboard or a paste leaves in it has to normalize to the one canonical code at submit.
+     */
+    @Test
+    fun `normalize accepts any mix of case, dashes and whitespace a keyboard or a paste leaves`() {
+        val canonical = "PTAAAABBBBCCCC"
+        listOf(
+            "Pt-AaAa-bBbB-CcCc",
+            "PT - AAAA - BBBB - CCCC",
+            "pt--aaaa--bbbb--cccc",
+            "PTAAAA-BBBBCCCC",
+            "PT\tAAAA\nBBBB\r\nCCCC",
+            "PT\u00A0AAAA\u00A0BBBB\u00A0CCCC",
+            "PT\u2013AAAA\u2014BBBB\u2011CCCC",
+            "PT\u2212AAAA\uFF0DBBBB_CCCC",
+            "\n PT-AAAA-BBBB-CCCC \n",
+        ).forEach { typed -> assertEquals("\"$typed\"", canonical, PromoApi.normalize(typed)) }
+        assertEquals("letters and digits are never dropped", "PT0123ABCD4567", PromoApi.normalize("pt-0123-abcd-4567"))
+    }
+
     @Test
     fun `rekey_required and code_retired are read from either field of a 401`() = runTest {
         listOf(

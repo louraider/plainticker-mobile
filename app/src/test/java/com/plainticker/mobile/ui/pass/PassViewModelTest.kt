@@ -583,11 +583,23 @@ class PassViewModelTest {
     }
 
     @Test
-    fun `typing normalizes uppercase, no spaces, no dashes, the same way the server does`() = runTest {
-        val vm = machine()
+    fun `typing keeps the field exactly as typed, and the code is normalized only when it is sent`() = runTest {
+        // Fresh-device QA of 1.3.23: normalizing on every change rewrote the field under the
+        // keyboard, and a fast "PT-AAAA-BBBB-CCCC" came out 12 to 14 characters long.
+        val promo = promoMock()
+        val vm = machine(promo = promo)
         vm.openPromo()
-        vm.promoInputChanged("pt-aaaa bbbb-cccc")
-        assertEquals(PromoState.Editing("PTAAAABBBBCCCC"), vm.promo.value)
+        "pt-aaaa bbbb-cccc".let { typed -> typed.indices.forEach { vm.promoInputChanged(typed.substring(0, it + 1)) } }
+        assertEquals(PromoState.Editing("pt-aaaa bbbb-cccc"), vm.promo.value)
+
+        vm.promo.test {
+            awaitItem()
+            vm.applyPromo()
+            awaitUntil { it is PromoState.Success }
+            cancelAndIgnoreRemainingEvents()
+        }
+        val body = promo.requests.single().bodyText()
+        assertTrue("sent normalized: $body", "\"PTAAAABBBBCCCC\"" in body)
     }
 
     @Test
@@ -699,7 +711,7 @@ class PassViewModelTest {
                 vm.applyPromo()
                 val failed = awaitUntil { it is PromoState.Failed } as PromoState.Failed
                 assertEquals("status $status", expected, failed.reason)
-                assertEquals("PTAAAABBBBCCCC", failed.input)
+                assertEquals("the field keeps what was typed, to fix", "pt-aaaa-bbbb-cccc", failed.input)
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -773,7 +785,7 @@ class PassViewModelTest {
             awaitUntil { it is PromoState.Failed }
             vm.promoInputChanged("pt-dddd-eeee-ffff")
             val editing = awaitUntil { it is PromoState.Editing } as PromoState.Editing
-            assertEquals("PTDDDDEEEEFFFF", editing.input)
+            assertEquals("kept as typed; normalized only when sent", "pt-dddd-eeee-ffff", editing.input)
             cancelAndIgnoreRemainingEvents()
         }
     }
