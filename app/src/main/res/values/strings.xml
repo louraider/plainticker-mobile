@@ -687,7 +687,7 @@
     <string name="action_find_stock">Find a stock</string>
     <!-- The figure's meaning, said once above the watched rows instead of on every row. -->
     <string name="today_figure_live">The figure is how far each token sits from the share price now.</string>
-    <string name="today_figure_close">The figure is how far each token sits from the last NYSE close.</string>
+    <string name="today_figure_close">The figure is how far each token sits from its share\'s last US price, which still moves before the open and after the close.</string>
     <!-- Reports this week (founder's pick of option B, 2026-09-26, replacing Tracked today). -->
     <string name="today_heading_reports">Reports this week</string>
     <!-- Saturday and Sunday: the window moves to next Monday through next Sunday, so the heading says so too. -->
@@ -713,7 +713,9 @@
     <!-- While the NYSE is closed (Toly's weekend idea): the covered tokens whose onchain price sits
          furthest from the last close, only where the pool clears the liquidity floor. -->
     <string name="today_closed_title">While New York is closed</string>
-    <string name="today_closed_lede">The tokens furthest from the last NYSE close, only where the pool is deep enough for the price to mean something.</string>
+    <string name="today_closed_lede">The tokens furthest from their share\'s last US price, only where the pool is deep enough for the price to mean something.</string>
+    <!-- The block holds its place while the NYSE is closed (QA of 1.3.20), so a quiet night says so. -->
+    <string name="today_closed_quiet">No token with a deep pool sits more than half a percent from its share right now.</string>
     <string name="today_closed_pool">Depth %1$s</string>
     <!-- The digest screen, under You. -->
     <string name="digest_screen_lede">One short check a day on the stocks you watch.</string>

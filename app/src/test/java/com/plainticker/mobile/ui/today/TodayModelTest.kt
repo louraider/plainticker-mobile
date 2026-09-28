@@ -166,7 +166,10 @@ class TodayModelTest {
         val open = MarketStatus(MarketState.REGULAR, MarketSource.VENUE, venueOpen = true, nextChangeAtMillis = null)
         val shut = open.copy(state = MarketState.CLOSED, venueOpen = false)
         assertEquals("The figure is how far each token sits from the share price now.", ShippedCopy.render(figureMeaning(open)))
-        assertEquals("The figure is how far each token sits from the last NYSE close.", ShippedCopy.render(figureMeaning(shut)))
+        assertEquals(
+            "The figure is how far each token sits from its share's last US price, which still moves before the open and after the close.",
+            ShippedCopy.render(figureMeaning(shut)),
+        )
         assertEquals("not known yet reads as the close", ShippedCopy.render(figureMeaning(shut)), ShippedCopy.render(figureMeaning(null)))
     }
 
@@ -637,10 +640,30 @@ class TodayModelTest {
         val movers = closedMovers(listOf(quote("META", 3.1)))
         val closed = MarketStatus(MarketState.CLOSED, MarketSource.VENUE, venueOpen = false, nextChangeAtMillis = null)
         val open = MarketStatus(MarketState.REGULAR, MarketSource.VENUE, venueOpen = true, nextChangeAtMillis = null)
-        assertTrue(closedMoversShown(closed, movers))
-        assertFalse("the session's live figure is on the watched rows already", closedMoversShown(open, movers))
-        assertFalse("an unknown venue is not a closed one", closedMoversShown(null, movers))
-        assertFalse("nothing moved, nothing drawn", closedMoversShown(closed, emptyList()))
+        assertEquals(ClosedBlock.Movers(movers), closedBlock(closed, movers, pricesLoading = false, pricesKnown = true))
+        assertNull("the session's live figure is on the watched rows already", closedBlock(open, movers, pricesLoading = false, pricesKnown = true))
+        assertNull("an unknown venue is not a closed one", closedBlock(null, movers, pricesLoading = true, pricesKnown = false))
+    }
+
+    /** QA of 1.3.20: the block was inserted after the prices answered and pushed Next up down. */
+    @Test
+    fun `a closed venue holds the block from the first frame, skeletons first, a quiet line last`() {
+        val closed = MarketStatus(MarketState.CLOSED, MarketSource.LOCAL_SCHEDULE, venueOpen = false, nextChangeAtMillis = null)
+        assertEquals(ClosedBlock.Loading, closedBlock(closed, emptyList(), pricesLoading = true, pricesKnown = false))
+        assertEquals("nothing moved keeps the slot", ClosedBlock.Quiet, closedBlock(closed, emptyList(), pricesLoading = false, pricesKnown = true))
+        assertEquals(
+            "a refresh keeps the quiet line rather than swapping back to skeletons",
+            ClosedBlock.Quiet,
+            closedBlock(closed, emptyList(), pricesLoading = true, pricesKnown = true),
+        )
+        assertNull(
+            "no price ever answered: nothing is known about the gaps, so no quiet night is claimed",
+            closedBlock(closed, emptyList(), pricesLoading = false, pricesKnown = false),
+        )
+        assertEquals(
+            "No token with a deep pool sits more than half a percent from its share right now.",
+            ShippedCopy.strings.getValue("today_closed_quiet"),
+        )
     }
 
     // ---- Next up's "Voted" (device QA of 1.3.18) ------------------------------------------------

@@ -112,6 +112,39 @@ class WatchlistViewModelTest {
         }
     }
 
+    /**
+     * QA of 1.3.20: on a cold start the venue line arrived with the catalog, about 2.9 s in, and
+     * pushed the whole screen down by about 160 px. The calendar now stands in from the first frame
+     * (the rule Stocks keeps), and the catalog's own block replaces it in the same slot.
+     */
+    @Test
+    fun `the venue line stands from the first frame, off the calendar, until the catalog answers`() = runTest {
+        serving("AAPL")
+        catalog.assets = Result.success(
+            listOf(xStockTrading("AAPLx", "AAPL", "mint-AAPL", Trading(currentPeriod = TradingPeriod.CLOSED, openNow = false))),
+        )
+        val vm = viewModel()
+
+        val first = vm.state.value
+        assertTrue("a venue is on the very first state", first.market != null)
+        assertEquals(MarketSource.LOCAL_SCHEDULE, first.market?.source)
+        assertFalse("Sunday 13 Sep: the calendar says closed", first.market!!.regularSession)
+
+        advanceUntilIdle()
+        assertEquals("the catalog's own block replaces the calendar", MarketSource.VENUE, vm.state.value.market?.source)
+    }
+
+    @Test
+    fun `a catalog that answered with nothing takes the calendar's line away again`() = runTest {
+        serving("AAPL")
+        catalog.assets = Result.success(emptyList())
+        val vm = viewModel()
+        assertTrue(vm.state.value.market != null)
+
+        advanceUntilIdle()
+        assertNull("nothing is known about the venue", vm.state.value.market)
+    }
+
     @Test
     fun `nothing watched is the empty state, and the watched-ticker join itself asks nothing of the network`() = runTest {
         val vm = viewModel()
