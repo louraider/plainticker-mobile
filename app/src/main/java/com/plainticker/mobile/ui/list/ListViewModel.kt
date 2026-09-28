@@ -101,7 +101,8 @@ data class ListRow(
      * added it bare): it has a full page but no classification against its sector (QA of 1.3.20:
      * ABBVx, CMCSAx, MAx, NKEx and Vx, `class_state` "unavailable", thin cohort). There is no score
      * to show and none to lock, so the row says so in neutral words instead of "Pro", which it drew
-     * even for a Pro reader. Never true together with [locked].
+     * even for a Pro reader. Also true for a served row with no composite in a body that withheld
+     * nothing ([bodyWithholdsComposites]; QA of 1.3.21, JEFx). Never true together with [locked].
      */
     val unclassified: Boolean = false,
     /**
@@ -785,6 +786,7 @@ class ListViewModel(
         // not of a row, so it is read once from the whole list: the bottom of a 179-row leaderboard
         // can legitimately be 0.56, and judging that row on its own would draw it as "56".
         val asFraction = percentilesAreFractions(unique.mapNotNull { it.composite })
+        val withheld = bodyWithholdsComposites(unique)
 
         // A summary row whose underlying has no xStock is not an xStock, so it is not a row on
         // this screen: docs/data-map.md defines "Without analysis" as catalog xStocks missing
@@ -798,7 +800,7 @@ class ListViewModel(
             .mapNotNull { row ->
                 val asset = byTicker[row.ticker.uppercase()] // lint-allow uppercase: map key
                 val isBare = row.ticker.uppercase() in bare // lint-allow uppercase: map key
-                if (asset == null && (catalogKnown || isBare)) null else row.toListRow(asset, asFraction, isBare)
+                if (asset == null && (catalogKnown || isBare)) null else row.toListRow(asset, asFraction, isBare, withheld)
             }
             .sortedWith(compareBy<ListRow, Double?>(nullsLast(reverseOrder())) { it.composite }.thenBy { it.ticker })
 
@@ -917,8 +919,11 @@ class ListViewModel(
      */
     private fun applyPrices(fetch: PriceFetch, asked: Collection<String>) {
         val covered = asked.toHashSet()
-        allAnalyzed = allAnalyzed.map { if (it.mint in covered) it.withPrice(fetch) else it }
-        allWithoutAnalysis = allWithoutAnalysis.map { if (it.mint in covered) it.withPrice(fetch) else it }
+        // The shared source has the last word (QA of 1.3.21): a quote another screen fetched while
+        // this run was out is newer than the run's own answer, so a row never steps back to it.
+        val latest = prices.latest.value
+        allAnalyzed = allAnalyzed.map { if (it.mint in covered) it.withPrice(fetch).withLatest(latest) else it }
+        allWithoutAnalysis = allWithoutAnalysis.map { if (it.mint in covered) it.withPrice(fetch).withLatest(latest) else it }
         val nothingPriced = fetch.priced.isEmpty()
         _state.update {
             it.copy(
@@ -1010,7 +1015,12 @@ class ListViewModel(
 
     // `headline` is deliberately never read: it is Ukrainian, and docs/data-map.md says it is
     // not rendered in the app. Nothing on a row can carry it because no row field holds it.
-    private fun SummaryRow.toListRow(asset: XStockAsset?, asFraction: Boolean, bare: Boolean = false) = ListRow(
+    private fun SummaryRow.toListRow(
+        asset: XStockAsset?,
+        asFraction: Boolean,
+        bare: Boolean = false,
+        withheld: Boolean = true,
+    ) = ListRow(
         ticker = ticker,
         symbol = asset?.symbol,
         mint = asset?.solanaMint,
@@ -1025,9 +1035,11 @@ class ListViewModel(
         analyzed = true,
         sector = sector,
         // A bare row carries no composite because the company has no row on /summary, not because
-        // the Pro lock withheld one: there is nothing to unlock (QA of 1.3.20).
-        locked = !bare && isProLocked(),
-        unclassified = bare && composite == null,
+        // the Pro lock withheld one: there is nothing to unlock (QA of 1.3.20). Nor does a row of a
+        // body that withholds nothing (QA of 1.3.21: JEFx drew "Pro" for a Pro reader, its
+        // composite null because the method gives it no class): see [bodyWithholdsComposites].
+        locked = !bare && withheld && isProLocked(),
+        unclassified = composite == null && (bare || !withheld || !isProLocked()),
     )
 
     private fun XStockAsset.toPriceOnlyRow() = ListRow(
@@ -1106,12 +1118,25 @@ internal const val OPEN_EXAMPLE_TICKER = "AAPL"
  * because this ticker carries no analysis: `/summary` (`SummaryResponse`'s own doc comment) lists
  * only tickers PlainTicker has classified, so a served row's composite is otherwise never null.
  * The server nulls `composite`, `tone`, `headline` and `setup_score` together on every locked row
- * and leaves [OPEN_EXAMPLE_TICKER] (AAPL) and a Pro caller's own response untouched, so this same
- * combination cannot arise any other way; the app has no separate signal for "is this device Pro"
- * to check instead, and does not need one.
+ * and leaves [OPEN_EXAMPLE_TICKER] (AAPL) and a Pro caller's own response untouched. One row alone
+ * cannot tell the lock from a company the method does not classify (JEFx carries no composite in
+ * the whole body either), so the join reads it together with [bodyWithholdsComposites].
  */
 internal fun SummaryRow.isProLocked(): Boolean =
     composite == null && (tone == null || headline == null) && !ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true)
+
+/**
+ * Whether this `/summary` body is the one the Pro-numbers lock withheld composites from. The server
+ * marks no field as locked: it nulls `composite`, `tone`, `headline` and `setup_score` on every row
+ * but [OPEN_EXAMPLE_TICKER] for a free caller (`withholdVerdictInputs` in
+ * app/api/v1/summary/route.ts), and leaves the body whole for a Pro caller or with monetization
+ * off. So the body answers for itself: when any row other than the open example carries a
+ * composite, nothing was withheld, and a row with none is a company the method does not classify
+ * (JEFx, QA of 1.3.21), "Not classified" rather than "Pro". A body with no such row is the locked
+ * one, and there a null composite reads as the lock, the only answer a free reader can be given.
+ */
+internal fun bodyWithholdsComposites(rows: List<SummaryRow>): Boolean =
+    rows.none { !it.ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true) && it.composite != null }
 
 /**
  * True when a whole payload's composites are the 0 to 1 fraction the v1 fixture and the design

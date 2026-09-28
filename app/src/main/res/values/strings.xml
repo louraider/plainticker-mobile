@@ -171,12 +171,17 @@
          reason plainly, after the web's components/ticker/sector-model-copy.ts. The API sends no
          business profile, so it names every profile the web gates (deposit banks, banks with
          capital markets, bank-brokers, retail brokers, property and casualty insurers) at once. -->
-    <string name="detail_verdict_unavailable">Unavailable</string>
+    <!-- "Not classified", the word the Stocks row uses too (QA of 1.3.21: the row said "Not
+         classified" and the page it opened said "Unavailable"). -->
+    <string name="detail_verdict_unavailable">Not classified</string>
     <string name="detail_verdict_unavailable_sector">Banks, capital-markets firms, brokers and insurers need their own sector model, which is in progress. The general method\'s debt and cash-flow checks do not read them fairly. The available financial figures are below.</string>
     <string name="detail_verdict_unavailable_data">Not enough data to classify this company against its sector. The available figures are below.</string>
     <!-- class_reason thin-cohort: the web's "The sector comparison is too narrow to classify"
-         (lib/methodology/decision-copy.ts thinCohortCopy), in plain words (QA of 1.3.20). -->
-    <string name="detail_verdict_unavailable_thin">Too few companies in this sector to compare fairly. This is not a judgement of the business. The figures and the read below still apply.</string>
+         (lib/methodology/decision-copy.ts thinCohortCopy), in plain words (QA of 1.3.20). The
+         server's cohort is a business-profile peer group, not the GICS sector the list groups by
+         (QA of 1.3.21: Financials lists 7 rows, yet MAx and Vx read "too few in this sector"), so
+         it names comparable companies, not the sector. -->
+    <string name="detail_verdict_unavailable_thin">Too few comparable companies to compare fairly. This is not a judgement of the business. The figures and the read below still apply.</string>
     <!-- The lock's one action: You, Plan, with the promo code field open and focused, where the
          hero's Get Pro sits too. -->
     <string name="detail_action_get_pro">Have a code? Get Pro</string>
@@ -249,6 +254,10 @@
          detail_composite when the server withheld the percentile from a free, non-AAPL caller,
          told apart from a payload that simply carries none by the two axes' own locked flag. -->
     <string name="detail_composite_locked">composite, Pro</string>
+    <!-- The composite of a company the method gives no class (QA of 1.3.21: ABBVx read "Against
+         the sector, composite 44" under "Not classified"). The figure stays; the line says it
+         decided nothing. -->
+    <string name="detail_composite_unclassified">Composite score %1$s, not used for a classification</string>
     <string name="detail_track_quality">Quality</string>
     <string name="detail_track_valuation">Valuation</string>
     <string name="detail_track_momentum">Momentum</string>
@@ -665,7 +674,6 @@
          plainly that tokens still trade on thinner pools. -->
     <string name="today_status_open">NYSE open. Closes at %1$s your time</string>
     <string name="today_status_open_short_day">NYSE open, short day. Closes at %1$s your time</string>
-    <string name="today_status_open_calendar">NYSE open by the exchange calendar. Closes at %1$s your time</string>
     <string name="today_status_open_untimed">NYSE open.</string>
     <string name="today_status_pre">NYSE opens at %1$s your time. Tokens still trade, on thinner pools</string>
     <string name="today_status_after_today">NYSE closed for the day. Opens today at %1$s your time. Tokens still trade, on thinner pools</string>

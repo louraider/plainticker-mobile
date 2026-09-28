@@ -328,7 +328,9 @@ val DetailUiState.tokenNotice: Copy?
 val DetailUiState.banner: DetailBanner?
     get() {
         val market = market ?: return null
-        val guessed = market.source == MarketSource.LOCAL_SCHEDULE
+        // While the live hours are on their way the calendar is all there is, and it is not yet a
+        // failure to load them: said as the venue would say it, the rule Stocks keeps.
+        val guessed = market.source == MarketSource.LOCAL_SCHEDULE && !hoursPending
         return when {
             market.halted -> DetailBanner.HALTED
             market.regularSession && guessed -> DetailBanner.OPEN_LOCAL
@@ -675,9 +677,32 @@ val DetailUiState.compositeMeta: Copy?
     get() {
         val payload = analysis ?: return null
         val value = payload.compositePercentile
+        // An unclassified company's composite is said in the lede instead ([compositeLede]).
+        if (value != null && payload.verdict?.unavailable == true) return null
         if (value != null) return words(R.string.detail_composite, Fmt.decimal(value, decimals = 0))
         return if (payload.axes.proNumbersLocked) words(R.string.detail_composite_locked) else null
     }
+
+/**
+ * The line under "Against the sector" for a company the method gives no class but still scores
+ * (QA of 1.3.21: ABBVx read "composite 44" under "Not classified"): the figure is kept and said
+ * to have decided nothing. Null for every other payload, whose composite sits in [compositeMeta].
+ */
+val DetailUiState.compositeLede: Copy?
+    get() {
+        val payload = analysis ?: return null
+        val value = payload.compositePercentile ?: return null
+        if (payload.verdict?.unavailable != true) return null
+        return words(R.string.detail_composite_unclassified, Fmt.decimal(value, decimals = 0))
+    }
+
+/**
+ * Lines the Classification skeleton reserves under the word: the two the fixed-rule qualifier
+ * wraps to on a phone, or three for a covered company the method does not classify, whose reason
+ * wraps to three (QA of 1.3.21: ABBVx's block settled 60 px taller than its skeleton).
+ */
+val DetailUiState.verdictSkeletonLines: Int
+    get() = if (ticker in com.plainticker.mobile.repo.Coverage.WITHOUT_ROW) 3 else 2
 
 /**
  * Quality, valuation and momentum, in that order, each with the server's own state word lowercased.
