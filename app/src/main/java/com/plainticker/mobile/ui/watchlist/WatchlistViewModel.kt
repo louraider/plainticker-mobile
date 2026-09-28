@@ -11,6 +11,7 @@ import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.Coverage
 import com.plainticker.mobile.repo.MarketClock
 import com.plainticker.mobile.repo.NextUpAnswer
 import com.plainticker.mobile.repo.NextUpRepository
@@ -444,7 +445,7 @@ class WatchlistViewModel(
 
             val summaryResult = summaryDeferred.await()
             val assets = catalogDeferred.await()
-            val rows = summaryResult.getOrNull()?.rows.orEmpty()
+            val rows = summaryResult.getOrNull()?.let(Coverage::rows).orEmpty()
                 .distinctBy { it.ticker.uppercase() } // lint-allow uppercase: map key
             val byTicker = assets.associateBy { it.underlyingTicker.uppercase() } // lint-allow uppercase: map key
 

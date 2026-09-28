@@ -94,6 +94,36 @@ class VoteTabViewModelTest {
     }
 
     /**
+     * Final QA of 1.3.19: ABBV has a full page and no `/summary` row, and sat on the ballot. A
+     * covered company is never on it, from the server's own list once sent, and from the app's
+     * bundled one until then.
+     */
+    @Test
+    fun `a covered company without a summary row is never on the ballot`() = runTest {
+        val catalog = catalogWith(
+            Triple("TSMx", "TSM", "Taiwan Semiconductor"),
+            Triple("ABBVx", "ABBV", "AbbVie xStock"),
+            Triple("MDTx", "MDT", "Medtronic xStock"),
+        )
+        val model = viewModel(catalog = catalog)
+        model.state.test {
+            awaitUntil { it.ballotLoaded }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf("MDT", "TSM"), model.state.value.ballot.map { it.ticker })
+
+        val served = FakeSummaryRepository(
+            summaryResult = Result.success(SummaryResponse("v1.1", "2026-09-28T00:00:00.000Z", covered = listOf("ABBV", "MDT"))),
+        )
+        val withList = viewModel(catalog = catalog, summaries = served)
+        withList.state.test {
+            awaitUntil { it.ballotLoaded }
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf("TSM"), withList.state.value.ballot.map { it.ticker })
+    }
+
+    /**
      * Audit 2026-09-26, item 3: the server accepts a vote for a US-listed underlying only, so a
      * London or Hong Kong row on the ballot dead-ended after the wallet connected. The ballot
      * holds US listings only; the catalog map still names a non-US winner if one ever appears.

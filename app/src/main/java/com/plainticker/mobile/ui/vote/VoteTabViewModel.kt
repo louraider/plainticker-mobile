@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.vote
 
+import com.plainticker.mobile.repo.Coverage
 import com.plainticker.mobile.repo.researchPublished
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -200,7 +201,9 @@ class VoteTabViewModel(
             if (!_state.value.ballotLoaded) _state.update { it.copy(ballotFailed = true) }
             return
         }
-        val classified = summary.rows.map { it.ticker.trim().uppercase() }.toSet() // lint-allow uppercase: map key
+        // Covered, not just classified: a company with a page and no /summary row (ABBV) is never
+        // on the ballot (QA of 1.3.19). The server refuses a vote for it anyway (409 ticker_covered).
+        val classified = Coverage.tickers(summary)
         allBallot = assets
             .filter { it.solanaMint != null && it.underlyingTicker.trim().uppercase() !in classified } // lint-allow uppercase: map key
             // US underlyings only: the server refuses every other listing, so a London or Hong

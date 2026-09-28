@@ -394,6 +394,50 @@ class ListViewModelTest {
         }
     }
 
+    /**
+     * Final QA of 1.3.19: ABBV has a full page (composite, F-Score, The read) and no `/summary`
+     * row, and was listed as "AbbVie xStock" under Without analysis with a Vote button, in search
+     * and in the Health Care chip.
+     */
+    @Test
+    fun `a covered company with no summary row is analysed, in its own sector, never offered a vote`() = runTest {
+        val abbv = xStockTrading("ABBVx", "ABBV", "ABBV-mint", Trading(currentPeriod = TradingPeriod.MARKET, openNow = true), "AbbVie xStock")
+        val vm = viewModel(catalog = FakeCatalogRepository(Result.success(catalog() + abbv)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.ticker == "ABBV" } }
+            val row = state.analyzed.single { it.ticker == "ABBV" }
+            assertTrue(row.analyzed)
+            assertEquals("Health Care", row.sector)
+            assertEquals("AbbVie Inc.", row.company)
+            assertNull("no classification is claimed for it", row.state)
+            assertTrue("never under Without analysis", state.withoutAnalysis.none { it.ticker == "ABBV" })
+            assertEquals(listOf("TSLAx"), state.withoutAnalysis.map { it.symbol })
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        vm.search("abbv")
+        vm.state.test {
+            val searched = awaitUntil { it.query == "abbv" }
+            assertEquals(listOf("ABBV"), searched.analyzed.map { it.ticker })
+            assertTrue(searched.withoutAnalysis.isEmpty())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the server's covered list, once sent, is the covered set`() = runTest {
+        val withCovered = summary().copy(covered = listOf("AAPL", "JPM", "TSLA"))
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(withCovered)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.ticker == "TSLA" } }
+            assertTrue(state.withoutAnalysis.isEmpty())
+            assertEquals("Consumer Discretionary", state.analyzed.single { it.ticker == "TSLA" }.sector)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `a ticker served twice is one row, not a duplicate key the list would crash on`() = runTest {
         val doubled = summary().let { it.copy(rows = it.rows + it.rows[0].copy(composite = 0.99)) }

@@ -4,6 +4,7 @@ import com.plainticker.mobile.data.plainticker.AnalysisPayload
 import com.plainticker.mobile.data.plainticker.SummaryRow
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.repo.CatalogRepository
+import com.plainticker.mobile.repo.Coverage
 import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.SummaryRepository
 
@@ -39,7 +40,7 @@ class WatchlistFacts(
         val summary = runCatching { summaries.summary() }
         val assets = runCatching { catalog.catalog() }
 
-        val rows = summary.getOrNull()?.rows.orEmpty().associateBy { it.ticker.uppercase() }
+        val rows = summary.getOrNull()?.let(Coverage::rows).orEmpty().associateBy { it.ticker.uppercase() }
         val byTicker = assets.getOrNull().orEmpty()
             .filter { it.solanaMint != null }
             .associateBy { it.underlyingTicker.uppercase() }

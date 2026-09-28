@@ -21,6 +21,13 @@ data class SummaryResponse(
     val schema: String,
     @SerialName("generated_at") val generatedAt: String,
     val rows: List<SummaryRow> = emptyList(),
+    /**
+     * Every company with its own full page on plainticker.com, the site's "covered" (web
+     * `lib/data/covered.ts`), which [rows] runs a few below: a company whose classification is
+     * unavailable has a page and no row. Null from a server that predates the field; the app then
+     * uses its own bundled list ([com.plainticker.mobile.repo.Coverage]).
+     */
+    val covered: List<String>? = null,
 )
 
 @Serializable
