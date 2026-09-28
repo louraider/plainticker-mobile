@@ -5,6 +5,7 @@ import com.plainticker.mobile.data.plainticker.Tone
 import com.plainticker.mobile.data.xstocks.Deployment
 import com.plainticker.mobile.data.xstocks.Underlying
 import com.plainticker.mobile.data.xstocks.XStockAsset
+import com.plainticker.mobile.ui.list.OPEN_EXAMPLE_TICKER
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
@@ -76,16 +77,29 @@ data class ListSnapshot(
     val isEmpty: Boolean get() = rows.isEmpty() && assets.isEmpty()
 }
 
-/** The same shape the live route hands the List, so the join runs once for both sources. */
-fun SnapshotRow.toSummaryRow(): SummaryRow = SummaryRow(
-    ticker = ticker,
-    company = company,
-    sector = sector,
-    tone = tone,
-    composite = composite,
-    stale = stale,
-    ageDays = ageDays,
-)
+/**
+ * The same shape the live route hands the List, so the join runs once for both sources.
+ *
+ * Under the Pro-numbers lock (security review M2): the snapshot is drawn for every reader, free
+ * ones included, before any server has said whether this device is Pro, and offline it is all
+ * there is. So it is read exactly as the server's free body is written (`withholdVerdictInputs`
+ * in the web repo's app/api/v1/summary/route.ts): composite and tone on the open example
+ * ([OPEN_EXAMPLE_TICKER], AAPL) only. The asset itself is captured that way too
+ * (scripts/capture-list-snapshot.mjs); this is the belt to that brace, so an asset captured with
+ * a Pro code can never hand a free reader the numbers.
+ */
+fun SnapshotRow.toSummaryRow(): SummaryRow {
+    val open = ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true)
+    return SummaryRow(
+        ticker = ticker,
+        company = company,
+        sector = sector,
+        tone = tone.takeIf { open },
+        composite = composite.takeIf { open },
+        stale = stale,
+        ageDays = ageDays,
+    )
+}
 
 fun SnapshotAsset.toXStockAsset(): XStockAsset = XStockAsset(
     name = name,

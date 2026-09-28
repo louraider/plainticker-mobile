@@ -39,6 +39,9 @@ async function getJson(url, headers = {}) {
   return response.json();
 }
 
+/** The one ticker whose composite and tone every reader sees (OPEN_EXAMPLE_TICKER in the app). */
+const OPEN_EXAMPLE_TICKER = "AAPL";
+
 /** Two decimals at most, and no "-0". */
 function round(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
@@ -53,9 +56,13 @@ async function captureSummary() {
       const out = { ticker: row.ticker };
       if (row.company) out.company = row.company;
       if (row.sector) out.sector = row.sector;
+      // The Pro-numbers lock (security review M2): the APK is public and the snapshot is drawn
+      // for free readers, so only the open example keeps its composite and tone, exactly as the
+      // server's free body does. The app strips them again when it reads the asset.
+      const open = row.ticker.toUpperCase() === OPEN_EXAMPLE_TICKER;
       const composite = round(row.composite);
-      if (composite !== null) out.composite = composite;
-      if (row.tone) out.tone = row.tone;
+      if (open && composite !== null) out.composite = composite;
+      if (open && row.tone) out.tone = row.tone;
       if (row.stale === true) out.stale = true;
       if (Number.isInteger(row.age_days)) out.age_days = row.age_days;
       return out;

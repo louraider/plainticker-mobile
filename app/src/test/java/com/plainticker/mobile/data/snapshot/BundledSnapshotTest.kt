@@ -1,7 +1,9 @@
 package com.plainticker.mobile.data.snapshot
 
+import com.plainticker.mobile.data.plainticker.Tone
 import com.plainticker.mobile.repo.AssetSource
 import com.plainticker.mobile.repo.BundledSnapshotRepository
+import com.plainticker.mobile.ui.list.isProLocked
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -65,6 +67,29 @@ class BundledSnapshotTest {
         val tokens = snapshot.assets.map { it.ticker.uppercase() }.toSet()
         val matched = snapshot.rows.count { it.ticker.uppercase() in tokens }
         assertTrue("only $matched of ${snapshot.rows.size} rows have an xStock", matched >= snapshot.rows.size / 2)
+    }
+
+    /**
+     * Security review M2: the asset was captured on 19 Sep, before the Pro-numbers lock, with a
+     * composite and a tone on every row, and a free reader saw them on every cold start and
+     * offline. The APK is public, so the asset itself must not carry them, and the read strips
+     * them again whatever an asset carries.
+     */
+    @Test
+    fun `the snapshot carries Pro numbers for the open example only, in the asset and as read`() = runTest {
+        val snapshot = checkNotNull(BundledSnapshotRepository(fromDisk).listSnapshot())
+        val withNumbers = snapshot.rows.filter { it.composite != null || it.tone != null }.map { it.ticker }
+        assertTrue("the asset carries Pro numbers for $withNumbers", withNumbers.all { it.equals("AAPL", ignoreCase = true) })
+
+        val captured = listOf(
+            SnapshotRow(ticker = "AAPL", composite = 49.67, tone = Tone.DANGER),
+            SnapshotRow(ticker = "NEM", composite = 82.37, tone = Tone.POSITIVE),
+        ).map { it.toSummaryRow() }
+        assertEquals(49.67, captured[0].composite!!, 0.0)
+        assertEquals(Tone.DANGER, captured[0].tone)
+        assertNull("a Pro composite never reaches a free reader from the snapshot", captured[1].composite)
+        assertNull(captured[1].tone)
+        assertTrue(captured[1].isProLocked())
     }
 
     @Test
