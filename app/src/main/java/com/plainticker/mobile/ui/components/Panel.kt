@@ -58,7 +58,7 @@ private fun PanelPreview() {
         Panel(colors = colors) {
             Text(text = "Today 08:00", style = AmberType.meta, color = colors.textTertiary(AmberSurface.RAISED))
             Text(
-                text = "3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days.",
+                text = "3 watched. NVDAx moved from -0.04% to -0.61% against its share's US price. TSLAx reports in 41 days.",
                 style = AmberType.body,
                 color = colors.textPrimary,
             )

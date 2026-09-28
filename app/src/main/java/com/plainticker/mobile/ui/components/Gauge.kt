@@ -90,12 +90,12 @@ import com.plainticker.mobile.ui.theme.AmberType
  * synthetic worst-case premium past anything the tracked catalogue has produced ("-999.99%",
  * 62.314dp at `figureInline`'s 14sp/400 `tnum`, well past the real worst measured, INTCx at
  * -4.13%, 45.458dp) leaves `caption` a 360 − 62.314 − 12 = **285.686dp** budget; the longest real
- * caption, the off-scale sentence ("Token vs NYSE close, past the 4.5% scale", 41 characters), is
+ * caption, the off-scale sentence ("Token vs last US price, past the 4.5% scale", 41 characters), is
  * 268.660dp at `context`'s 14sp/400, a 17.026dp margin on one line. At 1.3x font scale that same
  * caption (349.258dp) no longer fits the 1.3x-scaled budget (267dp), so it wraps to two lines,
  * exactly the graceful behaviour its unbounded `maxLines` exists for rather than a defect.
  *
- * @param referenceLabel what the token is being measured against, e.g. "Token vs NYSE close".
+ * @param referenceLabel what the token is being measured against, e.g. "Token vs last US price".
  * @param tracking the answer from the one rule, built from the Price v3 entry.
  * @param scalePct the premium that reaches the end of the track on each side. The default is the
  *   spread the tracked catalogue actually produced, [TrackingQuality.TRACKED_SPREAD_PCT].
@@ -230,16 +230,16 @@ private fun GaugePreview() {
         Column {
             // Premiums the live catalogue actually produced. The preview drawing only +0.09
             // percent is why a pinned tick reached a signed release without being seen.
-            Gauge("Token vs NYSE close", TrackingQuality.Tracked(0.09, poolUsd = 1_300_000.0))
-            Gauge("Token vs NYSE close", TrackingQuality.Tracked(-0.95, poolUsd = 1_900_000.0))
-            Gauge("Token vs NYSE close", TrackingQuality.Tracked(-2.34, poolUsd = 12_500.0))
+            Gauge("Token vs last US price", TrackingQuality.Tracked(0.09, poolUsd = 1_300_000.0))
+            Gauge("Token vs last US price", TrackingQuality.Tracked(-0.95, poolUsd = 1_900_000.0))
+            Gauge("Token vs last US price", TrackingQuality.Tracked(-2.34, poolUsd = 12_500.0))
             // Past the scale on each side: the tick stands off the track and the caption says so.
-            Gauge("Token vs NYSE close", TrackingQuality.Tracked(-4.10, poolUsd = 11_200.0))
-            Gauge("Token vs NYSE close", TrackingQuality.Tracked(6.80, poolUsd = 10_400.0))
+            Gauge("Token vs last US price", TrackingQuality.Tracked(-4.10, poolUsd = 11_200.0))
+            Gauge("Token vs last US price", TrackingQuality.Tracked(6.80, poolUsd = 10_400.0))
             // Below the floor, and priced with no depth: the gauge draws nothing at all, because
             // the price block above it has already stated the pool.
-            Gauge("Token vs NYSE close", TrackingQuality.Thin(poolUsd = 34.0))
-            Gauge("Token vs NYSE close", TrackingQuality.Untracked)
+            Gauge("Token vs last US price", TrackingQuality.Thin(poolUsd = 34.0))
+            Gauge("Token vs last US price", TrackingQuality.Untracked)
         }
     }
 }

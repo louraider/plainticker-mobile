@@ -23,7 +23,14 @@ data class PriceEntry(
 data class StockData(
     /** Issuer id, e.g. "xstocks". */
     val id: String? = null,
-    /** Reference price of the underlying share in USD. */
+    /**
+     * Reference price of the underlying share in USD: the share's latest US price as xStocks feeds
+     * it to Jupiter, **not** the regular-session close. On Monday 28 Sep 2026, with the NYSE shut
+     * (pre-market), QA of 1.3.20 saw METAx's "NYSE close" read $729.29 and then $730.00 across one
+     * refresh, and at 12:04 UTC the field read 731.47 with an `updatedAt` a minute old. No source this app reads carries the true close (xStocks `price-data` is the
+     * token's own indicative quote, and `/api/v1/{ticker}` sends no price at all), so every surface
+     * names this figure "last US price" while the exchange is shut, never "NYSE close".
+     */
     val price: Double? = null,
     val mcap: Double? = null,
     val updatedAt: String? = null,

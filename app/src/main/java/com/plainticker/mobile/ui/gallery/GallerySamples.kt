@@ -49,9 +49,9 @@ object GallerySamples {
     /** The public TSLAx mint; the gallery needs a leg and this is the one the artboards draw. */
     const val MINT = "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
     const val DIGEST_TIME = "Today 08:00"
-    const val DIGEST = "3 watched. NVDAx moved from -0.04% to -0.61% against the NYSE close. TSLAx reports in 41 days."
+    const val DIGEST = "3 watched. NVDAx moved from -0.04% to -0.61% against its share's US price. TSLAx reports in 41 days."
     const val METHOD = "We classify the company against its sector by a fixed rule. This is not a price forecast or investment advice."
-    const val SOURCES = "Filings from SEC EDGAR XBRL. Prices from Jupiter. Reference from the NYSE close."
+    const val SOURCES = "Filings from SEC EDGAR XBRL. Token prices and the share's last US price from Jupiter."
 
     val tabs = listOf("List", "Portfolio", "Watchlist")
 
@@ -92,29 +92,29 @@ object GallerySamples {
     )
 
     val analyzed = listOf(
-        RowSample("TSLAx", "Tesla, Inc.", "+0.09% vs NYSE close · 2 d old", "0.71", "strong"),
-        RowSample("NVDAx", "NVIDIA Corp.", "-0.04% vs NYSE close · 1 d old", "0.68", "strong"),
-        RowSample("AAPLx", "Apple Inc.", "+0.01% vs NYSE close · 2 d old", "0.61", "fair"),
-        RowSample("MSFTx", "Microsoft Corp.", "+0.03% vs NYSE close · 6 d old", "0.58", "fair"),
-        RowSample("AMZNx", "Amazon.com, Inc.", "-0.02% vs NYSE close · 2 d old", "0.55", "fair"),
-        RowSample("COINx", "Coinbase Global", "+0.08% vs NYSE close · 3 d old", "0.47", "weak"),
+        RowSample("TSLAx", "Tesla, Inc.", "+0.09% vs US price · 2 d old", "0.71", "strong"),
+        RowSample("NVDAx", "NVIDIA Corp.", "-0.04% vs US price · 1 d old", "0.68", "strong"),
+        RowSample("AAPLx", "Apple Inc.", "+0.01% vs US price · 2 d old", "0.61", "fair"),
+        RowSample("MSFTx", "Microsoft Corp.", "+0.03% vs US price · 6 d old", "0.58", "fair"),
+        RowSample("AMZNx", "Amazon.com, Inc.", "-0.02% vs US price · 2 d old", "0.55", "fair"),
+        RowSample("COINx", "Coinbase Global", "+0.08% vs US price · 3 d old", "0.47", "weak"),
     )
 
     val priceOnly = listOf(
-        RowSample("TSMx", "Taiwan Semiconductor", "+0.05% vs NYSE close", "\$264.10"),
-        RowSample("ASMLx", "ASML Holding", "-0.01% vs NYSE close", "\$812.40"),
+        RowSample("TSMx", "Taiwan Semiconductor", "+0.05% vs US price", "\$264.10"),
+        RowSample("ASMLx", "ASML Holding", "-0.01% vs US price", "\$812.40"),
     )
 
     val watched = listOf(
-        RowSample("TSLAx", "Tesla, Inc.", "Reports Oct 22 · +0.09% vs NYSE close"),
-        RowSample("AAPLx", "Apple Inc.", "Reports Oct 30 · +0.01% vs NYSE close"),
-        RowSample("NVDAx", "NVIDIA Corp.", "Reports Nov 19 · -0.04% vs NYSE close"),
+        RowSample("TSLAx", "Tesla, Inc.", "Reports Oct 22 · +0.09% vs US price"),
+        RowSample("AAPLx", "Apple Inc.", "Reports Oct 30 · +0.01% vs US price"),
+        RowSample("NVDAx", "NVIDIA Corp.", "Reports Nov 19 · -0.04% vs US price"),
     )
 
     val holdings = listOf(
-        RowSample("TSLAx", "Tesla, Inc.", "2.01364 TSLAx · +0.09% vs NYSE close", "\$737.33"),
-        RowSample("NVDAx", "NVIDIA Corp.", "2.1 NVDAx · -0.04% vs NYSE close", "\$366.05"),
-        RowSample("AAPLx", "Apple Inc.", "0.8 AAPLx · +0.01% vs NYSE close", "\$185.63"),
+        RowSample("TSLAx", "Tesla, Inc.", "2.01364 TSLAx · +0.09% vs US price", "\$737.33"),
+        RowSample("NVDAx", "NVIDIA Corp.", "2.1 NVDAx · -0.04% vs US price", "\$366.05"),
+        RowSample("AAPLx", "Apple Inc.", "0.8 AAPLx · +0.01% vs US price", "\$185.63"),
     )
 
     // The swap sheet and the receipt are not sampled here any more: the gallery composes the
