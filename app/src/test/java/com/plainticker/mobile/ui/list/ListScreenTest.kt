@@ -170,7 +170,10 @@ class ListScreenTest {
     @Test
     fun `the deep pool chip's slot is held while prices load, so the chip row does not jump`() {
         val row = body("private fun StocksFilterRow(", "private fun groupedRowModifier(")
-        val slot = row.indexOf("if (holdDeepPoolSlot && !showsDeepPoolChip(trackedCount, active)) {")
+        // QA of 1.3.20: the chip was drawn as soon as the first window priced ("Deep pool 6") and
+        // grew a second later ("Deep pool 17"). The slot now holds until the price run settles,
+        // whatever the partial count, unless the reader has already chosen the chip.
+        val slot = row.indexOf("if (holdDeepPoolSlot && active != StocksFilter.Tracked) {")
         assertTrue("the placeholder comes first, in the chip's own slot", slot >= 0 && slot < row.indexOf("AmberChip("))
         assertTrue("SkeletonChip(width = DeepPoolSlotWidth, colors = colors)" in row)
         assertTrue("holdDeepPoolSlot = pricesPending" in source)

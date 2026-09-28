@@ -505,7 +505,11 @@ private fun StocksFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (holdDeepPoolSlot && !showsDeepPoolChip(trackedCount, active)) {
+        // The count is not final until the first price run has settled: the visible window lands
+        // first, and a chip drawn then read "Deep pool 6" and a second later "Deep pool 17" (QA of
+        // 1.3.20). The slot's outline stands until the run is done; a chip the reader has already
+        // chosen stays, so a selection never vanishes under a finger.
+        if (holdDeepPoolSlot && active != StocksFilter.Tracked) {
             SkeletonChip(width = DeepPoolSlotWidth, colors = colors)
         } else if (showsDeepPoolChip(trackedCount, active)) {
             AmberChip(
