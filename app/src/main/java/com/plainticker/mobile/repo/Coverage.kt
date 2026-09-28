@@ -20,12 +20,22 @@ import com.plainticker.mobile.data.plainticker.SummaryRow
  * covered here by an old list. A row `/summary` does send is always covered, whichever list is
  * in use. [BUNDLED] is the site's whole list that day, with the company and GICS sector each page
  * shows, so a covered company without a row still lands in its own sector.
+ *
+ * **BABA is left out of both lists** (QA of 1.3.20). The site covers Alibaba, but xStocks issues
+ * no BABAx on any network: `GET /public/assets` (1,124 assets, every network) and the Solana
+ * atomic-swap list (1,090) carry no Alibaba entry on 28 Sep 2026, and `/public/assets/BABAx`
+ * answers 500. This app lists xStocks, so there is no row to draw, no page to open and nothing to
+ * vote for; the join already drops a covered ticker without a token, and these lists no longer
+ * name one. Should xStocks list it, the server's own `covered` list brings it back unchanged.
  */
 object Coverage {
 
     data class CoveredCompany(val ticker: String, val company: String, val sector: String)
 
-    /** plainticker.com's covered companies on 28 Sep 2026 (web `SERVED_TICKERS`, 57). */
+    /**
+     * plainticker.com's covered companies on 28 Sep 2026 (web `SERVED_TICKERS`, 57), less BABA,
+     * which has no xStock (see this object's doc comment): 56.
+     */
     val BUNDLED: List<CoveredCompany> = listOf(
         CoveredCompany("AAPL", "Apple Inc.", "Information Technology"),
         CoveredCompany("MSFT", "Microsoft Corporation", "Information Technology"),
@@ -76,7 +86,6 @@ object Coverage {
         CoveredCompany("T", "AT&T Inc.", "Communication Services"),
         CoveredCompany("VZ", "Verizon Communications Inc.", "Communication Services"),
         CoveredCompany("XOM", "Exxon Mobil Corporation", "Energy"),
-        CoveredCompany("BABA", "Alibaba Group Holding Limited", "Consumer Discretionary"),
         CoveredCompany("NVS", "Novartis AG", "Health Care"),
         CoveredCompany("TSM", "Taiwan Semiconductor Manufacturing Company Limited", "Information Technology"),
         CoveredCompany("ASML", "ASML Holding NV", "Information Technology"),
@@ -86,8 +95,8 @@ object Coverage {
         CoveredCompany("JEF", "Jefferies Financial Group Inc.", "Financials"),
     )
 
-    /** The covered companies `/summary` sent no row for on 28 Sep 2026. */
-    val WITHOUT_ROW: List<String> = listOf("ABBV", "BABA", "CMCSA", "MA", "NKE", "V")
+    /** The covered companies `/summary` sent no row for on 28 Sep 2026, less BABA (no xStock). */
+    val WITHOUT_ROW: List<String> = listOf("ABBV", "CMCSA", "MA", "NKE", "V")
 
     private val bundledByTicker: Map<String, CoveredCompany> = BUNDLED.associateBy { it.ticker }
 
