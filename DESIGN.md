@@ -40,7 +40,7 @@ nothing about the redesign touches it.
 
 A tracking figure is drawn only where the pool behind it can carry one. Measured live on
 2026-09-12 (`docs/data-map.md`): of the 157 analyzed xStocks on the list Jupiter priced 55; the 13
-pools at or above $100k all tracked the NYSE close within 0.8 percent; the 6 between $10k and
+pools at or above $100k all tracked the share's US price within 0.8 percent; the 6 between $10k and
 $100k deviated plausibly; below $10k the quoted premium was arithmetic off a dead pool. That first
 pass set the floor at $10,000. Re-measured the next day, 2026-09-13, at four candidate floors
 (`docs/data-map.md`, "Decided 2026-09-13: the floor drops to $4,000"): $10,000 kept a premium on 19
@@ -55,12 +55,16 @@ gauge's own scale, `TrackingQuality.TRACKED_SPREAD_PCT`, from 2.5 to **4.5** per
 22 tracked rows (INTCx, HOODx, XOMx) had already run past the narrower scale one day after it was
 set.
 
-Above the floor nothing changes: the row keeps the signed premium against the NYSE close, Detail
-draws the gauge. Below it neither is drawn and the surface states the pool instead, in one short
-sentence a person can act on: "Pool holds $34, too thin to track" on the row's single meta line,
-"Pool holds $34, too thin to track the NYSE close" on Detail. When Jupiter prices a token without
-reporting any depth, the honest reading is unknown rather than deep, so the premium is withheld
-there too and the line reads "Pool depth not reported." Money in these sentences is
+Above the floor nothing changes: the row keeps the signed premium against the share's last US
+price ("+0.4% vs US price"), Detail draws the gauge ("Token vs last US price", or "Token vs NYSE
+price" during the session). The reference is Jupiter Price v3's `stockData.price`, the share's
+latest US trade, pre-market and after-hours included. It is not the NYSE close, which no source
+the app reads carries, so since 1.3.21 no surface calls it the close. Below the floor neither is
+drawn and the surface states the pool instead, in one short sentence a person can act on: "Depth
+$34, too thin" on the row's single meta line, "Jupiter reports $34 behind this price. That is too
+little for the token to follow its share, so the premium is left out." on Detail. When Jupiter
+prices a token without reporting any depth, the honest reading is unknown rather than deep, so the
+premium is withheld there too and the row reads "Depth not reported". Money in these sentences is
 `Fmt.compactMoney`.
 
 This is disclosure, not curation. Nothing is filtered out, no section is added and the sort is
@@ -591,7 +595,7 @@ banner). One `LazyColumn` on `surfaceGround`, 16dp side inset, 8dp above each se
    holidays and early closes) answers until a one-asset refresh lands. Stocks' hours banner reads
    the same clock.
 2. **Watched**: `AmberSectionHead` (count as meta, the figure's meaning as the lede, said once:
-   against the share price while trading, against the last close otherwise), then the reader's
+   against the share price while trading, against the share's last US price otherwise), then the reader's
    rows in `AmberTickerRowGroup`, one figure each. The figure comes from Today's one price read,
    so no ticker is ever priced twice on the screen. A pool under the liquidity floor, or one with
    no depth reported, states itself beside the report date instead of a figure (1.1). No Unwatch
