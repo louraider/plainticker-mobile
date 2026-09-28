@@ -164,7 +164,7 @@ class TodayScreenTest {
     fun `next up is undrawn only with no round and no leader, and names the round in the reader's time`() {
         val fn = body("private fun TodayNextUpBlock(", "private fun TodayHoursSheet(")
         assertTrue("if (leader == null && round == null) return" in fn)
-        assertTrue("nextUpLede(round, zone)" in fn)
+        assertTrue("nextUpLede(round, zone, state.nowMillis)" in fn)
         // An open round nobody voted in still draws (judges' round 2), with the way to Vote.
         val empty = fn.substringAfter("} else if (round != null) {")
         assertTrue("the empty-round sentence", "nextUpEmpty(round)" in empty)

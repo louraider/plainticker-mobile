@@ -266,11 +266,18 @@ class VoteTabModelTest {
     @Test
     fun `the round closes in the reader's own zone and words`() {
         val round = VoteRound(id = 3, opensAt = "2026-09-21T00:00:00.000Z", closesAt = "2026-09-28T00:00:00.000Z")
-        val berlin = roundClosesLocal(round, java.time.ZoneId.of("Europe/Berlin"))!!
+        val weekBefore = java.time.Instant.parse("2026-09-21T06:00:00Z").toEpochMilli()
+        val berlin = roundClosesLocal(round, java.time.ZoneId.of("Europe/Berlin"), weekBefore)!!
         assertEquals("Closes Monday 28 Sep at 02:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(berlin))
-        val newYork = roundClosesLocal(round, java.time.ZoneId.of("America/New_York"))!!
+        val newYork = roundClosesLocal(round, java.time.ZoneId.of("America/New_York"), weekBefore)!!
         assertEquals("Closes Sunday 27 Sep at 20:00 your time", com.plainticker.mobile.ui.ShippedCopy.render(newYork))
-        assertEquals(null, roundClosesLocal(round.copy(closesAt = "not-a-date"), java.time.ZoneOffset.UTC))
+        assertEquals(null, roundClosesLocal(round.copy(closesAt = "not-a-date"), java.time.ZoneOffset.UTC, weekBefore))
+        // Inside the last day the weekday is enough: the same rule Today's lede keeps.
+        val lastDay = java.time.Instant.parse("2026-09-27T12:00:00Z").toEpochMilli()
+        assertEquals(
+            "Closes Monday at 02:00 your time",
+            com.plainticker.mobile.ui.ShippedCopy.render(roundClosesLocal(round, java.time.ZoneId.of("Europe/Berlin"), lastDay)!!),
+        )
     }
 
     /**

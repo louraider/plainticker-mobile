@@ -179,20 +179,36 @@ val TabStake.sentence: Copy
     }
 
 /**
- * When the round closes, in the reader's own zone and words ("Closes Monday 29 Sep at 02:00 your
- * time"), where the header used to print a UTC stamp nobody converts in their head. Null when the
- * server stamped no close, or one that does not parse.
+ * When a round closes, in the reader's own zone: the weekday, the clock, and the day of the month
+ * whenever the close is more than a day away. The one rule Today and the Vote tab both print by
+ * (final QA of 1.3.19: on Monday 28 Sep Today said "Round closes Monday at 03:00" for a round
+ * closing Monday 5 Oct). Null when the server stamped no close, or one that does not parse.
  */
-fun roundClosesLocal(round: VoteRound, zone: ZoneId): Copy? {
+data class RoundClose(val weekday: String, val dayMonth: String?, val clock: String)
+
+fun roundClose(round: VoteRound, zone: ZoneId, nowMillis: Long): RoundClose? {
     val closes = round.closesAtInstant() ?: return null
     val millis = closes.toEpochMilli()
-    val day = closes.atZone(zone).toLocalDate()
-    return words(
-        R.string.vote_tab_round_closes_local,
-        Fmt.weekday(millis, zone),
-        Fmt.dayMonth(day),
-        Fmt.clock(millis, zone),
+    val near = millis - nowMillis <= DAY_MILLIS
+    return RoundClose(
+        weekday = Fmt.weekday(millis, zone),
+        dayMonth = if (near) null else Fmt.dayMonth(closes.atZone(zone).toLocalDate()),
+        clock = Fmt.clock(millis, zone),
     )
+}
+
+private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+
+/**
+ * When the round closes, in the reader's own zone and words ("Closes Monday 29 Sep at 02:00 your
+ * time"), where the header used to print a UTC stamp nobody converts in their head; inside the
+ * last day, "Closes Monday at 02:00 your time" ([roundClose]). Null when the server stamped no
+ * close, or one that does not parse.
+ */
+fun roundClosesLocal(round: VoteRound, zone: ZoneId, nowMillis: Long): Copy? {
+    val close = roundClose(round, zone, nowMillis) ?: return null
+    val day = close.dayMonth ?: return words(R.string.vote_tab_round_closes_local_near, close.weekday, close.clock)
+    return words(R.string.vote_tab_round_closes_local, close.weekday, day, close.clock)
 }
 
 /**

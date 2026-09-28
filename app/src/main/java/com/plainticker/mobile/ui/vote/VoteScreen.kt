@@ -429,7 +429,10 @@ private fun Explainer() {
  */
 @Composable
 private fun RoundHeader(round: VoteRound, zone: ZoneId, colors: AmberColors) {
-    val closesText = roundClosesLocal(round, zone)?.text()
+    // Read once per round: the close is days away, so whether it is within the last day does not
+    // need a clock ticking under the header.
+    val now = remember(round) { System.currentTimeMillis() }
+    val closesText = roundClosesLocal(round, zone, now)?.text()
     // "Round 2" as one title (device QA of 1.3.16): the id used to go to the meta slot, which
     // drew it as a small grey figure at the far right of the card, styled like a count of rows.
     AmberSectionHead(

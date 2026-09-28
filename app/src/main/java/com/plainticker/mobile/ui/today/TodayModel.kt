@@ -17,6 +17,7 @@ import com.plainticker.mobile.ui.words
 import com.plainticker.mobile.watchlist.DigestRecord
 import com.plainticker.mobile.watchlist.WatchedTicker
 import com.plainticker.mobile.ui.vote.hasVoted
+import com.plainticker.mobile.ui.vote.roundClose
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.DayOfWeek
@@ -357,14 +358,16 @@ fun reportsAllCopy(): Copy = words(R.string.today_reports_all)
 // ---- Next up ----------------------------------------------------------------------------------
 
 /**
- * "Chosen by staked SKR. Round closes Monday at 03:00 your time.", the same round
- * com.plainticker.mobile.ui.vote.VoteScreen names, in the reader's own time rather than UTC.
+ * "Chosen by staked SKR. Round 3 closes Monday 5 Oct at 03:00 your time.", the same round
+ * com.plainticker.mobile.ui.vote.VoteScreen names, in the reader's own time rather than UTC, and
+ * by the same rule ([roundClose]): the date is left out only inside the last day.
  */
-fun nextUpLede(round: VoteRound?, zone: ZoneId): Copy? {
+fun nextUpLede(round: VoteRound?, zone: ZoneId, nowMillis: Long): Copy? {
     if (round == null) return null
-    val closesAt = round.closesAtInstant() ?: return null
-    val millis = closesAt.toEpochMilli()
-    return words(R.string.today_next_up_lede, Fmt.weekday(millis, zone), Fmt.clock(millis, zone))
+    val close = roundClose(round, zone, nowMillis) ?: return null
+    val id = round.id.toString()
+    val day = close.dayMonth ?: return words(R.string.today_next_up_lede, id, close.weekday, close.clock)
+    return words(R.string.today_next_up_lede_dated, id, close.weekday, day, close.clock)
 }
 
 /**
