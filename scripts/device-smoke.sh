@@ -849,10 +849,10 @@ assert_labels deep-top
 assert_geometry deep-top
 screen_has deep-top "^$DEEP_X\$" || fail "the ticker $DEEP_X in the hero" "$(screen_text deep-top | head -4 | tr '\n' ';')"
 screen_has deep-top '^Token price$' || fail "the price row" "no 'Token price' label"
-screen_has deep-top '^NYSE close$|^NYSE price$' || fail "the NYSE reference label" "neither 'NYSE close' nor 'NYSE price'"
-screen_has deep-top 'vs NYSE (close|price): (plus|minus) [0-9]' \
-  || fail "a gauge reading the token against the NYSE, for a pool above the \$10,000 floor" \
-          "$(screen_text deep-top | grep -i 'vs NYSE' | tr '\n' ';' || echo 'no gauge reading at all')"
+screen_has deep-top '^Last US price$|^US price$' || fail "the US reference label" "neither 'Last US price' nor 'US price'"
+screen_has deep-top 'vs (last )?US price: (plus|minus) [0-9]' \
+  || fail "a gauge reading the token against the share's US price, for a pool above the \$10,000 floor" \
+          "$(screen_text deep-top | grep -i 'US price' | tr '\n' ';' || echo 'no gauge reading at all')"
 assert_trust_rows deep-top
 assert_motion breathing
 

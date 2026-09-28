@@ -190,12 +190,15 @@
          reading off the pool rather than a price of the company (DESIGN.md section 1.1). -->
     <string name="detail_pool_quote">Pool quote</string>
     <string name="detail_nyse_close">Last US price</string>
-    <string name="detail_nyse_price">NYSE price</string>
+    <!-- The reference during the session. "US price", not "NYSE price" (QA of 1.3.22): the Stocks
+         row says "vs US price" in both states, and Jupiter's stockData is the share's latest US
+         trade, not an NYSE print (AAPL lists on Nasdaq). Shut, it is the last US price above. -->
+    <string name="detail_nyse_price">US price</string>
     <string name="detail_gauge_caption">%1$s, scale %2$s</string>
     <!-- The premium runs past the end of the stated scale, so the tick is a cap and not a value. -->
     <string name="detail_gauge_caption_off">%1$s, past the %2$s scale</string>
     <string name="detail_gauge_reference_close">Token vs last US price</string>
-    <string name="detail_gauge_reference_live">Token vs NYSE price</string>
+    <string name="detail_gauge_reference_live">Token vs US price</string>
     <string name="detail_gauge_thin">Jupiter reports %1$s behind this price. That is too little for the token to follow its share, so the premium is left out.</string>
     <string name="detail_gauge_pool_unknown">Jupiter priced this token but did not report how much stands behind the price, so whether it follows its share cannot be checked.</string>
     <string name="detail_live_label">Live from the mint</string>
@@ -293,7 +296,8 @@
     <string name="signal_asset_turnover_improving">Asset turnover improving</string>
     <string name="detail_heading_method">Method</string>
     <string name="detail_method_body">We classify the company against its sector by a fixed rule. This is not a price forecast or investment advice.</string>
-    <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Token prices and the share\'s last US price from Jupiter.</string>
+    <!-- "latest", not "last" (QA of 1.3.22): true whether the NYSE is open or shut. -->
+    <string name="detail_method_sources">Filings from SEC EDGAR XBRL. Token prices and the share\'s latest US price from Jupiter.</string>
     <string name="detail_swap_button">Swap %1$s to %2$s</string>
     <string name="detail_swap_out_button">Swap %1$s to USDC</string>
     <string name="detail_cost_line">Est. all-in cost %1$s · depth %2$s</string>

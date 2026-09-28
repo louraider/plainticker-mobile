@@ -56,8 +56,8 @@ gauge's own scale, `TrackingQuality.TRACKED_SPREAD_PCT`, from 2.5 to **4.5** per
 set.
 
 Above the floor nothing changes: the row keeps the signed premium against the share's last US
-price ("+0.4% vs US price"), Detail draws the gauge ("Token vs last US price", or "Token vs NYSE
-price" during the session). The reference is Jupiter Price v3's `stockData.price`, the share's
+price ("+0.4% vs US price"), Detail draws the gauge ("Token vs last US price", or "Token vs US
+price" during the session, the row's own words since 1.3.23). The reference is Jupiter Price v3's `stockData.price`, the share's
 latest US trade, pre-market and after-hours included. It is not the NYSE close, which no source
 the app reads carries, so since 1.3.21 no surface calls it the close. Below the floor neither is
 drawn and the surface states the pool instead, in one short sentence a person can act on: "Depth
