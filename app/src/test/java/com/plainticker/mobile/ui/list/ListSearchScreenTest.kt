@@ -74,8 +74,14 @@ class ListSearchScreenTest {
 
         // Both sets, drawn with their own existing row (composite for an analyzed match, price
         // plus the vote action for an uncovered one) rather than a shape of its own.
-        assertTrue("analyzed matches are drawn", "itemsIndexed(state.analyzed" in searching)
-        assertTrue("uncovered matches are drawn", "itemsIndexed(state.withoutAnalysis" in searching)
+        // QA of 1.3.22: one order across both sets, ranked by [searchResults], so an exact ticker
+        // leads whichever set it is in.
+        assertTrue(
+            "analyzed and uncovered matches are drawn as one ranked list",
+            "searchResults(state.analyzed, state.withoutAnalysis, state.query)" in searching,
+        )
+        assertTrue("the ranked list is what is drawn", "itemsIndexed(results" in searching)
+        assertTrue("an analyzed match keeps its row", "AnalyzedRow(" in searching)
         assertTrue("an uncovered match keeps its row, price and vote action included", "PriceOnlyRow(" in searching)
     }
 
@@ -99,7 +105,7 @@ class ListSearchScreenTest {
     @Test
     fun `a search result stands clear of the field's underline`() {
         val gap = listScreen.indexOf("Spacer(Modifier.height(SearchResultsGap))")
-        val flat = listScreen.indexOf("isLast = index == state.analyzed.lastIndex && state.withoutAnalysis.isEmpty()")
+        val flat = listScreen.indexOf("itemsIndexed(results")
         assertTrue("the gap leads the flat search list", gap in 0 until flat)
     }
 

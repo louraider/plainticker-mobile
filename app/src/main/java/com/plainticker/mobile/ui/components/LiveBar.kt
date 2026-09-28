@@ -23,8 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -116,7 +118,7 @@ fun LiveBar(
         // and the 14dp gap, so label (unbounded lines) and meta (maxLines = 1) are actually
         // constrained rather than free to demand more width than the row has, the shape of the
         // clipping trap this file's own doc comment measures against.
-        Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(LiveBarLineGap)) {
             Text(text = label, style = AmberType.context, color = colors.actionText)
             Text(
                 text = meta,
@@ -128,6 +130,43 @@ fun LiveBar(
         }
     }
 }
+
+/**
+ * What stands in for a [LiveBar] until its first read lands: the same row, the same side padding
+ * and the same two lines, each a bar centred in the line of text it stands in for, so the loaded
+ * bar replaces it in place (QA of 1.3.22: the 20dp bar that stood here before was about 48 px
+ * shorter than "Live from the mint" over its slot line, and "Backing and controls" dropped when
+ * the read landed). The lines are [AmberType.context] and [AmberType.meta]'s own line heights,
+ * read through the density, so the two stay equal at every font scale.
+ */
+@Composable
+fun LiveBarSkeleton(
+    modifier: Modifier = Modifier,
+    colors: AmberColors = defaultAmberColors(),
+) {
+    val density = LocalDensity.current
+    val labelLine = with(density) { AmberType.context.lineHeight.toDp() }
+    val metaLine = with(density) { AmberType.meta.lineHeight.toDp() }
+    // Starts where the bar's text does: the row's 20dp side, the 2dp bar and the 14dp gap after it.
+    Column(
+        modifier = modifier.fillMaxWidth().padding(start = 36.dp, end = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(LiveBarLineGap),
+    ) {
+        Box(Modifier.height(labelLine), contentAlignment = Alignment.CenterStart) {
+            SkeletonBar(width = LiveSkeletonLabelWidth, height = LiveSkeletonLabelBar, colors = colors)
+        }
+        Box(Modifier.height(metaLine), contentAlignment = Alignment.CenterStart) {
+            SkeletonBar(width = LiveSkeletonMetaWidth, height = LiveSkeletonMetaBar, colors = colors)
+        }
+    }
+}
+
+/** Between [LiveBar]'s label and its meta line, and between the two bars of [LiveBarSkeleton]. */
+internal val LiveBarLineGap = 2.dp
+private val LiveSkeletonLabelWidth = 140.dp
+private val LiveSkeletonLabelBar = 12.dp
+private val LiveSkeletonMetaWidth = 180.dp
+private val LiveSkeletonMetaBar = 10.dp
 
 @InstrumentPreviews
 @Composable

@@ -541,6 +541,147 @@ class ListViewModelTest {
         }
     }
 
+    // ---- QA of 1.3.22: a served composite the server gives no class ---------------------------
+
+    private val jefMint = "JEFxMint".padEnd(44, '1')
+    private val gsMint = "GSxMint".padEnd(44, '1')
+
+    /** The catalog the financials tests join against: Apple beside JEFx and GSx. */
+    private fun financialsCatalog() = listOf(
+        openAsset("AAPLx", "AAPL", aaplMint),
+        openAsset("JEFx", "JEF", jefMint),
+        openAsset("GSx", "GS", gsMint),
+    )
+
+    /**
+     * The rows `/summary` sends a Pro reader on 28 Sep 2026: AAPL classified, and JEF and GS with
+     * their composites (32 and 60, what the rows drew) but no tone and no headline, because the
+     * decision gives banks and brokers no class yet (`sector-model-pending`), the same decision
+     * that makes Detail say "Not classified".
+     */
+    private fun proFinancialsBody() = SummaryResponse(
+        schema = "v1.5",
+        generatedAt = "2026-09-28T15:27:09.075Z",
+        rows = listOf(
+            SummaryRow(ticker = "AAPL", company = "Apple Inc.", headline = "h", tone = Tone.DANGER, composite = 45.64, sector = "Information Technology"),
+            SummaryRow(ticker = "GS", company = "The Goldman Sachs Group, Inc.", headline = null, tone = null, composite = 60.2, sector = "Financials"),
+            SummaryRow(ticker = "JEF", company = "Jefferies Financial Group Inc.", headline = null, tone = null, composite = 32.4, sector = "Financials"),
+        ),
+        covered = listOf("AAPL", "GS", "JEF"),
+    )
+
+    @Test
+    fun `JEF and GS shaped rows with a composite and no class read Not classified, never a score`() = runTest {
+        val body = proFinancialsBody()
+        assertFalse("AAPL is not the only composite: nothing was withheld", bodyWithholdsComposites(body.rows))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(body)),
+            catalog = FakeCatalogRepository(Result.success(financialsCatalog())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size == 3 }
+            for (ticker in listOf("JEF", "GS")) {
+                val row = state.analyzed.single { it.ticker == ticker }
+                assertTrue("$ticker says what Detail says", row.unclassified)
+                assertFalse("$ticker has nothing to unlock", row.locked)
+                assertNull("$ticker carries no score any surface could print", row.composite)
+                assertNull(row.state)
+                assertEquals("Financials", row.sector)
+            }
+            val aapl = state.analyzed.single { it.ticker == "AAPL" }
+            assertFalse(aapl.unclassified || aapl.locked)
+            assertEquals(45.64, aapl.composite!!, 1e-9)
+            assertEquals("the classified row leads, the unclassified ones follow", "AAPL", state.analyzed.first().ticker)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the same financials in the free body keep the 1_3_22 Pro lock`() = runTest {
+        val body = proFinancialsBody().let { pro ->
+            pro.copy(rows = pro.rows.map { if (it.ticker == "AAPL") it else it.locked() })
+        }
+        assertTrue(bodyWithholdsComposites(body.rows))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(body)),
+            catalog = FakeCatalogRepository(Result.success(financialsCatalog())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size == 3 }
+            for (ticker in listOf("JEF", "GS")) {
+                val row = state.analyzed.single { it.ticker == ticker }
+                assertTrue("$ticker: a withheld body can only be read as the lock", row.locked)
+                assertFalse(row.unclassified)
+            }
+            assertFalse(state.analyzed.single { it.ticker == "AAPL" }.locked)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `classUnavailable reads the null tone only where the lock cannot have caused it`() {
+        val jef = SummaryRow(ticker = "JEF", composite = 32.4, tone = null, headline = null)
+        assertTrue("a whole body: no tone is no class", jef.classUnavailable(withheld = false))
+        assertFalse("a withheld body: no tone is the lock", jef.classUnavailable(withheld = true))
+        val aapl = SummaryRow(ticker = "AAPL", composite = 45.6, tone = null, headline = null)
+        assertTrue("the open example is never withheld, so its null tone is no class", aapl.classUnavailable(withheld = true))
+        assertFalse(aapl.copy(tone = Tone.DANGER).classUnavailable(withheld = true))
+        assertFalse(jef.copy(tone = Tone.CAUTION).classUnavailable(withheld = false))
+    }
+
+    // ---- QA of 1.3.22: search ranks the exact ticker first ---------------------------------------
+
+    @Test
+    fun `searching MA or V lists MAx or Vx first, then prefixes, then names`() = runTest {
+        val tickers = listOf(
+            Triple("TSM", "Taiwan Semiconductor Manufacturing Company Limited", 66.0),
+            Triple("GS", "The Goldman Sachs Group, Inc.", 60.0),
+            Triple("IBM", "International Business Machines Corporation", 57.0),
+            Triple("AMZN", "Amazon.com, Inc.", 55.0),
+            Triple("NVDA", "NVIDIA Corporation", 77.0),
+            Triple("MA", "Mastercard Incorporated", 50.0),
+            Triple("V", "Visa Inc.", 40.0),
+        )
+        val rows = tickers.map { (ticker, company, composite) ->
+            SummaryRow(ticker = ticker, company = company, headline = "h", tone = Tone.CAUTION, composite = composite)
+        }
+        val assets = tickers.map { (ticker, _, _) -> openAsset("${ticker}x", ticker, "${ticker}xMint".padEnd(44, '1')) } +
+            openAsset("MARAx", "MARA", "MARAxMint".padEnd(44, '1')) +
+            openAsset("VZx", "VZ", "VZxMint".padEnd(44, '1'))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(
+                Result.success(SummaryResponse("v1.5", "2026-09-28T00:00:00.000Z", rows, covered = tickers.map { it.first })),
+            ),
+            catalog = FakeCatalogRepository(Result.success(assets)),
+        )
+
+        vm.state.test {
+            awaitUntil { !it.refreshing && it.analyzed.size == tickers.size }
+
+            vm.search("MA")
+            val ma = awaitUntil { it.query == "MA" }
+            assertEquals("the exact ticker first, then the names in list order", listOf("MA", "TSM", "GS", "IBM", "AMZN"), ma.analyzed.map { it.ticker })
+            assertEquals(listOf("MARA"), ma.withoutAnalysis.map { it.ticker })
+            assertEquals(
+                "one flat order: MAx, the MARAx prefix, then the names",
+                listOf("MA", "MARA", "TSM", "GS", "IBM", "AMZN"),
+                searchResults(ma.analyzed, ma.withoutAnalysis, ma.query).map { it.ticker },
+            )
+
+            vm.search("v")
+            val v = awaitUntil { it.query == "v" }
+            assertEquals("V", v.analyzed.first().ticker)
+            assertEquals(
+                "Vx, then VZx by prefix, then NVDAx and Visa's name",
+                listOf("V", "VZ", "NVDA"),
+                searchResults(v.analyzed, v.withoutAnalysis, v.query).map { it.ticker },
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `the server's covered list, once sent, is the covered set`() = runTest {
         val withCovered = summary().copy(covered = listOf("AAPL", "JPM", "TSLA"))

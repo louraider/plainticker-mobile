@@ -337,33 +337,30 @@ internal fun ListContent(
                 // Clear of the search field's underline (device QA of 1.3.18: the first result sat
                 // on it when no chip row stood between them).
                 item(key = "search-gap") { Spacer(Modifier.height(SearchResultsGap)) }
-                itemsIndexed(state.analyzed, key = { _, row -> "a:" + row.ticker }) { index, row ->
-                    AnalyzedRow(
-                        row = row,
-                        pricesPending = pricesPending,
-                        modifier = groupedRowModifier(
-                            colors,
-                            isFirst = index == 0,
-                            isLast = index == state.analyzed.lastIndex && state.withoutAnalysis.isEmpty(),
-                        ),
-                        colors = colors,
-                        onOpenDetail = onOpenDetail,
-                    )
-                }
-                itemsIndexed(state.withoutAnalysis, key = { _, row -> "p:" + row.ticker }) { index, row ->
-                    PriceOnlyRow(
-                        row = row,
-                        pricesPending = pricesPending,
-                        modifier = groupedRowModifier(
-                            colors,
-                            isFirst = index == 0 && state.analyzed.isEmpty(),
-                            isLast = index == state.withoutAnalysis.lastIndex,
-                        ),
-                        colors = colors,
-                        onOpenDetail = onOpenDetail,
-                        onVote = onVote,
-                        voted = votedTickers.hasVoted(row.ticker),
-                    )
+                // One order across both sets, the exact ticker first (QA of 1.3.22: "MA" drew four
+                // companies whose names contain "ma" above MAx), see [searchResults].
+                val results = searchResults(state.analyzed, state.withoutAnalysis, state.query)
+                itemsIndexed(results, key = { _, row -> (if (row.analyzed) "a:" else "p:") + row.ticker }) { index, row ->
+                    val grouped = groupedRowModifier(colors, isFirst = index == 0, isLast = index == results.lastIndex)
+                    if (row.analyzed) {
+                        AnalyzedRow(
+                            row = row,
+                            pricesPending = pricesPending,
+                            modifier = grouped,
+                            colors = colors,
+                            onOpenDetail = onOpenDetail,
+                        )
+                    } else {
+                        PriceOnlyRow(
+                            row = row,
+                            pricesPending = pricesPending,
+                            modifier = grouped,
+                            colors = colors,
+                            onOpenDetail = onOpenDetail,
+                            onVote = onVote,
+                            voted = votedTickers.hasVoted(row.ticker),
+                        )
+                    }
                 }
             }
         }

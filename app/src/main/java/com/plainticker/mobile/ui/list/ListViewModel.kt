@@ -102,7 +102,10 @@ data class ListRow(
      * ABBVx, CMCSAx, MAx, NKEx and Vx, `class_state` "unavailable", thin cohort). There is no score
      * to show and none to lock, so the row says so in neutral words instead of "Pro", which it drew
      * even for a Pro reader. Also true for a served row with no composite in a body that withheld
-     * nothing ([bodyWithholdsComposites]; QA of 1.3.21, JEFx). Never true together with [locked].
+     * nothing ([bodyWithholdsComposites]; QA of 1.3.21, JEFx), and for a served row the server
+     * gives no class even though it still sends the composite ([classUnavailable]; QA of 1.3.22,
+     * JEFx "32 of 100" and GSx "60 of 100" against Detail's "Not classified"), whose [composite]
+     * is then dropped so no surface can print it. Never true together with [locked].
      */
     val unclassified: Boolean = false,
     /**
@@ -1001,14 +1004,13 @@ class ListViewModel(
 
     // ---- Search -------------------------------------------------------------------------
 
+    /** The rows [query] finds, best match first (see [searchTier]); the list order within a tier. */
     private fun List<ListRow>.matching(query: String): List<ListRow> {
         val q = query.trim()
         if (q.isEmpty()) return this
-        return filter { row ->
-            row.ticker.contains(q, ignoreCase = true) ||
-                row.symbol?.contains(q, ignoreCase = true) == true ||
-                row.company?.contains(q, ignoreCase = true) == true
-        }
+        return mapNotNull { row -> searchTier(q, row.ticker, row.symbol, row.company)?.let { row to it } }
+            .sortedBy { it.second }
+            .map { it.first }
     }
 
     // ---- Mapping ------------------------------------------------------------------------
@@ -1020,27 +1022,34 @@ class ListViewModel(
         asFraction: Boolean,
         bare: Boolean = false,
         withheld: Boolean = true,
-    ) = ListRow(
-        ticker = ticker,
-        symbol = asset?.symbol,
-        mint = asset?.solanaMint,
-        company = company ?: asset?.name,
-        composite = percentile(composite, asFraction),
-        state = tone.toRowState(),
-        stale = stale,
-        ageDays = ageDays,
-        priceUsd = null,
-        referencePriceUsd = null,
-        poolUsd = null,
-        analyzed = true,
-        sector = sector,
-        // A bare row carries no composite because the company has no row on /summary, not because
-        // the Pro lock withheld one: there is nothing to unlock (QA of 1.3.20). Nor does a row of a
-        // body that withholds nothing (QA of 1.3.21: JEFx drew "Pro" for a Pro reader, its
-        // composite null because the method gives it no class): see [bodyWithholdsComposites].
-        locked = !bare && withheld && isProLocked(),
-        unclassified = composite == null && (bare || !withheld || !isProLocked()),
-    )
+    ): ListRow {
+        // QA of 1.3.22: JEFx drew "32 of 100" and GSx "60 of 100" while Detail said "Not
+        // classified". The body that withholds nothing still carries the composite of a company
+        // the method gives no class; its null tone is the class_state "unavailable" (see
+        // [classUnavailable]). Such a row says what Detail says, never a score.
+        val noClass = !bare && classUnavailable(withheld)
+        return ListRow(
+            ticker = ticker,
+            symbol = asset?.symbol,
+            mint = asset?.solanaMint,
+            company = company ?: asset?.name,
+            composite = if (noClass) null else percentile(composite, asFraction),
+            state = tone.toRowState(),
+            stale = stale,
+            ageDays = ageDays,
+            priceUsd = null,
+            referencePriceUsd = null,
+            poolUsd = null,
+            analyzed = true,
+            sector = sector,
+            // A bare row carries no composite because the company has no row on /summary, not because
+            // the Pro lock withheld one: there is nothing to unlock (QA of 1.3.20). Nor does a row of a
+            // body that withholds nothing (QA of 1.3.21: JEFx drew "Pro" for a Pro reader, its
+            // composite null because the method gives it no class): see [bodyWithholdsComposites].
+            locked = !bare && withheld && isProLocked(),
+            unclassified = noClass || composite == null && (bare || !withheld || !isProLocked()),
+        )
+    }
 
     private fun XStockAsset.toPriceOnlyRow() = ListRow(
         ticker = underlyingTicker,
@@ -1124,6 +1133,20 @@ internal const val OPEN_EXAMPLE_TICKER = "AAPL"
  */
 internal fun SummaryRow.isProLocked(): Boolean =
     composite == null && (tone == null || headline == null) && !ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true)
+
+/**
+ * True when the server gives this row no class (`verdict.class_state` "unavailable" on Detail, for
+ * any reason: `sector-model-pending`, `thin-cohort` or `insufficient-data`). `/summary` carries no
+ * class_state of its own, but its `tone` and `headline` come from the same decision
+ * (`resolveVerdict` in lib/leaderboard/verdict.ts): both are null exactly when that decision gives
+ * no class, while `composite` is still served (QA of 1.3.22: JEFx 32, GSx 60, both financials
+ * waiting on their sector model). So in a body that withholds nothing ([withheld] false), a null
+ * tone is the unavailable class. In the withheld body a null tone is also the Pro lock on every
+ * row but [OPEN_EXAMPLE_TICKER], which the lock never touches, so only that row can be read there;
+ * the rest keep the 1.3.22 lock ([isProLocked]), the only answer that body can give.
+ */
+internal fun SummaryRow.classUnavailable(withheld: Boolean): Boolean =
+    tone == null && (!withheld || ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true))
 
 /**
  * Whether this `/summary` body is the one the Pro-numbers lock withheld composites from. The server

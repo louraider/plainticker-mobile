@@ -119,15 +119,15 @@ class ListScreenTest {
     }
 
     @Test
-    fun `every groupedRowModifier call site threads colors through, all four rows this screen groups`() {
+    fun `every groupedRowModifier call site threads colors through, every row this screen groups`() {
         // "= groupedRowModifier(" excludes the function's own definition ("private fun
-        // groupedRowModifier(..."), matching only the four `modifier = groupedRowModifier(...)`
+        // groupedRowModifier(..."), matching only the three `modifier = groupedRowModifier(...)`
         // call sites below.
         val callSites = Regex("= groupedRowModifier\\(").findAll(source).toList()
         assertTrue(
-            "expected the four grouped-row call sites this screen draws (chapter rows, next-up " +
-                "leaders, the flat analyzed search results, the flat price-only search results)",
-            callSites.size == 4,
+            "expected the three grouped-row call sites this screen draws (chapter rows, next-up " +
+                "leaders, and the one ranked flat search list across both sets, QA of 1.3.22)",
+            callSites.size == 3,
         )
         callSites.forEach { call ->
             val afterOpenParen = source.substring(call.range.last + 1).trimStart()
