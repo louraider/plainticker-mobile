@@ -126,8 +126,16 @@ data class DetailUiState(
      * Empty when the call failed or the list is empty; the screen then states no standing.
      */
     val nextUp: List<NextUpRow> = emptyList(),
-    /** Where the venue is, from the asset's trading block or the local weekday schedule. */
+    /**
+     * Where the venue is: the shared [com.plainticker.mobile.repo.MarketClock] reading Today and
+     * Stocks draw too (QA of 1.3.21), with this asset's own halt laid over it.
+     */
     val market: MarketStatus? = null,
+    /**
+     * The live hours are still on their way (the catalog has not answered, or a live block is
+     * being read by any screen): the calendar's reading is then not yet a failure to load them.
+     */
+    val hoursPending: Boolean = false,
     val watched: Boolean = false,
     /** Wall clock of the last refresh, so ages and countdowns are read against one instant. */
     val nowMillis: Long = 0L,

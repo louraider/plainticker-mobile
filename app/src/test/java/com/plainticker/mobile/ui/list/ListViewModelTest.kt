@@ -503,6 +503,44 @@ class ListViewModelTest {
         }
     }
 
+    /**
+     * QA of 1.3.21: JEFx drew "Pro" for a Pro reader. It is on /summary with no composite and no
+     * tone because the method gives it no class, not because anything was withheld: every other
+     * row of the same body carries its composite, so the body withheld nothing.
+     */
+    @Test
+    fun `a served row with no composite in a body that withheld nothing is not classified, never Pro`() = runTest {
+        val jef = SummaryRow(ticker = "TSLA", company = "Tesla, Inc.", composite = null, tone = null, headline = null, stale = false)
+        val proBody = summary().let { it.copy(rows = listOf(it.rows[0], it.rows[1], jef)) }
+        assertFalse("JPM carries its composite: this body is whole", bodyWithholdsComposites(proBody.rows))
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(proBody)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.ticker == "TSLA" } }
+            val row = state.analyzed.single { it.ticker == "TSLA" }
+            assertFalse("nothing was withheld from this reader", row.locked)
+            assertTrue(row.unclassified)
+            assertTrue("the classified rows are untouched", state.analyzed.filter { it.ticker != "TSLA" }.none { it.locked || it.unclassified })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the same row in the body a free reader gets is the lock, the only answer that body can give`() = runTest {
+        val jef = SummaryRow(ticker = "TSLA", company = "Tesla, Inc.", composite = null, tone = null, headline = null, stale = false)
+        val freeBody = summary().let { it.copy(rows = listOf(it.rows[0], it.rows[1].locked(), jef)) }
+        assertTrue(bodyWithholdsComposites(freeBody.rows))
+        val vm = viewModel(summaries = FakeSummaryRepository(Result.success(freeBody)))
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.ticker == "TSLA" } }
+            assertTrue(state.analyzed.single { it.ticker == "TSLA" }.locked)
+            assertTrue(state.analyzed.single { it.ticker == "JPM" }.locked)
+            assertTrue(state.analyzed.none { it.unclassified })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `the server's covered list, once sent, is the covered set`() = runTest {
         val withCovered = summary().copy(covered = listOf("AAPL", "JPM", "TSLA"))

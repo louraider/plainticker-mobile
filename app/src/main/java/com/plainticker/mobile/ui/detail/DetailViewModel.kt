@@ -7,7 +7,8 @@ import com.plainticker.mobile.data.SplitMultiplier
 import com.plainticker.mobile.data.net.ApiException
 import com.plainticker.mobile.data.plainticker.ReadApi
 import com.plainticker.mobile.data.plainticker.ReadError
-import com.plainticker.mobile.data.xstocks.MarketHours
+import com.plainticker.mobile.data.xstocks.MarketState
+import com.plainticker.mobile.data.xstocks.MarketStatus
 import com.plainticker.mobile.data.xstocks.XStockAsset
 import com.plainticker.mobile.data.xstocks.toReserves
 import com.plainticker.mobile.prefs.DevicePassStore
@@ -15,6 +16,7 @@ import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.WatchlistStore
 import com.plainticker.mobile.repo.CatalogRepository
 import com.plainticker.mobile.repo.Coverage
+import com.plainticker.mobile.repo.MarketClock
 import com.plainticker.mobile.repo.MintRepository
 import com.plainticker.mobile.repo.NextUpRepository
 import com.plainticker.mobile.repo.PriceRepository
@@ -77,6 +79,30 @@ class DetailViewModel(
 
     private var refreshJob: Job? = null
 
+    /**
+     * The venue, read from the same shared hours Today and Stocks read (QA of 1.3.21: at 13:32 UTC
+     * on a trading day Detail said "The NYSE is closed" under Today's "NYSE open. Closes at 23:00
+     * your time"). Detail used to take the status once, off the catalog's cached block, with
+     * [com.plainticker.mobile.data.xstocks.MarketHours.of], which believes a block past its own
+     * `nextChangeAt`: a block cached before the open still said CLOSED after it. Now it is the
+     * same [MarketClock] the other screens run, over the same [com.plainticker.mobile.repo.VenueHours],
+     * so the three screens read one venue and the price row's labels follow it.
+     */
+    private val marketClock = MarketClock(clock, catalog, viewModelScope, localUntilKnown = true) { market ->
+        _state.update { it.copy(market = withHalt(market), hoursPending = hoursPending()) }
+    }
+
+    /** The issuer stopped this one asset: Detail's own fact, never shared with the list screens. */
+    private var assetHalted = false
+
+    /** The catalog has answered (or failed) at least once, so the live hours are no longer on their way by default. */
+    private var catalogSettled = false
+
+    private fun hoursPending(): Boolean = !catalogSettled || marketClock.loading
+
+    private fun withHalt(market: MarketStatus?): MarketStatus? =
+        if (market != null && assetHalted) market.copy(state = MarketState.HALTED, venueOpen = false) else market
+
     init {
         // `this.ticker` on purpose: inside init the constructor parameter shadows the property,
         // and it is the untrimmed, unnormalized string the route handed over.
@@ -85,8 +111,16 @@ class DetailViewModel(
             watchlist.tickers.collect { watched -> _state.update { it.copy(watched = key in watched) } }
         }
         viewModelScope.launch { keepTheClockMoving() }
+        // The venue from the first frame: the hours another screen already read, or the calendar.
+        marketClock.tick()
         refresh()
     }
+
+    /** Detail came back: recompute the venue now and at every boundary while it stays on screen. */
+    fun onResume() = marketClock.onResume()
+
+    /** Detail left the foreground: the boundary job stops. */
+    fun onPause() = marketClock.onPause()
 
     /**
      * Every age on this screen is read against [DetailUiState.nowMillis], so that field has to
@@ -128,13 +162,17 @@ class DetailViewModel(
         refreshJob = viewModelScope.launch {
             val now = clock.nowMillis()
             _state.update {
-                DetailUiState(ticker = ticker, watched = it.watched, nowMillis = now, known = it.known)
+                // The venue is the shared clock's, not this refresh's: it is kept, never reset.
+                DetailUiState(
+                    ticker = ticker, watched = it.watched, nowMillis = now, known = it.known,
+                    market = it.market, hoursPending = it.hoursPending,
+                )
             }
 
             // The analysis does not wait for the chain and the chain does not wait for the
             // analysis: a ticker PlainTicker has never classified still gets its whole trust layer.
             launch { loadAnalysis() }
-            launch { loadTokenSide(now) }
+            launch { loadTokenSide() }
             // Independent of both: a server that cannot answer this call, or has not turned the
             // route on yet, must never delay a single block this screen drew before task A6.
             launch { loadRead() }
@@ -235,9 +273,18 @@ class DetailViewModel(
 
     // ---- The token side -----------------------------------------------------------------
 
-    private suspend fun loadTokenSide(now: Long) {
-        val lookup = runCatching { catalog.catalog().forTicker(ticker) }
+    private suspend fun loadTokenSide() {
+        val assets = runCatching { catalog.catalog() }
+        val lookup = assets.map { it.forTicker(ticker) }
         val asset = lookup.getOrNull()
+
+        assetHalted = asset?.isTradingHalted == true || asset?.trading?.isTradingHalted == true
+        catalogSettled = true
+        // The catalog's block joins the shared hours (and asks for the live one if it has
+        // expired); what Detail shows is the shared clock's reading, never this block alone.
+        val market = withHalt(
+            assets.getOrNull()?.takeIf { it.isNotEmpty() }?.let(marketClock::setAssets) ?: marketClock.tick(),
+        )
 
         _state.update {
             it.copy(
@@ -247,9 +294,8 @@ class DetailViewModel(
                     lookup.isSuccess -> Piece.Absent
                     else -> Piece.Failed
                 },
-                // The venue's own trading block when there is one, the local weekday schedule when
-                // there is not; never the other way round (MarketHours).
-                market = MarketHours.of(asset, now),
+                market = market,
+                hoursPending = hoursPending(),
             )
         }
 

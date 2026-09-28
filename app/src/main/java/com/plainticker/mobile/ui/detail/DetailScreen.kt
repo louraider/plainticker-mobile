@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.KnownMints
@@ -142,6 +143,12 @@ fun DetailScreen(
     onGetPro: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // The venue reads a clock shared with Today and Stocks (QA of 1.3.21): recomputed every time
+    // Detail comes back and at every open or close while it stays on screen.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.onResume()
+        onPauseOrDispose { viewModel.onPause() }
+    }
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
     val holding by swapViewModel.holding.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
@@ -373,10 +380,11 @@ private fun VerdictSection(state: DetailUiState, onGetPro: (() -> Unit)?) {
                     height = VerdictPlaceholderHeight,
                 )
                 Column {
-                    repeat(VerdictQualifierLines) { line ->
+                    val lines = state.verdictSkeletonLines
+                    repeat(lines) { line ->
                         SkeletonBar(
                             modifier = Modifier.padding(vertical = (VerdictQualifierLine - VerdictQualifierBar) / 2),
-                            width = if (line == 0) 280.dp else 140.dp,
+                            width = if (line < lines - 1) 280.dp else 140.dp,
                             height = VerdictQualifierBar,
                         )
                     }
@@ -756,7 +764,11 @@ private fun FundamentalsBlock(state: DetailUiState) {
         return
     }
 
-    AmberSectionHead(title = stringResource(R.string.detail_heading_sector), meta = state.compositeMeta?.text())
+    AmberSectionHead(
+        title = stringResource(R.string.detail_heading_sector),
+        meta = state.compositeMeta?.text(),
+        lede = state.compositeLede?.text(),
+    )
     state.tracks.forEach { row ->
         when {
             row.locked -> LockedRow(row.label.text())
@@ -1117,8 +1129,7 @@ private val VerdictPlaceholderHeight = 22.dp
 /** One [AmberType.sectionHead] line: the classification word the skeleton stands in for. */
 private val VerdictWordLine = 27.dp
 
-/** The qualifier under the word wraps to two [AmberType.context] lines on a phone. */
-private const val VerdictQualifierLines = 2
+/** One [AmberType.context] line of the qualifier; how many the skeleton keeps is [verdictSkeletonLines]. */
 private val VerdictQualifierLine = 18.dp
 private val VerdictQualifierBar = 12.dp
 private val PriceTop = 28.dp

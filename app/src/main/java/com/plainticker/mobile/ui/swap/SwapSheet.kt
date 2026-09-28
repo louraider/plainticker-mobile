@@ -79,6 +79,7 @@ import com.plainticker.mobile.ui.components.PreviewCanvas
 import com.plainticker.mobile.ui.components.SkeletonBar
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.defaultAmberColors
+import com.plainticker.mobile.ui.components.drawCautionMark
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
@@ -417,27 +418,9 @@ private fun ResultMark(tone: ResultTone, progress: Float, colors: AmberColors) {
                 drawCircle(color = live, radius = size.minDimension * FILL_RATIO * progress * progress)
             }
 
-            ResultTone.Failed -> {
-                drawArc(
-                    color = caution,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
-                // The caution sign: a bar above the centre and a dot below it.
-                val cx = size.width / 2f
-                drawLine(
-                    color = caution,
-                    start = Offset(cx, size.height * CAUTION_BAR_TOP),
-                    end = Offset(cx, size.height * CAUTION_BAR_BOTTOM),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                )
-                drawCircle(color = caution, radius = stroke * 0.75f, center = Offset(cx, size.height * CAUTION_DOT))
-            }
+            // The shared caution mark (ui/components/CautionMark.kt), the one the vote sheet's
+            // refusals carry too (QA of 1.3.21).
+            ResultTone.Failed -> drawCautionMark(color = caution, stroke = stroke)
 
             ResultTone.Pending -> repeat(PENDING_SEGMENTS) { i ->
                 drawArc(
@@ -617,11 +600,6 @@ private const val QUICK_MILLIS = 150
 
 /** How far the settled fill reaches inside the ring, as a share of the mark's size. */
 private const val FILL_RATIO = 0.22f
-
-/** Where the failure mark's caution bar and dot sit, as fractions of the mark's height. */
-private const val CAUTION_BAR_TOP = 0.28f
-private const val CAUTION_BAR_BOTTOM = 0.56f
-private const val CAUTION_DOT = 0.72f
 
 private const val PENDING_SEGMENTS = 4
 private const val PENDING_GAP_DEGREES = 28f

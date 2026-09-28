@@ -210,7 +210,7 @@ class DetailModelTest {
         val cohortBlock = served(analysis = AnalysisState.Served(payload(verdict = cohort))).verdictBlock as VerdictBlock.Unavailable
         assertEquals(R.string.detail_verdict_unavailable_thin, label(cohortBlock.reason))
         assertEquals(
-            "Too few companies in this sector to compare fairly. This is not a judgement of the business. " +
+            "Too few comparable companies to compare fairly. This is not a judgement of the business. " +
                 "The figures and the read below still apply.",
             com.plainticker.mobile.ui.ShippedCopy.strings.getValue("detail_verdict_unavailable_thin"),
         )
@@ -694,6 +694,49 @@ class DetailModelTest {
     @Test
     fun `a payload with no composite leaves the heading meta off rather than printing a zero`() {
         assertNull(served(analysis = AnalysisState.Served(payload(composite = null))).compositeMeta)
+    }
+
+    /** QA of 1.3.21: ABBVx read "Against the sector, composite 44" under an unclassified headline. */
+    @Test
+    fun `an unclassified company keeps its composite, said to decide nothing`() {
+        val cohort = Verdict(classState = "unavailable", classReason = "thin-cohort")
+        val state = served(analysis = AnalysisState.Served(payload(composite = 44.0, verdict = cohort)))
+        assertNull("not the bare \"composite 44\" beside the sector head", state.compositeMeta)
+        assertEquals(R.string.detail_composite_unclassified, label(state.compositeLede))
+        assertEquals(listOf("44"), args(state.compositeLede))
+        assertEquals(
+            "Composite score 44, not used for a classification",
+            ShippedCopy.render(state.compositeLede!!),
+        )
+        // A classified company is unchanged: the meta, and no lede.
+        val classified = served()
+        assertEquals(R.string.detail_composite, label(classified.compositeMeta))
+        assertNull(classified.compositeLede)
+    }
+
+    /** QA of 1.3.21: the row said "Not classified" and the page it opened said "Unavailable". */
+    @Test
+    fun `the unclassified headline is the row's own word, and the thin reason names comparable companies`() {
+        assertEquals("Not classified", ShippedCopy.strings.getValue("detail_verdict_unavailable"))
+        assertEquals(ShippedCopy.strings.getValue("list_row_not_classified"), ShippedCopy.strings.getValue("detail_verdict_unavailable"))
+        val thin = ShippedCopy.strings.getValue("detail_verdict_unavailable_thin")
+        assertFalse("the server's cohort is not the GICS sector", "sector" in thin)
+    }
+
+    /** QA of 1.3.21: ABBVx's Classification settled 60 px taller than its skeleton. */
+    @Test
+    fun `the classification skeleton reserves the lines the answer will take`() {
+        assertEquals(2, served().verdictSkeletonLines)
+        com.plainticker.mobile.repo.Coverage.WITHOUT_ROW.forEach { ticker ->
+            assertEquals(ticker, 3, served().copy(ticker = ticker).verdictSkeletonLines)
+        }
+    }
+
+    @Test
+    fun `the calendar's open is not called a failure to load while the live hours are on their way`() {
+        val calendarOpen = MarketStatus(MarketState.REGULAR, MarketSource.LOCAL_SCHEDULE, venueOpen = true, nextChangeAtMillis = null)
+        assertNull(served(market = calendarOpen).copy(hoursPending = true).banner)
+        assertEquals(DetailBanner.OPEN_LOCAL, served(market = calendarOpen).banner)
     }
 
     // ---- The Pro-numbers lock (founder decision 2026-09-23) --------------------------------------

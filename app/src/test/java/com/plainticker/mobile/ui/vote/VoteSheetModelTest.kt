@@ -140,6 +140,17 @@ class VoteSheetModelTest {
         assertFalse("nothing else may send a vote", VoteActionKind.Confirm in others)
     }
 
+    /** QA of 1.3.21: the swap sheet's no-wallet failure carried the caution mark and the vote sheet's did not. */
+    @Test
+    fun `every refusal carries the swap sheet's caution mark, and nothing else does`() {
+        VoteRefusal.entries.forEach { reason ->
+            assertTrue(reason.name, sheetOf(VoteState.Refused("NFLX", "NFLXx", reason)).caution)
+        }
+        allStates.filter { it !is VoteState.Refused }.forEach { state ->
+            assertFalse(state::class.simpleName, sheetOf(state).caution)
+        }
+    }
+
     // ---- The bound ----------------------------------------------------------------------------------
 
     @Test

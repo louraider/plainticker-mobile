@@ -155,8 +155,12 @@ class SwapSheetTest {
         assertTrue("the landing ring does not close with the settle", "sweepAngle = 360f * progress" in mark)
         // QA of 1.3.20: a static open ring beside "No wallet connected" read as a frozen spinner.
         val failed = mark.substringAfter("ResultTone.Failed ->").substringBefore("ResultTone.Pending ->")
-        assertTrue("the failure ring is not closed", "sweepAngle = 360f," in failed)
-        assertTrue("the failure mark carries no caution sign", "drawLine(" in failed && "drawCircle(" in failed)
+        // QA of 1.3.21: the failure mark is the shared component the vote sheet's refusals carry.
+        assertTrue("the failure mark is not the shared caution mark", "drawCautionMark(color = caution" in failed)
+        val shared = File(module, "src/main/java/com/plainticker/mobile/ui/components/CautionMark.kt").readText()
+        val shape = shared.substringAfter("fun DrawScope.drawCautionMark(")
+        assertTrue("the failure ring is not closed", "sweepAngle = 360f," in shape)
+        assertTrue("the failure mark carries no caution sign", "drawLine(" in shape && "drawCircle(" in shape)
     }
 
     @Test

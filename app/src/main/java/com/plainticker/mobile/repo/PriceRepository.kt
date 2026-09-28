@@ -88,7 +88,8 @@ class CachedPriceRepository(
     private val ttlMillis: Long = TTL_MS,
 ) : PriceRepository {
 
-    private class Cached(val entry: PriceEntry?, val at: Long)
+    /** [at] is when the answer arrived (the TTL runs from it); [asked] when its request left. */
+    private class Cached(val entry: PriceEntry?, val at: Long, val asked: Long)
 
     private val mutex = Mutex()
     private val cache = HashMap<String, Cached>()
@@ -119,16 +120,24 @@ class CachedPriceRepository(
         if (missing.isNotEmpty()) {
             fetched = api.prices(missing)
             val at = clock.nowMillis()
-            mutex.withLock {
-                for (mint in missing) {
-                    if (mint in fetched.unfetched) continue
-                    cache[mint] = Cached(fetched.priced[mint], at)
-                }
+            // Only the mints this answer is the newest for (QA of 1.3.21: Stocks and Detail lagged
+            // Today by one refresh). A paced fetch takes seconds; a pull on another screen that
+            // left after it and landed before it is the newer quote, and the older answer landing
+            // last used to overwrite it in the cache and in [latest], so every screen but the one
+            // that pulled drew the quote from one refresh before.
+            val newest = mutex.withLock {
+                missing.filter { mint ->
+                    val held = cache[mint]
+                    (mint !in fetched.unfetched && (held == null || held.asked <= asked)).also { write ->
+                        if (write) cache[mint] = Cached(fetched.priced[mint], at, asked)
+                    }
+                }.toSet()
             }
             // Every screen observes this: what one screen fetched, all of them draw.
-            val answeredWithoutPrice = missing.toSet() - fetched.unfetched - fetched.priced.keys
-            if (fetched.priced.isNotEmpty() || answeredWithoutPrice.isNotEmpty()) {
-                _latest.update { current -> (current - answeredWithoutPrice) + fetched.priced }
+            val priced = fetched.priced.filterKeys { it in newest }
+            val answeredWithoutPrice = newest - priced.keys
+            if (priced.isNotEmpty() || answeredWithoutPrice.isNotEmpty()) {
+                _latest.update { current -> (current - answeredWithoutPrice) + priced }
             }
         }
 

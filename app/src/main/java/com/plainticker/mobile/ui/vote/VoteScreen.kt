@@ -227,9 +227,13 @@ internal fun VoteTabContent(
                         zone = zone,
                         onPick = {
                             scope.launch {
-                                // A negative offset leaves the item that far below the top edge.
+                                // A negative offset leaves the item that far below the top edge. The
+                                // target is the ballot's heading, the item right above the field
+                                // (QA of 1.3.21: landing on the field left "Without analysis" and
+                                // its count clipped under the status bar), so the heading, its
+                                // count and the field all land below the clock and its scrim.
                                 val below = with(density) { searchClearance.roundToPx() }
-                                listState.animateScrollToItem(ballotSearchIndex[0], scrollOffset = -below)
+                                listState.animateScrollToItem(ballotHeadingIndex(ballotSearchIndex[0]), scrollOffset = -below)
                                 // Dropped rather than thrown if the field is not attached yet.
                                 runCatching { searchFocus.requestFocus() }
                             }
@@ -361,6 +365,9 @@ internal fun VoteTabContent(
         }
     }
 }
+
+/** The ballot's heading sits right above its search field: the item the top card's action lands on. */
+internal fun ballotHeadingIndex(searchIndex: Int): Int = (searchIndex - 1).coerceAtLeast(0)
 
 /**
  * The top card (judges' round 2): the round and when it closes in the reader's own time, what a
