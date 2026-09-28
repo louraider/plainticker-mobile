@@ -275,7 +275,7 @@ words, "Screenshots accurately represent the app".
 | Icon PNG | 512 x 512 | **Written, Amber.** `design/brand/store/icon-512.png`, re-rendered 2026-09-24 by `design/brand/render_icons.py` from the shipped `ic_launcher_foreground.xml` (commit `66c21af`) | The shipped launcher icon flattened: the two-corner mark on the amber tile. Square, opaque, no radius: the store applies its own mask. |
 | Banner | 1024 x 500 PNG | **Written, Amber.** `design/brand/store/banner-1024x500.png`, same commit and generator | The mark, the wordmark in Bricolage Grotesque and the short description under it. No phone mockup, no stock photography, no gradient. |
 | Screenshot 1 | Portrait, 1200 x 2670 off the Seeker | Candidate: `docs/img/01-today.png` (1.3.12). Recapture on the submission build | Today: the NYSE status line, Watched, Reports next week. |
-| Screenshot 2 | Same device, orientation and aspect ratio | Candidate: `docs/img/03-stock-page-aapl.png` (1.3.8). Recapture | A stock page: the classification, the token price beside *Last US price*, *Live from the mint* with its slot, and *Backing and controls*. |
+| Screenshot 2 | Same device, orientation and aspect ratio | Candidate: `docs/img/03-stock-page-aapl.png` (1.3.8). Recapture | A stock page: the classification, the token price beside the share's last US price, *Live from the mint* with its slot, and *Backing and controls*. |
 | Screenshot 3 | Same | Candidate: `docs/img/02-stocks.png` (1.3.12). Recapture | Stocks: search, the Deep pool and sector filters, the covered list. |
 | Screenshot 4 | Same | To capture | The swap result, *Swap landed*, with the receipt and its signature. |
 | Screenshot 5 | Same | To capture | The Vote tab: the explainer, the round, *Last round*, the ballot. |

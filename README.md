@@ -54,7 +54,8 @@ are not available to US persons; the app asks for that self-certification on its
 | ![Daily digest: one short check a day](docs/img/04-daily-digest.png) | ![Recent swaps: three real swaps with their all-in cost](docs/img/05-recent-swaps.png) |
 
 All five screenshots were captured on a Seeker (1200 × 2670) from builds 1.3.8 to 1.3.12, so they
-predate the 1.3.21 labels: the stock page now names its reference *Last US price*. The last one is
+predate the 1.3.21 labels: the stock page now names its reference *Last US price* while the NYSE
+is shut. The last one is
 cropped from Portfolio and lists the three swaps in the proof table below.
 
 ## What it is and who it is for
@@ -72,7 +73,7 @@ price. PlainTicker gives them three things that screen does not.
   age of the analysis is shown on every row. Every number is a position against the sector. None
   of them is a forecast.
 - **What the price is worth.** The token's gap to the last US price of the share, labelled *Last
-  US price* on the stock page. That reference is Jupiter Price v3's `stockData.price`: the share's
+  US price* on the stock page while the NYSE is shut (*NYSE price* during the session). That reference is Jupiter Price v3's `stockData.price`: the share's
   latest US trade, pre-market and after-hours included, so it keeps moving while the NYSE is shut.
   It is not the NYSE close, and no source the app reads carries the regular-session close. The
   gap is drawn only where Jupiter reports at least $4,000 of depth behind the price. Below that floor the app states the

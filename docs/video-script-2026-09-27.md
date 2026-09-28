@@ -189,8 +189,9 @@ Re-read these against the app before recording, and change the line rather than 
   line says ("open, and closes at ten my time", or "opens at half past four my time").
 - **Shot 3:** proof of reserves is on screen (100.8% for AAPLx on 25 September) and is not
   spoken, so the line stays true whatever the figure reads.
-- **Shot 3, the price:** the stock page labels the reference *Last US price*, the share's latest
-  US trade from Jupiter, which moves before the open and after the close. It is not the NYSE
+- **Shot 3, the price:** while the NYSE is shut the stock page labels the reference *Last US
+  price* (during the session it reads *NYSE price*): the share's latest US trade from Jupiter,
+  which moves before the open and after the close. It is not the NYSE
   close, so no line calls it the close.
 - **Shot 4, the Review step:** Review and **Continue to wallet** are in 1.3.21, and the spoken
   line names them. Hold Review long enough to read the network fee and the "Up to" deposit.
