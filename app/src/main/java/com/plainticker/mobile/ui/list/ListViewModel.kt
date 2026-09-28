@@ -417,8 +417,15 @@ class ListViewModel(
      * and neither keeps showing the status the catalog cache was fetched under.
      */
     private val marketClock = MarketClock(clock, catalog, viewModelScope, localUntilKnown = true) { market ->
-        _state.update { it.copy(market = market) }
+        _state.update { it.copy(market = market, hoursPending = hoursPending()) }
     }
+
+    /**
+     * The live hours are still on their way: the catalog has not settled, or a live block is being
+     * read (by this screen or Today). Never "did not load" while a load is in flight (final QA of
+     * 1.3.19: the line appeared mid-load, while Today already said "Opens today at 16:30").
+     */
+    private fun hoursPending(): Boolean = !catalogSettled || marketClock.loading
 
     /**
      * True while a first load holds the bundled snapshot back for the live analysis (device QA of
@@ -780,7 +787,7 @@ class ListViewModel(
                 generatedAt = generatedAt,
                 snapshotBannerDue = bannerGracePassed,
                 analysisFromSnapshot = haveSnapshot && liveRows == null,
-                hoursPending = !catalogSettled && liveAssets.isEmpty(),
+                hoursPending = hoursPending(),
             )
         }
     }
@@ -1013,8 +1020,18 @@ class ListViewModel(
          * so no refresh that behaves like a warm launch can reach it, and it costs the honest
          * case almost nothing: the first ever launch settles at 12.4 s, so the line still stands
          * for about eleven of them.
+         *
+         * 1.5 s until 1.3.20. Final QA of 1.3.19 caught a cold start whose `/summary` answered
+         * just past it: the snapshot of 19 Sep was drawn (Communication Services 11, METAx 66),
+         * then replaced by the live list (5, METAx 59) and a two-line banner, a jump of about
+         * 50 px. The snapshot is for offline and slow networks; 4 s holds the skeletons through
+         * a cold TLS start and still draws the snapshot early on a network that is really slow.
          */
-        const val SNAPSHOT_BANNER_GRACE_MS = 1_500L
+        const val SNAPSHOT_BANNER_GRACE_MS = 4_000L
+
+        /** The pull indicator's least and most stay (see [pull]). */
+        const val PULL_MIN_MS = 600L
+        const val PULL_MAX_MS = 15_000L
 
         /**
          * How old the list's prices may get while Stocks is on screen: the price cache's own
