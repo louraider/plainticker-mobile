@@ -262,6 +262,41 @@ class WatchlistCheckTest {
         )
     }
 
+    /**
+     * QA of 1.3.21 saw "Round 3 closes Monday." on the digest: text a pre-1.3.21 check had stored
+     * (the record keeps the sentence exactly as it was sent). Every digest path, the stored text
+     * and the shade alike, is [Digest]'s one [DigestLine.RoundCloses], which reads the shared
+     * [com.plainticker.mobile.ui.vote.roundClose]: on the day round 3 opens, the line has its date.
+     */
+    @Test
+    fun `the check stores and posts the round's close with its date, by the shared round rule`() = runTest {
+        serves("AAPL")
+        val opening = FakeNextUpRepository(
+            answer = Result.success(
+                NextUpAnswer.Open(
+                    rows = emptyList(),
+                    round = VoteRound(id = 3, opensAt = "2026-09-28T00:00:00.000Z", closesAt = "2026-10-05T00:00:00.000Z"),
+                    previous = null,
+                ),
+            ),
+        )
+        val check = WatchlistCheck(
+            watchlist = watchlist,
+            facts = WatchlistFacts(summaries, catalog, prices),
+            digests = digests,
+            strings = RealStrings.strings,
+            notifier = notifier,
+            clock = TestClock(Instant.parse("2026-09-28T08:00:00Z").toEpochMilli()),
+            vote = VoteDigestFacts(opening, summaries),
+            readerZone = java.time.ZoneId.of("Europe/Kyiv"),
+        )
+
+        val full = "Round 3 closes Monday 5 Oct at 03:00 your time."
+        assertEquals(CheckOutcome.Produced(full), check.run())
+        assertEquals("the stored text the digest screen draws", full, digests.record.value.text)
+        assertEquals("the shade's title", listOf("Round 3 closes Monday 5 Oct at 03:00 your time"), notifier.posted)
+    }
+
     @Test
     fun `a check with no vote collaborator at all carries no vote line, exactly as before this task`() = runTest {
         serves("AAPL")
