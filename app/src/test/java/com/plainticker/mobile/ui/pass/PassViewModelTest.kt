@@ -651,6 +651,33 @@ class PassViewModelTest {
     }
 
     @Test
+    fun `a redeem that just landed can open the field again for another code`() = runTest {
+        // Fresh-device QA of 1.3.24 (B4): the row said "Enter another code to add more time" and
+        // "Have a code?" did nothing until a restart, because opening worked only from Idle.
+        val promo = promoMock("""{"pro":true,"source":"promo","until":"2026-10-19T00:00:00.000Z"}""")
+        val vm = machine(promo = promo)
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm.applyPromo()
+        advanceUntilIdle()
+        assertEquals(PromoState.Success(1_792_368_000_000L), vm.promo.value)
+
+        vm.openPromo()
+        assertEquals(PromoState.Editing(""), vm.promo.value)
+    }
+
+    @Test
+    fun `opening the field again keeps what was typed`() = runTest {
+        val vm = machine(promo = promoMock())
+        vm.openPromo()
+        vm.promoInputChanged("pt-aaaa-bbbb-cccc")
+        vm.promoInputChanged("pt-aaaa-bbbb-ccc")
+        val editing = vm.promo.value
+        vm.openPromo()
+        assertEquals("an open field keeps what was typed", editing, vm.promo.value)
+    }
+
+    @Test
     fun `the device code rides in the header only, never in the body, and is never logged`() = runTest {
         val logged = mutableListOf<String>()
         // A refusal, not a success: applyPromo's own debugLog.raw line only runs on that path, and

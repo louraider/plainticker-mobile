@@ -12,6 +12,9 @@ import com.plainticker.mobile.R
  *      |                  |  +---apply() again--+---4xx/5xx--> Failed
  *      +------dismiss()---+----------------------------------------+
  *
+ * [Success] opens again too (open() from it goes to an empty [Editing]), so a second code can be
+ * entered right after the first.
+ *
  * [Editing] and [Failed] both carry the text the field shows, as typed, so a reader who typed a
  * bad code keeps it on screen to fix rather than losing it; [inputChanged] moves a [Failed] state
  * back to [Editing], clearing the error the instant they touch the field again.

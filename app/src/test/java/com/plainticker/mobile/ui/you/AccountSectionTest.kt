@@ -260,9 +260,13 @@ class AccountSectionTest {
         // true; the server records the account only at redemption.
         val screen = screenScan.code
         assertTrue("promoKeepNote = account is AccountUiState.SignedOut" in screen)
-        assertTrue("sub = if (keepNote) stringResource(R.string.promo_signin_first_hint) else null" in screen)
+        // The closed row's two notes are picked by promoLine (YouModel.kt, YouModelTest pins which
+        // is said when), told only whether the account is known to be absent.
+        assertTrue("promoLine(promo, pro, signedOut = keepNote)" in screen)
         assertTrue("if (signInHint) {" in screen)
-        assertTrue("sub = if (keepNote) stringResource(R.string.promo_success_saved_to_phone) else null" in screen)
+        val model = source("YouModel.kt")
+        assertTrue("sub = if (signedOut) words(R.string.promo_signin_first_hint) else null" in model)
+        assertTrue("sub = if (signedOut) words(R.string.promo_success_saved_to_phone) else null" in model)
         assertEquals("Signing in with Google keeps this Pro if you reinstall.", ShippedCopy.strings.getValue("promo_signin_first_hint"))
         assertEquals(
             "Saved to this phone. Sign in with Google to keep it if you reinstall.",

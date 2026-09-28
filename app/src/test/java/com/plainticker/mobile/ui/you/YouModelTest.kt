@@ -6,6 +6,8 @@ import com.plainticker.mobile.prefs.SignedInAccount
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.ShippedCopy
 import com.plainticker.mobile.ui.pass.ProUiState
+import com.plainticker.mobile.ui.pass.PromoRefusal
+import com.plainticker.mobile.ui.pass.PromoState
 import com.plainticker.mobile.wallet.WalletAccount
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -227,6 +229,97 @@ class YouModelTest {
         assertEquals(R.string.you_hero_pro_until, words(promoSuccessLine(now + 30 * day)))
         assertEquals("Pro until 21 Oct 2026", ShippedCopy.render(promoSuccessLine(now + 30 * day)))
         assertEquals(R.string.you_hero_pro, words(promoSuccessLine(null)))
+    }
+
+    // ---- The promo row, closed (fresh-device QA of 1.3.24, B3 and B4) -----------------------
+
+    @Test
+    fun `a promo Pro read from the entitlement draws what the redeem drew, after a restart too`() {
+        // After a relaunch PromoState is Idle again; only the entitlement remembers the redeem.
+        val relaunched = promoLine(PromoState.Idle, promo, signedOut = true)!!
+        val redeemed = promoLine(PromoState.Success(now + 30 * day), promo, signedOut = true)!!
+        assertEquals(redeemed, relaunched)
+        assertEquals("Pro until 21 Oct 2026", ShippedCopy.render(relaunched.value))
+        assertEquals(R.string.promo_success_saved_to_phone, words(relaunched.sub!!))
+        assertEquals(
+            "Saved to this phone. Sign in with Google to keep it if you reinstall.",
+            ShippedCopy.render(relaunched.sub!!),
+        )
+        assertFalse("a held Pro is not the quiet prompt", relaunched.quiet)
+    }
+
+    @Test
+    fun `signed in, a promo Pro says only until when`() {
+        val line = promoLine(PromoState.Idle, promo, signedOut = false)!!
+        assertEquals(R.string.you_hero_pro_until, words(line.value))
+        assertNull(line.sub)
+    }
+
+    @Test
+    fun `before any redeem the row is the quiet prompt, with the sign in first hint only when signed out`() {
+        val out = promoLine(PromoState.Idle, free, signedOut = true)!!
+        assertEquals(R.string.promo_prompt, words(out.value))
+        assertEquals(R.string.promo_signin_first_hint, words(out.sub!!))
+        assertTrue(out.quiet)
+        assertNull(promoLine(PromoState.Idle, free, signedOut = false)!!.sub)
+        // Pro from somewhere else is not a promo: the prompt stays.
+        assertEquals(R.string.promo_prompt, words(promoLine(PromoState.Idle, pass, signedOut = true)!!.value))
+        assertEquals(R.string.promo_prompt, words(promoLine(PromoState.Idle, stake, signedOut = true)!!.value))
+    }
+
+    @Test
+    fun `an entitlement still being read or refused is not taken for a promo Pro`() {
+        val reading = promo.copy(entitlementLoading = true)
+        assertEquals(R.string.promo_prompt, words(promoLine(PromoState.Idle, reading, signedOut = true)!!.value))
+        val failed = promo.copy(entitlementFailed = true)
+        assertEquals(R.string.promo_prompt, words(promoLine(PromoState.Idle, failed, signedOut = true)!!.value))
+    }
+
+    @Test
+    fun `a redeem that just landed shows its own date, else the entitlement's`() {
+        val justNow = promoLine(PromoState.Success(now + 40 * day), free, signedOut = false)!!
+        assertEquals("Pro until 31 Oct 2026", ShippedCopy.render(justNow.value))
+        val undated = promoLine(PromoState.Success(null), promo, signedOut = false)!!
+        assertEquals("Pro until 21 Oct 2026", ShippedCopy.render(undated.value))
+    }
+
+    @Test
+    fun `the open field's own states draw the field, not a closed line`() {
+        assertNull(promoLine(PromoState.Editing(""), promo, signedOut = true))
+        assertNull(promoLine(PromoState.Applying("PT"), promo, signedOut = true))
+        assertNull(promoLine(PromoState.Failed("PT", PromoRefusal.INVALID_CODE), promo, signedOut = true))
+    }
+
+    // ---- Bringing the opened promo row into view (fresh-device QA of 1.3.24, B1) ------------
+
+    @Test
+    fun `a row above the status bar band comes down to just below it`() {
+        // 24-have-code: the label and field sat above the top edge, Apply and Cancel just under it.
+        val clear = 130f
+        val delta = promoRevealScroll(rowTop = -120f, rowBottom = 180f, clearTop = clear, viewportBottom = 1400f)
+        assertEquals(-250f, delta, 0f)
+        assertEquals("the row's top lands on the clear line", clear, -120f - delta, 0f)
+    }
+
+    @Test
+    fun `a row under the keyboard goes up only as far as its bottom edge`() {
+        val delta = promoRevealScroll(rowTop = 1200f, rowBottom = 1500f, clearTop = 130f, viewportBottom = 1400f)
+        assertEquals(100f, delta, 0f)
+    }
+
+    @Test
+    fun `a row already whole on screen is left where it is`() {
+        assertEquals(0f, promoRevealScroll(rowTop = 400f, rowBottom = 700f, clearTop = 130f, viewportBottom = 1400f), 0f)
+        assertEquals("touching both edges is still whole", 0f, promoRevealScroll(130f, 1400f, 130f, 1400f), 0f)
+    }
+
+    @Test
+    fun `a row taller than the room keeps its label and field in view, not its buttons`() {
+        // Font scale 1.3 on a short phone with the keyboard up: 600px of room, a 700px row.
+        val below = promoRevealScroll(rowTop = 500f, rowBottom = 1200f, clearTop = 100f, viewportBottom = 700f)
+        assertEquals("the top goes to the clear line", 400f, below, 0f)
+        val above = promoRevealScroll(rowTop = -50f, rowBottom = 650f, clearTop = 100f, viewportBottom = 700f)
+        assertEquals(-150f, above, 0f)
     }
 
     @Test
