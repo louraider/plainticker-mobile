@@ -684,6 +684,39 @@ left the sheet hidden with the machine still in `Landing`, and `open()` refuses 
 machine, so the receipt for a swap that did land could never be reached. The drag itself is now
 refused, through `confirmValueChange` on the sheet state, and only while landing.
 
+#### "No route" that was not, 2026-09-29 (1.3.25)
+
+On the Seeker, with the demo wallet connected, "Check swap availability" answered "Swap unavailable:
+Jupiter has no route for this token right now". Reproduced from a laptop the same morning (NYSE
+shut, pre-market Tuesday) with the app's own call, keyless `GET /swap/v2/order` with the demo
+wallet as taker, and every answer fed through the app's parser and guard in a unit test
+(`LiveOrdersGuardTest`, fixtures `jupiter/order-live-0929-*.json`):
+
+| Ask | Jupiter's answer | What the guard said |
+|---|---|---|
+| 1 and 5 USDC into AAPLx | 200, Metis over Raydium CLMM, rent 1,488,440 declared (no AAPLx account yet) | Allowed; priority 166 and 77 lamports, rent bound 2,672,640 |
+| 1 and 5 USDC into TSLAx | 200, Metis over Whirlpool, no rent (the empty TSLAx account exists) | Allowed; priority 103 and 8 lamports |
+| AAPLx to USDC, none held | 200 with a quote, no transaction, `errorCode` 1, "Insufficient funds" | not reached |
+| AALx or JEFx, any size | 400 "Quote not available from market maker", then without the RFQ router 400 "Failed to get quotes" | not reached |
+| The sixth ask in a row | 429 `{"code":429,"message":"[API Gateway] Too many requests"}`, JSON, no Retry-After | not reached |
+
+The guard, the fee ceiling, the rent bound and the market hours were not it: every real order
+passed. "No route" is shown only on an unpriced leg (Price v3 had no `usdPrice`, which it drops for
+xStocks it cannot price, AALx and JEFx among them), and there every structured `/order` refusal read
+as no route. The gateway's 429 is a structured body, so it parsed as `OrderRejected(429)`, not as
+the transport failure the T10 table above meant it to be; so did "Insufficient funds", and so did a
+500 with a JSON body. On a priced token the same 429 read "This pair cannot be quoted at this size
+right now". The rate limit is easy to hit on this path: `/order` shares the 0.5 rps bucket with
+Price v3, which Detail has just called, and an RFQ refusal is followed by a second `/order` 2.1 s
+later.
+
+Now the status speaks first at the order stage: 429 is `SwapError.RateLimited` ("Jupiter is busy,
+try again in a few seconds"), any 5xx is `Http` ("No quote came back"), a request that never left
+the phone is `OFFLINE`, and `NO_ROUTE` needs `SwapError.noRoute`, a refusal whose words are about a
+route ("Failed to get quotes", "No routes found", "market maker", "not tradable"). A quote that came
+back without bytes is `NO_TRANSACTION` on every leg, since a quote is a route. For AALx and JEFx
+today, "no route" is the true answer.
+
 #### On hardware, 2026-09-13 (T10, DT7)
 
 The Seeker enumerated for the first time since the sheet was written, and the debug build was
