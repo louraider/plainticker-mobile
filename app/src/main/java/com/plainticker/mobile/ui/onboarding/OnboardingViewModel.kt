@@ -14,8 +14,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** The two steps: the self-certification, then picking stocks to watch (skippable). */
-enum class OnboardingStep { CONSENT, PICK }
+/**
+ * The steps: the self-certification, then one screen on the controls every tokenized stock
+ * carries (founder feedback 2026-09-29, skippable), then picking stocks to watch (skippable).
+ *
+ * The controls step comes before the pick step, not after it: the pick step's Skip lands on the
+ * AAPLx page, where "Backing and controls" sits right under the price, so the reader meets the
+ * rows having just been told what they are; after the pick it would stand between the picking and
+ * the Today it fills.
+ */
+enum class OnboardingStep { CONSENT, CONTROLS, PICK }
 
 /** One stock the pick step offers: the ticker is the watchlist key, the symbol is what it reads. */
 data class PickChip(val ticker: String, val symbol: String)
@@ -105,7 +113,7 @@ class OnboardingViewModel(
     }
 
     /**
-     * Persists the onboarded flag and moves on to the pick step. A press while the box is
+     * Persists the onboarded flag and moves on to the controls step. A press while the box is
      * unchecked, and a second press after the first one landed, both write nothing. Without a
      * watchlist to fill (a caller that has none), there is no pick step and this finishes at once.
      */
@@ -115,8 +123,14 @@ class OnboardingViewModel(
         if (watchlist == null) {
             _state.update { it.copy(completed = true) }
         } else {
-            _state.update { it.copy(step = OnboardingStep.PICK) }
+            _state.update { it.copy(step = OnboardingStep.CONTROLS) }
         }
+    }
+
+    /** Continue or Skip on the controls step: both move on to the pick step, and nothing is written. */
+    fun continueToPick() {
+        if (_state.value.step != OnboardingStep.CONTROLS || _state.value.completed) return
+        _state.update { it.copy(step = OnboardingStep.PICK) }
     }
 
     fun togglePick(ticker: String) {

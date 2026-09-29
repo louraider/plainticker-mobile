@@ -32,6 +32,30 @@
     <string name="detail_share_reserves">reserves reported at %1$s</string>
     <string name="detail_share_url">https://www.plainticker.com/en/%1$s</string>
     <string name="detail_share_home_url">https://www.plainticker.com/en</string>
+    <!-- Share images (founder feedback 2026-09-29): one 1080 by 1350 card per context, drawn on
+         a Canvas in Amber and sent with the text above. Facts the screen read, nothing more: the
+         classification only when the server sent it to this reader, never a Pro number. The
+         links are printed without the scheme, the way a person reads them off a picture. -->
+    <string name="share_card_reserves">Reserves reported by xStocks</string>
+    <string name="share_card_circulating">In circulation per xStocks</string>
+    <string name="share_card_stock_url">plainticker.com/en/%1$s</string>
+    <string name="share_card_home_url">plainticker.com</string>
+    <string name="share_card_vote_url">plainticker.com/en/vote</string>
+    <string name="share_card_stock_footer">Read on %1$s from the Solana mint, xStocks and Jupiter. Not a price forecast or investment advice.</string>
+    <string name="share_card_vote_headline">I voted for %1$s to be analyzed next</string>
+    <string name="share_card_vote_round">Round</string>
+    <string name="share_card_vote_weight">Staked SKR behind the vote</string>
+    <string name="share_card_skr">%1$s SKR</string>
+    <string name="share_card_tx">Transaction on Solscan</string>
+    <string name="share_card_vote_footer">Votes are weighted by staked SKR and counted on chain.</string>
+    <string name="share_card_swap_headline">Swapped into %1$s</string>
+    <string name="share_card_swap_route">Route</string>
+    <string name="share_card_swap_route_value">Jupiter, on Solana</string>
+    <!-- What a landed swap's Share sends beside its card: the token and the public transaction,
+         never an amount, a price or a cost. -->
+    <string name="swap_share_text">Swapped into %1$s with PlainTicker. https://www.plainticker.com/en Proof on chain: https://solscan.io/tx/%2$s</string>
+    <string name="swap_share_out_text">Swapped %1$s to USDC with PlainTicker. https://www.plainticker.com/en Proof on chain: https://solscan.io/tx/%2$s</string>
+    <string name="share_card_swap_footer">Tokenized stocks, read before you swap. Not a price forecast or investment advice.</string>
     <string name="action_max">Max</string>
     <string name="action_clear">Clear</string>
     <string name="action_retry">Retry</string>
@@ -79,6 +103,17 @@
     <string name="onboarding_pick_body">Today will show their next report dates and how closely each token follows its share. One short digest a day says what changed.</string>
     <string name="onboarding_pick_skip_example">Skip and read %1$s</string>
     <string name="onboarding_pick_skip">Skip</string>
+    <!-- The controls step (founder feedback 2026-09-29), between the consent and the pick step:
+         one screen, skippable, so the first stock page a reader opens (the pick step's Skip lands
+         on AAPLx) is not the first time they meet the issuer's controls. -->
+    <string name="onboarding_controls_title">Every tokenized stock has controls</string>
+    <string name="onboarding_controls_backing_lead">Backing.</string>
+    <string name="onboarding_controls_backing">xStocks holds real shares for the tokens and reports how many.</string>
+    <string name="onboarding_controls_powers_lead">Issuer powers.</string>
+    <string name="onboarding_controls_powers">The issuer can move, burn or pause tokens in any wallet, to meet its legal duties.</string>
+    <string name="onboarding_controls_splits_lead">Splits.</string>
+    <string name="onboarding_controls_splits">A stock split or a dividend changes a multiplier, not the balance stored on chain.</string>
+    <string name="onboarding_controls_where">You will see them on each stock page under Backing and controls.</string>
 
     <!-- List -->
     <string name="list_today_stale">Checked %1$s, tap to refresh</string>
@@ -212,6 +247,35 @@
     <string name="detail_live_unread_meta">Nothing below this line is read from the chain</string>
     <string name="detail_price_absent">Jupiter has no price for this token yet</string>
     <string name="detail_heading_backing">Backing and controls</string>
+    <!-- "What backing and controls mean" (founder feedback 2026-09-29): the info action on the
+         section head opens a sheet that explains every row the grid can show, each with what it is
+         and why it matters to the reader. The same words, EN and UK, are the web page
+         plainticker.com/en/learn/backing-and-controls; keep the two in step. The two percent
+         signs are doubled because the sheet reads these through the formatting getString, so a
+         bare one cannot be taken for a placeholder. -->
+    <string name="backing_explain_action">Explain</string>
+    <string name="backing_explain_title">What backing and controls mean</string>
+    <string name="backing_explain_lede">Every tokenized stock here is a Solana token issued by xStocks. This section lists what backs each token and what its issuer can do with it. Here is what each row means, in plain words.</string>
+    <string name="backing_explain_what">What it is</string>
+    <string name="backing_explain_why">Why it matters to you</string>
+    <string name="backing_explain_reserves_what">xStocks says how many real shares its custodian holds for the tokens it counts in circulation. 100%% means one share held for each token. This is the issuer\'s own report. PlainTicker reads it from xStocks and cannot look into the custodian\'s account.</string>
+    <string name="backing_explain_reserves_why">A token is worth what stands behind it. Under 100%% means fewer shares than tokens by the issuer\'s own count. No report means the backing cannot be checked here at all.</string>
+    <string name="backing_explain_supply_title">Minted on chain and in circulation</string>
+    <string name="backing_explain_supply_what">Minted on chain is how many tokens the Solana mint says exist right now. In circulation is the count xStocks reports, the one its reserves are measured against. The two are different measures and often differ. PlainTicker cannot see why, so it shows both and draws no conclusion.</string>
+    <string name="backing_explain_supply_why">The reserves figure covers the count in circulation. If far more tokens exist on chain, that figure alone does not say how the rest are backed. That is a fair question to put to the issuer.</string>
+    <string name="backing_explain_delegate_what">A setting on the token that gives one address, chosen by the issuer, the power to move or burn tokens in any wallet, without the holder signing anything. Tokenized stocks carry it because the issuer has legal duties an ordinary token cannot meet: reversing a transfer made in error, acting on a court order or on sanctions, and handling company events such as a merger.</string>
+    <string name="backing_explain_delegate_why">Tokens in your own wallet are not fully under your control. When the delegate is active, the stock page shows its address, so you can see who holds this power.</string>
+    <string name="backing_explain_pausable_what">The issuer can stop every transfer of the token at once. Some tokens also let the issuer freeze a single wallet. The row says whether this switch exists and whether it is on right now.</string>
+    <string name="backing_explain_pausable_why">While transfers are paused you cannot swap or send the token, even when the share itself trades as usual in the US.</string>
+    <string name="backing_explain_hook_what">A program the issuer can attach to the token so that it runs every time the token moves. It can add checks, and it can refuse a transfer. None means no program runs.</string>
+    <string name="backing_explain_hook_why">A hook can block a transfer to or from your wallet. When one runs, the stock page names the program.</string>
+    <string name="backing_explain_split_what">The token uses a Solana feature called Scaled UI Amount. The balance stored on chain stays the same, and the issuer changes one multiplier instead. A stock split, or a dividend xStocks adds to the token instead of paying it out, changes the multiplier, and a wallet shows the stored balance times the multiplier.</string>
+    <string name="backing_explain_split_why">After a split the number of tokens a wallet shows changes, while the value of your tokens does not. A change can be set ahead of time, and the stock page shows the new figure and its date once one is announced. A wallet that ignores the multiplier shows the wrong amount.</string>
+    <string name="backing_explain_chain_title">Supply on chain</string>
+    <string name="backing_explain_chain_what">The minted count is read live from the Solana mint, at the slot shown above the rows, and multiplied by the multiplier, so it is the count a wallet would add up. No company reports it.</string>
+    <string name="backing_explain_chain_why">It is the one figure here nobody has to take on trust. Anyone can check it on a block explorer.</string>
+    <string name="backing_explain_read_more">Read more on plainticker.com</string>
+    <string name="backing_explain_url">https://www.plainticker.com/en/learn/backing-and-controls</string>
     <string name="detail_fact_por">Proof of reserves, reported by xStocks</string>
     <string name="detail_fact_por_sub">%1$s shares held for %2$s tokens</string>
     <string name="detail_fact_por_custodian_sub">%1$s shares held by %2$s for %3$s tokens</string>

@@ -49,6 +49,7 @@ import com.plainticker.mobile.ui.components.defaultAmberColors
 import com.plainticker.mobile.ui.components.resultAnnouncement
 import com.plainticker.mobile.ui.SolscanAction
 import com.plainticker.mobile.ui.rememberShareText
+import com.plainticker.mobile.ui.share.rememberShareCard
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberSurface
 import com.plainticker.mobile.ui.theme.AmberType
@@ -194,7 +195,10 @@ internal fun ColumnScope.VoteSheetBody(
     ) {
         val share = content.shareText?.text()
         val systemShare = rememberShareText()
-        val onShare = actions.onShare ?: systemShare
+        // The landed vote's card rides with the sentence (founder feedback 2026-09-29).
+        val cardShare = rememberShareCard()
+        val card = content.shareCard
+        val onShare = actions.onShare ?: { text: String -> if (card != null) cardShare(card, text) else systemShare(text) }
         content.primary?.let {
             AmberPrimaryAction(label = it.label.text(), onClick = actions.of(it.kind, share, onShare))
         }

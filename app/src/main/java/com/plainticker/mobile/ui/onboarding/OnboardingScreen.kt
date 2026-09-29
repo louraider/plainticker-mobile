@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.onboarding
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,6 +38,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,6 +98,7 @@ fun OnboardingScreen(
         state = state,
         onCheckedChange = viewModel::setAccepted,
         onContinue = viewModel::confirm,
+        onNext = viewModel::continueToPick,
         picks = PickActions(onToggle = viewModel::togglePick, onFinish = viewModel::finish, onSkip = viewModel::skip),
         modifier = modifier,
     )
@@ -115,6 +121,7 @@ private fun OnboardingContent(
     onContinue: () -> Unit,
     picks: PickActions,
     modifier: Modifier = Modifier,
+    onNext: () -> Unit = {},
 ) {
     val colors = defaultAmberColors()
     Box(modifier.fillMaxSize().background(colors.surfaceGround)) {
@@ -133,6 +140,11 @@ private fun OnboardingContent(
                 enabled = state.canContinue,
                 onCheckedChange = onCheckedChange,
                 onContinue = onContinue,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+
+            OnboardingStep.CONTROLS -> ControlsPanel(
+                onNext = onNext,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
 
@@ -256,6 +268,72 @@ private fun ConsentPanel(
             )
         }
     }
+}
+
+/**
+ * The controls step (founder feedback 2026-09-29): one screen, "Every tokenized stock has
+ * controls", three points each led by its own word in weight 600 (one wrapping [Text] per point,
+ * so no lead column can starve a sentence column, the rule the old tab map kept), and where the
+ * reader will meet them again. Continue and Skip both move on to the pick step: nothing here is
+ * a choice, so skipping costs nothing but the reading.
+ */
+@Composable
+private fun ControlsPanel(onNext: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = defaultAmberColors()
+    AmberSheetSurface(modifier = modifier, handle = false, colors = colors) {
+        Column(
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets(bottom = PanelBottomPadding)))
+                .padding(start = PanelSidePadding, end = PanelSidePadding, top = PanelTopPadding),
+            verticalArrangement = Arrangement.spacedBy(PanelGap),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(PanelGap),
+            ) {
+                Text(
+                    text = stringResource(R.string.onboarding_controls_title),
+                    style = AmberType.screenTitle,
+                    color = colors.textPrimary,
+                )
+                ControlsPoint(R.string.onboarding_controls_backing_lead, R.string.onboarding_controls_backing, colors)
+                ControlsPoint(R.string.onboarding_controls_powers_lead, R.string.onboarding_controls_powers, colors)
+                ControlsPoint(R.string.onboarding_controls_splits_lead, R.string.onboarding_controls_splits, colors)
+                Text(
+                    text = stringResource(R.string.onboarding_controls_where),
+                    style = AmberType.body,
+                    color = colors.textSecondary,
+                )
+            }
+            AmberPrimaryAction(
+                label = stringResource(R.string.onboarding_consent_continue),
+                onClick = onNext,
+                colors = colors,
+            )
+            TextAction(
+                label = stringResource(R.string.onboarding_pick_skip),
+                onClick = onNext,
+                color = colors.actionText,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+        }
+    }
+}
+
+/** One point: its lead word in weight 600, then the sentence, in one wrapping text. */
+@Composable
+private fun ControlsPoint(@StringRes lead: Int, @StringRes body: Int, colors: AmberColors) {
+    val leadText = stringResource(lead)
+    val bodyText = stringResource(body)
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) { append(leadText) }
+            append(" ")
+            append(bodyText)
+        },
+        style = AmberType.body,
+        color = colors.textSecondary,
+    )
 }
 
 /**

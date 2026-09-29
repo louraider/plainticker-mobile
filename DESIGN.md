@@ -514,6 +514,38 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. Since Today direction A (2026-09-24) Today no longer draws `WatchlistContent`: the digest lives on its own screen under You (`ui/you/DigestScreen.kt`), whose `Panel` resolves the same colours. |
 | `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept anatomy, Amber type and colour (2026-09-26)** | Each resolves `defaultAmberColors()`, and since the pre-freeze pass each draws Bricolage (`AmberType.label`, `textAction`, `fieldText`, `figureLarge`, `wordmark`) instead of Outfit; the pass sheet's title and sentences moved the same day (`sectionHead`, `body`). JetBrains Mono stays only where an on-chain identifier is drawn: a wallet's short key in `TopBar`, a signature or address in a `FactCell`/`AmberFact` with `valueMono`. |
 
+### 4.8 Share images and the controls explainer (2026-09-29)
+
+**Share images** (`ui/share/`). Share on Detail, on a landed vote and on a landed swap into a
+token (the result hero's Share slot, wired by Detail and Portfolio) sends a picture with its text: `ShareCard` decides what the picture says, `ShareCardRenderer` draws it on the
+platform Canvas, and `ShareImage` writes a PNG under `cache/share/` and hands it out through a
+FileProvider that is not exported (`image/png`, `EXTRA_STREAM`, a read grant set on the intent and
+on its ClipData), falling back to the text alone on any failure. The size is 1080 by 1350 (4:5):
+the tallest uncropped post on Instagram's feed, shown whole on X's phone timeline and in
+Telegram, framed rather than cut in a 9:16 story; 1200 by 630 works only as a link preview. The
+card is always the dark set, whatever the phone's setting, so it looks the same in every feed.
+Anatomy: the brand mark's two corners drawn large around the headline (the one bold element),
+facts in a two-column tonal grid parted by ground seams (`FactGrid`'s own anatomy), then the
+lockup and the link on one line and the small print under it. Bricolage everywhere, `tnum` on
+figures, JetBrains Mono for a transaction only, caution only on an active permanent delegate.
+Every line wraps in its column or shrinks to fit it, and a body that would reach the foot steps
+down in scale (to 60 percent at most), so nothing clips. `ShareCardTest` pins what each card may
+say: the classification with its qualifier only when the server sent this reader the word, never
+the composite or an axis, no amount or price on a swap card; `ShareProviderTest` pins the provider.
+
+**"Explain" on "Backing and controls"** opens `BackingExplainerSheet` (`ui/detail/`), every row the
+grid can show under its own label with "What it is" and "Why it matters to you", then a link to the
+same words at plainticker.com/en/learn/backing-and-controls. The action is an optional
+`TextAction` slot on `AmberSectionHead`, on the title's baseline. Measured with fontTools against
+the bundled Bricolage: "Backing and controls" at `sectionHead` is 224.73dp, "Explain" at
+`textAction` 49.25dp plus its 16dp inset, so on a 360dp frame the title keeps 26dp to spare at
+1.0x and wraps to its second line at 1.3x rather than clipping.
+
+**Onboarding's controls step** sits between the consent and the pick step: "Every tokenized stock
+has controls", three points each led by its word in weight 600 in one wrapping `Text`, and where
+the reader meets them again. Continue and Skip both lead to the pick step. It comes first because
+the pick step's Skip lands on AAPLx, where the rows sit right under the price.
+
 ## 5. Layout
 
 The shared information architecture (Today, Stocks, Vote, Portfolio, You under `AmberBottomNav`,

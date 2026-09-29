@@ -27,6 +27,9 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -98,7 +101,8 @@ import com.plainticker.mobile.ui.components.Track
 import com.plainticker.mobile.ui.portfolio.PRO_STAKE_THRESHOLD_RAW
 import com.plainticker.mobile.ui.swap.SwapActions
 import com.plainticker.mobile.ui.resolve
-import com.plainticker.mobile.ui.shareText as shareSystemText
+import com.plainticker.mobile.ui.share.rememberShareCard
+import com.plainticker.mobile.ui.share.rememberSwapShare
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.swap.SwapSheet
 import com.plainticker.mobile.ui.swap.SwapState
@@ -151,6 +155,7 @@ fun DetailScreen(
         onPauseOrDispose { viewModel.onPause() }
     }
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
+    val swapShare = rememberSwapShare(swap)
     val holding by swapViewModel.holding.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
     val voted by voteViewModel.votedTickers.collectAsStateWithLifecycle()
@@ -195,6 +200,8 @@ fun DetailScreen(
             onRetry = swapViewModel::retry,
             onSwapBack = swapViewModel::swapBack,
             onContinue = swapViewModel::continueToWallet,
+            // The receipt's Share: "Swapped into AAPLx" as a card, with the transaction.
+            onShare = swapShare,
         ),
         holding = holding,
         onSwapOut = { swapToken?.let(swapViewModel::openOut) },
@@ -251,6 +258,7 @@ internal fun DetailContent(
 ) {
     val colors = defaultAmberColors()
     val pullState = rememberPullToRefreshState()
+    var explaining by rememberSaveable { mutableStateOf(false) }
     // The only Box on Detail, and the only thing in it that does not scroll is the scrim: the
     // 64sp hero used to draw in the same pixels as the white system clock, because the content
     // scrolls under a transparent status bar and nothing stood between them (Insets.kt). Nothing
@@ -281,15 +289,18 @@ internal fun DetailContent(
                 .navigationBarsPadding(),
         ) {
             // Share beside Watch (judges' round 2): one factual line off the trust card and the
-            // stock's web page, built at the tap from what this screen has read by then.
+            // stock's web page, built at the tap from what this screen has read by then. Since the
+            // founder's feedback of 2026-09-29 the line rides with a picture of the same facts
+            // (ui/share), the text alone when the picture cannot be made.
             val context = LocalContext.current
+            val shareCard = rememberShareCard()
             TopBar(
                 action = stringResource(if (state.watched) R.string.action_watching else R.string.action_watch),
                 onAction = onToggleWatch,
                 colors = colors,
                 secondaryAction = stringResource(R.string.action_share),
                 onSecondaryAction = {
-                    context.shareSystemText(state.shareText { copy -> copy.resolve(context.resources) })
+                    shareCard(state.shareCard(), state.shareText { copy -> copy.resolve(context.resources) })
                 },
             )
             state.banner?.let { Banner(text = stringResource(it.text)) }
@@ -313,7 +324,12 @@ internal fun DetailContent(
                 }
                 Spacer(Modifier.height(LiveGap))
                 LiveBlock(state)
-                AmberSectionHead(title = stringResource(R.string.detail_heading_backing))
+                // "Explain" opens what every row means (founder feedback 2026-09-29).
+                AmberSectionHead(
+                    title = stringResource(R.string.detail_heading_backing),
+                    action = stringResource(R.string.backing_explain_action),
+                    onAction = { explaining = true },
+                )
                 TrustBlock(state)
             }
 
@@ -332,6 +348,7 @@ internal fun DetailContent(
             // mid-landing would take a landed swap's receipt with it.
             SwapSheet(state = swap, actions = swapActions)
             VoteSheet(state = vote, actions = voteActions)
+            if (explaining) BackingExplainerSheet(onDismiss = { explaining = false })
         }
         TopScrim(Modifier.align(Alignment.TopCenter), groundColor = colors.surfaceGround)
     }

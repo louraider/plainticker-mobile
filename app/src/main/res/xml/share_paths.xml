@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one folder the share provider serves (ui/share/ShareImage.kt): cache/share/, where the share
+  image is written just before the chooser opens. Nothing else under the cache or files is
+  reachable through it. ShareProviderTest pins this.
+-->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>

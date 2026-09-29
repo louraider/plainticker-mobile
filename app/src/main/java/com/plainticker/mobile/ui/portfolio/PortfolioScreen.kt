@@ -1,5 +1,6 @@
 package com.plainticker.mobile.ui.portfolio
 
+import com.plainticker.mobile.ui.share.rememberSwapShare
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -152,6 +153,7 @@ fun PortfolioScreen(
                 onRetry = swapViewModel::retry,
                 onSwapBack = swapViewModel::swapBack,
                 onContinue = swapViewModel::continueToWallet,
+                onShare = rememberSwapShare(swap),
             ),
         )
     }
