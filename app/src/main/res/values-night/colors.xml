@@ -2,5 +2,5 @@
 <resources>
     <!-- Dark system theme: Amber's own dark page ground (AmberDarkColors.surfaceGround) behind
          the splash and the plain window, the same value as amber_ground. -->
-    <color name="window_ground">#16130D</color>
+    <color name="window_ground">@color/amber_ground</color>
 </resources>
