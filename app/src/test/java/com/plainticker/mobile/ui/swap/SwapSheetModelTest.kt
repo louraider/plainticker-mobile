@@ -6,6 +6,7 @@ import com.plainticker.mobile.data.KnownMints
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.ShippedCopy
+import com.plainticker.mobile.ui.components.ResultMarkTone
 import com.plainticker.mobile.ui.words
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -856,10 +857,29 @@ class SwapSheetModelTest {
         assertEquals(R.string.result_received_in, id(result.detail))
         assertEquals("TSLAx received, confirmed in 3.1 s", ShippedCopy.render(requireNotNull(result.detail)))
         assertEquals(
-            "TalkBack hears the headline and what arrived, once",
-            listOf("Swap landed", "Received 0.013609 TSLAx"),
+            "TalkBack hears the headline, what arrived and where it is, once",
+            listOf("Swap landed", "Received 0.013609 TSLAx", "TSLAx is in your wallet now, and Portfolio shows it."),
             result.announcement.map { ShippedCopy.render(it) },
         )
+    }
+
+    @Test
+    fun `a landing says what happens next, where the tokens are now`() {
+        // 2026-09-29, the founder on the Seeker: the result said what happened and not what now.
+        val result = requireNotNull(landed().shown().result)
+        assertEquals(R.string.result_landed_next, id(result.next))
+        assertEquals("TSLAx is in your wallet now, and Portfolio shows it.", ShippedCopy.render(requireNotNull(result.next)))
+        assertEquals(ResultMarkTone.Landed, result.tone.mark)
+    }
+
+    @Test
+    fun `a landing offers Share, and only a landing does`() {
+        val content = landed().shown()
+        assertEquals(SheetActionKind.Share, content.share?.kind)
+        assertEquals("Share", ShippedCopy.render(requireNotNull(content.share).label))
+        SwapFailure.entries.forEach { reason ->
+            assertNull(reason.name, SwapState.Failed(leg, funds, amount(), reason, quote, false, timing).shown().share)
+        }
     }
 
     @Test
@@ -867,7 +887,11 @@ class SwapSheetModelTest {
         val result = requireNotNull(landed(fill.copy(outAmountRaw = null)).shown().result)
         assertEquals(R.string.value_missing, id(result.figure))
         assertEquals(
-            listOf("Swap landed", "The amount of TSLAx received was not reported"),
+            listOf(
+                "Swap landed",
+                "The amount of TSLAx received was not reported",
+                "TSLAx is in your wallet now, and Portfolio shows it.",
+            ),
             result.announcement.map { ShippedCopy.render(it) },
         )
     }
@@ -882,12 +906,14 @@ class SwapSheetModelTest {
     }
 
     @Test
-    fun `each failure's headline says what is certain about the money, in the failure tone`() {
+    fun `each failure's headline is the plain answer, and its reason says what is certain about the money`() {
+        // 2026-09-29: "Swap failed", the founder's own words, in place of "Nothing was swapped" and
+        // "The swap did not land"; the reason under it still says what happened to the money.
         SwapFailure.entries.forEach { reason ->
             val result = requireNotNull(SwapState.Failed(leg, funds, amount(), reason, quote, false, timing).shown().result)
             val (tone, headline) = when (reason.outcome) {
-                FailureOutcome.NOTHING_SENT -> ResultTone.Failed to "Nothing was swapped"
-                FailureOutcome.NOT_LANDED -> ResultTone.Failed to "The swap did not land"
+                FailureOutcome.NOTHING_SENT -> ResultTone.Failed to "Swap failed"
+                FailureOutcome.NOT_LANDED -> ResultTone.Failed to "Swap failed"
                 FailureOutcome.UNKNOWN -> ResultTone.Pending to "Sent, not confirmed yet"
                 FailureOutcome.NOT_CONNECTED -> ResultTone.Failed to "No wallet connected"
             }
@@ -895,6 +921,7 @@ class SwapSheetModelTest {
             assertEquals(reason.name, headline, ShippedCopy.render(result.headline))
             assertEquals("the reason is the failure's own one line", reason.text, id(result.detail))
             assertNull("a failure has no hero figure", result.figure)
+            assertNull("a failure's next step is its primary action, not a sentence", result.next)
             assertEquals(2, result.announcement.size)
         }
     }

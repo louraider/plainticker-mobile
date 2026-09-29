@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light system theme: dark status and navigation bar icons over the light ground
+         (window_ground). values-night turns this off. -->
+    <bool name="window_light_bars">true</bool>
+</resources>

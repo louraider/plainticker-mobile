@@ -3,28 +3,7 @@
 package com.plainticker.mobile.ui.swap
 
 import android.content.ClipData
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import com.plainticker.mobile.ui.components.AmberFact
-import com.plainticker.mobile.ui.components.AmberFactRows
-import com.plainticker.mobile.ui.components.rememberMotionEnabled
-import com.plainticker.mobile.ui.theme.AmberType
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,15 +26,12 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -68,6 +44,8 @@ import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.rememberExplorerOpener
+import com.plainticker.mobile.ui.components.AmberFact
+import com.plainticker.mobile.ui.components.AmberFactRows
 import com.plainticker.mobile.ui.components.AmberPrimaryAction
 import com.plainticker.mobile.ui.components.AmberSecondaryAction
 import com.plainticker.mobile.ui.components.AmberSheet
@@ -76,13 +54,15 @@ import com.plainticker.mobile.ui.components.Field
 import com.plainticker.mobile.ui.components.InstrumentPreviews
 import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
+import com.plainticker.mobile.ui.components.ResultHero
 import com.plainticker.mobile.ui.components.SkeletonBar
 import com.plainticker.mobile.ui.components.TextAction
 import com.plainticker.mobile.ui.components.defaultAmberColors
-import com.plainticker.mobile.ui.components.drawCautionMark
+import com.plainticker.mobile.ui.components.resultAnnouncement
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberSurface
+import com.plainticker.mobile.ui.theme.AmberType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -129,6 +109,12 @@ data class SwapActions(
     val onSwapBack: () -> Unit = {},
     /** From the Review step, the one way to the wallet. */
     val onContinue: () -> Unit = {},
+    /**
+     * Share, from a landed receipt. Null, every host's default today, draws no Share action at
+     * all; a host that passes one (a picture of the receipt, say) gets the action beside "View on
+     * Solscan" with nothing else on the sheet changing.
+     */
+    val onShare: (() -> Unit)? = null,
 )
 
 @Composable
@@ -174,7 +160,6 @@ internal fun ColumnScope.SwapSheetBody(
     // rather than the fixed-dark Ink/Ink2/Muted/Canvas/Elevated this sheet drew unconditionally
     // before this fix, which left the sheet dark regardless of the system setting.
     val colors = defaultAmberColors()
-    ConfirmOnLanded(content.receipt?.signature)
     val lead = leadFocus(takeFocus)
 
     content.debug?.let { DebugBand(it, colors) }
@@ -183,7 +168,7 @@ internal fun ColumnScope.SwapSheetBody(
     if (result != null) {
         // A finished attempt leads with what happened, not with what the sheet was for: landed,
         // failed, or not known yet, each as its own moment, and each announced once.
-        ResultBlock(result = result, pair = content.title, lead = lead, colors = colors)
+        ResultBlock(result = result, pair = content.title, signature = content.receipt?.signature, lead = lead, colors = colors)
     } else {
         Title(content, lead, actions, colors)
         content.phase?.let { Phase(it, Modifier) }
@@ -231,9 +216,19 @@ internal fun ColumnScope.SwapSheetBody(
 
     // What this phone checked in the bytes, on the Review step and while the wallet is open (2026-09-27).
     content.checked?.let { Sentence(it, AmberType.context, colors.textSecondary, NoticeTop) }
-    // The receipt's way to check it on the chain, under the signature and the slot.
+    // The receipt's way to check it on the chain, under the signature and the slot, and beside it
+    // the Share slot: drawn only when the model offers it (a landing) and a host passed
+    // [SwapActions.onShare], which is where a share of the receipt plugs in.
     val explorerLabel = content.explorerLabel
-    content.explorerUrl?.let { url -> if (explorerLabel != null) ExplorerLink(url, explorerLabel, colors) }
+    val share = content.share?.takeIf { actions.onShare != null }
+    if (content.explorerUrl != null || share != null) {
+        Row(modifier = Modifier.padding(start = Side, top = NoticeTop), horizontalArrangement = Arrangement.spacedBy(LinkGap)) {
+            content.explorerUrl?.let { url -> if (explorerLabel != null) ExplorerLink(url, explorerLabel, colors) }
+            share?.let {
+                TextAction(label = it.label.text(), onClick = actions.of(it.kind), color = colors.actionText, contentPadding = FlipPadding)
+            }
+        }
+    }
 
     Column(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),
@@ -262,6 +257,7 @@ private fun SwapActions.of(kind: SheetActionKind): () -> Unit = when (kind) {
     SheetActionKind.Retry -> onRetry
     SheetActionKind.SwapBack -> onSwapBack
     SheetActionKind.Continue -> onContinue
+    SheetActionKind.Share -> onShare ?: {}
 }
 
 // ---- The pieces ---------------------------------------------------------------------------------
@@ -303,138 +299,38 @@ private fun Phase(phase: SheetPhase, lead: Modifier) {
 }
 
 /**
- * The finished attempt, as its own moment (2026-09-24). The founder's first real receipt put the
- * outcome in a small amber "Landed" line and left whether the swap had worked unclear; this puts
- * it in the largest words on the sheet, beside a mark whose shape alone already says which of
- * the three it is.
+ * The finished attempt, as its own moment: the shared [ResultHero] (2026-09-29), the one the vote
+ * sheet leads with too, so both results read the same way. The founder's first real receipt
+ * (2026-09-24) put the outcome in a small amber "Landed" line; the Seeker report of 2026-09-29
+ * found the replacement still too quiet (a 40dp ring beside a 22sp line). Now:
  *
- * - **Landed.** An amber ring closes and fills as it settles, "Swap landed", then the fill as the
- *   hero figure ([AmberType.figureLarge], `tnum`, amber: the same figure style as Portfolio's
- *   total), then what arrived and how fast.
- * - **Failed.** An open ring in the caution colour, which never closes, a headline that says what
- *   is certain about the money ("Nothing was swapped", "The swap did not land"), and the reason.
- * - **Pending.** A broken amber ring, static, "Sent, not confirmed yet", and what to do.
+ * - **Landed.** A 72dp amber disc whose ring closes and whose check strokes in, "Swap landed" in
+ *   the largest words on the sheet, the fill as the hero figure, what arrived and how fast, and
+ *   where it is now. One Confirm haptic, keyed on the signature.
+ * - **Failed.** The closed caution ring with its sign, "Swap failed" in the caution colour, and
+ *   the reason, which says what is certain about the money.
+ * - **Pending.** The broken amber ring, static once drawn, "Sent, not confirmed yet", and what to
+ *   do.
  *
- * **Motion.** Amber's two tokens and nothing new: the ring sweeps on the settle spring (no bounce,
- * medium-low stiffness, the one `AmberChip` and Today's entrance use) and the figure fades in on
- * the quick 150ms tween (Portfolio's total). Both are gated on [rememberMotionEnabled]: at
- * animator scale 0 the first frame is already the settled one, not a snap a frame later, and
- * nothing here needs to move to be read, because the headline says it in words.
- *
- * **Accessibility.** The block is one merged node, a heading, and a polite live region whose
- * description is the headline and the detail together, so TalkBack reads the result once when it
- * appears. It is also where focus lands ([lead]).
- *
- * **Fit.** The headline wraps beside the 40dp mark (no line limit). The hero figure is one line on
- * the full 360dp: the widest realistic fill, "99,999.999999", measures 242.896dp at 34sp / 700 with
- * `tnum`, 315.765dp at 1.3x (SwapResultFitTest).
+ * Motion, haptic and accessibility live in [ResultHero] and are pinned there; this block only
+ * hands it the model's words.
  */
 @Composable
-private fun ResultBlock(result: SheetResult, pair: Copy, lead: Modifier, colors: AmberColors) {
-    val motion = rememberMotionEnabled()
-    val announcement = result.announcement.map { it.text() }.joinToString(". ")
-    // Without motion the first frame is the settled one; with it, the settle starts on arrival.
-    var settled by remember(result) { mutableStateOf(!motion) }
-    LaunchedEffect(result) { settled = true }
-    val sweep by animateFloatAsState(
-        targetValue = if (settled) 1f else 0f,
-        animationSpec = if (motion) RingSettle else snap(),
-        label = "result-ring",
+private fun ResultBlock(result: SheetResult, pair: Copy, signature: String?, lead: Modifier, colors: AmberColors) {
+    val headline = result.headline.text()
+    val sentences = listOfNotNull(result.detail, result.next).map { it.text() }
+    val spoken = result.announcement.map { it.text() }
+    ResultHero(
+        tone = result.tone.mark,
+        headline = headline,
+        sentences = sentences,
+        announcement = resultAnnouncement(spoken.first(), spoken.drop(1)),
+        modifier = lead,
+        eyebrow = pair.text(),
+        figure = result.figure?.text(),
+        hapticKey = signature,
+        colors = colors,
     )
-    val reveal by animateFloatAsState(
-        targetValue = if (settled) 1f else 0f,
-        animationSpec = if (motion) tween(durationMillis = QUICK_MILLIS, easing = LinearOutSlowInEasing) else snap(),
-        label = "result-reveal",
-    )
-    val headlineColor = if (result.tone == ResultTone.Failed) colors.stateCaution else colors.textPrimary
-    Column(
-        modifier = lead
-            .fillMaxWidth()
-            .padding(start = Side, end = Side, top = ResultTop)
-            .semantics(mergeDescendants = true) {
-                heading()
-                liveRegion = LiveRegionMode.Polite
-                contentDescription = announcement
-            },
-        verticalArrangement = Arrangement.spacedBy(ResultGap),
-    ) {
-        Text(text = pair.text(), style = AmberType.meta, color = colors.textSecondary)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MarkGap)) {
-            ResultMark(tone = result.tone, progress = sweep, colors = colors)
-            Text(
-                text = result.headline.text(),
-                style = AmberType.sectionHead,
-                color = headlineColor,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        result.figure?.let {
-            Text(
-                text = it.text(),
-                style = AmberType.figureLarge,
-                color = colors.actionText,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.graphicsLayer { alpha = reveal },
-            )
-        }
-        result.detail?.let {
-            Text(text = it.text(), style = AmberType.context, color = colors.textSecondary)
-        }
-    }
-}
-
-/**
- * The mark beside the headline, drawn, never a glyph: a ring that closes and fills for a
- * landing, a closed caution ring with a caution bar and dot inside for a failure, a broken amber
- * ring for an answer still to come. Decorative: the block's own description already says what it
- * means.
- *
- * The failure ring used to be open (a 300 degree arc), and a static open ring is what a spinner
- * looks like: on "No wallet connected" it read as a load that had frozen (QA of 1.3.20). Closed,
- * with the caution sign inside, it reads as a notice and nothing else.
- */
-@Composable
-private fun ResultMark(tone: ResultTone, progress: Float, colors: AmberColors) {
-    val live = colors.stateLive
-    val caution = colors.stateCaution
-    Canvas(Modifier.size(MarkSize)) {
-        val stroke = MarkStroke.toPx()
-        val inset = stroke / 2f
-        val arcSize = Size(size.width - stroke, size.height - stroke)
-        val topLeft = Offset(inset, inset)
-        when (tone) {
-            ResultTone.Landed -> {
-                drawArc(
-                    color = live,
-                    startAngle = -90f,
-                    sweepAngle = 360f * progress,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
-                // The fill settles in behind the closing ring, reaching its size as it closes.
-                drawCircle(color = live, radius = size.minDimension * FILL_RATIO * progress * progress)
-            }
-
-            // The shared caution mark (ui/components/CautionMark.kt), the one the vote sheet's
-            // refusals carry too (QA of 1.3.21).
-            ResultTone.Failed -> drawCautionMark(color = caution, stroke = stroke)
-
-            ResultTone.Pending -> repeat(PENDING_SEGMENTS) { i ->
-                drawArc(
-                    color = live,
-                    startAngle = -90f + i * (360f / PENDING_SEGMENTS),
-                    sweepAngle = 360f / PENDING_SEGMENTS - PENDING_GAP_DEGREES,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
-            }
-        }
-    }
 }
 
 /**
@@ -481,7 +377,6 @@ private fun ExplorerLink(url: String, label: Copy, colors: AmberColors) {
         onClick = { open(url) },
         color = colors.actionText,
         contentPadding = FlipPadding,
-        modifier = Modifier.padding(start = Side, top = NoticeTop),
     )
 }
 
@@ -494,19 +389,6 @@ private fun Sentence(text: Copy, style: TextStyle, color: Color, top: Dp) {
         color = color,
         modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = top),
     )
-}
-
-/**
- * One Confirm haptic when the swap lands, and exactly one: the effect is keyed on the signature,
- * so a recomposition, a rotation or a second collection of the same state does not buzz again.
- * Nothing else on this screen has a haptic, and nothing at all has a sound (DESIGN.md section 6).
- */
-@Composable
-private fun ConfirmOnLanded(signature: String?) {
-    val haptics = LocalHapticFeedback.current
-    LaunchedEffect(signature) {
-        if (signature != null) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-    }
 }
 
 /**
@@ -582,27 +464,11 @@ private val BlockTop = 22.dp
 private val ActionsTop = 24.dp
 private val ActionGap = 10.dp
 private val SheetBottom = 40.dp
-private val ResultTop = 12.dp
-private val ResultGap = 8.dp
-private val MarkGap = 12.dp
-private val MarkSize = 40.dp
-private val MarkStroke = 3.dp
+private val LinkGap = 8.dp
 private val RowsInset = 4.dp
 private val BandPadding = 10.dp
 private val SkeletonGap = 12.dp
 private val FlipPadding = PaddingValues(start = 0.dp, top = 12.dp, end = 16.dp, bottom = 12.dp)
-
-/** Amber's settle: no bounce, medium-low stiffness, the spring AmberChip and Today use. */
-private val RingSettle = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
-
-/** Amber's quick token: the 150ms one-shot reveal Portfolio's total uses. */
-private const val QUICK_MILLIS = 150
-
-/** How far the settled fill reaches inside the ring, as a share of the mark's size. */
-private const val FILL_RATIO = 0.22f
-
-private const val PENDING_SEGMENTS = 4
-private const val PENDING_GAP_DEGREES = 28f
 
 // ---- Previews -----------------------------------------------------------------------------------
 

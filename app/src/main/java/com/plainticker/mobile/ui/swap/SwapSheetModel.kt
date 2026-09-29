@@ -5,6 +5,7 @@ import com.plainticker.mobile.R
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Explorer
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.ResultMarkTone
 import com.plainticker.mobile.ui.counted
 import com.plainticker.mobile.ui.raw
 import com.plainticker.mobile.ui.words
@@ -112,7 +113,7 @@ data class SheetReceipt(
 )
 
 /** What a button does. The sheet maps each to one [SwapViewModel] method and decides nothing. */
-enum class SheetActionKind { Submit, Edit, Close, ViewPortfolio, Retry, SwapBack, Continue }
+enum class SheetActionKind { Submit, Edit, Close, ViewPortfolio, Retry, SwapBack, Continue, Share }
 
 /** Which of the three results a finished attempt is. Each has its own mark, colour and words. */
 enum class ResultTone {
@@ -124,6 +125,15 @@ enum class ResultTone {
 
     /** It was signed and handed on and nobody has said whether it landed. Amber, open. */
     Pending,
+    ;
+
+    /** The shared result hero's mark for this tone ([ResultHero][com.plainticker.mobile.ui.components.ResultHero]). */
+    val mark: ResultMarkTone
+        get() = when (this) {
+            Landed -> ResultMarkTone.Landed
+            Failed -> ResultMarkTone.Failed
+            Pending -> ResultMarkTone.Pending
+        }
 }
 
 /**
@@ -132,9 +142,11 @@ enum class ResultTone {
  * 0.5 s" in a small amber line, and whether the swap had worked was not clear).
  *
  * [headline] is the plain answer in the largest words on the sheet. [figure] is the hero number,
- * only for a landing, and only the executed fill. [detail] says the one thing a person needs next:
- * what arrived and how fast, or why it failed. [announcement] is what TalkBack reads once, as a
- * polite live region, when the result appears: headline and detail together, no seconds ticking.
+ * only for a landing, and only the executed fill. [detail] says what happened: what arrived and
+ * how fast, or why it failed. [next] says what happens now, where there is something to say
+ * (2026-09-29: a landing says where the tokens are). [announcement] is what TalkBack reads once,
+ * as a polite live region, when the result appears: headline and detail together, no seconds
+ * ticking.
  */
 data class SheetResult(
     val tone: ResultTone,
@@ -142,6 +154,7 @@ data class SheetResult(
     val figure: Copy? = null,
     val detail: Copy?,
     val announcement: List<Copy>,
+    val next: Copy? = null,
 )
 
 /** One button. */
@@ -194,6 +207,11 @@ data class SheetContent(
     val checked: Copy? = null,
     /** Solscan's page for the landed transaction, drawn as "View on Solscan". Receipt only. */
     val explorerUrl: String? = null,
+    /**
+     * Share, offered on a landing only. The sheet draws it only when its host passed a share
+     * handler ([SwapActions.onShare]); the model offers it whether or not one is wired.
+     */
+    val share: SheetAction? = null,
 ) {
     /** The label [explorerUrl] is drawn with, decided here like every other word on the sheet. */
     val explorerLabel: Copy? get() = explorerUrl?.let { words(R.string.action_view_on_solscan) }
@@ -232,6 +250,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         extra: SheetAction? = null,
         checked: Copy? = null,
         explorerUrl: String? = null,
+        share: SheetAction? = null,
     ) = SheetContent(
         title = title,
         flip = flip,
@@ -249,6 +268,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
         extra = extra,
         checked = checked,
         explorerUrl = explorerUrl,
+        share = share,
     )
 
     return when (this) {
@@ -385,6 +405,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
                     SheetActionKind.SwapBack,
                 ),
                 explorerUrl = Explorer.transaction(fill.signature),
+                share = SheetAction(words(R.string.action_share), SheetActionKind.Share),
             )
         }
 
@@ -493,24 +514,28 @@ private fun SwapState.Landed.landedResult(amount: Copy): SheetResult {
     val spoken = fill.outAmountRaw
         ?.let { words(R.string.result_landed_a11y, leg.output.shown(it), leg.output.symbol) }
         ?: words(R.string.result_landed_unreported_a11y, leg.output.symbol)
+    val next = words(R.string.result_landed_next, leg.output.symbol)
     return SheetResult(
         tone = ResultTone.Landed,
         headline = headline,
         figure = amount,
         detail = detail,
-        announcement = listOf(headline, spoken),
+        announcement = listOf(headline, spoken, next),
+        next = next,
     )
 }
 
 /**
- * A failure, as its own moment. The headline says what is certain about the money, picked by the
- * failure's [FailureOutcome]; the detail is the failure's own one-line reason. Not knowing is its
- * own tone, not a failure: [ResultTone.Pending].
+ * A failure, as its own moment. The headline is the plain answer, "Swap failed" (the founder's own
+ * words, 2026-09-29), picked by the failure's [FailureOutcome]; the detail is the failure's own
+ * reason, which says what is certain about the money ("Nothing was swapped", "Nothing was sent").
+ * A wallet that was never connected says that instead, since no swap was attempted, and not
+ * knowing is its own tone, not a failure: [ResultTone.Pending].
  */
 private fun SwapState.Failed.failedResult(): SheetResult {
     val (tone, headline) = when (reason.outcome) {
-        FailureOutcome.NOTHING_SENT -> ResultTone.Failed to words(R.string.result_nothing_swapped)
-        FailureOutcome.NOT_LANDED -> ResultTone.Failed to words(R.string.result_not_landed)
+        FailureOutcome.NOTHING_SENT -> ResultTone.Failed to words(R.string.result_failed)
+        FailureOutcome.NOT_LANDED -> ResultTone.Failed to words(R.string.result_failed)
         FailureOutcome.UNKNOWN -> ResultTone.Pending to words(R.string.result_pending)
         FailureOutcome.NOT_CONNECTED -> ResultTone.Failed to words(R.string.result_not_connected)
     }

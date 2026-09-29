@@ -422,9 +422,9 @@
     <string name="result_received_in">%1$s received, confirmed in %2$s</string>
     <string name="result_landed_a11y">Received %1$s %2$s</string>
     <string name="result_landed_unreported_a11y">The amount of %1$s received was not reported</string>
-    <string name="result_nothing_swapped">Nothing was swapped</string>
+    <string name="result_landed_next">%1$s is in your wallet now, and Portfolio shows it.</string>
+    <string name="result_failed">Swap failed</string>
     <string name="result_not_connected">No wallet connected</string>
-    <string name="result_not_landed">The swap did not land</string>
     <string name="result_pending">Sent, not confirmed yet</string>
 
     <!-- Receipt -->
@@ -520,8 +520,14 @@
     <string name="vote_fee">%1$s SOL</string>
     <string name="vote_collector_label">Sent to</string>
     <string name="vote_refreshed">The transaction went stale while this was open, so the server built a fresh one. Nothing was signed. Confirm again to send the vote.</string>
-    <string name="vote_landed_label">Vote sent</string>
-    <string name="vote_landed_note">The vote is on the chain. Counted within about 20 minutes.</string>
+    <!-- The vote's result, the sheet's own moment (2026-09-29): the headline in the largest words,
+         then what happens next. -->
+    <string name="vote_result_landed">Your vote is on chain</string>
+    <string name="vote_result_landed_next">Counted within about 20 minutes. You will see it under Your votes.</string>
+    <string name="vote_result_refused">Vote not sent</string>
+    <string name="vote_result_unknown">Vote not confirmed</string>
+    <string name="vote_result_unknown_next">Check Your votes in about 20 minutes before you vote again.</string>
+    <string name="vote_stock_label">Stock</string>
     <!-- Share from the landed state: a plain sentence, the public vote page anyone can open, and the
          public transaction as the proof. Nothing else. -->
     <string name="vote_share_text">I voted for %1$s to be analyzed next on PlainTicker. The vote: https://www.plainticker.com/en/vote Proof on chain: https://solscan.io/tx/%2$s</string>
