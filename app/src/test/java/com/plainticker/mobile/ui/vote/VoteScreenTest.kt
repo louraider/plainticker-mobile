@@ -561,7 +561,7 @@ class VoteScreenTest {
     fun `the ops-log copy is one line, and nothing claims anyone can recount to the same result`() {
         val strings = ShippedCopy.strings
         assertEquals("Counted within about 20 minutes.", strings["vote_tab_your_votes_note"])
-        assertEquals("The vote is on the chain. Counted within about 20 minutes.", strings["vote_landed_note"])
+        assertEquals("Counted within about 20 minutes. You will see it under Your votes.", strings["vote_result_landed_next"])
         strings.filterKeys { it.startsWith("vote_") }.forEach { (name, text) ->
             assertFalse("$name still narrates the tally schedule", text.contains("ten minutes") || text.contains("cached"))
             assertFalse("$name claims anyone can count the same way", text.contains("anyone can count"))

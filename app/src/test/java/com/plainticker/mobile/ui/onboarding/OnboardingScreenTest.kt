@@ -55,6 +55,9 @@ class OnboardingScreenTest {
             "onboarding_body_disclaimer", "onboarding_certify", "onboarding_consent_continue",
             "onboarding_continue", "onboarding_pick_title", "onboarding_pick_body",
             "onboarding_pick_skip_example", "onboarding_pick_skip",
+            "onboarding_controls_title", "onboarding_controls_backing_lead", "onboarding_controls_backing",
+            "onboarding_controls_powers_lead", "onboarding_controls_powers", "onboarding_controls_splits_lead",
+            "onboarding_controls_splits", "onboarding_controls_where",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
             assertTrue("OnboardingScreen.kt does not read R.string.$name", "R.string.$name" in scan.code)
@@ -142,8 +145,8 @@ class OnboardingScreenTest {
         assertTrue("touches are not consumed before the children see them", "PointerEventPass.Initial" in scan.code)
         val handlers = Regex("""\bonClick\s*=\s*(\w+)""").findAll(scan.code).map { it.groupValues[1] }.toList()
         assertEquals(
-            "the consent button, then the pick step's finish and skip, are the only named click handlers",
-            listOf("onContinue", "actions", "actions"),
+            "the consent button, the controls step's continue and skip, then the pick step's finish and skip, are the only named click handlers",
+            listOf("onContinue", "onNext", "onNext", "actions", "actions"),
             handlers,
         )
     }

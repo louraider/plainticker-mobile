@@ -40,6 +40,21 @@ class SwapSheetTest {
 
     private val stringsXml: String by lazy { File(module, "src/main/res/values/strings.xml").readText() }
 
+    /** The shared result hero both sheets lead a finished attempt with (2026-09-29). */
+    private val hero: String by lazy {
+        val file = File(module, "src/main/java/com/plainticker/mobile/ui/components/ResultHero.kt")
+        assertTrue("ResultHero.kt is missing", file.isFile)
+        KotlinScan(file.readText()).code
+    }
+
+    private fun heroBody(function: String, until: String): String {
+        val start = hero.indexOf(function)
+        assertTrue("ResultHero.kt has no $function", start >= 0)
+        val end = hero.indexOf(until, start)
+        assertTrue("ResultHero.kt has no $until after $function", end > start)
+        return hero.substring(start, end)
+    }
+
     private fun count(marker: String): Int = scan.code.split(marker).size - 1
 
     /**
@@ -82,7 +97,6 @@ class SwapSheetTest {
             "SwapSheetBody",
             body("internal fun ColumnScope.SwapSheetBody(", "private fun SwapActions.of("),
             listOf(
-                "ConfirmOnLanded(",
                 "content.debug",
                 "content.result",
                 "Title(content",
@@ -109,58 +123,78 @@ class SwapSheetTest {
         assertOrder(
             "the lead branch",
             branch,
-            listOf("if (result != null)", "ResultBlock(result = result, pair = content.title, lead = lead, colors = colors)"),
+            listOf(
+                "if (result != null)",
+                "ResultBlock(result = result, pair = content.title, signature = content.receipt?.signature, lead = lead, colors = colors)",
+            ),
         )
         assertOrder("the sheet branch", branch, listOf("Title(content, lead, actions, colors)", "Phase(it, Modifier)"))
         assertEquals("the old receipt headline is gone", 0, count("Received("))
     }
 
     @Test
-    fun `the result is one merged heading, announced once as a polite live region`() {
-        val block = body("private fun ResultBlock(", "private fun ResultMark(")
-        assertTrue("the block is not one node", "semantics(mergeDescendants = true)" in block)
-        assertTrue("the result is not a heading", "heading()" in block)
-        assertTrue("the result is never announced", "liveRegion = LiveRegionMode.Polite" in block)
-        assertTrue("TalkBack hears the model's words, not the drawing", "contentDescription = announcement" in block)
-        assertTrue("the result does not take the sheet's focus", "modifier = lead" in block)
+    fun `the result is the shared hero, handed the model's words and the sheet's focus`() {
+        val block = body("private fun ResultBlock(", "private fun DebugBand(")
+        assertTrue("the swap result is not the shared hero", "ResultHero(" in block)
+        assertTrue("the hero does not take the sheet's focus", "modifier = lead" in block)
+        assertTrue("the tone is not the model's", "tone = result.tone.mark" in block)
+        assertTrue("the pair is not the eyebrow", "eyebrow = pair.text()" in block)
+        assertTrue("the fill is not the hero figure", "figure = result.figure?.text()" in block)
+        assertTrue("the next step is dropped", "listOfNotNull(result.detail, result.next)" in block)
+        assertTrue("TalkBack hears the model's words, not the drawing", "resultAnnouncement(" in block)
+        assertEquals("the sheet draws no mark of its own any more", 0, count("Canvas("))
     }
 
     @Test
-    fun `the result's motion is Amber's own tokens, and gated so it can be read without it`() {
-        val block = body("private fun ResultBlock(", "private fun ResultMark(")
+    fun `the hero is one merged heading, announced once as a polite live region`() {
+        val block = heroBody("fun ResultHero(", "fun ResultMark(")
+        assertTrue("the block is not one node", "semantics(mergeDescendants = true)" in block)
+        assertTrue("the result is not a heading", "heading()" in block)
+        assertTrue("the result is never announced", "liveRegion = LiveRegionMode.Polite" in block)
+        assertTrue("TalkBack hears the given words, not the drawing", "contentDescription = announcement" in block)
+        assertTrue("the headline is not the largest words on the sheet", "style = AmberType.screenTitle" in block)
+        assertTrue("the hero figure is not Amber's large figure", "style = AmberType.figureLarge" in block)
+    }
+
+    @Test
+    fun `the hero's motion is Amber's own tokens, and gated so it can be read without it`() {
+        val block = heroBody("fun ResultHero(", "fun ResultMark(")
         assertTrue("motion is not gated", "rememberMotionEnabled()" in block)
         // With animator scale 0 the first frame is the settled one, not a snap a frame later.
         assertTrue("the settled state is not the starting state without motion", "mutableStateOf(!motion)" in block)
         assertEquals("both animations snap without motion", 2, block.split("else snap()").size - 1)
-        assertTrue("the ring is not on the settle spring", "if (motion) RingSettle" in block)
+        assertTrue("the mark is not on the settle spring", "if (motion) MarkSettle" in block)
         assertTrue(
             "the settle spring is not Amber's no-bounce medium-low one",
-            "spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)" in scan.code,
+            "spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)" in hero,
         )
         assertTrue("the figure is not on the quick token", "tween(durationMillis = QUICK_MILLIS, easing = LinearOutSlowInEasing)" in block)
-        assertTrue("the quick token is not 150ms", "private const val QUICK_MILLIS = 150" in scan.code)
+        assertTrue("the quick token is not 150ms", "private const val QUICK_MILLIS = 150" in hero)
+        assertEquals("nothing in the hero repeats: a moving ring is a spinner", 0, hero.split("infiniteRepeatable").size - 1)
     }
 
     @Test
     fun `failure is drawn in the caution colour and never with a glyph`() {
-        val block = body("private fun ResultBlock(", "private fun ResultMark(")
+        val block = heroBody("fun ResultHero(", "fun ResultMark(")
         assertTrue(
             "a failure's headline is not the caution colour",
-            "if (result.tone == ResultTone.Failed) colors.stateCaution else colors.textPrimary" in block,
+            "if (tone == ResultMarkTone.Failed) colors.stateCaution else colors.textPrimary" in block,
         )
-        val mark = body("private fun ResultMark(", "private fun DebugBand(")
+        val mark = heroBody("fun ResultMark(", "internal data class MarkPhases(")
         assertTrue("the mark is not drawn", "Canvas(" in mark)
         assertEquals("the mark has no text of its own", 0, mark.split("Text(").size - 1)
-        assertTrue("the failure mark is not the caution colour", "color = caution" in mark)
-        assertTrue("the landing ring does not close with the settle", "sweepAngle = 360f * progress" in mark)
-        // QA of 1.3.20: a static open ring beside "No wallet connected" read as a frozen spinner.
-        val failed = mark.substringAfter("ResultTone.Failed ->").substringBefore("ResultTone.Pending ->")
+        val failed = mark.substringAfter("ResultMarkTone.Failed ->").substringBefore("ResultMarkTone.Pending ->")
         // QA of 1.3.21: the failure mark is the shared component the vote sheet's refusals carry.
         assertTrue("the failure mark is not the shared caution mark", "drawCautionMark(color = caution" in failed)
         val shared = File(module, "src/main/java/com/plainticker/mobile/ui/components/CautionMark.kt").readText()
         val shape = shared.substringAfter("fun DrawScope.drawCautionMark(")
-        assertTrue("the failure ring is not closed", "sweepAngle = 360f," in shape)
+        // QA of 1.3.20: a static open ring beside "No wallet connected" read as a frozen spinner.
+        // The ring now closes as it draws in, and a static caller gets the closed ring.
+        assertTrue("the failure ring does not close", "sweepAngle = 360f * ring" in shape)
+        assertTrue("a static caller does not get the whole mark", "progress: Float = 1f" in shape)
         assertTrue("the failure mark carries no caution sign", "drawLine(" in shape && "drawCircle(" in shape)
+        // A landing strokes a check in; that is the one shape a failure never draws.
+        assertTrue("the landing draws no check", "measure.getSegment(" in hero)
     }
 
     @Test
@@ -171,7 +205,6 @@ class SwapSheetTest {
         listOf("PlainTickerType", "JetBrainsMono", "bigValue", "sheetTitle", "FactGrid(").forEach {
             assertEquals("SwapSheet.kt still draws $it", 0, count(it))
         }
-        assertTrue("the hero figure is not Amber's large figure", "style = AmberType.figureLarge" in scan.code)
         assertTrue("only the copied cell is an identifier", "identifier = copied != null" in scan.code)
     }
 
@@ -189,8 +222,11 @@ class SwapSheetTest {
         // The receipt's "Swap back" is drawn through that same one call site, never a second
         // primary: a sheet asks for one decision at a time.
         assertTrue("listOfNotNull(content.secondary, content.extra).forEach" in scan.code)
-        // The direction, and on a receipt "View on Solscan" (judges' review, 2026-09-27).
-        assertEquals("two text actions: the direction and the explorer link", 2, count("TextAction("))
+        // The direction, and on a receipt "View on Solscan" (judges' review, 2026-09-27) with the
+        // Share slot beside it (2026-09-29).
+        assertEquals("three text actions: the direction, the explorer link and Share", 3, count("TextAction("))
+        assertTrue("Share is drawn without a host's handler", "content.share?.takeIf { actions.onShare != null }" in scan.code)
+        assertTrue("SwapActions has no share slot", "val onShare: (() -> Unit)? = null" in scan.code)
     }
 
     // ---- No slippage, and no arithmetic ------------------------------------------------------
@@ -247,11 +283,14 @@ class SwapSheetTest {
 
     @Test
     fun `exactly one Confirm haptic, keyed on the signature so it cannot fire twice`() {
-        assertEquals("one haptic on the whole surface", 1, count("performHapticFeedback("))
-        assertEquals("and it is Confirm", 1, count("HapticFeedbackType.Confirm"))
-        val effect = body("private fun ConfirmOnLanded(", "private fun leadFocus(")
-        assertTrue("the effect is not keyed on the signature", "LaunchedEffect(signature)" in effect)
-        assertTrue("a null signature must not buzz", "if (signature != null)" in effect)
+        // The haptic moved into the shared hero (2026-09-29); the sheet hands it the signature.
+        assertEquals("the sheet buzzes nothing itself", 0, count("performHapticFeedback("))
+        assertTrue("the hero is not keyed on the signature", "hapticKey = signature" in scan.code)
+        assertEquals("one haptic in the hero", 1, hero.split("performHapticFeedback(").size - 1)
+        assertEquals("and it is Confirm", 1, hero.split("HapticFeedbackType.Confirm").size - 1)
+        val effect = heroBody("private fun ConfirmOnLanded(", "val ResultMarkSize")
+        assertTrue("the effect is not keyed on the signature", "LaunchedEffect(key)" in effect)
+        assertTrue("a null signature or a failure must not buzz", "if (key != null && isLanded)" in effect)
         assertEquals("nothing on this screen makes a sound", 0, count("SoundEffect"))
     }
 

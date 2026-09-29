@@ -4,6 +4,7 @@ import com.plainticker.mobile.data.plainticker.VoteBuild
 import com.plainticker.mobile.data.plainticker.VoteSummary
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.ShippedCopy
+import com.plainticker.mobile.ui.components.ResultMarkTone
 import com.plainticker.mobile.wallet.TransactionGuard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -50,8 +51,9 @@ class VoteSheetModelTest {
         render(content.phase),
         render(content.notice),
         render(content.disclosure),
-        render(content.bar?.label),
-    ) + content.cells.flatMap { listOf(ShippedCopy.render(it.label), ShippedCopy.render(it.value)) }
+        render(content.result?.headline),
+    ) + content.result?.sentences.orEmpty().map { ShippedCopy.render(it) } +
+        content.cells.flatMap { listOf(ShippedCopy.render(it.label), ShippedCopy.render(it.value)) }
 
     private val allStates: List<VoteState> = listOf(
         VoteState.Opening("NFLX", "NFLXx", VotePhase.CONNECTING),
@@ -144,7 +146,11 @@ class VoteSheetModelTest {
     @Test
     fun `every refusal carries the swap sheet's caution mark, and nothing else does`() {
         VoteRefusal.entries.forEach { reason ->
-            assertTrue(reason.name, sheetOf(VoteState.Refused("NFLX", "NFLXx", reason)).caution)
+            val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", reason))
+            assertTrue(reason.name, content.caution)
+            // The one refusal that cannot say nothing was sent draws the pending ring instead.
+            val tone = if (reason == VoteRefusal.FAILED) ResultMarkTone.Pending else ResultMarkTone.Failed
+            assertEquals(reason.name, tone, content.result?.tone)
         }
         allStates.filter { it !is VoteState.Refused }.forEach { state ->
             assertFalse(state::class.simpleName, sheetOf(state).caution)
@@ -173,23 +179,67 @@ class VoteSheetModelTest {
     // ---- The receipt ---------------------------------------------------------------------------------
 
     @Test
-    fun `a landed vote names the signature the way the swap receipt does`() {
+    fun `a landed vote names the weight, the stock and the signature the way the swap receipt does`() {
         val content = sheetOf(landed())
-
-        assertEquals("Vote sent", render(content.bar?.label))
-        assertEquals("4xQm…VtHe", ShippedCopy.render(content.bar!!.meta))
 
         val cells = content.cells
         assertEquals("Staked SKR behind NFLXx", ShippedCopy.render(cells[0].label))
         assertEquals("38,406.150222", ShippedCopy.render(cells[0].value))
-        assertEquals("Signature", ShippedCopy.render(cells[1].label))
-        assertEquals("4xQm…VtHe", ShippedCopy.render(cells[1].value))
-        assertEquals("the fragment is what is shown, the signature is what is copied", signature, cells[1].copies)
+        assertEquals("the weight takes the whole row", 2, cells[0].span)
+        assertEquals("Stock", ShippedCopy.render(cells[1].label))
+        assertEquals("NFLXx", ShippedCopy.render(cells[1].value))
+        assertEquals("Signature", ShippedCopy.render(cells[2].label))
+        assertEquals("4xQm…VtHe", ShippedCopy.render(cells[2].value))
+        assertEquals("the fragment is what is shown, the signature is what is copied", signature, cells[2].copies)
+        assertEquals("the stock and the signature pair up in one row", listOf(1, 1), cells.drop(1).map { it.span })
 
         assertEquals("a landed vote offers to share it, and nothing that sends another", VoteActionKind.Share, content.primary?.kind)
         assertEquals("Share", render(content.primary?.label))
         assertEquals(VoteActionKind.Close, content.secondary?.kind)
-        assertEquals("The vote is on the chain. Counted within about 20 minutes.", render(content.notice))
+        assertEquals(signature, content.signature)
+    }
+
+    /**
+     * Founder's report from the Seeker, 2026-09-29: "vote sent" was small text with no success or
+     * failure mark. A landed vote now leads with the shared result hero: the check, the headline
+     * in the largest words on the sheet, and what happens next.
+     */
+    @Test
+    fun `a landed vote leads with its result, the headline and what happens next`() {
+        val content = sheetOf(landed())
+        val result = requireNotNull(content.result) { "a landed vote must lead with its result" }
+        assertEquals(ResultMarkTone.Landed, result.tone)
+        assertEquals("Your vote is on chain", render(result.headline))
+        assertEquals(
+            listOf("Counted within about 20 minutes. You will see it under Your votes."),
+            result.sentences.map { ShippedCopy.render(it) },
+        )
+        assertNull("the result carries the sentence, so no notice repeats it", content.notice)
+        assertEquals("the title stays, as the result's eyebrow", "Vote to cover NFLXx", render(content.title))
+    }
+
+    @Test
+    fun `a refused vote says it was not sent, then why, and a failed wallet says it is not confirmed`() {
+        VoteRefusal.entries.forEach { reason ->
+            val content = sheetOf(VoteState.Refused("NFLX", "NFLXx", reason))
+            val result = requireNotNull(content.result) { "$reason must lead with its result" }
+            val sentences = result.sentences.map { ShippedCopy.render(it) }
+            assertEquals("the reason is the first sentence", render(content.notice), sentences.first())
+            if (reason == VoteRefusal.FAILED) {
+                assertEquals("Vote not confirmed", render(result.headline))
+                assertEquals("Check Your votes in about 20 minutes before you vote again.", sentences[1])
+            } else {
+                assertEquals(reason.name, "Vote not sent", render(result.headline))
+                assertEquals(1, sentences.size)
+            }
+        }
+    }
+
+    @Test
+    fun `only a finished vote leads with a result`() {
+        allStates.filter { it !is VoteState.Landed && it !is VoteState.Refused }.forEach { state ->
+            assertNull(state::class.simpleName, sheetOf(state).result)
+        }
     }
 
     /**
@@ -214,7 +264,7 @@ class VoteSheetModelTest {
         val sentences = mutableMapOf<String, VoteState>()
         allStates.forEach { state ->
             val content = sheetOf(state)
-            val voice = render(content.phase) ?: render(content.notice) ?: render(content.bar?.label)
+            val voice = render(content.phase) ?: render(content.notice) ?: render(content.result?.headline)
             assertNotNull("$state says nothing at all", voice)
             assertTrue("$state says a blank", voice!!.isNotBlank())
             val clash = sentences.put(voice, state)

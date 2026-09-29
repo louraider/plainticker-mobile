@@ -46,6 +46,16 @@ sealed class SwapError(
     class InvalidOrder(detail: String?) :
         SwapError(Stage.ORDER, null, detail, "order refused by this app: ${detail ?: "-"}")
 
+    /**
+     * /order answered 429: the keyless bucket is empty. Jupiter's gateway sends a structured
+     * body for it, `{"code":429,"message":"[API Gateway] Too many requests"}` (measured
+     * 2026-09-29, the sixth ask in a row), which read as a refusal of the pair until this type
+     * existed, and "Check swap availability" then told the Seeker Jupiter had no route. It says
+     * nothing about the pair, only that this app asked too often.
+     */
+    class RateLimited(stage: Stage, detail: String?) :
+        SwapError(stage, null, detail, "rate limited at ${stage.name.lowercase()}: ${detail ?: "-"}")
+
     /** /execute failed with a code this app does not special-case. */
     class ExecuteFailed(code: Int?, detail: String?) :
         SwapError(Stage.EXECUTE, code, detail, "execute failed${code?.let { " ($it)" } ?: ""}: ${detail ?: "-"}")
@@ -71,6 +81,22 @@ sealed class SwapError(
         get() = stage == Stage.ORDER && code == null &&
             detail?.contains("market maker", ignoreCase = true) == true
 
+    /**
+     * Jupiter looked for a way to fill this order and found none: the RFQ router's "Quote not
+     * available from market maker", the aggregator's "Failed to get quotes" (AALx and JEFx at every
+     * size, measured 2026-09-29), "No routes found", a token Metis calls not tradable. The one
+     * refusal that may be said as "no route".
+     *
+     * Only an [OrderRejected] qualifies: a rate limit ([RateLimited]) or a server that failed
+     * ([Http]) never looked at the pair. Matched on the words, like [noMarketMakerQuote], because
+     * these bodies carry no code; a refusal worded otherwise ("Insufficient funds", a bad mint)
+     * stays a refusal, which the sheet says as one rather than claiming there is no route.
+     */
+    val noRoute: Boolean
+        get() = this is OrderRejected && detail?.let { words ->
+            NO_ROUTE_WORDS.any { words.contains(it, ignoreCase = true) }
+        } == true
+
     val needsFreshOrder: Boolean
         get() = code == CODE_QUOTE_EXPIRED || code == CODE_REJECTED_BY_MAKER
 
@@ -89,6 +115,15 @@ sealed class SwapError(
         const val CODE_QUOTE_EXPIRED = -2003
         const val CODE_REJECTED_BY_MAKER = -2004
 
+        /**
+         * The words Jupiter's route refusals carry: "Failed to get quotes", "No routes found",
+         * "Quote not available from market maker", and Metis's TOKEN_NOT_TRADABLE ("not tradable").
+         */
+        private val NO_ROUTE_WORDS = listOf("route", "quote", "tradable")
+
+        private const val STATUS_TOO_MANY_REQUESTS = 429
+        private const val STATUS_SERVER_ERROR = 500
+
         fun fromCode(code: Int?, detail: String?, stage: Stage): SwapError = when (code) {
             CODE_NOT_FULLY_SIGNED -> NotFullySigned(detail)
             CODE_QUOTE_EXPIRED -> QuoteExpired(detail)
@@ -100,11 +135,21 @@ sealed class SwapError(
          * Maps a response body onto a [SwapError]. Jupiter's error bodies are
          * `{"error": "..."}` (order) or `{"code": -2, "error": "..."}` (execute); anything
          * else becomes [Http] with a short excerpt.
+         *
+         * At the order stage the status speaks first: a 429 is [RateLimited] and a 5xx is [Http]
+         * whatever the body says, because neither is Jupiter's answer about the pair. The execute
+         * stage keeps reading the body, where a code can say what happened to signed bytes.
          */
         fun fromErrorBody(status: Int, body: String?, stage: Stage, json: Json): SwapError {
             val obj = body?.let { runCatching { json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
             val detail = obj.str("error") ?: obj.str("errorMessage") ?: obj.str("message")
             val code = obj.str("code")?.toIntOrNull() ?: obj.str("errorCode")?.toIntOrNull()
+            if (stage == Stage.ORDER && status == STATUS_TOO_MANY_REQUESTS) {
+                return RateLimited(stage, detail ?: body?.trim()?.take(200)?.takeIf { it.isNotEmpty() })
+            }
+            if (stage == Stage.ORDER && status >= STATUS_SERVER_ERROR) {
+                return Http(stage, status, detail ?: body?.trim()?.take(200)?.takeIf { it.isNotEmpty() })
+            }
             if (obj == null || (detail == null && code == null)) {
                 return Http(stage, status, body?.trim()?.take(200)?.takeIf { it.isNotEmpty() })
             }

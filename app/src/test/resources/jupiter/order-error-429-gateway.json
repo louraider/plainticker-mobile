@@ -1,0 +1,5 @@
+{
+  "_fixture_note": "Live HTTP 429 from GET /swap/v2/order (keyless), 2026-09-29, the sixth ask in a row for 1 USDC -> TSLAx. Content-Type application/json, x-ratelimit-remaining 0, x-ratelimit-current 5, no Retry-After. The body carries a numeric code (429) and a message, and no 'error' key: parsed as an ordinary error body it looked like Jupiter refusing the pair.",
+  "code": 429,
+  "message": "[API Gateway] Too many requests"
+}

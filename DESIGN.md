@@ -514,6 +514,38 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 | `Panel` | **Kept, Instrument anatomy, Amber colour (2026-09-22)** | `GalleryScreen.kt` (canvas validation, unchanged) and, separately, `WatchlistScreen.kt`'s `Digest`, which is live: `WatchlistContent` is Today's own Yours block now, so the digest panel, its `Footer` (delivery/checked lines) and its `EmptyLine` (the first-run "nothing watched" sentence) drew Instrument's fixed `Ink`/`Ink2`/`Muted` directly, unlike every row on the same screen (`Watched`, fully on `AmberTickerRow`). No restyle pass's file set had reached `WatchlistScreen.kt` for this. Fixed: `Digest`, `Footer` and `EmptyLine` now resolve `defaultAmberColors()`, and `Panel` itself (its `surfaceRaised` background and `border`, previously Instrument's fixed `Elevated`/`Line`) takes a `colors: AmberColors` parameter the same way; `PlainTickerType` is unchanged on all three, the same "type stays, colour resolves" pattern the row below uses. Since Today direction A (2026-09-24) Today no longer draws `WatchlistContent`: the digest lives on its own screen under You (`ui/you/DigestScreen.kt`), whose `Panel` resolves the same colours. |
 | `Field`, `Skeleton`, `Banner`, `TopBar`, `TextAction` | **Kept anatomy, Amber type and colour (2026-09-26)** | Each resolves `defaultAmberColors()`, and since the pre-freeze pass each draws Bricolage (`AmberType.label`, `textAction`, `fieldText`, `figureLarge`, `wordmark`) instead of Outfit; the pass sheet's title and sentences moved the same day (`sectionHead`, `body`). JetBrains Mono stays only where an on-chain identifier is drawn: a wallet's short key in `TopBar`, a signature or address in a `FactCell`/`AmberFact` with `valueMono`. |
 
+### 4.8 Share images and the controls explainer (2026-09-29)
+
+**Share images** (`ui/share/`). Share on Detail, on a landed vote and on a landed swap into a
+token (the result hero's Share slot, wired by Detail and Portfolio) sends a picture with its text: `ShareCard` decides what the picture says, `ShareCardRenderer` draws it on the
+platform Canvas, and `ShareImage` writes a PNG under `cache/share/` and hands it out through a
+FileProvider that is not exported (`image/png`, `EXTRA_STREAM`, a read grant set on the intent and
+on its ClipData), falling back to the text alone on any failure. The size is 1080 by 1350 (4:5):
+the tallest uncropped post on Instagram's feed, shown whole on X's phone timeline and in
+Telegram, framed rather than cut in a 9:16 story; 1200 by 630 works only as a link preview. The
+card is always the dark set, whatever the phone's setting, so it looks the same in every feed.
+Anatomy: the brand mark's two corners drawn large around the headline (the one bold element),
+facts in a two-column tonal grid parted by ground seams (`FactGrid`'s own anatomy), then the
+lockup and the link on one line and the small print under it. Bricolage everywhere, `tnum` on
+figures, JetBrains Mono for a transaction only, caution only on an active permanent delegate.
+Every line wraps in its column or shrinks to fit it, and a body that would reach the foot steps
+down in scale (to 60 percent at most), so nothing clips. `ShareCardTest` pins what each card may
+say: the classification with its qualifier only when the server sent this reader the word, never
+the composite or an axis, no amount or price on a swap card; `ShareProviderTest` pins the provider.
+
+**"Explain" on "Backing and controls"** opens `BackingExplainerSheet` (`ui/detail/`), every row the
+grid can show under its own label with "What it is" and "Why it matters to you", then a link to the
+same words at plainticker.com/en/learn/backing-and-controls. The action is an optional
+`TextAction` slot on `AmberSectionHead`, on the title's baseline. Measured with fontTools against
+the bundled Bricolage: "Backing and controls" at `sectionHead` is 224.73dp, "Explain" at
+`textAction` 49.25dp plus its 16dp inset, so on a 360dp frame the title keeps 26dp to spare at
+1.0x and wraps to its second line at 1.3x rather than clipping.
+
+**Onboarding's controls step** sits between the consent and the pick step: "Every tokenized stock
+has controls", three points each led by its word in weight 600 in one wrapping `Text`, and where
+the reader meets them again. Continue and Skip both lead to the pick step. It comes first because
+the pick step's Skip lands on AAPLx, where the rows sit right under the price.
+
 ## 5. Layout
 
 The shared information architecture (Today, Stocks, Vote, Portfolio, You under `AmberBottomNav`,
@@ -769,7 +801,8 @@ this is the whole list, not a sample of it:
 | `SkeletonSwitch` (Detail's `Hero` company name; every other skeleton-to-content switch in the app) | `tween(200ms, EaseOut)` alpha fade, never a spinner | `rememberMotionEnabled()` | Alpha 1 |
 | `Track`'s position marker | `tween(400ms, CubicBezierEasing(.2, .8, .2, 1))`, unchanged since before this restyle | `rememberMotionEnabled()` | The target position |
 | `LiveBar`'s breathing bar | `infiniteRepeatable(tween(1200ms, EaseInOut), reverse)`, alpha 1 to 0.45, while `live` is true | `rememberMotionEnabled()` | Alpha 1 (stops breathing, does not disappear) |
-| The swap result's mark and hero figure (`SwapSheet.kt`'s `ResultBlock`, 2026-09-24) | The ring's sweep and its settling fill on the no-bounce, medium-low spring; the hero figure on the quick 150ms tween. Once per result. Landed only moves; a failure's closed caution ring with its caution sign (closed since 1.3.21: an open ring read as a frozen spinner) and a pending broken amber ring are static | `rememberMotionEnabled()` | The settled frame is the first frame: the state starts settled when motion is off, so nothing snaps a frame later |
+| The swap and vote result (`ResultHero.kt`, shared by `SwapSheet.kt`'s `ResultBlock` and `VoteSheet.kt` since 2026-09-29) | The 72dp mark draws itself in once per result on the no-bounce, medium-low spring: a landing's ring closes, the amber disc fills and the check strokes in; a failure's caution ring closes and its sign fades in (closed since 1.3.21: an open ring read as a frozen spinner); a pending ring's four segments close in turn and then hold still, because a moving ring is a spinner. The hero figure fades in on the quick 150ms tween. One Confirm haptic on a landing, keyed on the signature | `rememberMotionEnabled()` | The settled frame is the first frame: the state starts settled when motion is off, so nothing snaps a frame later |
+| Navigation between screens (`NavMotion.kt`, every route in `AppNavHost`, 2026-09-29) | Forward: the new screen slides in from the end over 300ms on Track's `CubicBezierEasing(.2, .8, .2, 1)`, fading in over the quick 150ms only; the old one drifts a tenth of the width toward the start, never fading. Back (the system gesture, predictive back included, which scrubs these same specs): the closing screen slides out to the end, fully opaque until its last 100ms; the screen returned to comes back from a tenth of the width with no fade at all. Home replacing a screen above it (Detail's "View in Portfolio", a notification's tab) plays the back motion. Every destination paints `surfaceGround` edge to edge (`NavScreen`), and NavHost keeps the closing screen above the destination on a pop, so nothing ever shows through anything | `rememberMotionEnabled()` | `EnterTransition.None` / `ExitTransition.None`: the destination is simply there |
 
 Two spring families do the orchestrated work (`AmberChip`'s morph and `TodayScreen`'s stagger), both
 `Spring.DampingRatioNoBouncy` at `Spring.StiffnessMediumLow`: a settle, never a bounce, because a
@@ -911,8 +944,9 @@ tile (`#FFC247`, `AmberDarkColors.actionFill`, `amber_action` — `#F5EEDD`/`amb
 geometry (rotationally symmetric about the centre, never mirror-symmetric top to bottom, so a
 flattened, one-colour silhouette still reads as itself rather than collapsing into a plus sign,
 and every corner inside the 36-unit circle a launcher actually cuts) and the two colours directly
-against `AmberDarkColors`. The same rectangles reappear as the splash icon (in
-Amber's own ink, over Amber's own ground as the window background) and the notification icon (in
+against `AmberDarkColors`. The same rectangles reappear as the splash icon (since
+2026-09-29 the launcher icon itself, dark corners in an amber circle, over the page ground of the
+theme the system is in; see "the splash is the launcher icon" below) and the notification icon (in
 white, fitted to the 24dp status-bar viewport).
 
 **Judgement, looked at on Amber's ground rather than transcribed, and since fixed (2026-09-22).**
@@ -1030,6 +1064,22 @@ a real rebrand is ever decided against a concrete alternative, the same standard
 `1.5.0-alpha` to. This fix is narrower again: the arrangement, unchanged since 2026-09-15, now
 also clears the mask a real launcher cuts with room to spare, and the tile, the store images and
 the app's own wordmark all read as the one product the web already does.
+
+**2026-09-29: the splash is the launcher icon.** On the Seeker a cold start drew `ic_brand_mark`,
+the same four rectangles in Amber's cream ink straight on the near-black ground, and the founder
+read it as "the old white logo", beside the amber tile they had just tapped. The starting theme
+(`Theme.PlainTicker.Starting`, parent `Theme.SplashScreen.IconBackground`) now draws the
+launcher's own foreground layer (`ic_launcher_foreground`, the dark corners) inside a circle of
+the launcher's own tile colour (`windowSplashScreenIconBackgroundColor`, `amber_action`), so the
+splash is the icon. Android 12 and later draw an icon with a background at 240dp and keep a 160dp
+circle of it: the 108 viewport's 36-unit radius, the same circle the 2026-09-24 refit already
+clears (furthest corner 32.53 units, 72.3dp of the 80dp). `values-v31/themes.xml` repeats the style
+with the platform's own `android:windowSplashScreen*` attributes set directly. The ground behind
+it, and behind the plain window before Compose's first frame, is `window_ground`: Amber's own
+light `surfaceGround` (`#FFFBF2`) in `values`, the dark one (`#16130D`) in `values-night`, with
+the system bar icons following the same split (`window_light_bars`), so a light phone no longer
+opens on a near-black window and flashes into a cream Today. `ic_brand_mark.xml` is gone and
+`glyph.py` no longer writes it; `BrandAssetsTest` pins all of this.
 
 ## 10. Material3 Expressive: what 1.4.0 actually has
 

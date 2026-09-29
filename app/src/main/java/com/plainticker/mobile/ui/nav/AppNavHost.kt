@@ -17,6 +17,8 @@ import androidx.navigation.navArgument
 import com.plainticker.mobile.AppContainer
 import com.plainticker.mobile.BuildConfig
 import com.plainticker.mobile.ui.appViewModelFactory
+import com.plainticker.mobile.ui.components.rememberMotionEnabled
+import com.plainticker.mobile.ui.nav.NavMotion.isReturnHome
 import com.plainticker.mobile.ui.detail.DetailScreen
 import com.plainticker.mobile.ui.gallery.GalleryScreen
 import com.plainticker.mobile.ui.home.HomeScreen
@@ -83,8 +85,19 @@ fun AppNavHost(
         navController.navigate(Routes.detail(ticker)) { launchSingleTop = true }
     }
 
-    NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
-        composable(Routes.ONBOARDING) {
+    // Every transition is NavMotion's (the founder's report of 2026-09-29: going back, the closing
+    // screen ghosted over the one returned to), and every destination paints its own ground.
+    val motion = rememberMotionEnabled()
+    NavHost(
+        navController = navController,
+        startDestination = startDestination,
+        modifier = modifier,
+        enterTransition = { if (isReturnHome()) NavMotion.popEnter(motion) else NavMotion.enter(motion) },
+        exitTransition = { if (isReturnHome()) NavMotion.popExit(motion) else NavMotion.exit(motion) },
+        popEnterTransition = { NavMotion.popEnter(motion) },
+        popExitTransition = { NavMotion.popExit(motion) },
+    ) {
+        composable(Routes.ONBOARDING) { NavScreen {
             OnboardingScreen(
                 viewModel = viewModel(factory = factory),
                 onDone = { exit ->
@@ -96,13 +109,13 @@ fun AppNavHost(
                     exit.ticker?.let { navController.navigate(Routes.detail(it)) }
                 },
             )
-        }
+        } }
         composable(
             route = Routes.HOME_TAB,
             arguments = listOf(
                 navArgument(Routes.ARG_TAB) { type = NavType.IntType; defaultValue = HomeTab.LIST.ordinal },
             ),
-        ) { entry ->
+        ) { entry -> NavScreen {
             // Detail's "Have a code? Get Pro" (judges' round 2) leaves this flag on the home entry
             // it pops back to, rather than building a new home: the reader's place on Today or
             // Stocks survives, and You opens with the code field ready.
@@ -118,15 +131,15 @@ fun AppNavHost(
                 openPromo = promoRequested,
                 onPromoOpened = { entry.savedStateHandle[Routes.KEY_OPEN_PROMO] = false },
             )
-        }
-        composable(Routes.DIGEST) {
+        } }
+        composable(Routes.DIGEST) { NavScreen {
             // No back control on the screen, the same as Detail: the system gesture pops it.
             DigestScreen(viewModel = viewModel(factory = factory))
-        }
+        } }
         composable(
             route = Routes.DETAIL,
             arguments = listOf(navArgument(Routes.ARG_TICKER) { type = NavType.StringType }),
-        ) {
+        ) { NavScreen {
             // No back control on the screen: the TopBar carries the Watch action and nothing
             // else (DESIGN.md section 4), and the system gesture pops this entry.
             DetailScreen(
@@ -158,11 +171,11 @@ fun AppNavHost(
                     }
                 },
             )
-        }
+        } }
         if (BuildConfig.DEBUG) {
-            composable(Routes.GALLERY) {
+            composable(Routes.GALLERY) { NavScreen {
                 GalleryScreen(onBack = { navController.popBackStack() })
-            }
+            } }
         }
     }
 }
