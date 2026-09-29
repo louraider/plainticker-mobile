@@ -76,7 +76,7 @@ class AccountSectionTest {
         assertTrue("the first tap only asks", "RowAction(signOut, { confirming = true })" in row)
         assertTrue("the second tap signs out", "RowAction(signOut, { confirming = false; onSignOut() })" in row)
         assertTrue("Cancel folds the question away", "R.string.you_action_cancel), { confirming = false })" in row)
-        assertTrue("the question says what happens", "R.string.you_sign_out_confirm" in row)
+        assertTrue("the question says what happens", "stringResource(signOutQuestionRes(proOnPhone))" in row)
         assertEquals("onSignOut is called in exactly one place", 1, code.split("onSignOut()").size - 1)
     }
 
@@ -266,13 +266,14 @@ class AccountSectionTest {
         assertTrue("if (signInHint) {" in screen)
         val model = source("YouModel.kt")
         assertTrue("sub = if (signedOut) words(R.string.promo_signin_first_hint) else null" in model)
-        assertTrue("sub = if (signedOut) words(R.string.promo_success_saved_to_phone) else null" in model)
+        assertTrue("sub = if (signedOut) words(R.string.pro_saved_to_phone) else null" in model)
         assertEquals("Signing in with Google keeps this Pro if you reinstall.", ShippedCopy.strings.getValue("promo_signin_first_hint"))
         assertEquals(
-            "Saved to this phone. Sign in with Google to keep it if you reinstall.",
-            ShippedCopy.strings.getValue("promo_success_saved_to_phone"),
+            "Saved to this phone until you sign in. Signing in moves it to your Google account.",
+            ShippedCopy.strings.getValue("pro_saved_to_phone"),
         )
         assertFalse(ShippedCopy.strings.containsKey("promo_success_keep_note"))
+        assertFalse("the old promise that a reinstall is the only risk is gone", ShippedCopy.strings.containsKey("promo_success_saved_to_phone"))
     }
 
     @Test
@@ -280,6 +281,27 @@ class AccountSectionTest {
         val text = ShippedCopy.strings.getValue("you_sign_out_confirm")
         assertFalse("keeps that account" in text)
         assertTrue("unlinks it from the account" in text)
+        // 2026-09-29: a pass or code used on the phone moved to the account; it no longer stays.
+        assertFalse("stays with it" in text)
+    }
+
+    /** 2026-09-29, the founder's rule: Pro belongs to the Google account, not the phone. */
+    @Test
+    fun `on a phone that reads as Pro the sign-out question says the Pro leaves the phone and stays on the account`() {
+        assertEquals(R.string.you_sign_out_confirm_pro, signOutQuestionRes(proOnPhone = true))
+        assertEquals(R.string.you_sign_out_confirm, signOutQuestionRes(proOnPhone = false))
+        assertEquals(
+            "Signing out removes Pro from this phone. It stays on your Google account.",
+            ShippedCopy.strings.getValue("you_sign_out_confirm_pro"),
+        )
+        assertTrue("You hands the section what the phone reads as", "proOnPhone = pro.entitlementKnown && pro.pro" in screenScan.code)
+    }
+
+    @Test
+    fun `a finished sign-in or sign-out re-reads the plan at once, not quietly`() {
+        assertTrue(
+            "accountViewModel.accountSwitched.collect { passViewModel.refreshEntitlement(fresh = true) }" in screenScan.code,
+        )
     }
 
     /** Device QA of 1.3.17: "Stays connected between launches" sat under "Not connected". */

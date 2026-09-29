@@ -847,11 +847,17 @@
     <string name="promo_error_unavailable">PlainTicker could not read the answer. Try again.</string>
     <string name="promo_error_rekey_pending">This phone\'s code is being updated. Try again in a minute.</string>
     <string name="promo_error_code_retired">PlainTicker no longer accepts this phone\'s code. Write to hi@plainticker.com and we will sort it out.</string>
-    <!-- No Google account signed in (device QA of 1.3.17). The server ties a code to an account
-         only at the moment it is redeemed, so signing in afterwards does not carry the grant: the
-         hint comes before redemption, and after it the note says only where the Pro lives. -->
+    <!-- No Google account signed in (device QA of 1.3.17). The hint comes before redemption. -->
     <string name="promo_signin_first_hint">Signing in with Google keeps this Pro if you reinstall.</string>
-    <string name="promo_success_saved_to_phone">Saved to this phone. Sign in with Google to keep it if you reinstall.</string>
+    <!-- Whose Pro it is (2026-09-29, the founder's rule: Pro belongs to the Google account or to a
+         wallet, never to the phone). Signed out, a pass paid or a code redeemed on this phone is
+         the phone's own until it signs in; signing in moves it to the account, and from then on it
+         shows only when signed in to that account. Right after a sign-in that moved some, Plan
+         says so once. Signed in, the source names the account by its email. -->
+    <string name="pro_saved_to_phone">Saved to this phone until you sign in. Signing in moves it to your Google account.</string>
+    <string name="pro_moved_to_account">Moved to your Google account.</string>
+    <string name="you_plan_on_account">On the Google account %1$s.</string>
+    <string name="you_plan_on_account_unnamed">On your Google account.</string>
 
     <string name="you_heading_methods">Sign-in methods</string>
     <string name="you_method_google">Google</string>
@@ -871,7 +877,11 @@
     <string name="you_action_copy">Copy</string>
     <string name="you_action_copied">Copied</string>
     <string name="you_copy_clip_label">Wallet address</string>
-    <string name="you_sign_out_confirm">Sign out on this phone? PlainTicker unlinks it from the account. A pass or promo code used on this phone stays with it.</string>
+    <!-- The sign-out question (2026-09-29): a pass or code used on this phone moved to the Google
+         account when it signed in, so it no longer stays with the phone. On a phone that reads as
+         Pro the question says where that Pro goes. -->
+    <string name="you_sign_out_confirm">Sign out on this phone? PlainTicker unlinks it from the account.</string>
+    <string name="you_sign_out_confirm_pro">Signing out removes Pro from this phone. It stays on your Google account.</string>
     <string name="you_action_cancel">Cancel</string>
     <string name="you_action_keep">Keep</string>
 

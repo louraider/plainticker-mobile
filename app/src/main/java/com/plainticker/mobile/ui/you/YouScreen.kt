@@ -187,6 +187,12 @@ fun YouScreen(
     LaunchedEffect(accountViewModel, passViewModel) {
         accountViewModel.signedIn.collect { passViewModel.refreshEntitlement() }
     }
+    // A finished sign-in or sign-out changed whose Pro this phone answers for (2026-09-29: Pro
+    // belongs to the Google account, not the phone). Re-read at once and not quietly, so the plan
+    // of the account signed out of never stays on screen as this phone's.
+    LaunchedEffect(accountViewModel, passViewModel) {
+        accountViewModel.accountSwitched.collect { passViewModel.refreshEntitlement(fresh = true) }
+    }
 
     // The one piece of this screen that can change while the app is away: a reader who took the
     // Enable action went to the system settings and came back (the same rule WatchlistScreen
@@ -363,7 +369,7 @@ internal fun YouContent(
         }
     }
     val hero = youHero(account, state.account, pro, nowMillis)
-    val plan = planRows(pro, hero.action, nowMillis)
+    val plan = planRows(pro, hero.action, nowMillis, owner = planOwner(account))
     val heroMessage = (account as? AccountUiState.SignedOut)?.message?.takeIf { hero.action == HeroAction.SIGN_IN }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.surfaceGround)
@@ -427,6 +433,7 @@ internal fun YouContent(
                 deviceCodeStatus = deviceCodeStatus,
                 onStartWithNewCode = onStartWithNewCode,
                 newCodeFailed = newCodeFailed,
+                proOnPhone = pro.entitlementKnown && pro.pro,
             )
         }
         item(key = "wallet") {

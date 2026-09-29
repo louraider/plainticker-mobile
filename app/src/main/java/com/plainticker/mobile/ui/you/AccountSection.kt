@@ -76,6 +76,8 @@ internal fun AccountSection(
     onStartWithNewCode: () -> Unit = {},
     /** The last start with a new code could not be saved. */
     newCodeFailed: Boolean = false,
+    /** This phone reads as Pro now: the sign-out question says that Pro leaves the phone. */
+    proOnPhone: Boolean = false,
 ) {
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(
@@ -96,7 +98,7 @@ internal fun AccountSection(
                     )
                 }
             }
-            GoogleRow(state = state, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors, showMessage = showMessage)
+            GoogleRow(state = state, onSignIn = onSignIn, onSignOut = onSignOut, colors = colors, showMessage = showMessage, proOnPhone = proOnPhone)
             (state as? AccountUiState.SignedIn)?.let { signedIn ->
                 LinkedWalletsGroup(state = signedIn, onUnlink = onUnlink, colors = colors)
             }
@@ -146,6 +148,7 @@ private fun GoogleRow(
     onSignOut: () -> Unit,
     colors: AmberColors,
     showMessage: Boolean,
+    proOnPhone: Boolean = false,
 ) {
     val label = stringResource(R.string.you_method_google)
     val uriHandler = LocalUriHandler.current
@@ -175,21 +178,31 @@ private fun GoogleRow(
                 sub = stringResource(R.string.account_signing_out),
             )
         } else {
-            SignedInRow(state.account, label, onSignOut, colors)
+            SignedInRow(state.account, label, onSignOut, colors, proOnPhone)
         }
     }
 }
 
-/** The two-step sign-out: the first tap asks in place, the second signs out. */
+/**
+ * The two-step sign-out: the first tap asks in place, the second signs out. On a phone that reads
+ * as Pro the question says where that Pro goes (2026-09-29: it belongs to the Google account, so
+ * signing out takes it off the phone and the account keeps it).
+ */
 @Composable
-private fun SignedInRow(account: SignedInAccount, label: String, onSignOut: () -> Unit, colors: AmberColors) {
+private fun SignedInRow(
+    account: SignedInAccount,
+    label: String,
+    onSignOut: () -> Unit,
+    colors: AmberColors,
+    proOnPhone: Boolean = false,
+) {
     var confirming by rememberSaveable { mutableStateOf(false) }
     val signOut = stringResource(R.string.account_sign_out)
     CabinetRow(
         colors = colors,
         label = label,
         value = accountIdentity(account).text(),
-        sub = if (confirming) stringResource(R.string.you_sign_out_confirm) else null,
+        sub = if (confirming) stringResource(signOutQuestionRes(proOnPhone)) else null,
         actions = if (confirming) {
             listOf(
                 RowAction(signOut, { confirming = false; onSignOut() }),

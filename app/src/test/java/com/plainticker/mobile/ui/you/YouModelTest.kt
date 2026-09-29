@@ -240,9 +240,9 @@ class YouModelTest {
         val redeemed = promoLine(PromoState.Success(now + 30 * day), promo, signedOut = true)!!
         assertEquals(redeemed, relaunched)
         assertEquals("Pro until 21 Oct 2026", ShippedCopy.render(relaunched.value))
-        assertEquals(R.string.promo_success_saved_to_phone, words(relaunched.sub!!))
+        assertEquals(R.string.pro_saved_to_phone, words(relaunched.sub!!))
         assertEquals(
-            "Saved to this phone. Sign in with Google to keep it if you reinstall.",
+            "Saved to this phone until you sign in. Signing in moves it to your Google account.",
             ShippedCopy.render(relaunched.sub!!),
         )
         assertFalse("a held Pro is not the quiet prompt", relaunched.quiet)
@@ -443,5 +443,63 @@ class YouModelTest {
         assertEquals("Wallet", ShippedCopy.strings.getValue("you_heading_wallet"))
         val short = ShippedCopy.strings.getValue("you_wallet_note_short")
         assertTrue(short.contains("Not a sign-in"))
+    }
+
+    // ---- Whose Pro it is (2026-09-29: Pro belongs to the Google account, not the phone) --------
+
+    private val ownerOut = planOwner(signedOut)
+    private val ownerIn = planOwner(signedIn)
+
+    @Test
+    fun `the plan's owner follows the account state, and says nothing while it is still being read`() {
+        assertEquals(PlanOwner(signedIn = false), ownerOut)
+        assertEquals(PlanOwner(signedIn = true, account = signedIn.account), ownerIn)
+        assertEquals(true, planOwner(signedIn.copy(movedToAccount = true))?.moved)
+        assertNull(planOwner(AccountUiState.Restoring))
+        assertNull(planOwner(AccountUiState.SigningIn))
+        assertNull("no owner, no line", planRows(pass, HeroAction.EXTEND, now, owner = null)[0].sub)
+    }
+
+    @Test
+    fun `signed out, a pass on this phone is saved to it until a sign-in moves it to the account`() {
+        val source = planRows(pass, HeroAction.EXTEND, now, owner = ownerOut)[0]
+        assertEquals(R.string.pro_saved_to_phone, words(source.sub!!))
+        assertEquals(
+            "Saved to this phone until you sign in. Signing in moves it to your Google account.",
+            ShippedCopy.render(source.sub!!),
+        )
+    }
+
+    @Test
+    fun `signed out, a promo says it once, in its own row, and a stake never, since no sign-in moves a wallet`() {
+        assertNull(planRows(promo, null, now, owner = ownerOut)[0].sub)
+        assertEquals(R.string.pro_saved_to_phone, words(promoLine(PromoState.Idle, promo, signedOut = true)!!.sub!!))
+        assertNull(planRows(stake, null, now, owner = ownerOut)[0].sub)
+    }
+
+    @Test
+    fun `signed in, the source names the Google account by its email`() {
+        for (plan in listOf(pass, stake, subscription, promo)) {
+            val source = planRows(plan, null, now, owner = ownerIn)[0]
+            assertEquals(R.string.you_plan_on_account, words(source.sub!!))
+            assertEquals("On the Google account ann@example.com.", ShippedCopy.render(source.sub!!))
+        }
+        val noEmail = planOwner(AccountUiState.SignedIn(SignedInAccount(null, "Ann", emptyList())))
+        assertEquals(R.string.you_plan_on_account_unnamed, words(planRows(pass, null, now, owner = noEmail)[0].sub!!))
+        assertEquals("On your Google account.", ShippedCopy.strings.getValue("you_plan_on_account_unnamed"))
+    }
+
+    @Test
+    fun `right after a sign-in that moved this phone's Pro, the source says it moved`() {
+        val moved = planOwner(signedIn.copy(movedToAccount = true))
+        val source = planRows(pass, null, now, owner = moved)[0]
+        assertEquals(R.string.pro_moved_to_account, words(source.sub!!))
+        assertEquals("Moved to your Google account.", ShippedCopy.render(source.sub!!))
+    }
+
+    @Test
+    fun `a phone that is not Pro draws no owner line at all`() {
+        assertTrue(planRows(free, HeroAction.GET_PRO, now, owner = ownerOut).none { (it.sub as? Copy.Words)?.id == R.string.pro_saved_to_phone })
+        assertTrue(planRows(free, HeroAction.GET_PRO, now, owner = ownerIn).none { (it.sub as? Copy.Words)?.id == R.string.you_plan_on_account })
     }
 }
