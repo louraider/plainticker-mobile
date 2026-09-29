@@ -111,6 +111,8 @@ sealed interface VoteState {
         override val symbol: String,
         val stakeRaw: Long,
         val signature: String,
+        /** The round this vote was stamped with on its receipt, for the share card; null when unknown. */
+        val round: Int? = null,
     ) : OnTicker
 
     /** The attempt is over. [reason] is one of this app's own sentences, never the server's. */

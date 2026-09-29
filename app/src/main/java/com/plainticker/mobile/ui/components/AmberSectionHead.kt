@@ -53,6 +53,13 @@ fun AmberSectionHead(
      * head sitting on a different surface passes that surface's colour instead.
      */
     background: Color = colors.surfaceGround,
+    /**
+     * An optional [TextAction] after the title (founder feedback 2026-09-29: "Explain" on Detail's
+     * "Backing and controls"). Drawn only with [onAction]; it shares the title's line and baseline,
+     * and the title keeps its weighted column, so a long title wraps rather than starving it.
+     */
+    action: String? = null,
+    onAction: (() -> Unit)? = null,
 ) {
     Column(modifier.fillMaxWidth().background(background)) {
         Row(
@@ -79,6 +86,14 @@ fun AmberSectionHead(
                     color = colors.textTertiary(surfaceOf(background, colors)),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.alignByBaseline(),
+                )
+            }
+            if (action != null && onAction != null) {
+                TextAction(
+                    label = action,
+                    onClick = onAction,
+                    color = colors.actionText,
                     modifier = Modifier.alignByBaseline(),
                 )
             }

@@ -373,6 +373,7 @@ class VoteViewModel(
             symbol = ready.symbol,
             stakeRaw = weightRaw,
             signature = signatureText,
+            round = pendingRoundId,
         )
     }
 

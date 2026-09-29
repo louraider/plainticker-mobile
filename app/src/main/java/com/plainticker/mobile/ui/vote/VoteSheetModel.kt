@@ -7,6 +7,8 @@ import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.raw
 import com.plainticker.mobile.ui.refusal
+import com.plainticker.mobile.ui.share.ShareCard
+import com.plainticker.mobile.ui.share.shareCard
 import com.plainticker.mobile.ui.words
 
 /**
@@ -47,6 +49,11 @@ data class VoteSheetContent(
      * transaction link, never a figure or a verdict. Null in every state but a landed vote.
      */
     val shareText: Copy? = null,
+    /**
+     * The picture that rides with [shareText] (founder feedback 2026-09-29): the landed vote's
+     * card, [com.plainticker.mobile.ui.share.shareCard]. Null in every state but a landed vote.
+     */
+    val shareCard: ShareCard? = null,
     /** The landed vote's signature, for "View on Solscan". Landed only. */
     val signature: String? = null,
     /**
@@ -136,6 +143,7 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         primary = VoteAction(words(R.string.action_share), VoteActionKind.Share),
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),
         shareText = words(R.string.vote_share_text, ticker, signature),
+        shareCard = shareCard(),
         signature = signature,
     )
 
