@@ -91,15 +91,20 @@ class OnboardingViewModelTest {
         OnboardingViewModel(InMemoryOnboardingStore(), watchlist = watchlist).apply {
             setAccepted(true)
             confirm()
+            continueToPick()
         }
 
     @Test
-    fun `with a watchlist, consent is written and the pick step comes next, not the exit`() {
+    fun `with a watchlist, consent is written, then the controls step, then the pick step, not the exit`() {
         val store = InMemoryOnboardingStore()
         val vm = OnboardingViewModel(store, watchlist = com.plainticker.mobile.prefs.InMemoryWatchlistStore())
         vm.setAccepted(true)
         vm.confirm()
         assertTrue("consent is recorded at once", store.isOnboarded())
+        assertEquals(OnboardingStep.CONTROLS, vm.state.value.step)
+        assertFalse(vm.state.value.completed)
+        vm.continueToPick()
+        assertEquals("the controls step writes nothing", 1, store.writes)
         assertEquals(OnboardingStep.PICK, vm.state.value.step)
         assertFalse(vm.state.value.completed)
         assertFalse("nothing picked, nothing to finish with", vm.state.value.canFinish)
@@ -143,5 +148,18 @@ class OnboardingViewModelTest {
         assertEquals(listOf("AAPLx", "TSLAx", "JEFx", "ABTx", "ZTSx"), picks.map { it.symbol })
         assertEquals("a ticker with no token is never offered", false, picks.any { it.ticker == "UNLISTED" })
         assertEquals(MAX_PICKS, onboardingPicks((1..20).map { "T$it" }, (1..20).associate { "T$it" to "T${it}x" }).size)
+    }
+
+    @Test
+    fun `the controls step moves on only from itself`() {
+        val vm = OnboardingViewModel(InMemoryOnboardingStore(), watchlist = com.plainticker.mobile.prefs.InMemoryWatchlistStore())
+        vm.continueToPick()
+        assertEquals("a press before consent does nothing", OnboardingStep.CONSENT, vm.state.value.step)
+        vm.setAccepted(true)
+        vm.confirm()
+        vm.continueToPick()
+        vm.continueToPick()
+        assertEquals(OnboardingStep.PICK, vm.state.value.step)
+        assertFalse(vm.state.value.completed)
     }
 }
