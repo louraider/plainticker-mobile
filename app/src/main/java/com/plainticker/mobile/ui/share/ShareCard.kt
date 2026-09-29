@@ -114,3 +114,13 @@ fun SwapState.Landed.shareCard(): ShareCard? {
         footer = words(R.string.share_card_swap_footer),
     )
 }
+
+/**
+ * The text a landed swap's Share sends: the token and the public transaction, nothing about the
+ * money. A swap back to USDC says so and rides without a card ([shareCard] makes none for it).
+ */
+fun SwapState.Landed.shareText(): Copy = if (leg.intoToken) {
+    words(R.string.swap_share_text, leg.output.symbol, fill.signature)
+} else {
+    words(R.string.swap_share_out_text, leg.input.symbol, fill.signature)
+}

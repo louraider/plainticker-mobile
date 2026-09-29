@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import com.plainticker.mobile.ui.resolve
 import com.plainticker.mobile.ui.shareText
+import com.plainticker.mobile.ui.swap.SwapState
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -98,4 +99,25 @@ fun rememberShareCard(): (ShareCard, String) -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     return remember(context, scope) { { card: ShareCard, text: String -> scope.launch { context.shareCard(card, text) } } }
+}
+
+/**
+ * The swap receipt's Share ([com.plainticker.mobile.ui.swap.SwapActions.onShare]): the landed
+ * swap's card and text, read from [state] at the tap. A swap into a token rides with its card; a
+ * swap back to USDC sends the text alone. Anything but a landing does nothing.
+ */
+@Composable
+fun rememberSwapShare(state: SwapState): () -> Unit {
+    val context = LocalContext.current
+    val share = rememberShareCard()
+    val current = androidx.compose.runtime.rememberUpdatedState(state)
+    return remember(context, share) {
+        {
+            (current.value as? SwapState.Landed)?.let { landed ->
+                val text = landed.shareText().resolve(context.resources)
+                val card = landed.shareCard()
+                if (card != null) share(card, text) else context.shareText(text)
+            }
+        }
+    }
 }

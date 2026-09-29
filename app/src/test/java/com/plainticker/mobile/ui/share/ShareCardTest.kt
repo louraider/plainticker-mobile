@@ -230,6 +230,20 @@ class ShareCardTest {
     }
 
     @Test
+    fun `a swap's share text names the token and the transaction, nothing about the money`() {
+        val into = SwapState.Landed(SwapLeg.into(tslax), quote, fill, requoted = false, timing = timing).shareText()
+        assertEquals(
+            "Swapped into TSLAx with PlainTicker. https://www.plainticker.com/en Proof on chain: https://solscan.io/tx/$signature",
+            ShippedCopy.render(into),
+        )
+        val back = SwapState.Landed(SwapLeg.into(tslax).flipped(), quote, fill, requoted = false, timing = timing).shareText()
+        assertEquals(
+            "Swapped TSLAx to USDC with PlainTicker. https://www.plainticker.com/en Proof on chain: https://solscan.io/tx/$signature",
+            ShippedCopy.render(back),
+        )
+    }
+
+    @Test
     fun `a swap back to USDC makes no card`() {
         assertNull(SwapState.Landed(SwapLeg.into(tslax).flipped(), quote, fill, requoted = false, timing = timing).shareCard())
     }

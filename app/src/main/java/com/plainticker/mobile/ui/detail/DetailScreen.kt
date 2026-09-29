@@ -102,6 +102,7 @@ import com.plainticker.mobile.ui.portfolio.PRO_STAKE_THRESHOLD_RAW
 import com.plainticker.mobile.ui.swap.SwapActions
 import com.plainticker.mobile.ui.resolve
 import com.plainticker.mobile.ui.share.rememberShareCard
+import com.plainticker.mobile.ui.share.rememberSwapShare
 import com.plainticker.mobile.ui.text
 import com.plainticker.mobile.ui.swap.SwapSheet
 import com.plainticker.mobile.ui.swap.SwapState
@@ -154,6 +155,7 @@ fun DetailScreen(
         onPauseOrDispose { viewModel.onPause() }
     }
     val swap by swapViewModel.state.collectAsStateWithLifecycle()
+    val swapShare = rememberSwapShare(swap)
     val holding by swapViewModel.holding.collectAsStateWithLifecycle()
     val vote by voteViewModel.state.collectAsStateWithLifecycle()
     val voted by voteViewModel.votedTickers.collectAsStateWithLifecycle()
@@ -198,6 +200,8 @@ fun DetailScreen(
             onRetry = swapViewModel::retry,
             onSwapBack = swapViewModel::swapBack,
             onContinue = swapViewModel::continueToWallet,
+            // The receipt's Share: "Swapped into AAPLx" as a card, with the transaction.
+            onShare = swapShare,
         ),
         holding = holding,
         onSwapOut = { swapToken?.let(swapViewModel::openOut) },

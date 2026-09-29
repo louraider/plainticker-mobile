@@ -51,6 +51,10 @@
     <string name="share_card_swap_headline">Swapped into %1$s</string>
     <string name="share_card_swap_route">Route</string>
     <string name="share_card_swap_route_value">Jupiter, on Solana</string>
+    <!-- What a landed swap's Share sends beside its card: the token and the public transaction,
+         never an amount, a price or a cost. -->
+    <string name="swap_share_text">Swapped into %1$s with PlainTicker. https://www.plainticker.com/en Proof on chain: https://solscan.io/tx/%2$s</string>
+    <string name="swap_share_out_text">Swapped %1$s to USDC with PlainTicker. https://www.plainticker.com/en Proof on chain: https://solscan.io/tx/%2$s</string>
     <string name="share_card_swap_footer">Tokenized stocks, read before you swap. Not a price forecast or investment advice.</string>
     <string name="action_max">Max</string>
     <string name="action_clear">Clear</string>
