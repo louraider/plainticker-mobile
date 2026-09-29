@@ -19,6 +19,7 @@ import com.plainticker.mobile.repo.PriceRepository
 import com.plainticker.mobile.repo.RpcRepository
 import com.plainticker.mobile.repo.SecondRead
 import com.plainticker.mobile.repo.SecondSource
+import com.plainticker.mobile.ui.sentence
 import com.plainticker.mobile.wallet.TransactionGuard
 import com.plainticker.mobile.wallet.WalletOutcome
 import com.plainticker.mobile.wallet.WalletSession
@@ -528,12 +529,13 @@ class SwapViewModel(
         val leg = review.leg
         val funds = review.funds
         val input = review.input
-        val quote = review.quote
+        var quote = review.quote
         val requote = review.requote
         var timing = timingIn
         // Decoded again from the quote the guard read; it decoded there, so it decodes here.
         val unsigned = quote.transaction?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
             ?: return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
+        val order = quote.order ?: return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
         run {
             // ---- The wallet this order was built for is still the one connected: checked again,
             // because time passed on the Review step.
@@ -587,12 +589,39 @@ class SwapViewModel(
                 return fail(leg, funds, input, SwapFailure.WALLET_CHANGED, quote, requote, timing)
             }
 
-            // ---- What the wallet handed back is what the guard read (judges' review, 2026-09-26).
+            // ---- What the wallet handed back passes the guard too (judges' review, 2026-09-26).
             // The guard checked the bytes this app gave the wallet; /execute sends the bytes the
-            // wallet gave back. Only signatures may differ, and this wallet's must be there.
-            if (!TransactionGuard.signedMatches(unsigned, signed, funds.owner)) {
-                debugLog.raw("order ${quote.requestId}: the signed transaction is not the one checked, not sent")
-                return fail(leg, funds, input, SwapFailure.SIGNED_MISMATCH, quote, requote, timing)
+            // wallet gave back. A wallet may set its own priority fee or add assertions before it
+            // signs (Seed Vault did, 2026-09-29), so the signed bytes are read in full against the
+            // same request, and the fee shown from here on, the receipt's included, is theirs.
+            when (
+                val reading = TransactionGuard.readSigned(
+                    unsigned = unsigned,
+                    signed = signed,
+                    wallet = funds.owner,
+                    order = order,
+                    inputMint = leg.input.mint,
+                    outputMint = leg.output.mint,
+                    amount = input.raw,
+                )
+            ) {
+                is TransactionGuard.SignedReading.Refused -> {
+                    debugLog.raw("order ${quote.requestId}: not sent, ${reading.change}: ${reading.reason}")
+                    _state.value = SwapState.Failed(
+                        leg, funds, input, SwapFailure.SIGNED_MISMATCH, quote, requote, timing,
+                        walletChange = reading.sentence(),
+                    )
+                    return
+                }
+                is TransactionGuard.SignedReading.Allowed -> {
+                    if (reading.changed) {
+                        debugLog.raw(
+                            "order ${quote.requestId}: the wallet changed the message, priority " +
+                                "${quote.costs?.priorityFeeLamports} became ${reading.costs.priorityFeeLamports} lamports",
+                        )
+                    }
+                    quote = quote.copy(costs = reading.costs)
+                }
             }
 
             if (!submitSwaps) {

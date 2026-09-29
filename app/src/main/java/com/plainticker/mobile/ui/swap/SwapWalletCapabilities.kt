@@ -4,9 +4,9 @@ import com.solana.mobilewalletadapter.clientlib.protocol.MobileWalletAdapterClie
 import com.solana.mobilewalletadapter.common.ProtocolContract
 
 /**
- * Whether the connected wallet can sign without sending, which the swap needs: the app checks
- * the signed bytes against the ones it read, then hands them to Jupiter's /execute
- * ([com.plainticker.mobile.wallet.TransactionGuard.signedMatches]).
+ * Whether the connected wallet can sign without sending, which the swap needs: the app runs its
+ * checks again on the signed bytes, then hands them to Jupiter's /execute
+ * ([com.plainticker.mobile.wallet.TransactionGuard.readSigned]).
  *
  * `solana:signTransactions` is an optional feature in MWA 2.x (Beeman, judges' review,
  * 2026-09-27). `getCapabilities` lists optional features only, so absence means something only
