@@ -516,8 +516,8 @@ same light-only 1dp border ring described above, since a skeleton fill is exactl
 
 ### 4.8 Share images and the controls explainer (2026-09-29)
 
-**Share images** (`ui/share/`). Share on Detail and on a landed vote sends a picture with the
-text it always sent: `ShareCard` decides what the picture says, `ShareCardRenderer` draws it on the
+**Share images** (`ui/share/`). Share on Detail, on a landed vote and on a landed swap into a
+token (the result hero's Share slot, wired by Detail and Portfolio) sends a picture with its text: `ShareCard` decides what the picture says, `ShareCardRenderer` draws it on the
 platform Canvas, and `ShareImage` writes a PNG under `cache/share/` and hands it out through a
 FileProvider that is not exported (`image/png`, `EXTRA_STREAM`, a read grant set on the intent and
 on its ClipData), falling back to the text alone on any failure. The size is 1080 by 1350 (4:5):
