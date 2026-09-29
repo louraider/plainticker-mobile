@@ -7,7 +7,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,17 +20,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -47,10 +43,10 @@ import com.plainticker.mobile.ui.components.AmberSheetSurface
 import com.plainticker.mobile.ui.components.FactCell
 import com.plainticker.mobile.ui.components.FactGrid
 import com.plainticker.mobile.ui.components.InstrumentPreviews
-import com.plainticker.mobile.ui.components.LiveBar
 import com.plainticker.mobile.ui.components.PreviewCanvas
-import com.plainticker.mobile.ui.components.CautionMark
+import com.plainticker.mobile.ui.components.ResultHero
 import com.plainticker.mobile.ui.components.defaultAmberColors
+import com.plainticker.mobile.ui.components.resultAnnouncement
 import com.plainticker.mobile.ui.SolscanAction
 import com.plainticker.mobile.ui.rememberShareText
 import com.plainticker.mobile.ui.text
@@ -120,34 +116,42 @@ internal fun ColumnScope.VoteSheetBody(
     takeFocus: Boolean = true,
 ) {
     val colors = defaultAmberColors()
-    ConfirmOnSent(content.bar != null)
     val lead = leadFocus(takeFocus)
 
-    content.bar?.let {
-        // Static, like the swap receipt's bar: the vote is sent and nothing is still moving.
-        LiveBar(
-            label = it.label.text(),
-            meta = it.meta.text(),
-            live = false,
-            modifier = lead.padding(top = BarTop),
+    val result = content.result
+    if (result != null) {
+        // A finished vote leads with what happened (founder's report from the Seeker, 2026-09-29:
+        // "vote sent" was small text with no mark): the shared result hero, the swap sheet's own,
+        // with the title as its eyebrow. It carries the one Confirm haptic, keyed on the signature.
+        val headline = result.headline.text()
+        val sentences = result.sentences.map { it.text() }
+        ResultHero(
+            tone = result.tone,
+            headline = headline,
+            sentences = sentences,
+            announcement = resultAnnouncement(headline, sentences),
+            modifier = lead,
+            eyebrow = content.title.text(),
+            hapticKey = content.signature,
+            colors = colors,
         )
+    } else {
+        Text(
+            text = content.title.text(),
+            style = AmberSheetTitle,
+            color = colors.textPrimary,
+            maxLines = 1,
+            softWrap = false,
+            modifier = lead
+                .fillMaxWidth()
+                .padding(start = Side, end = Side, top = TitleTop)
+                .semantics { heading() },
+        )
+
+        // What is in flight, always as a sentence. This app draws no spinners (DESIGN.md section
+        // 8), so the phase is the only thing that says a round-trip is happening, and which.
+        content.phase?.let { Sentence(it.text(), AmberType.body, colors.textSecondary, PhaseTop) }
     }
-
-    Text(
-        text = content.title.text(),
-        style = AmberSheetTitle,
-        color = colors.textPrimary,
-        maxLines = 1,
-        softWrap = false,
-        modifier = (if (content.bar == null) lead else Modifier)
-            .fillMaxWidth()
-            .padding(start = Side, end = Side, top = TitleTop)
-            .semantics { heading() },
-    )
-
-    // What is in flight, always as a sentence. This app draws no spinners (DESIGN.md section 8),
-    // so the phase is the only thing that says a round-trip is happening, and it has to say which.
-    content.phase?.let { Sentence(it.text(), AmberType.body, colors.textSecondary, PhaseTop) }
 
     if (content.cells.isNotEmpty()) {
         Spacer(Modifier.height(GridTop))
@@ -159,25 +163,10 @@ internal fun ColumnScope.VoteSheetBody(
         )
     }
 
-    content.notice?.let { notice ->
-        if (content.caution) {
-            // A refusal reads beside the swap sheet's own failure mark (QA of 1.3.21).
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = NoticeTop),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MarkGap),
-            ) {
-                CautionMark()
-                Text(
-                    text = notice.text(),
-                    style = AmberType.body,
-                    color = colors.textSecondary,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        } else {
-            Sentence(notice.text(), AmberType.body, colors.textSecondary, NoticeTop)
-        }
+    // A result carries its own sentences inside it (a refusal's reason included); only a sheet
+    // still in progress draws the notice on its own line.
+    if (result == null) {
+        content.notice?.let { Sentence(it.text(), AmberType.body, colors.textSecondary, NoticeTop) }
     }
 
     // The weakness of a balance-weighted vote, set in the metadata face under the figure it is
@@ -196,6 +185,9 @@ internal fun ColumnScope.VoteSheetBody(
         SolscanAction(signature = it, color = colors.actionText, modifier = Modifier.padding(start = Side))
     }
 
+    // The actions. On a landed vote the primary is Share, the one slot the share action lives in:
+    // VoteActionKind.Share hands [VoteSheetContent.shareText] to [VoteActions.onShare] (the
+    // system share sheet by default), so a richer share replaces that callback, not this layout.
     Column(
         modifier = Modifier.padding(start = Side, end = Side, top = ActionsTop, bottom = SheetBottom),
         verticalArrangement = Arrangement.spacedBy(ActionGap),
@@ -260,15 +252,6 @@ private fun VoteCell.factCell(): FactCell {
     )
 }
 
-/** One Confirm haptic when the vote lands, and exactly one: the effect is keyed on [sent]. */
-@Composable
-private fun ConfirmOnSent(sent: Boolean) {
-    val haptics = LocalHapticFeedback.current
-    LaunchedEffect(sent) {
-        if (sent) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-    }
-}
-
 /**
  * The modifier for whatever the sheet leads with, already asked for focus. Focus is an affordance
  * and not a state of the vote, so a requester whose node has gone is dropped rather than thrown.
@@ -283,12 +266,10 @@ private fun leadFocus(takeFocus: Boolean): Modifier {
 // ---- Measurements ------------------------------------------------------------------------------
 
 private val Side = 20.dp
-private val BarTop = 8.dp
 private val TitleTop = 14.dp
 private val PhaseTop = 12.dp
 private val GridTop = 20.dp
 private val NoticeTop = 16.dp
-private val MarkGap = 12.dp
 private val DisclosureTop = 12.dp
 private val ActionsTop = 24.dp
 private val ActionGap = 10.dp
@@ -323,6 +304,7 @@ private val PreviewStates: List<VoteState> = listOf(
     VoteState.Ready("NFLX", "NFLXx", PreviewCollector, PreviewStakeRaw, PreviewBuild, refreshed = true),
     VoteState.Landed("NFLX", "NFLXx", PreviewStakeRaw, "4xQm7gZ1LdPqR8vWnJb3sT6yUeK2cHaX9fNmD5oVtHe"),
     VoteState.Refused("NFLX", "NFLXx", VoteRefusal.NOT_OPEN),
+    VoteState.Refused("NFLX", "NFLXx", VoteRefusal.FAILED),
 )
 
 private val PreviewActions = VoteActions(onConfirm = {}, onRetry = {}, onClose = {})

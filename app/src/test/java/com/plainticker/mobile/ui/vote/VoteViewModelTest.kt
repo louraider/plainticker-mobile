@@ -789,7 +789,7 @@ class VoteViewModelTest {
 
         states.forEach { state ->
             val sheet = state.sheet() ?: throw AssertionError("$state draws no sheet at all")
-            assertNotNull("$state says nothing", sheet.phase ?: sheet.notice ?: sheet.bar)
+            assertNotNull("$state says nothing", sheet.phase ?: sheet.notice ?: sheet.result)
         }
         assertNull("only the closed state draws nothing", VoteState.Closed.sheet())
     }
