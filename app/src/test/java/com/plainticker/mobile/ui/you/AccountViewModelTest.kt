@@ -206,6 +206,73 @@ class AccountViewModelTest {
         assertEquals("the screen re-reads the entitlement exactly once", 1, events.size)
     }
 
+    // ---- Pro belongs to the account (2026-09-29) ------------------------------------------------
+
+    @Test
+    fun `a sign-in whose answer says grants moved to the account is marked, so Plan can say so`() = runTest {
+        val moved = okBody.replace("\"until\":\"2026-10-20T00:00:00.000Z\"}", "\"until\":\"2026-10-20T00:00:00.000Z\",\"moved\":2}")
+        assertTrue(moved.contains("\"moved\":2"))
+        val vm = machine(api = mockApi { respondJson(moved) })
+        advanceUntilIdle()
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertTrue((vm.state.value as AccountUiState.SignedIn).movedToAccount)
+    }
+
+    @Test
+    fun `a server older than the move (no moved field) or one that moved nothing marks nothing`() = runTest {
+        for (body in listOf(okBody, okBody.replace("\"until\":\"2026-10-20T00:00:00.000Z\"}", "\"until\":\"2026-10-20T00:00:00.000Z\",\"moved\":0}"))) {
+            val vm = machine(api = mockApi { respondJson(body) })
+            advanceUntilIdle()
+            vm.signIn(source(GoogleCredentialResult.Token(token)))
+            advanceUntilIdle()
+            assertFalse((vm.state.value as AccountUiState.SignedIn).movedToAccount)
+        }
+    }
+
+    @Test
+    fun `a finished sign-in and a finished sign-out each fire one account switch, so the plan is re-read at once`() = runTest {
+        val api = mockApi { request ->
+            if (request.url.encodedPath.endsWith("/account/signout")) respondJson("""{"ok":true}""") else respondJson(okBody)
+        }
+        val vm = machine(api = api)
+        val switches = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.accountSwitched.toList(switches) }
+        advanceUntilIdle()
+        vm.signIn(source(GoogleCredentialResult.Token(token)))
+        advanceUntilIdle()
+        assertEquals("sign-in", 1, switches.size)
+        vm.signOut()
+        advanceUntilIdle()
+        assertEquals("sign-out", 2, switches.size)
+        assertEquals(AccountUiState.SignedOut(), vm.state.value)
+    }
+
+    @Test
+    fun `an unconfirmed sign-out still switches the account, the phone forgot it either way`() = runTest {
+        val api = mockApi { request ->
+            if (request.url.encodedPath.endsWith("/account/signout")) throw IOException("offline") else respondJson(okBody)
+        }
+        val vm = machine(api = api, store = InMemoryAccountStore(signedInAnn))
+        val switches = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.accountSwitched.toList(switches) }
+        advanceUntilIdle()
+        vm.signOut()
+        advanceUntilIdle()
+        assertEquals(1, switches.size)
+    }
+
+    @Test
+    fun `a plain account refresh is not an account switch`() = runTest {
+        val vm = machine(api = mockApi { respondJson(okBody) }, store = InMemoryAccountStore(signedInAnn))
+        val switches = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.accountSwitched.toList(switches) }
+        advanceUntilIdle()
+        vm.refresh()
+        advanceUntilIdle()
+        assertTrue(switches.isEmpty())
+    }
+
     @Test
     fun `the device code rides in the X-PT-Code header of the sign-in call`() = runTest {
         val api = mockApi { respondJson(okBody) }

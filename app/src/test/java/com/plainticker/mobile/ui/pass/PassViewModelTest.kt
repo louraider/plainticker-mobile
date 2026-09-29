@@ -566,6 +566,60 @@ class PassViewModelTest {
         assertFalse(vm.pro.value.entitlementLoading)
     }
 
+    /**
+     * 2026-09-29, the founder's rule: Pro belongs to the Google account, not the phone. After a
+     * sign-out the plan last shown was the account's; the re-read after a sign-in or sign-out
+     * drops it at once and never keeps it on a failure.
+     */
+    @Test
+    fun `a fresh re-read after an account change drops the known plan at once and never keeps it on a failure`() = runTest {
+        var calls = 0
+        val entitlement = mockApi {
+            calls++
+            if (calls == 1) {
+                respondJson("""{"pro":true,"source":"pass","until":"2027-05-12T00:00:00.000Z"}""")
+            } else {
+                respondHtml("<html>down</html>", HttpStatusCode.BadGateway)
+            }
+        }
+        val vm = machine(entitlement = entitlement)
+        vm.pro.test {
+            awaitUntil { !it.entitlementLoading && it.pro }
+            cancelAndIgnoreRemainingEvents()
+        }
+        vm.refreshEntitlement(fresh = true)
+        assertTrue("the old account's plan leaves the screen before the answer", vm.pro.value.entitlementLoading)
+        assertFalse(vm.pro.value.entitlementKnown)
+        // The same sign-out also tells every screen through EntitlementChanges; that quiet re-read
+        // finds nothing known to keep.
+        vm.refreshEntitlement()
+        advanceUntilIdle()
+        assertTrue("a failed read says so", vm.pro.value.entitlementFailed)
+        assertFalse(vm.pro.value.entitlementKnown)
+    }
+
+    @Test
+    fun `a fresh re-read that answers not Pro shows Free, not the previous account's Pro`() = runTest {
+        var calls = 0
+        val entitlement = mockApi {
+            calls++
+            if (calls == 1) {
+                respondJson("""{"pro":true,"source":"pass","until":"2027-05-12T00:00:00.000Z"}""")
+            } else {
+                respondJson("""{"pro":false,"source":null,"until":null}""")
+            }
+        }
+        val vm = machine(entitlement = entitlement)
+        vm.pro.test {
+            awaitUntil { !it.entitlementLoading && it.pro }
+            cancelAndIgnoreRemainingEvents()
+        }
+        vm.refreshEntitlement(fresh = true)
+        advanceUntilIdle()
+        assertFalse(vm.pro.value.pro)
+        assertTrue(vm.pro.value.entitlementKnown)
+    }
+
     // ---- Promo code redemption ---------------------------------------------------------------
 
     private fun TestScope.promoTrail(machine: PassViewModel): List<PromoState> {

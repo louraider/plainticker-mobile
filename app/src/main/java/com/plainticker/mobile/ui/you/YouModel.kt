@@ -3,6 +3,7 @@ package com.plainticker.mobile.ui.you
 import androidx.annotation.StringRes
 import com.plainticker.mobile.R
 import com.plainticker.mobile.data.plainticker.EntitlementSource
+import com.plainticker.mobile.prefs.SignedInAccount
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
 import com.plainticker.mobile.ui.counted
@@ -244,7 +245,7 @@ private fun promoPro(pro: ProUiState): Boolean =
 
 private fun held(untilMillis: Long?, signedOut: Boolean) = PromoLine(
     value = promoSuccessLine(untilMillis),
-    sub = if (signedOut) words(R.string.promo_success_saved_to_phone) else null,
+    sub = if (signedOut) words(R.string.pro_saved_to_phone) else null,
     quiet = false,
 )
 
@@ -256,11 +257,50 @@ enum class PlanAction { GET_PRO, EXTEND, REFRESH }
 data class PlanRow(val label: Copy, val value: Copy, val sub: Copy? = null, val action: PlanAction? = null)
 
 /**
+ * Who the Pro on this phone belongs to (2026-09-29, the founder's rule: Pro belongs to the Google
+ * account or to a wallet, never to the phone). Signed in, the server answers with that account's
+ * Pro alone, so the Plan's source names the account; signed out, any Pro left is this phone's own
+ * and moves to the account at the next sign-in. Null when the account is still being read, which
+ * says neither.
+ */
+data class PlanOwner(
+    val signedIn: Boolean,
+    /** The signed-in account, for its email; null when signed out. */
+    val account: SignedInAccount? = null,
+    /** This sign-in moved the phone's own Pro to the account ([AccountUiState.SignedIn.movedToAccount]). */
+    val moved: Boolean = false,
+)
+
+fun planOwner(account: AccountUiState): PlanOwner? = when (account) {
+    is AccountUiState.SignedIn -> PlanOwner(signedIn = true, account = account.account, moved = account.movedToAccount)
+    is AccountUiState.SignedOut -> PlanOwner(signedIn = false)
+    AccountUiState.Restoring, AccountUiState.SigningIn -> null
+}
+
+/**
+ * The line under the Plan's source: whose Pro it is. Signed in, the account by its email, or
+ * "Moved to your Google account." right after a sign-in that moved the phone's own Pro there.
+ * Signed out, a pass or an unnamed source is this phone's own until it signs in; a promo says the
+ * same in its own row just above ([promoLine]), and a stake belongs to the wallet, which no
+ * sign-in moves, so neither repeats it here.
+ */
+private fun ownerLine(owner: PlanOwner?, source: EntitlementSource?): Copy? = when {
+    owner == null -> null
+    owner.signedIn && owner.moved -> words(R.string.pro_moved_to_account)
+    owner.signedIn -> owner.account?.email?.takeIf { it.isNotBlank() }
+        ?.let { words(R.string.you_plan_on_account, it) }
+        ?: words(R.string.you_plan_on_account_unnamed)
+    source == EntitlementSource.PASS || source == null -> words(R.string.pro_saved_to_phone)
+    else -> null
+}
+
+/**
  * The Plan group: source, valid until, how to extend, then the stake figure and a pending
  * payment. [heroAction] is what the hero already draws, so the pay entry lands here only when the
- * hero does not carry it (a reader with no identity yet still reaches the pass flow).
+ * hero does not carry it (a reader with no identity yet still reaches the pass flow). [owner]
+ * names whose Pro it is under the source ([ownerLine]).
  */
-fun planRows(pro: ProUiState, heroAction: HeroAction?, nowMillis: Long): List<PlanRow> {
+fun planRows(pro: ProUiState, heroAction: HeroAction?, nowMillis: Long, owner: PlanOwner? = null): List<PlanRow> {
     val rows = mutableListOf<PlanRow>()
     val pay = planAction(pro).takeIf { it != heroAction }?.let {
         if (it == HeroAction.EXTEND) PlanAction.EXTEND else PlanAction.GET_PRO
@@ -280,7 +320,7 @@ fun planRows(pro: ProUiState, heroAction: HeroAction?, nowMillis: Long): List<Pl
             rows += free.copy(action = refresh)
             rows += proRow
         }
-        else -> rows += proRows(pro, pay, refresh)
+        else -> rows += proRows(pro, pay, refresh, owner)
     }
     rows += PlanRow(words(R.string.you_stake_label), stakeLine(pro) ?: words(R.string.state_loading))
     pendingPaymentLine(pro)?.let { rows += PlanRow(words(R.string.you_plan_payment_label), it) }
@@ -292,7 +332,7 @@ private fun freeRows(pay: PlanAction?): List<PlanRow> = listOf(
     PlanRow(words(R.string.you_pro_label), words(R.string.you_plan_pro_value), action = pay),
 )
 
-private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?): List<PlanRow> {
+private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?, owner: PlanOwner?): List<PlanRow> {
     val source = when (pro.source) {
         EntitlementSource.PASS -> R.string.you_plan_source_pass
         EntitlementSource.STAKE -> R.string.you_plan_source_stake
@@ -300,7 +340,9 @@ private fun proRows(pro: ProUiState, pay: PlanAction?, refresh: PlanAction?): Li
         EntitlementSource.PROMO -> R.string.you_plan_source_promo
         null -> R.string.you_plan_source_unnamed
     }
-    val rows = mutableListOf(PlanRow(words(R.string.you_plan_source_label), words(source), action = refresh))
+    val rows = mutableListOf(
+        PlanRow(words(R.string.you_plan_source_label), words(source), sub = ownerLine(owner, pro.source), action = refresh),
+    )
     when (pro.source) {
         EntitlementSource.STAKE -> {
             rows += PlanRow(words(R.string.you_plan_until_label), words(R.string.you_plan_until_stake))

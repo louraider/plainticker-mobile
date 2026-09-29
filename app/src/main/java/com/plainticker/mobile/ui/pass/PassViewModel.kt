@@ -198,9 +198,18 @@ class PassViewModel(
      * read runs, and a read that fails keeps it rather than replacing a known plan with an error.
      * The loading state is kept for the cases it is honest in: the first read, a retry after a
      * failure, and a wallet change, which drops to loading itself (see [init]) before calling here.
+     *
+     * [fresh] is the fourth (2026-09-29): a Google sign-in or sign-out just finished, so the plan on
+     * screen belonged to the account before and is not this one's. Pro belongs to the account, not
+     * the phone: after a sign-out the phone may have no Pro at all. The known answer is dropped at
+     * once, and a failed read says so rather than keeping the old account's plan.
      */
-    fun refreshEntitlement() {
+    fun refreshEntitlement(fresh: Boolean = false) {
         entitlementJob?.cancel()
+        // At once, not inside the launch: a quiet refresh asked for a moment later (the same
+        // sign-out also tells every screen through EntitlementChanges) then finds no known answer
+        // to keep, and is loud too.
+        if (fresh) _pro.update { it.copy(entitlementLoading = true, entitlementDisabled = false, entitlementFailed = false) }
         entitlementJob = viewModelScope.launch {
             val quiet = _pro.value.entitlementKnown
             if (!quiet) {

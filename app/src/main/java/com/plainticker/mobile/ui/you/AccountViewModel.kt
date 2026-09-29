@@ -141,6 +141,12 @@ sealed interface AccountUiState {
         val unlinkFailure: Pair<String, UnlinkFailure>? = null,
         /** `POST /api/v1/account/signout` is in flight: the row says so and offers nothing meanwhile. */
         val signingOut: Boolean = false,
+        /**
+         * This sign-in moved Pro this phone held on its own to the Google account (the server's
+         * `moved`, above 0). Plan says "Moved to your Google account." until the next sign-out or
+         * relaunch; an older server never sets it.
+         */
+        val movedToAccount: Boolean = false,
     ) : AccountUiState
 }
 
@@ -248,6 +254,16 @@ class AccountViewModel(
     /** One event per sign-in, refresh or unlink that finished: the screen refreshes the entitlement on each. */
     val signedIn: Flow<Unit> = signedInEvents.receiveAsFlow()
 
+    private val accountSwitchedEvents = Channel<Unit>(Channel.BUFFERED)
+
+    /**
+     * One event per sign-in and per sign-out that finished: the Google account this phone answers
+     * for has changed, so its Pro is not the one last read (2026-09-29, Pro belongs to the account,
+     * not the phone). The screen re-reads the entitlement at once, and not quietly: the plan last
+     * shown belonged to the account before, and must not stay on screen as if it were this one's.
+     */
+    val accountSwitched: Flow<Unit> = accountSwitchedEvents.receiveAsFlow()
+
     private var signInJob: Job? = null
     private var refreshJob: Job? = null
     private var unlinkJob: Job? = null
@@ -315,8 +331,9 @@ class AccountViewModel(
             }
             when (outcome) {
                 is Outcome.Done -> {
-                    _state.value = AccountUiState.SignedIn(outcome.account)
+                    _state.value = AccountUiState.SignedIn(outcome.account, movedToAccount = outcome.moved)
                     signedInEvents.trySend(Unit)
+                    accountSwitchedEvents.trySend(Unit)
                     entitlement?.changed()
                 }
                 is Outcome.Failed -> _state.value = AccountUiState.SignedOut(outcome.message)
@@ -325,7 +342,7 @@ class AccountViewModel(
     }
 
     private sealed interface Outcome {
-        data class Done(val account: SignedInAccount) : Outcome
+        data class Done(val account: SignedInAccount, val moved: Boolean = false) : Outcome
         data class Failed(val message: AccountMessage) : Outcome
     }
 
@@ -367,7 +384,7 @@ class AccountViewModel(
         store.save(account)
         // The "sign in again" line after a rekey has done its job.
         rekeyer?.signedInAgain()
-        return Outcome.Done(account)
+        return Outcome.Done(account, moved = response.moved > 0)
     }
 
     /** What the server returned for display, the same shape every one of these three calls answers. */
@@ -454,6 +471,7 @@ class AccountViewModel(
             _state.value = AccountUiState.SignedOut(
                 if (result == SignOutResult.QUEUED) AccountMessage.SIGN_OUT_UNCONFIRMED else null,
             )
+            accountSwitchedEvents.trySend(Unit)
             entitlement?.changed()
         }
     }
@@ -541,7 +559,7 @@ class AccountViewModel(
         _state.update { current ->
             val previous = current as? AccountUiState.SignedIn
             if (finishesUnlink || previous == null) {
-                AccountUiState.SignedIn(account)
+                AccountUiState.SignedIn(account, movedToAccount = previous?.movedToAccount ?: false)
             } else {
                 previous.copy(
                     account = account,

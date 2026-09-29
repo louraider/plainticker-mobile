@@ -32,6 +32,13 @@ data class GoogleAuthResponse(
     val pro: Boolean = false,
     val source: String? = null,
     val until: String? = null,
+    /**
+     * How many of this phone's own grants (a pass paid with its code, a promo code redeemed on
+     * it) moved to the Google account in this sign-in (server/auth/README.md §1, 2026-09-29: Pro
+     * belongs to the account, not the phone). A server older than that never sends it: 0, and
+     * You says nothing about a move.
+     */
+    val moved: Int = 0,
 )
 
 /** Both fields can be null: a wallet-first account may have no name, and the contract allows either. */

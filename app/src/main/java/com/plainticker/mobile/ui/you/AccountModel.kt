@@ -51,6 +51,14 @@ fun accountMessageRes(message: AccountMessage): Int = when (message) {
 /** Whether [message] comes with the text action that opens [AccountMessage.LINK_ON_WEB_URL]. */
 fun accountMessageOpensWeb(message: AccountMessage?): Boolean = message == AccountMessage.LINK_ON_WEB
 
+/**
+ * The sign-out question (2026-09-29, Pro belongs to the Google account, not the phone): on a phone
+ * that reads as Pro it says the Pro leaves the phone and stays on the account; otherwise it only
+ * says what signing out does.
+ */
+fun signOutQuestionRes(proOnPhone: Boolean): Int =
+    if (proOnPhone) R.string.you_sign_out_confirm_pro else R.string.you_sign_out_confirm
+
 /** The line You draws about this phone's own code, or null when there is nothing to say. */
 @StringRes
 fun deviceCodeNoticeRes(status: DeviceCodeStatus): Int? = when (status) {

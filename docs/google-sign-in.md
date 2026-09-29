@@ -35,8 +35,18 @@ is the web repo's `POST /api/v1/auth/google` (PR #140, `server/auth/README.md`, 
 stored account on this phone whatever the answer. Only a 200 reads as a plain signed-out state.
 Offline, or on any unclean answer, the account is still cleared here, You says the server has not
 confirmed it yet, and one retry is queued (`AccountSignOut`: a minute later while the process
-lives, and on the next launch); a new sign-in drops that retry first. A pass or promo code bound to
-the device code itself stays with the device.
+lives, and on the next launch); a new sign-in drops that retry first.
+
+**Pro belongs to the Google account, not the phone** (2026-09-29, web server/billing/PROMO.md
+§3a). A pass paid or a promo code redeemed on this phone while signed out is the phone's own
+until it signs in; signing in moves it to the Google account (the sign-in answer's `moved` says
+how many, and Plan shows "Moved to your Google account." once). Signed in, the server answers
+with the account's Pro alone, and Plan names the account under the source. Signed out, the phone
+has no Pro of the account's, and the sign-out question says so on a phone that reads as Pro. A
+finished sign-in or sign-out re-reads the plan at once and not quietly
+(`AccountViewModel.accountSwitched`, `PassViewModel.refreshEntitlement(fresh = true)`), so the
+previous account's Pro never stays on screen. Against a server older than that change the app is
+the same apart from the words: no `moved` field, nothing said about a move.
 
 **Sign-in refused with `link_on_web`** (409): the Google account's email already belongs to a
 PlainTicker account made another way. The app does not link it; You says so and offers
