@@ -398,20 +398,20 @@ class SwapViewModel(
                 )
                 return
             } catch (e: SwapError) {
-                debugLog.raw("order refused: code=${e.code} ${e.detail ?: e.message}")
-                // A non-2xx with no structured body is a transport answer, not a verdict on the
-                // pair: a gateway page or a rate limit knows nothing about whether this pair can
-                // be quoted, so it must not be reported as though the pair were the problem. On a
-                // token Jupiter has no reference price for, a refused order is the answer to
-                // "Check swap availability": no route right now.
+                debugLog.raw("order refused: ${e::class.simpleName} code=${e.code} ${e.detail ?: e.message}")
+                // Only Jupiter finding no way to fill the order is "no route". A rate limit or a
+                // server error never looked at the pair, and a refusal for another reason (funds, a
+                // bad mint) is a refusal: on 1.3.25 the gateway's 429, a structured body, read as
+                // a refused order and "Check swap availability" told the Seeker there was no route.
                 quoteFailure = when {
+                    e is SwapError.RateLimited -> SwapFailure.RATE_LIMITED
                     e is SwapError.Http -> SwapFailure.QUOTE_UNAVAILABLE
-                    leg.unpriced && leg.intoToken -> SwapFailure.NO_ROUTE
+                    e.noRoute && leg.unpriced && leg.intoToken -> SwapFailure.NO_ROUTE
                     else -> SwapFailure.QUOTE_REFUSED
                 }
             } catch (e: Exception) {
                 debugLog.raw("order threw ${e::class.simpleName}: ${e.message}")
-                quoteFailure = SwapFailure.QUOTE_UNAVAILABLE
+                quoteFailure = if (e.isOffline()) SwapFailure.OFFLINE else SwapFailure.QUOTE_UNAVAILABLE
             }
             timing = timing.closeQuoting(clock.nowMillis())
             if (order == null) {
@@ -424,9 +424,10 @@ class SwapViewModel(
             // approval and then blame the wallet for a payload it was never handed.
             val unsigned = quote.transaction?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
             if (unsigned == null) {
+                // A quote came back, so Jupiter found a route: whatever the leg, this is a quote
+                // with nothing to approve, never "no route".
                 debugLog.raw("order ${quote.requestId} carried no transaction this app could read")
-                val reason = if (leg.unpriced && leg.intoToken) SwapFailure.NO_ROUTE else SwapFailure.NO_TRANSACTION
-                return fail(leg, funds, input, reason, quote, requote, timing)
+                return fail(leg, funds, input, SwapFailure.NO_TRANSACTION, quote, requote, timing)
             }
 
             // ---- The bytes against the request (security audit, finding 2). The sheet's figures
@@ -948,3 +949,12 @@ data class SwapHolding(val token: SwapToken, val raw: Long) {
     /** True when there is something to swap back to USDC. */
     val canSwapOut: Boolean get() = raw > 0L
 }
+
+/**
+ * True when a request never left the phone: no DNS answer, no connection, no route to the host,
+ * anywhere in the cause chain. A timeout is not this: the request went, and nothing came back.
+ */
+internal fun Throwable.isOffline(): Boolean =
+    generateSequence(this) { it.cause.takeIf { cause -> cause !== it } }.take(8).any {
+        it is java.net.UnknownHostException || it is java.net.ConnectException || it is java.net.NoRouteToHostException
+    }

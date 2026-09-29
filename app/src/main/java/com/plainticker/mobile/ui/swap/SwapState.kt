@@ -642,19 +642,31 @@ enum class SwapFailure(
     /** The wallet is connected but its lamports or its balances could not be read. */
     CHAIN_UNREAD(R.string.swap_failed_chain_unread, FailureOutcome.NOTHING_SENT, FailureNext.NONE),
 
-    /** GET /order did not answer: no network, a gateway page, a timeout. */
+    /** GET /order did not answer: a gateway page, a server error, a timeout. */
     QUOTE_UNAVAILABLE(R.string.swap_failed_quote_unavailable, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 
-    /** GET /order answered with a refusal: no route, an amount out of bounds, a bad mint. */
+    /**
+     * GET /order answered 429: the keyless bucket, which Price v3 shares, is empty. Said as busy,
+     * because it is, and a few seconds later the same tap is answered (Seeker, 1.3.25: this read
+     * as "no route" on "Check swap availability").
+     */
+    RATE_LIMITED(R.string.swap_failed_rate_limited, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /** GET /order never left the phone: no DNS, no connection. */
+    OFFLINE(R.string.swap_failed_offline, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
+
+    /** GET /order answered with a refusal: no route, an amount out of bounds, a bad mint, funds. */
     QUOTE_REFUSED(R.string.swap_failed_quote_refused, FailureOutcome.NOTHING_SENT, FailureNext.EDIT),
 
     /** The order came back without a transaction, so there is nothing to approve. */
     NO_TRANSACTION(R.string.swap_failed_no_transaction, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 
     /**
-     * "Check swap availability" on a token Jupiter has no reference price for, and Jupiter had no
-     * executable order for it: a refusal of the order, or an order with nothing to sign. Said as
-     * no route right now, which is what it is; a retry may find one.
+     * "Check swap availability" on a token Jupiter has no reference price for, and Jupiter looked
+     * for a way to fill it and found none ([com.plainticker.mobile.data.jupiter.SwapError.noRoute]:
+     * no market maker, then no aggregator quote). Said as no route right now, which is what it is;
+     * a retry may find one. A rate limit, a server error, no network, or a quote that came back
+     * without bytes each say their own sentence: none of them is Jupiter finding no route.
      */
     NO_ROUTE(R.string.swap_failed_no_route, FailureOutcome.NOTHING_SENT, FailureNext.RETRY),
 

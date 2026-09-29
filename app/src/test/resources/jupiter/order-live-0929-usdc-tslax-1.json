@@ -1,0 +1,54 @@
+{
+  "_fixture_note": "Live GET /swap/v2/order (keyless, default routing) on 2026-09-29 ~10:45 UTC, NYSE shut (pre-market Tuesday), taker = the public demo wallet 9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ (0.093 SOL, 8.37 USDC). Verbatim, nothing redacted: an order carries only public data. 1 USDC -> TSLAx. Metis over Whirlpool; no rent, the wallet already holds an (empty) TSLAx account.",
+  "swapType": "aggregator",
+  "inAmount": "1000000",
+  "outAmount": "278356",
+  "otherAmountThreshold": "275573",
+  "swapMode": "ExactIn",
+  "slippageBps": 100,
+  "priceImpactPct": "-0.0007605321641534717",
+  "routePlan": [
+    {
+      "percent": 100,
+      "bps": 10000,
+      "usdValue": 0.9998934260032011,
+      "swapInfo": {
+        "ammKey": "9p7abUFv31ycgu9kckvnoqMMvBy67dqTDM2m6HP9xokN",
+        "label": "Whirlpool",
+        "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+        "inAmount": "1000000",
+        "outAmount": "278635"
+      }
+    }
+  ],
+  "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "feeBps": 10,
+  "platformFee": {
+    "feeBps": 10,
+    "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  "taker": "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ",
+  "gasless": false,
+  "jitOptimized": false,
+  "signatureFeeLamports": 5000,
+  "signatureFeePayer": "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ",
+  "prioritizationFeeLamports": 103,
+  "prioritizationFeePayer": "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ",
+  "rentFeeLamports": 0,
+  "rentFeePayer": "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ",
+  "transaction": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQACCIDeSOVvbw9rfMwj1NkVjmov6SLTYRN2thSoQ2k+om1zF8JVsi3oh929ApSRtnWi2GZKKDTtV+qKL+abvyDp40Jf6fn6nVQb/ujvq8uMR2/jZJgLbBiGyknym7PuRsekw2yVxwC/7Kmb8qXVfrDWNmi+aYErfMz9tV4Sb9unMiDeoYXQeBsSihwsLpLnu/Hyw20PA6IJ8XmjNhPOrW0VpuDWicOxmpOFW4QsRAlQfzur538J//ZqHQFnYfPqqoeKVAMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAABHnVW/IxwG7udMVuzmgVB/2xst6j9I5RArHNola8E4+glXB8s5e5rX4H1zcYT4I817Ou8vMDtnrHFZWh0nRMHAMGAAUCIycBAAYACQNNBQAAAAAAAAccAAMEDhQQEQcNBwgTERASAAsUDgQKAwkBBQIMDym7ZPrMMcSvFEBCDwAAAAAAVT8EAAAAAABkAAoAAAABAAAALwAAECcAAQIpv5UHKk+/BN9xdZPnOLzMIScoFcJHGoDZ+fVVsNSEJQExBQAoARQVwXGnJio1ksmZC7b/J8QPnNZybXRpuG6sUzJE4GHfgL8EzMvG0QN0ysQ=",
+  "lastValidBlockHeight": "429658688",
+  "inputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "outputMint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+  "router": "metis",
+  "guaranteedPrice": false,
+  "requestId": "01a0ecc6-2b82-71c5-912e-fc425ccb776d",
+  "inUsdValue": 0.999893426003201,
+  "outUsdValue": 0.9991329748919999,
+  "swapUsdValue": 0.999893426003201,
+  "priceImpact": -0.07605321641534717,
+  "mode": "ultra",
+  "transactionVersion": 0,
+  "totalTime": 211
+}

@@ -373,6 +373,8 @@
     <string name="no_wallet_app">No Solana wallet app on this phone. PlainTicker is built for the Solana Seeker, where Seed Vault Wallet signs. On another Android phone, install a wallet that supports Mobile Wallet Adapter, such as Solflare or Phantom, then try again.</string>
     <string name="swap_failed_chain_unread">This wallet could not be read, so nothing was quoted</string>
     <string name="swap_failed_quote_unavailable">No quote came back. Nothing was sent.</string>
+    <string name="swap_failed_rate_limited">Jupiter is busy, try again in a few seconds</string>
+    <string name="swap_failed_offline">Jupiter could not be reached. Check the connection and try again. Nothing was sent.</string>
     <string name="swap_failed_quote_refused">This pair cannot be quoted at this size right now</string>
     <string name="swap_failed_no_transaction">The quote carried nothing to approve</string>
     <string name="swap_failed_no_route">Swap unavailable: Jupiter has no route for this token right now</string>

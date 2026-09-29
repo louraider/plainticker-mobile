@@ -384,4 +384,101 @@ class JupiterSwapApiTest {
         // A bad mint names no maker at all.
         assertFalse(SwapError.fromErrorBody(400, """{"error":"Invalid outputMint"}""", SwapError.Stage.ORDER, json).noMarketMakerQuote)
     }
+
+    // ---- What a refusal is, measured live on 2026-09-29 (the NO_ROUTE report on 1.3.25) --------
+
+    @Test
+    fun `order - the gateway's live 429 is RateLimited, not a refusal of the pair`() = runTest {
+        // {"code":429,"message":"[API Gateway] Too many requests"}: a structured body, so it used to
+        // read as OrderRejected(429), and "Check swap availability" then said Jupiter had no route.
+        val mock = MockApi { respondJson(Fixtures.read("jupiter/order-error-429-gateway.json"), HttpStatusCode.TooManyRequests) }
+
+        val e = expectThrows<SwapError> { api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 1_000_000L, placeholderTaker) }
+
+        assertTrue("got ${e::class.simpleName}", e is SwapError.RateLimited)
+        assertFalse(e.noRoute)
+        assertFalse(e.noMarketMakerQuote)
+        assertFalse(e.requotable)
+        assertEquals("a busy bucket is not asked again at once", 1, mock.requests.size)
+    }
+
+    @Test
+    fun `order - a 429 on the aggregator retry is RateLimited too`() = runTest {
+        var calls = 0
+        val mock = MockApi {
+            calls++
+            if (calls == 1) {
+                respondJson(Fixtures.read("jupiter/order-error-400-no-maker.json"), HttpStatusCode.BadRequest)
+            } else {
+                respondJson(Fixtures.read("jupiter/order-error-429-gateway.json"), HttpStatusCode.TooManyRequests)
+            }
+        }
+
+        val e = expectThrows<SwapError> { api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 1_000_000L, placeholderTaker) }
+
+        assertTrue("got ${e::class.simpleName}", e is SwapError.RateLimited)
+        assertEquals(2, mock.requests.size)
+    }
+
+    @Test
+    fun `order - a server error with a JSON body is Http, not a verdict on the pair`() = runTest {
+        val mock = MockApi { respondJson("""{"error":"Internal server error"}""", HttpStatusCode.InternalServerError) }
+
+        val e = expectThrows<SwapError> { api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 1_000_000L, placeholderTaker) }
+
+        assertTrue("got ${e::class.simpleName}", e is SwapError.Http)
+        assertEquals(500, (e as SwapError.Http).status)
+        assertFalse(e.noRoute)
+    }
+
+    @Test
+    fun `order - a pair with no route at all, RFQ then the aggregator, is noRoute`() = runTest {
+        // AALx at 1 USDC, live: no market maker, then "Failed to get quotes" without the RFQ router.
+        var calls = 0
+        val mock = MockApi {
+            calls++
+            if (calls == 1) {
+                respondJson(Fixtures.read("jupiter/order-error-400-no-maker.json"), HttpStatusCode.BadRequest)
+            } else {
+                respondJson(Fixtures.read("jupiter/order-error-400-failed-to-get-quotes.json"), HttpStatusCode.BadRequest)
+            }
+        }
+
+        val e = expectThrows<SwapError> { api(mock).order(KnownMints.USDC, KnownMints.TSLAX, 1_000_000L, placeholderTaker) }
+
+        assertTrue(e is SwapError.OrderRejected)
+        assertEquals("Failed to get quotes", e.detail)
+        assertTrue(e.noRoute)
+        assertEquals(2, mock.requests.size)
+    }
+
+    @Test
+    fun `order - Insufficient funds is a refusal, and not a missing route`() = runTest {
+        // HTTP 200 with a full quote, no transaction, errorCode 1: the taker holds none of the input.
+        val mock = MockApi { respondJson(Fixtures.read("jupiter/order-live-0929-aaplx-usdc-insufficient.json")) }
+
+        val e = expectThrows<SwapError> { api(mock).order(KnownMints.TSLAX, KnownMints.USDC, 300_000L, placeholderTaker) }
+
+        assertTrue(e is SwapError.OrderRejected)
+        assertEquals(1, e.code)
+        assertEquals("Insufficient funds", e.detail)
+        assertFalse(e.noRoute)
+    }
+
+    @Test
+    fun `noRoute is the order stage's route refusals and nothing else`() {
+        val json = HttpClientFactory.json
+        fun body(status: Int, text: String) = SwapError.fromErrorBody(status, text, SwapError.Stage.ORDER, json)
+        assertTrue(body(400, """{"error":"Failed to get quotes"}""").noRoute)
+        assertTrue(body(400, """{"error":"No routes found"}""").noRoute)
+        assertTrue(body(200, """{"error":"No route found","errorCode":-4}""").noRoute)
+        assertTrue(body(400, Fixtures.read("jupiter/order-error-400-no-maker.json")).noRoute)
+        assertTrue(body(400, """{"error":"The token is not tradable","errorCode":"TOKEN_NOT_TRADABLE"}""").noRoute)
+        assertFalse(body(400, """{"error":"Invalid outputMint"}""").noRoute)
+        assertFalse(body(200, """{"error":"Insufficient funds","errorCode":1}""").noRoute)
+        assertFalse(body(429, Fixtures.read("jupiter/order-error-429-gateway.json")).noRoute)
+        assertFalse(body(503, """{"error":"No routes found"}""").noRoute)
+        // The execute stage never answers a route question.
+        assertFalse(SwapError.fromErrorBody(400, """{"error":"No routes found"}""", SwapError.Stage.EXECUTE, json).noRoute)
+    }
 }
