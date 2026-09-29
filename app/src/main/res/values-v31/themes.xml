@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12 and later: the same starting theme as values/themes.xml, with the platform's
+         own splash attributes set directly as well as the library's, so the starting window the
+         system draws on a cold start reads the current mark without going through a theme
+         reference. Keep every item equal to values/themes.xml; BrandAssetsTest pins it. -->
+    <style name="Theme.PlainTicker.Starting" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/window_ground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/amber_action</item>
+        <item name="postSplashScreenTheme">@style/Theme.PlainTicker</item>
+        <item name="android:windowSplashScreenBackground">@color/window_ground</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/amber_action</item>
+        <item name="android:windowLightStatusBar">@bool/window_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/window_light_bars</item>
+    </style>
+</resources>

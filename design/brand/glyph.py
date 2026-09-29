@@ -5,7 +5,6 @@ Writes everything the launcher icon is made of, from the geometry in design/bran
 
   app/src/main/res/drawable/ic_launcher_foreground.xml   108 viewport, the mark over the ground
   app/src/main/res/drawable/ic_launcher_monochrome.xml   the same paths in one color, themed icons
-  app/src/main/res/drawable/ic_brand_mark.xml            the same paths in Ink, for the splash
   app/src/main/res/drawable/ic_brand_mark_tight.xml      cropped to its block, white, the TopBar lockup
   app/src/main/res/drawable/ic_stat_plainticker.xml      24 viewport, white, notification small icon
   app/src/main/res/values/ic_launcher_background.xml     the adaptive icon's background layer
@@ -29,6 +28,10 @@ keeps the silhouette off a plus sign; this file only decides which mark ships (m
 where the files go. design/brand/two-corners/measure.py puts the mark in the real drawer and
 measures it; design/brand/render_icons.py draws every candidate at the sizes an icon is seen.
 
+2026-09-29: the splash draws the launcher's own foreground layer over the launcher's own tile
+colour (themes.xml, windowSplashScreenIconBackgroundColor), so the separate cream splash mark,
+ic_brand_mark.xml, is no longer written. On the Seeker it read as an old white logo.
+
 Only absolute path commands are emitted, so BrandAssetsTest can walk the coordinates.
 
 Run from anywhere:  PYTHONIOENCODING=utf-8 python design/brand/glyph.py
@@ -50,7 +53,6 @@ def main():
     for folder, name, text in (
         (DRAWABLE, "ic_launcher_foreground.xml", mark.foreground()),
         (DRAWABLE, "ic_launcher_monochrome.xml", mark.monochrome()),
-        (DRAWABLE, "ic_brand_mark.xml", mark.splash()),
         (DRAWABLE, "ic_brand_mark_tight.xml", mark.tight()),
         (DRAWABLE, "ic_stat_plainticker.xml", mark.stat()),
         (VALUES, "ic_launcher_background.xml", marks.background_resource(mark)),

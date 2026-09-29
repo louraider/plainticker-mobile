@@ -40,16 +40,22 @@ class SwapResultFitTest {
     }
 
     @Test
-    fun `the headline wraps beside the mark rather than clipping, and the landing one fits on one line`() {
-        // sectionHead, 22sp / 700, beside a 40dp mark and a 12dp gap: 308dp, weight(1f), no line limit.
-        val budget = 360.0 - 40.0 - 12.0
-        val landed = 137.566
-        assertTrue("\"Swap landed\" on one line at 1.3x", at13(landed) <= budget)
-        assertTrue("\"Nothing was swapped\" on one line at 1.3x", at13(236.698) <= budget)
-        assertTrue("\"The swap did not land\" on one line at 1.3x", at13(232.056) <= budget)
-        // "Sent, not confirmed yet" goes to a second line at 1.3x, which the weighted, unlimited
-        // headline allows: two lines carry it with room to spare.
-        val pending = 249.414
+    fun `the result headline wraps rather than clipping, and the landing and failure ones fit on one line`() {
+        // 2026-09-29: the shared ResultHero sets the headline in screenTitle, 26sp / 700 / opsz 26,
+        // centred under the mark on the full 360dp, no line limit. Measured with fontTools the same
+        // way as every figure in this file.
+        val budget = 360.0
+        assertTrue("\"Swap landed\" on one line at 1.3x", at13(161.772) <= budget)
+        assertTrue("\"Swap failed\" on one line at 1.3x", at13(146.562) <= budget)
+        assertTrue("\"No wallet connected\" on one line at 1.3x", at13(256.932) <= budget)
+        // The vote sheet's three, through the same hero.
+        assertTrue("\"Your vote is on chain\" on one line at 1.3x", at13(259.896) <= budget)
+        assertTrue("\"Vote not confirmed\" on one line at 1.3x", at13(242.112) <= budget)
+        assertTrue("\"Vote not sent\" on one line at 1.3x", at13(167.154) <= budget)
+        // "Sent, not confirmed yet" goes to a second line at 1.3x, which the unlimited headline
+        // allows: two lines carry it with room to spare.
+        val pending = 293.358
+        assertTrue(pending <= budget)
         assertFalse(at13(pending) <= budget)
         assertTrue(at13(pending) <= 2 * budget)
     }

@@ -5,6 +5,7 @@ import com.plainticker.mobile.data.plainticker.VoteSummary
 import com.plainticker.mobile.data.rpc.SkrStakeBound
 import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.ui.Fmt
+import com.plainticker.mobile.ui.components.ResultMarkTone
 import com.plainticker.mobile.ui.raw
 import com.plainticker.mobile.ui.refusal
 import com.plainticker.mobile.ui.share.ShareCard
@@ -22,11 +23,12 @@ data class VoteSheetContent(
     val title: Copy,
     /** What is in flight, as a sentence. Never a spinner and never a bare label. */
     val phase: Copy?,
-    /** The static bar a landed vote leads with, the way a landed swap does. */
-    val bar: VoteBar?,
     /** The figures the sheet states: the weight, the fee and the collector, then the signature. */
     val cells: List<VoteCell>,
-    /** The lede on the confirm step, or the sentence a refusal ends on. */
+    /**
+     * The lede on the confirm step, or the sentence a refusal ends on. A refusal's sentence is
+     * also the first of its [result]'s sentences, which is where the sheet draws it.
+     */
     val notice: Copy?,
     /**
      * The one weakness of a balance-weighted vote, stated where a voter can read it before acting
@@ -57,14 +59,27 @@ data class VoteSheetContent(
     /** The landed vote's signature, for "View on Solscan". Landed only. */
     val signature: String? = null,
     /**
-     * The attempt ended without a vote: the notice is drawn beside the same caution mark the swap
-     * sheet's failures carry ([com.plainticker.mobile.ui.components.CautionMark]; QA of 1.3.21).
+     * The attempt ended without a vote: the result carries the same caution mark the swap sheet's
+     * failures carry ([com.plainticker.mobile.ui.components.CautionMark]; QA of 1.3.21).
      */
     val caution: Boolean = false,
+    /**
+     * The finished attempt's own moment (2026-09-29), landed or not: drawn by
+     * [com.plainticker.mobile.ui.components.ResultHero] at the top of the sheet in place of the
+     * title. Null while the vote is still being opened, built, confirmed or signed.
+     */
+    val result: VoteResult? = null,
 )
 
-/** The label and the mono fragment of the bar over a landed vote. */
-data class VoteBar(val label: Copy, val meta: Copy)
+/**
+ * How a vote ended, as the sheet's largest words: the mark, the headline, then one or two plain
+ * sentences of what happened and what happens next. Every word is a string this app owns.
+ */
+data class VoteResult(
+    val tone: ResultMarkTone,
+    val headline: Copy,
+    val sentences: List<Copy>,
+)
 
 /** One cell of the fact grid. [copies] is the full text a tap puts on the clipboard. */
 data class VoteCell(
@@ -111,7 +126,6 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
     is VoteState.Ready -> VoteSheetContent(
         title = words(R.string.vote_title, symbol),
         phase = null,
-        bar = null,
         cells = readyCells(stakeRaw, build.summary),
         // A confirm step that replaced a stale one leads with what happened to the tap that made
         // it, because the reader asked to send and is looking at the same button again. The lede
@@ -122,37 +136,44 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),
     )
 
+    // The wallet signed and sent it and handed the signature back: the vote is on the chain, and
+    // the server counts it on its next pass. The key facts under the result: the weight it
+    // carries, the stock it is for, and the signature that proves it.
     is VoteState.Landed -> VoteSheetContent(
         title = words(R.string.vote_title, symbol),
         phase = null,
-        bar = VoteBar(words(R.string.vote_landed_label), raw(Fmt.shortKey(signature))),
         cells = listOf(
             VoteCell(
                 label = words(R.string.vote_weight_landed_label, symbol),
                 value = raw(skr(stakeRaw)),
                 span = 2,
             ),
+            VoteCell(label = words(R.string.vote_stock_label), value = raw(symbol)),
             VoteCell(
                 label = words(R.string.receipt_signature),
                 value = raw(Fmt.shortKey(signature)),
                 copies = signature,
             ),
         ),
-        notice = words(R.string.vote_landed_note),
+        notice = null,
         disclosure = null,
         primary = VoteAction(words(R.string.action_share), VoteActionKind.Share),
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),
         shareText = words(R.string.vote_share_text, ticker, signature),
         shareCard = shareCard(),
         signature = signature,
+        result = VoteResult(
+            tone = ResultMarkTone.Landed,
+            headline = words(R.string.vote_result_landed),
+            sentences = listOf(words(R.string.vote_result_landed_next)),
+        ),
     )
 
     is VoteState.Refused -> VoteSheetContent(
         title = words(R.string.vote_title, symbol),
         phase = null,
-        bar = null,
         cells = emptyList(),
-        notice = why?.takeIf { reason == VoteRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text),
+        notice = refusalSentence(),
         disclosure = null,
         primary = if (reason.retryable) {
             // The same two labels the swap and pass sheets use (QA of 1.3.20).
@@ -162,6 +183,31 @@ fun VoteState.sheet(): VoteSheetContent? = when (this) {
         },
         secondary = VoteAction(words(R.string.action_close), VoteActionKind.Close),
         caution = true,
+        result = refusedResult(),
+    )
+}
+
+private fun VoteState.Refused.refusalSentence(): Copy =
+    why?.takeIf { reason == VoteRefusal.GUARD_REFUSED }?.refusal() ?: words(reason.text)
+
+/**
+ * A vote that did not land, as its own moment. Every refusal but one is certain nothing was sent,
+ * and says so in the headline ("Vote not sent") beside the caution mark. The one that is not
+ * certain is [VoteRefusal.FAILED]: the wallet answered with a failure and no signature, and it
+ * signs and sends in one call, so whether the vote reached the chain is not known. That one reads
+ * "Vote not confirmed" beside the pending ring, with where to look before voting again.
+ */
+private fun VoteState.Refused.refusedResult(): VoteResult = if (reason == VoteRefusal.FAILED) {
+    VoteResult(
+        tone = ResultMarkTone.Pending,
+        headline = words(R.string.vote_result_unknown),
+        sentences = listOf(refusalSentence(), words(R.string.vote_result_unknown_next)),
+    )
+} else {
+    VoteResult(
+        tone = ResultMarkTone.Failed,
+        headline = words(R.string.vote_result_refused),
+        sentences = listOf(refusalSentence()),
     )
 }
 
@@ -172,7 +218,6 @@ private fun VoteState.OnTicker.running(
 ) = VoteSheetContent(
     title = words(R.string.vote_title, symbol),
     phase = phase,
-    bar = null,
     cells = cells,
     notice = null,
     disclosure = null,

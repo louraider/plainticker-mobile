@@ -1,35 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Dark only (this window; the live Compose content is AmberTheme and follows the system
-         setting). The window paints Amber's own dark ground so no mismatched frame flashes before
-         Compose draws, and both system bars are transparent from the first frame;
-         MainActivity.enableEdgeToEdge then lays the content out under them with light icons.
-         amber_ground replaces Instrument's retired, cool "canvas": see colors.xml and DESIGN.md
-         section 9. -->
-    <style name="Theme.PlainTicker" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/amber_ground</item>
-        <item name="android:colorBackground">@color/amber_ground</item>
+    <!-- The plain window, painted before Compose draws its first frame. window_ground is Amber's
+         own page ground for the theme the system is in (values/colors.xml light, values-night
+         dark), so neither theme flashes the other's ground before AmberTheme draws; both system
+         bars are transparent from the first frame, with icons that suit that ground
+         (window_light_bars). MainActivity.enableEdgeToEdge then lays the content out under them
+         and keeps the icons following the live setting. DESIGN.md section 9. -->
+    <style name="Theme.PlainTicker" parent="android:Theme.Material.NoActionBar" tools:targetApi="27">
+        <item name="android:windowBackground">@color/window_ground</item>
+        <item name="android:colorBackground">@color/window_ground</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightStatusBar">@bool/window_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/window_light_bars</item>
     </style>
 
-    <!-- Splash, DESIGN.md section 9: Amber's own ground behind the brand mark, no branding image.
-         core-splashscreen draws it on every release the app runs on; MainActivity.installSplashScreen
-         then switches to Theme.PlainTicker.
-         The icon here is ic_brand_mark and not the adaptive icon's foreground layer. They are the
-         same four rectangles, but the foreground is drawn in amber_ground for the amber_action tile
-         the launcher shows (DESIGN.md section 9, "Two corners, refit"), and amber_ground on
-         amber_ground is nothing at all. glyph.py writes both from the same geometry so they cannot
-         drift apart.
-         Theme.SplashScreen is a DayNight theme, so on a light system theme it would ask for dark
-         status and navigation bar icons over the near-black amber_ground; both flags are pinned to
-         light icons here. windowLightNavigationBar exists from API 27 and is ignored on 26. -->
-    <style name="Theme.PlainTicker.Starting" parent="Theme.SplashScreen" tools:targetApi="27">
-        <item name="windowSplashScreenBackground">@color/amber_ground</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_brand_mark</item>
+    <!-- Splash, DESIGN.md section 9 (2026-09-29): the launcher icon itself, the two dark corners
+         of ic_launcher_foreground on the amber_action tile, over Amber's own page ground. Until
+         this date the splash drew a separate cream copy of the mark (ic_brand_mark) straight on
+         the dark ground, which on the Seeker read as an old white logo beside the amber icon the
+         reader had just tapped.
+
+         Theme.SplashScreen.IconBackground is what makes the icon background colour count: on
+         Android 12 and later the system draws the 240dp icon inside a 160dp circle of that
+         colour, and core-splashscreen draws the same on older releases. The mark fits that
+         circle with room to spare: its furthest corner is 32.53 of the 108 viewport's units from
+         the centre, 72.3dp at 240dp, inside the circle's 80dp radius (BrandAssetsTest).
+
+         values-v31/themes.xml repeats this style with the platform's own attributes set
+         directly, so the system's starting window never has to resolve them through the
+         library's theme references. The two are pinned equal by BrandAssetsTest.
+
+         windowLightNavigationBar exists from API 27 and is ignored on 26. -->
+    <style name="Theme.PlainTicker.Starting" parent="Theme.SplashScreen.IconBackground" tools:targetApi="27">
+        <item name="windowSplashScreenBackground">@color/window_ground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/amber_action</item>
         <item name="postSplashScreenTheme">@style/Theme.PlainTicker</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightStatusBar">@bool/window_light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/window_light_bars</item>
     </style>
 </resources>

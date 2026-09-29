@@ -263,17 +263,6 @@ class Mark:
         x0, _, x1, _ = self.bounds()
         return vector(x1 - x0, self.tight_rects(), WHITE, self.header("tight"))
 
-    def splash(self):
-        """
-        The mark in Amber's own ink (AMBER_INK) on transparent, for the splash screen.
-
-        The splash paints Amber's own ground (AMBER_GROUND) and then this vector over it, so it
-        cannot be the foreground layer: the foreground is drawn for whatever ground the adaptive
-        icon carries, and when that ground is light the foreground is a near-black mark that would
-        be invisible on that same ground. Same rectangles, AMBER_INK, and nothing else.
-        """
-        return vector(VIEWPORT, self.rects, AMBER_INK, self.header("splash"))
-
     def header(self, layer):
         x0, y0, x1, y1 = self.bounds()
         radius = self.radius()
@@ -305,14 +294,6 @@ class Mark:
                 "  Monochrome layer of the adaptive icon (themed icons, Android 13 and later): the same\n"
                 "  rectangles as the foreground in one color, the launcher supplies the color. The\n"
                 "  layer has no ground of its own, so the mark is the shapes and never the field.\n" + where
-            )
-        if layer == "splash":
-            return (
-                "  Splash screen icon: the mark in Amber's own ink on transparent, over Amber's own\n"
-                "  ground as the window background. The adaptive icon's own foreground is drawn for the\n"
-                "  launcher tile's ground, which is not this ground, so the splash needs the mark in the\n"
-                "  color the splash background can show.\n"
-                + where
             )
         if layer == "tight":
             return (

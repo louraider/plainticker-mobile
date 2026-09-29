@@ -22,4 +22,9 @@
          amber_ground is 11.5:1, matching AmberContrastTest's own pinned actionText-over-
          surfaceGround figure; see design/brand/marks.py. -->
     <color name="amber_action">#FFC247</color>
+    <!-- The page ground behind the splash and the plain window, for the theme the system is in:
+         Amber's own light page ground here (AmberLightColors.surfaceGround), its dark one in
+         values-night (AmberDarkColors.surfaceGround, the same value as amber_ground), so a light
+         phone does not open on a near-black window and flash into a cream Today (2026-09-29). -->
+    <color name="window_ground">#FFFBF2</color>
 </resources>
