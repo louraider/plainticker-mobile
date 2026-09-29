@@ -1,0 +1,81 @@
+{
+  "_fixture_note": "Live GET /swap/v2/order (keyless, default routing) on 2026-09-29 ~10:45 UTC, NYSE shut (pre-market Tuesday), taker = the public demo wallet 9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ (0.093 SOL, 8.37 USDC). Verbatim, nothing redacted: an order carries only public data. 0.003 AAPLx -> USDC from a wallet holding no AAPLx: HTTP 200 with a full quote, no transaction, errorCode 1 and error 'Insufficient funds'.",
+  "swapType": "aggregator",
+  "inAmount": "300000",
+  "outAmount": "1011683",
+  "otherAmountThreshold": "1001566",
+  "swapMode": "ExactIn",
+  "slippageBps": 100,
+  "priceImpactPct": "-0.000615418906705723",
+  "routePlan": [
+    {
+      "percent": 61.15,
+      "bps": 6115,
+      "usdValue": 0.6185782231198586,
+      "swapInfo": {
+        "ammKey": "21xzJuNiW7pikhcYRp9WSUVQvE21CsVJSrTS6fm8r3iu",
+        "label": "PancakeSwap",
+        "inputMint": "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp",
+        "outputMint": "So11111111111111111111111111111111111111112",
+        "inAmount": "183437",
+        "outAmount": "5186154"
+      }
+    },
+    {
+      "percent": 100,
+      "bps": 10000,
+      "usdValue": 0.6185782231198586,
+      "swapInfo": {
+        "ammKey": "7DyH4hFA9KY2Uf3ZC2fUGP9ATsLqAEq3pUpyJPA2Mjft",
+        "label": "ZeroFi",
+        "inputMint": "So11111111111111111111111111111111111111112",
+        "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "inAmount": "5186154",
+        "outAmount": "619261"
+      }
+    },
+    {
+      "percent": 38.85,
+      "bps": 3885,
+      "usdValue": 0.3929969577793378,
+      "swapInfo": {
+        "ammKey": "ApniVWuZbZoruTAJdyJcLBA4AVw4DKGdV5fHxo6qrAZT",
+        "label": "Raydium CLMM",
+        "inputMint": "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp",
+        "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "inAmount": "116563",
+        "outAmount": "393434"
+      }
+    }
+  ],
+  "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "feeBps": 10,
+  "platformFee": {
+    "feeBps": 10,
+    "feeMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  "taker": "9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ",
+  "gasless": false,
+  "jitOptimized": false,
+  "signatureFeeLamports": 0,
+  "signatureFeePayer": null,
+  "prioritizationFeeLamports": 0,
+  "prioritizationFeePayer": null,
+  "rentFeeLamports": 0,
+  "rentFeePayer": null,
+  "transaction": "",
+  "errorCode": 1,
+  "errorMessage": "Insufficient funds",
+  "inputMint": "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp",
+  "outputMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "router": "metis",
+  "guaranteedPrice": false,
+  "requestId": "01a0ecc6-4156-73b6-8b16-52cdd4757c2c",
+  "inUsdValue": 1.012198106751423,
+  "outUsdValue": 1.0115751808991964,
+  "swapUsdValue": 1.0115751808991964,
+  "priceImpact": -0.06154189067057231,
+  "mode": "ultra",
+  "error": "Insufficient funds",
+  "totalTime": 204
+}

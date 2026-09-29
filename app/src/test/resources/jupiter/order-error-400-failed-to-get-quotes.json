@@ -1,0 +1,5 @@
+{
+  "_fixture_note": "Live HTTP 400 from GET /swap/v2/order, 2026-09-29, 1 USDC -> AALx (XsrisVGB3qU1p3KGR7fg4JuxHkeCpdPtByJpYLB4pbH, no Jupiter price, no liquidity) with excludeRouters=jupiterz, taker the demo wallet. The default ask answered 'Quote not available from market maker' first. This body is what a pair with no route at all looks like: the aggregator found nothing. JEFx at 5 USDC answered the same.",
+  "requestId": "01a0ecca-e311-7584-a24c-25e18f2dc2a6",
+  "error": "Failed to get quotes"
+}
