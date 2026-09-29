@@ -1,6 +1,7 @@
 package com.plainticker.mobile
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -43,10 +44,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * simply recomposes in the new palette on the next frame, the same way any other configuration
  * value read through Compose would.
  *
- * The manifest starts it in Theme.PlainTicker.Starting (Canvas behind the launcher glyph, DESIGN.md
- * section 9, unchanged: the brand mark is pinned to Instrument's tokens by BrandAssetsTest and is
- * explicitly not this task's scope); installSplashScreen must run before super.onCreate so it can
- * swap in the app theme.
+ * The manifest starts it in Theme.PlainTicker.Starting (the launcher icon itself over the page
+ * ground of the theme the system is in, DESIGN.md section 9, pinned by BrandAssetsTest);
+ * installSplashScreen must run before super.onCreate so it can swap in the app theme.
  */
 class MainActivity : ComponentActivity() {
 
@@ -72,12 +72,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        // A starting style only; the real, theme-following style is applied every frame below,
-        // once Compose knows whether the system is in dark or light mode.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        // A starting style only, read off the same day/night split the window ground is
+        // (res/values-night), so the first frame's bar icons already suit it; the real,
+        // theme-following style is applied every frame below, once Compose is up.
+        val startsDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        val startStyle = if (startsDark) {
+            SystemBarStyle.dark(Color.TRANSPARENT)
+        } else {
+            SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        }
+        enableEdgeToEdge(statusBarStyle = startStyle, navigationBarStyle = startStyle)
 
         openTab.value = tabFrom(intent)
         openTicker.value = tickerFrom(intent)

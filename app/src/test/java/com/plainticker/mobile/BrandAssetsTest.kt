@@ -23,8 +23,9 @@ import org.w3c.dom.Element
  * launcher icon is the "Two corners" mark in Amber's own dark ground over an Amber-action tile,
  * carries a monochrome layer with the same shapes, keeps every coordinate inside the mask a
  * launcher actually cuts, and no template bitmap is left in a mipmap folder. The splash theme
- * paints Amber's own ground behind the same rectangles in Amber's own ink, with light system bar
- * icons, and hands over to the app theme; the notification icon is the same mark in white. Colors
+ * (since 2026-09-29) draws the launcher icon itself, the foreground layer inside a circle of the
+ * tile colour, over the page ground of the theme the system is in, with system bar icons to suit
+ * it, and hands over to the app theme; the notification icon is the same mark in white. Colors
  * are compared with [AmberDarkColors], not with copied literals, so a change to
  * [AmberDarkColors.surfaceGround] or [AmberDarkColors.actionFill] cannot leave the icon behind.
  *
@@ -109,6 +110,10 @@ class BrandAssetsTest {
 
         /** A launcher shows only the central 72 of the 108 viewport, and masks that. */
         const val VISIBLE_HALF = 36.0
+
+        /** Android 12's splash icon with an icon background: 240dp, of which a 160dp circle shows. */
+        const val SPLASH_ICON_DP = 240.0
+        const val SPLASH_CIRCLE_DP = 160.0
     }
 
     private val androidNs = "http://schemas.android.com/apk/res/android"
@@ -167,9 +172,16 @@ class BrandAssetsTest {
 
     /** A color resource with `@color/` aliases followed. */
     private fun color(name: String): String {
+        return color(name, "values")
+    }
+
+    private fun color(name: String, folder: String): String {
         val colors = File(res, "values").listFiles { f -> f.extension == "xml" }.orEmpty()
             .flatMap { parse(it).elements("color") }
-            .associate { it.getAttribute("name") to it.textContent.trim() }
+            .associate { it.getAttribute("name") to it.textContent.trim() } +
+            File(res, folder).takeIf { folder != "values" }?.listFiles { f -> f.extension == "xml" }.orEmpty()
+                .flatMap { parse(it).elements("color") }
+                .associate { it.getAttribute("name") to it.textContent.trim() }
         var value = colors[name] ?: error("no color resource named $name")
         while (value.startsWith("@color/")) value = colors.getValue(value.removePrefix("@color/"))
         return value
@@ -368,7 +380,6 @@ class BrandAssetsTest {
         listOf(
             "ic_launcher_foreground.xml",
             "ic_launcher_monochrome.xml",
-            "ic_brand_mark.xml",
             "ic_brand_mark_tight.xml",
             "ic_stat_plainticker.xml",
         ).forEach { name ->
@@ -400,17 +411,64 @@ class BrandAssetsTest {
     }
 
     @Test
-    fun `the splash draws the same shapes in amber's own ink, because the foreground is drawn for a light tile`() {
-        // The splash paints Amber's own ground and then this vector over it. It cannot be the
-        // adaptive icon's foreground layer any more: that layer is the same ground, for the
-        // Amber-action tile the launcher shows (2026-09-24, "Two corners, refit"), and that
-        // ground on itself is nothing. Same rectangles, different color, one generator.
-        val fg = vector("ic_launcher_foreground.xml")
-        val brand = vector("ic_brand_mark.xml")
-        assertEquals(108, brand.size)
-        assertEquals(fg.data, brand.data)
-        assertEquals(setOf(hex(AmberDarkColors.textPrimary)), brand.fills.toSet())
+    fun `the splash is the launcher icon itself, the dark corners on the amber tile`() {
+        // 2026-09-29, the founder on the Seeker: a cold start showed "the old white logo", a cream
+        // copy of the mark (ic_brand_mark) straight on the dark ground, beside the amber icon just
+        // tapped. The splash now draws the launcher's own foreground layer inside a circle of the
+        // launcher's own tile colour, so it is the icon, and the cream copy is gone.
+        listOf(style("Theme.PlainTicker.Starting"), style("Theme.PlainTicker.Starting", "values-v31")).forEach { starting ->
+            assertEquals("Theme.SplashScreen.IconBackground", starting.getAttribute("parent"))
+            assertEquals("@drawable/ic_launcher_foreground", starting.item("windowSplashScreenAnimatedIcon"))
+            assertEquals("@color/amber_action", starting.item("windowSplashScreenIconBackgroundColor"))
+        }
+        assertEquals(hex(AmberDarkColors.actionFill), color("amber_action"))
+        assertEquals(color("ic_launcher_background"), color("amber_action"))
+        assertFalse("the cream splash mark is back", File(res, "drawable/ic_brand_mark.xml").exists())
+    }
+
+    @Test
+    fun `the splash mark sits inside the 160dp circle of the 240dp icon, so it is never clipped`() {
+        // Android 12 and later draw a splash icon with a background at 240dp and keep only a
+        // 160dp circle of it. The 108 viewport scales to 240dp, so the circle's 80dp radius is 36
+        // viewport units from the centre: the same circle a launcher cuts, which is why the
+        // 2026-09-24 refit already clears it.
+        val scale = SPLASH_ICON_DP / 108.0
+        vector("ic_launcher_foreground.xml").data.flatMap(::points).forEach { (x, y) ->
+            val reach = hypot(x - 54.0, y - 54.0) * scale
+            assertTrue("($x, $y) reaches ${"%.1f".format(reach)}dp, past the splash circle", reach <= SPLASH_CIRCLE_DP / 2)
+        }
+    }
+
+    @Test
+    fun `the splash and the plain window paint the page ground of the theme the system is in`() {
+        assertEquals(hex(AmberLightColors.surfaceGround), color("window_ground"))
+        assertEquals(hex(AmberDarkColors.surfaceGround), color("window_ground", "values-night"))
         assertEquals(hex(AmberDarkColors.surfaceGround), color("amber_ground"))
+        listOf(
+            style("Theme.PlainTicker.Starting"),
+            style("Theme.PlainTicker.Starting", "values-v31"),
+        ).forEach { assertEquals("@color/window_ground", it.item("windowSplashScreenBackground")) }
+        assertEquals("@color/window_ground", style("Theme.PlainTicker").item("android:windowBackground"))
+        assertEquals("@color/window_ground", style("Theme.PlainTicker").item("android:colorBackground"))
+    }
+
+    @Test
+    fun `the android 12 starting theme sets the platform's own attributes to the same values`() {
+        val base = style("Theme.PlainTicker.Starting")
+        val v31 = style("Theme.PlainTicker.Starting", "values-v31")
+        listOf(
+            "windowSplashScreenBackground",
+            "windowSplashScreenAnimatedIcon",
+            "windowSplashScreenIconBackgroundColor",
+            "postSplashScreenTheme",
+            "android:windowLightStatusBar",
+            "android:windowLightNavigationBar",
+        ).forEach { assertEquals(it, base.item(it), v31.item(it)) }
+        listOf(
+            "windowSplashScreenBackground",
+            "windowSplashScreenAnimatedIcon",
+            "windowSplashScreenIconBackgroundColor",
+        ).forEach { assertEquals("android:$it", base.item(it), v31.item("android:$it")) }
     }
 
     @Test
@@ -470,31 +528,35 @@ class BrandAssetsTest {
 
     // ---- Splash and manifest ------------------------------------------------------------------
 
-    private fun style(name: String): Element =
-        parse(File(res, "values/themes.xml")).elements("style").single { it.getAttribute("name") == name }
+    private fun style(name: String, folder: String = "values"): Element =
+        parse(File(res, "$folder/themes.xml")).elements("style").single { it.getAttribute("name") == name }
+
+    private fun bool(name: String, folder: String): String =
+        parse(File(res, "$folder/bools.xml")).elements("bool").single { it.getAttribute("name") == name }.textContent.trim()
 
     private fun Element.item(name: String): String =
         getElementsByTagName("item").let { l -> (0 until l.length).map { l.item(it) as Element } }
             .single { it.getAttribute("name") == name }.textContent.trim()
 
     @Test
-    fun `starting theme paints amber's own ground behind the brand mark then hands over to the app theme`() {
-        val starting = style("Theme.PlainTicker.Starting")
-        assertEquals("Theme.SplashScreen", starting.getAttribute("parent"))
-        assertEquals("@color/amber_ground", starting.item("windowSplashScreenBackground"))
-        assertEquals("@drawable/ic_brand_mark", starting.item("windowSplashScreenAnimatedIcon"))
-        assertEquals("@style/Theme.PlainTicker", starting.item("postSplashScreenTheme"))
-        assertEquals("@color/amber_ground", style("Theme.PlainTicker").item("android:windowBackground"))
+    fun `starting theme hands over to the app theme`() {
+        assertEquals("@style/Theme.PlainTicker", style("Theme.PlainTicker.Starting").item("postSplashScreenTheme"))
     }
 
     @Test
-    fun `starting theme keeps light system bar icons over amber's own ground whatever the system theme`() {
-        // Theme.SplashScreen is DayNight: without these, a light system theme gets dark icons on
-        // amber_ground.
-        val starting = style("Theme.PlainTicker.Starting")
-        assertEquals("false", starting.item("android:windowLightStatusBar"))
-        assertEquals("false", starting.item("android:windowLightNavigationBar"))
-        assertEquals("false", style("Theme.PlainTicker").item("android:windowLightStatusBar"))
+    fun `system bar icons suit the ground of the theme the system is in`() {
+        // Theme.SplashScreen is DayNight, so the icons are pinned by the same day/night split the
+        // ground is: dark icons on the light ground, light icons on the dark one.
+        listOf(
+            style("Theme.PlainTicker.Starting"),
+            style("Theme.PlainTicker.Starting", "values-v31"),
+            style("Theme.PlainTicker"),
+        ).forEach {
+            assertEquals("@bool/window_light_bars", it.item("android:windowLightStatusBar"))
+            assertEquals("@bool/window_light_bars", it.item("android:windowLightNavigationBar"))
+        }
+        assertEquals("true", bool("window_light_bars", "values"))
+        assertEquals("false", bool("window_light_bars", "values-night"))
     }
 
     @Test
