@@ -235,6 +235,9 @@ object TransactionGuard {
         KnownPrograms.ASSOCIATED_TOKEN,
     )
 
+    /** What a wallet may add to a swap before it signs: see [readSigned]. */
+    private val SIGNED_SWAP_PROGRAMS = SWAP_PROGRAMS + KnownPrograms.LIGHTHOUSE
+
     /**
      * Anchor discriminators of the two Jupiter instructions whose layout is known from real /order
      * answers: `route_v2` (sha256("global:route_v2")[0..8]) and JupiterZ `fill`. Both carry the
@@ -526,9 +529,19 @@ object TransactionGuard {
         inputMint: String,
         outputMint: String,
         amount: Long,
+    ): SwapReading = readSwapBytes(bytes, wallet, order, inputMint, outputMint, amount, signedByWallet = false)
+
+    private suspend fun readSwapBytes(
+        bytes: ByteArray,
+        wallet: String,
+        order: SwapOrder,
+        inputMint: String,
+        outputMint: String,
+        amount: Long,
+        signedByWallet: Boolean,
     ): SwapReading {
         var costs: SwapCosts? = null
-        val verdict = guarded { swapVerdict(bytes, wallet, order, inputMint, outputMint, amount) { costs = it } }
+        val verdict = guarded { swapVerdict(bytes, wallet, order, inputMint, outputMint, amount, signedByWallet) { costs = it } }
         return when (verdict) {
             is Verdict.Refuse -> SwapReading.Refused(verdict)
             Verdict.Allow -> costs?.let { SwapReading.Allowed(it) }
@@ -543,6 +556,7 @@ object TransactionGuard {
         inputMint: String,
         outputMint: String,
         amount: Long,
+        signedByWallet: Boolean,
         onCosts: (SwapCosts) -> Unit,
     ): Verdict {
         if (!order.feeFieldsValid) return refuse("order fee or rent fields are negative or overflow", Why.COSTS_MORE_THAN_SHOWN)
@@ -562,7 +576,7 @@ object TransactionGuard {
         val keys = staticKeys(m)
         val signers = keys.take(m.signatureCount.toInt())
         if (wallet !in signers) return refuse("the wallet is not a required signer", Why.NOT_YOUR_WALLET)
-        requirePrograms(m, keys, SWAP_PROGRAMS)?.let { return it }
+        requirePrograms(m, keys, if (signedByWallet) SIGNED_SWAP_PROGRAMS else SWAP_PROGRAMS)?.let { return it }
 
         // The wallet's own accounts for each side, under either token program: USDC lives under
         // the classic one and every xStock under Token-2022, and an account derived for this owner
@@ -647,6 +661,8 @@ object TransactionGuard {
                 }
                 KnownPrograms.SYSTEM -> checkSwapSystem(acc, data, wallet)?.let { return it }
                 KnownPrograms.COMPUTE_BUDGET -> Unit
+                // Only reachable on the signed bytes: requirePrograms refuses it on the order's own.
+                KnownPrograms.LIGHTHOUSE -> Unit
                 else -> return refuse("program $program is not allowed in a swap", Why.UNKNOWN_PROGRAM)
             }
         }
@@ -695,7 +711,10 @@ object TransactionGuard {
         if (walletPays && signatureFee > order.signatureFeeLamports) {
             return refuse("signature fee $signatureFee exceeds the order's ${order.signatureFeeLamports}", Why.COSTS_MORE_THAN_SHOWN)
         }
-        if (walletPays && priority > order.prioritizationFeeLamports) {
+        // The order's priority fee is bound to its declared one. A wallet may raise it before it
+        // signs (Seed Vault sets its own), so on the signed bytes only the ceiling below binds, and
+        // the fee shown from then on is the signed one.
+        if (walletPays && !signedByWallet && priority > order.prioritizationFeeLamports) {
             return refuse("priority fee $priority exceeds the order's ${order.prioritizationFeeLamports}", Why.COSTS_MORE_THAN_SHOWN)
         }
         if (signatureFee + priority > MAX_WALLET_FEE_LAMPORTS) {
@@ -959,35 +978,133 @@ object TransactionGuard {
 
     // ---- What came back from the wallet ------------------------------------------------------
 
+    /** What the wallet changed in a swap it signed, in the categories a screen may name. */
+    enum class WalletChange {
+        /** The bytes that came back could not be read as a transaction. */
+        UNREADABLE,
+
+        /** The wallet's own signature slot is empty. */
+        NOT_SIGNED,
+
+        /** Another account now pays the network fee. */
+        FEE_PAYER,
+
+        /** The accounts that must sign are not the ones the order named. */
+        SIGNERS,
+
+        /** An instruction of a program this app does not allow; [SignedReading.Refused.program] names it. */
+        PROGRAM,
+
+        /** The network fee is above [MAX_WALLET_FEE_LAMPORTS]. */
+        FEE_ABOVE_CEILING,
+
+        /** The money would land somewhere other than the wallet's own account. */
+        RECIPIENT,
+
+        /** The amount spent is not the one shown. */
+        AMOUNT,
+
+        /** It could cost more, or pay out less, than the sheet shows. */
+        PAYS_LESS,
+
+        /** It hands control of a token account to someone else. */
+        CONTROL,
+
+        /** Anything else the guard refuses. */
+        OTHER,
+    }
+
+    /** [readSigned]'s answer. */
+    sealed interface SignedReading {
+        /** [costs] are the signed bytes' own; [changed] is true when the message differs from the checked one. */
+        data class Allowed(val costs: SwapCosts, val changed: Boolean) : SignedReading
+
+        /** [reason] is for the debug log only; [program] is set with [WalletChange.PROGRAM]. */
+        data class Refused(val change: WalletChange, val reason: String, val program: String? = null) : SignedReading
+    }
+
     /**
-     * True when [signed], the transaction a wallet handed back from `sign_transactions`, carries
-     * byte for byte the message [unsigned] did, the one [checkSwap] read, and a signature from
-     * [wallet] in the wallet's own slot (judges' review, 2026-09-26).
+     * The transaction a wallet handed back from `sign_transactions`, read as the guard read the
+     * order's own bytes, because /execute sends what the wallet gave back (judges' review,
+     * 2026-09-26).
      *
-     * The guard checked the bytes it gave the wallet; what goes to Jupiter's /execute is what the
-     * wallet gave back. A wallet, or anything between the app and it, returning a different
-     * message would otherwise be sent unread. Only signatures may differ: a fee payer's slot stays
-     * empty for the co-signer to fill.
+     * It used to have to carry byte for byte the checked message. The first real swap with Seed
+     * Vault Wallet under that rule (Seeker, 1.3.26, USDC to AMZNx on Metis, 2026-09-29) was
+     * refused by it: a wallet may set its own priority fee, or add assertions, before it signs.
+     * So the signed bytes are now held to the whole of [readSwap], against the same order and
+     * request, with two differences only: the priority fee is bound by [MAX_WALLET_FEE_LAMPORTS]
+     * rather than by the order's declared one, and [KnownPrograms.LIGHTHOUSE] may appear. Also
+     * required: the same fee payer and signers as [unsigned], and a non-zero signature in the
+     * wallet's own slot. The blockhash may change. Every refusal names what the wallet changed.
      *
      * Swap only. A pass and a vote use `sign_and_send_transactions`, where the wallet submits the
-     * transaction itself and returns only its signature: no payload comes back to compare, and the
-     * bytes the wallet was handed are the ones [checkPass] and [checkVote] read, since [decode]
-     * requires them to re-serialize exactly.
+     * transaction itself and returns only its signature: no payload comes back to read.
      */
-    fun signedMatches(unsigned: ByteArray, signed: ByteArray, wallet: String): Boolean = runCatching {
-        if (decode(unsigned) == null) return@runCatching false
-        val tx = decode(signed) ?: return@runCatching false
-        val (count, header) = signatureSection(signed)
-        val (unsignedCount, unsignedHeader) = signatureSection(unsigned)
-        if (count != unsignedCount) return@runCatching false
-        val message = signed.copyOfRange(header + count * SIGNATURE_BYTES, signed.size)
-        val checked = unsigned.copyOfRange(unsignedHeader + count * SIGNATURE_BYTES, unsigned.size)
-        if (!message.contentEquals(checked)) return@runCatching false
-        val slot = staticKeys(tx.message).take(tx.message.signatureCount.toInt()).indexOf(wallet)
-        if (slot < 0 || slot >= count) return@runCatching false
-        val at = header + slot * SIGNATURE_BYTES
-        (at until at + SIGNATURE_BYTES).any { signed[it].toInt() != 0 }
-    }.getOrDefault(false)
+    suspend fun readSigned(
+        unsigned: ByteArray,
+        signed: ByteArray,
+        wallet: String,
+        order: SwapOrder,
+        inputMint: String,
+        outputMint: String,
+        amount: Long,
+    ): SignedReading {
+        fun refused(change: WalletChange, reason: String, program: String? = null) =
+            SignedReading.Refused(change, reason, program)
+        return try {
+            val before = decode(unsigned) ?: return refused(WalletChange.UNREADABLE, "the checked transaction no longer decodes")
+            val after = decode(signed) ?: return refused(WalletChange.UNREADABLE, "the signed bytes are not a transaction this app can read")
+            val keysBefore = staticKeys(before.message)
+            val keysAfter = staticKeys(after.message)
+            if (keysAfter.first() != keysBefore.first()) {
+                return refused(WalletChange.FEE_PAYER, "fee payer ${keysBefore.first()} became ${keysAfter.first()}")
+            }
+            val signers = keysAfter.take(after.message.signatureCount.toInt())
+            if (signers != keysBefore.take(before.message.signatureCount.toInt())) {
+                return refused(WalletChange.SIGNERS, "the required signers changed to $signers")
+            }
+            val (count, header) = signatureSection(signed)
+            val slot = signers.indexOf(wallet)
+            if (slot < 0 || slot >= count) return refused(WalletChange.NOT_SIGNED, "the wallet is not a required signer")
+            val at = header + slot * SIGNATURE_BYTES
+            if ((at until at + SIGNATURE_BYTES).all { signed[it].toInt() == 0 }) {
+                return refused(WalletChange.NOT_SIGNED, "the wallet's signature slot is empty")
+            }
+            val m = after.message
+            m.instructions.map { keysAfter[it.programIdIndex.toInt()] }.firstOrNull { it !in SIGNED_SWAP_PROGRAMS }?.let {
+                return refused(WalletChange.PROGRAM, "the wallet added an instruction of program $it", program = it)
+            }
+            if (keysAfter.first() == wallet) {
+                val fee = feeLamports(m, keysAfter)
+                if (fee != null && fee > MAX_WALLET_FEE_LAMPORTS) {
+                    return refused(WalletChange.FEE_ABOVE_CEILING, "signed fees of $fee lamports exceed the ceiling of $MAX_WALLET_FEE_LAMPORTS")
+                }
+            }
+            when (val reading = readSwapBytes(signed, wallet, order, inputMint, outputMint, amount, signedByWallet = true)) {
+                is SwapReading.Allowed -> {
+                    val (beforeCount, beforeHeader) = signatureSection(unsigned)
+                    val changed = !signed.copyOfRange(header + count * SIGNATURE_BYTES, signed.size)
+                        .contentEquals(unsigned.copyOfRange(beforeHeader + beforeCount * SIGNATURE_BYTES, unsigned.size))
+                    SignedReading.Allowed(reading.costs, changed)
+                }
+                is SwapReading.Refused -> {
+                    val change = when (reading.refusal.why) {
+                        Why.WRONG_RECIPIENT -> WalletChange.RECIPIENT
+                        Why.WRONG_AMOUNT -> WalletChange.AMOUNT
+                        Why.COSTS_MORE_THAN_SHOWN, Why.SLIPPAGE_TOO_WIDE -> WalletChange.PAYS_LESS
+                        Why.HANDS_OVER_CONTROL -> WalletChange.CONTROL
+                        Why.UNREADABLE -> WalletChange.UNREADABLE
+                        else -> WalletChange.OTHER
+                    }
+                    refused(change, "the signed transaction: ${reading.refusal.reason}")
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            refused(WalletChange.UNREADABLE, "the signed transaction could not be read: ${e::class.simpleName}")
+        }
+    }
 
     private const val SIGNATURE_BYTES = 64
 

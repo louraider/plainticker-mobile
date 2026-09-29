@@ -26,6 +26,8 @@ import com.plainticker.mobile.repo.scaled
 import com.plainticker.mobile.wallet.FakeAdapterOperations
 import com.plainticker.mobile.wallet.FakeWalletSession
 import com.plainticker.mobile.wallet.TransactionGuard
+import com.plainticker.mobile.R
+import com.plainticker.mobile.ui.Copy
 import com.plainticker.mobile.wallet.WireMessage
 import com.plainticker.mobile.wallet.leData
 import com.plainticker.mobile.wallet.WalletOutcome
@@ -787,7 +789,8 @@ class SwapViewModelTest {
             .plus(KnownPrograms.TOKEN, listOf(REAL_TAKER, REAL_TAKER, seeker.address), byteArrayOf(4, -1, -1, -1, -1, -1, -1, -1, 127))
             .transaction().let(::signAsSeeker)
         val unsignedEcho = unsignedBytes.copyOf()
-        for (returned in listOf(tampered, unsignedEcho, "SIGNED-BY-THE-WALLET".encodeToByteArray())) {
+        val said = listOf(R.string.swap_signed_control, R.string.swap_signed_not_signed, R.string.swap_signed_unreadable)
+        for ((returned, sentence) in listOf(tampered, unsignedEcho, "SIGNED-BY-THE-WALLET".encodeToByteArray()).zip(said)) {
             resetPerCase()
             val mock = jupiter()
             val wallet = FakeWalletSession().apply {
@@ -800,11 +803,42 @@ class SwapViewModelTest {
                 submitFive(vm, this)
                 val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
                 assertEquals(SwapFailure.SIGNED_MISMATCH, failed.reason)
+                assertEquals("the sheet names what the wallet changed", sentence, (failed.sentence as Copy.Words).id)
                 assertEquals("the wallet was asked once", 1, wallet.callCount)
                 assertTrue("nothing reaches /execute", mock.executes().isEmpty())
                 assertTrue("and no receipt is written", receipts.writes.isEmpty())
                 cancelAndIgnoreRemainingEvents()
             }
+        }
+    }
+
+    @Test
+    fun `a priority fee the wallet raised before signing lands, and the fee shown is the signed one`() = runTest {
+        // Seeker, 1.3.26, 2026-09-29: Seed Vault Wallet set its own priority fee, and the old
+        // byte-for-byte rule refused the swap. Within the ceiling it is the wallet's call.
+        fun raise(tx: ByteArray): ByteArray {
+            val m = WireMessage.parseTransaction(tx)
+            val at = m.instructions.indexOfFirst { m.keys[it.program] == KnownPrograms.COMPUTE_BUDGET && it.data[0].toInt() == 3 }
+            return signAsSeeker(m.mapInstruction(at) { it.copy(data = leData(3.toByte(), 1_000_000L)) }.transaction())
+        }
+        val walletSigned = raise(unsignedBytes)
+        val mock = jupiter()
+        val wallet = FakeWalletSession().apply {
+            connectedAs(seeker)
+            operations = FakeAdapterOperations(signedPayloads = listOf(walletSigned))
+        }
+        val vm = viewModel(mock, wallet)
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val landed = awaitUntil { it is SwapState.Landed } as SwapState.Landed
+            val costs = landed.quote.costs!!
+            assertTrue("the signed fee, above the order's 395", costs.priorityFeeLamports > 395L)
+            assertEquals(costs.priorityFeeLamports, landed.quote.paidSol.prioritizationFeeLamports)
+            val body = HttpClientFactory.json.parseToJsonElement(mock.executes().single().bodyText()).jsonObject
+            assertEquals(Base64.getEncoder().encodeToString(walletSigned), body["signedTransaction"]!!.jsonPrimitive.content)
+            assertEquals(1, receipts.writes.size)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 

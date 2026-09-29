@@ -455,6 +455,16 @@
     <string name="swap_failed_dust">This amount is too small. The quote returns nothing for it.</string>
     <string name="swap_failed_wallet_changed">The wallet disconnected or changed before signing. Nothing was signed.</string>
     <string name="swap_failed_signed_mismatch">The wallet handed back a transaction other than the one checked, so it was not sent. Nothing moved.</string>
+    <string name="swap_signed_unreadable">The wallet handed back a transaction this app cannot read, so it was not sent. Nothing moved.</string>
+    <string name="swap_signed_not_signed">The wallet handed back the transaction without its signature, so it was not sent. Nothing moved.</string>
+    <string name="swap_signed_fee_payer">The wallet changed who pays the network fee, so the transaction was not sent. Nothing moved.</string>
+    <string name="swap_signed_signers">The wallet changed who has to sign the transaction, so it was not sent. Nothing moved.</string>
+    <string name="swap_signed_program">The wallet added an instruction from a program this app does not allow: %1$s. It was not sent. Nothing moved.</string>
+    <string name="swap_signed_fee_ceiling">The wallet raised the network fee above %1$s SOL, the most this app lets a swap pay, so it was not sent. Nothing moved.</string>
+    <string name="swap_signed_recipient">The wallet changed where the tokens go, so the transaction was not sent. Nothing moved.</string>
+    <string name="swap_signed_amount">The wallet changed the amount, so the transaction was not sent. Nothing moved.</string>
+    <string name="swap_signed_pays_less">The wallet changed the transaction so it could cost more or pay out less than shown. It was not sent. Nothing moved.</string>
+    <string name="swap_signed_control">The wallet added a step that would give someone else control of your tokens. It was not sent. Nothing moved.</string>
     <string name="swap_failed_sign_only_unsupported">This wallet only signs by sending, and a swap needs it to sign first. Use Seed Vault Wallet. Nothing was signed.</string>
     <string name="swap_failed_slippage">The price moved past the limit this quote allowed, so the swap reverted. Nothing was swapped.</string>
     <string name="swap_failed_quote_expired">The quote expired before it landed. Nothing was swapped.</string>

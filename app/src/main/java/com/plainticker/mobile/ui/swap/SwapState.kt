@@ -237,10 +237,14 @@ sealed interface SwapState {
         override val timing: SwapTiming? = null,
         /** Set only with [SwapFailure.GUARD_REFUSED]: the plain reason this phone refused it. */
         val why: TransactionGuard.Why? = null,
+        /** Set only with [SwapFailure.SIGNED_MISMATCH]: what the wallet changed, in plain words. */
+        val walletChange: Copy.Words? = null,
     ) : Terminal {
         /** The failure's sentence: the guard's plain reason where it refused, else [reason]'s own. */
         val sentence: Copy
-            get() = why?.takeIf { reason == SwapFailure.GUARD_REFUSED }?.refusal() ?: words(reason.text)
+            get() = why?.takeIf { reason == SwapFailure.GUARD_REFUSED }?.refusal()
+                ?: walletChange?.takeIf { reason == SwapFailure.SIGNED_MISMATCH }
+                ?: words(reason.text)
     }
 
     val isBusy: Boolean get() = this is Running
@@ -472,6 +476,11 @@ data class SwapQuote(
      * the sheet, the SOL check and the receipt are these and never the JSON's declared fields.
      */
     val costs: TransactionGuard.SwapCosts? = null,
+    /**
+     * The order this quote was read from, kept so the transaction the wallet signs is held to the
+     * same order ([TransactionGuard.readSigned]). Null only on a quote not built by [from].
+     */
+    val order: SwapOrder? = null,
 ) {
     val hasExpiry: Boolean get() = expireAtEpochSec != null
 
@@ -536,6 +545,7 @@ data class SwapQuote(
             expireAtEpochSec = order.expireAt?.takeIf { order.hasExpiry },
             inUsdValue = order.inUsdValue.takeIf { it > 0.0 },
             walletSol = walletPaid(order),
+            order = order,
         )
 
         /**

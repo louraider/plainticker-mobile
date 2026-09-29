@@ -31,4 +31,12 @@ object KnownPrograms {
 
     /** JupiterZ, Jupiter's RFQ program: every `jupiterz`-routed Ultra order (`fill`), seen in real /order answers. */
     const val JUPITER_RFQ = "61DFfeTKM7trxYcPQCM78bJ794ddZprZpAwAnLiwTpYH"
+
+    /**
+     * Lighthouse, the read-only assertion program some wallets add to a transaction before they
+     * sign it: its instructions only fail the transaction when an account is not in the state
+     * asserted, and move nothing. The id is the program's own `declare_id!` in
+     * github.com/Jac0xb/lighthouse (`programs/lighthouse/src/lib.rs`, read 2026-09-29).
+     */
+    const val LIGHTHOUSE = "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95"
 }

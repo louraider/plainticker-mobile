@@ -30,3 +30,28 @@ fun TransactionGuard.Why.refusal(): Copy.Words = when (this) {
 
 /** USDC and USDT both count six decimals: the unit [TransactionGuard.PASS_PRICE_CEILING_RAW] is in. */
 private const val STABLECOIN_DECIMALS = 6
+
+/**
+ * What a swap sheet says when the transaction the wallet signed failed the guard
+ * ([TransactionGuard.readSigned]): what the wallet changed, plainly enough for the founder to
+ * report it, and that nothing was sent.
+ */
+fun TransactionGuard.SignedReading.Refused.sentence(): Copy.Words = when (change) {
+    TransactionGuard.WalletChange.UNREADABLE -> words(R.string.swap_signed_unreadable)
+    TransactionGuard.WalletChange.NOT_SIGNED -> words(R.string.swap_signed_not_signed)
+    TransactionGuard.WalletChange.FEE_PAYER -> words(R.string.swap_signed_fee_payer)
+    TransactionGuard.WalletChange.SIGNERS -> words(R.string.swap_signed_signers)
+    TransactionGuard.WalletChange.PROGRAM -> words(R.string.swap_signed_program, Fmt.shortKey(program.orEmpty()))
+    TransactionGuard.WalletChange.FEE_ABOVE_CEILING -> words(
+        R.string.swap_signed_fee_ceiling,
+        Fmt.tokenAmount(TransactionGuard.MAX_WALLET_FEE_LAMPORTS, LAMPORT_DECIMALS),
+    )
+    TransactionGuard.WalletChange.RECIPIENT -> words(R.string.swap_signed_recipient)
+    TransactionGuard.WalletChange.AMOUNT -> words(R.string.swap_signed_amount)
+    TransactionGuard.WalletChange.PAYS_LESS -> words(R.string.swap_signed_pays_less)
+    TransactionGuard.WalletChange.CONTROL -> words(R.string.swap_signed_control)
+    TransactionGuard.WalletChange.OTHER -> words(R.string.swap_failed_signed_mismatch)
+}
+
+/** A lamport counts nine decimals of a SOL. */
+private const val LAMPORT_DECIMALS = 9
