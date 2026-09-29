@@ -144,6 +144,9 @@ class SwapViewModelTest {
         .replace(REDACTED_TAKER_FIELD, """"taker": "${seeker.address}",""")
     private var orderStatus = HttpStatusCode.OK
 
+    /** Thrown by the transport in place of any /order answer: the phone has no network. */
+    private var orderTransportFailure: Throwable? = null
+
     /** Answers for /execute in order; the last one repeats once the list runs out. */
     private var executePlan: List<Pair<String, HttpStatusCode>> = listOf(LANDED to HttpStatusCode.OK)
     private var executeIndex = 0
@@ -162,7 +165,10 @@ class SwapViewModelTest {
 
     private fun jupiter() = MockApi { request ->
         when (request.url.encodedPath) {
-            "/swap/v2/order" -> respondJson(orderResponse, orderStatus)
+            "/swap/v2/order" -> {
+                orderTransportFailure?.let { throw it }
+                respondJson(orderResponse, orderStatus)
+            }
             "/swap/v2/execute" -> {
                 val answer = executePlan[minOf(executeIndex, executePlan.lastIndex)]
                 executeIndex++
@@ -1091,12 +1097,22 @@ class SwapViewModelTest {
     }
 
     @Test
-    fun `checking availability on an order with nothing to sign says no route`() = runTest {
+    fun `checking availability on a quote with nothing to sign is not called no route`() = runTest {
+        // The order carries a route (amounts, a route plan) and no bytes: Jupiter found a way, so
+        // "no route" would be a claim the answer contradicts.
         orderResponse = orderResponse.replace(transactionField, """"transaction": null,""")
+        val failed = checkAvailabilityFails()
+        assertEquals(SwapFailure.NO_TRANSACTION, failed.reason)
+    }
+
+    // ---- Only a true "no route" reads as one (1.3.25 on the Seeker, 2026-09-29) ------------------
+
+    /** "Check swap availability" on TSLAx, 5 USDC, to the first Failed; the wallet never opens. */
+    private suspend fun kotlinx.coroutines.test.TestScope.checkAvailabilityFails(): SwapState.Failed {
         val mock = jupiter()
         val wallet = wallet()
         val vm = viewModel(mock, wallet)
-
+        var failed: SwapState.Failed? = null
         vm.state.test {
             awaitItem()
             vm.checkAvailability(tslax)
@@ -1104,9 +1120,75 @@ class SwapViewModelTest {
             vm.amountChanged("5")
             awaitUntil { it is SwapState.Amount && it.input.isUsable }
             vm.submit()
+            failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(0, wallet.callCount)
+        assertTrue(mock.executes().isEmpty())
+        return requireNotNull(failed)
+    }
+
+    @Test
+    fun `checking availability when the aggregator finds nothing either is no route`() = runTest {
+        // AALx, live: "Quote not available from market maker", then "Failed to get quotes".
+        orderResponse = Fixtures.read("jupiter/order-error-400-failed-to-get-quotes.json")
+        orderStatus = HttpStatusCode.BadRequest
+        assertEquals(SwapFailure.NO_ROUTE, checkAvailabilityFails().reason)
+    }
+
+    @Test
+    fun `checking availability on a busy Jupiter says busy, not no route`() = runTest {
+        orderResponse = Fixtures.read("jupiter/order-error-429-gateway.json")
+        orderStatus = HttpStatusCode.TooManyRequests
+        val failed = checkAvailabilityFails()
+        assertEquals(SwapFailure.RATE_LIMITED, failed.reason)
+        assertEquals(FailureNext.RETRY, failed.reason.next)
+        assertEquals("the amount survives, so Try again is one tap", "5", failed.input?.text)
+    }
+
+    @Test
+    fun `a priced token on a busy Jupiter says busy, not that the pair cannot be quoted`() = runTest {
+        orderResponse = Fixtures.read("jupiter/order-error-429-gateway.json")
+        orderStatus = HttpStatusCode.TooManyRequests
+        val vm = viewModel(jupiter(), wallet())
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
             val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
-            assertEquals(SwapFailure.NO_ROUTE, failed.reason)
-            assertEquals(0, wallet.callCount)
+            assertEquals(SwapFailure.RATE_LIMITED, failed.reason)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `checking availability on a server error is unavailable, not no route`() = runTest {
+        orderResponse = """{"error":"Internal server error"}"""
+        orderStatus = HttpStatusCode.InternalServerError
+        assertEquals(SwapFailure.QUOTE_UNAVAILABLE, checkAvailabilityFails().reason)
+    }
+
+    @Test
+    fun `checking availability that Jupiter refuses for funds is a refusal, not no route`() = runTest {
+        orderResponse = Fixtures.read("jupiter/order-live-0929-aaplx-usdc-insufficient.json")
+        assertEquals(SwapFailure.QUOTE_REFUSED, checkAvailabilityFails().reason)
+    }
+
+    @Test
+    fun `checking availability with no network says offline, not no route`() = runTest {
+        orderTransportFailure = java.net.UnknownHostException("api.jup.ag")
+        assertEquals(SwapFailure.OFFLINE, checkAvailabilityFails().reason)
+    }
+
+    @Test
+    fun `a priced token with no network says offline too`() = runTest {
+        orderTransportFailure = java.net.ConnectException("failed to connect to api.jup.ag")
+        val vm = viewModel(jupiter(), wallet())
+        vm.state.test {
+            awaitItem()
+            submitFive(vm, this)
+            val failed = awaitUntil { it is SwapState.Failed } as SwapState.Failed
+            assertEquals(SwapFailure.OFFLINE, failed.reason)
+            assertEquals(FailureNext.RETRY, failed.reason.next)
             cancelAndIgnoreRemainingEvents()
         }
     }
