@@ -123,7 +123,7 @@ fun HomeScreen(
     onOpenDigest: (() -> Unit)? = null,
     /**
      * True when Detail's "Have a code? Get Pro" asked for You with the promo code field open
-     * (judges' round 2). Home selects You and hands the request on; [onPromoOpened] clears it once
+     * (mock judges' round 2). Home selects You and hands the request on; [onPromoOpened] clears it once
      * You has acted on it, so a later recomposition does not open the field again.
      */
     openPromo: Boolean = false,

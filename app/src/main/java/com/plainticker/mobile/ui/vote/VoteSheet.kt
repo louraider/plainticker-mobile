@@ -179,7 +179,7 @@ internal fun ColumnScope.VoteSheetBody(
         Sentence(it.text(), AmberType.meta, colors.textTertiary(AmberSurface.HIGH), DisclosureTop)
     }
 
-    // The landed vote on a public explorer, right above Share (judges' review, 2026-09-27), the
+    // The landed vote on a public explorer, right above Share (mock judges' review, 2026-09-27), the
     // way the pass receipt places its own. Flush with the text column: the action has no start
     // inset of its own.
     content.signature?.let {

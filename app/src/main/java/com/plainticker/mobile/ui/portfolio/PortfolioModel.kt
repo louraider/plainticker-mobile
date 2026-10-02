@@ -216,7 +216,7 @@ fun swapRow(receipt: SwapReceipt, zone: ZoneId = ZoneId.systemDefault()): SwapRo
             )
         }
         ?: words(R.string.portfolio_swap_row_received_unknown, receipt.outputSymbol),
-    // "all-in" only when the receipt priced the SOL it paid (judges' review, 2026-09-27); a
+    // "all-in" only when the receipt priced the SOL it paid (mock judges' review, 2026-09-27); a
     // receipt written before that, or without a SOL price, has the route's cost and says so.
     cost = receipt.allInCostPct
         ?.let { words(R.string.portfolio_swap_cost, Fmt.percent(it, signed = false)) }

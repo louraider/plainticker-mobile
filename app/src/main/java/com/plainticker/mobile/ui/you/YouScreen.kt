@@ -129,11 +129,11 @@ import kotlinx.coroutines.withTimeoutOrNull
  * 2. **Plan** ([planRows]): source, valid until, how to extend, the staked SKR figure, a pending
  *    payment. The pass entry lands here as a text action whenever the hero does not carry it.
  *    "Have a code?" is the group's first row, in full action colour, so it sits above the fold
- *    (judges' round 2); Detail's "Have a code? Get Pro" opens You with its field already focused.
+ *    (mock judges' round 2); Detail's "Have a code? Get Pro" opens You with its field already focused.
  * 3. **Sign-in methods** ([AccountSection]): Google, then the wallets linked to the Google
  *    account, if the server returned any.
  * 4. **Wallet** ([WalletSection]): the phone's Solana wallet connection, its own group since the
- *    judges' round 2 because it signs transactions and is not a way to sign in.
+ *    mock judges' round 2 because it signs transactions and is not a way to sign in.
  * 5. **On this device**: swaps, votes and stocks watched, each a row that opens its tab.
  * 6. **Notifications**: the delivery line with Enable, and the daily digest.
  * 7. **About**: version, disclaimer, privacy policy, terms, account deletion (each opening
@@ -304,7 +304,7 @@ internal fun YouContent(
     header: @Composable () -> Unit = {},
     nowMillis: Long = System.currentTimeMillis(),
     /**
-     * True when Detail's "Have a code? Get Pro" sent the reader here (judges' round 2): the code
+     * True when Detail's "Have a code? Get Pro" sent the reader here (mock judges' round 2): the code
      * field opens (a finished redeem's confirmation folds first, so the field can open at all),
      * the list returns to its top, where the hero's Get Pro and the Plan group's first row, the
      * field itself, share the first screen, and the field takes focus as it appears
@@ -588,7 +588,7 @@ private fun PlanGroup(
     Column(Modifier.fillMaxWidth()) {
         AmberSectionHead(title = stringResource(R.string.you_heading_plan), colors = colors)
         AmberTickerRowGroup(colors = colors) {
-            // First, not last (judges' round 2): a judge holding a code found "Have a code?" only
+            // First, not last (mock judges' round 2): a judge holding a code found "Have a code?" only
             // after scrolling past the fold, under every Plan row.
             Box(
                 Modifier.fillMaxWidth().then(
@@ -642,7 +642,7 @@ private fun planRowAction(action: PlanAction, onPay: () -> Unit, onRefresh: () -
  * ([com.plainticker.mobile.data.plainticker.PromoApi.normalize], from
  * [com.plainticker.mobile.ui.pass.PassViewModel.applyPromo]), with Apply and
  * Cancel beside it. Shown even when this device is already Pro, so a judge's second code can
- * extend or stack it, and always in full [AmberColors.actionText] (judges' round 2: the dimmed
+ * extend or stack it, and always in full [AmberColors.actionText] (mock judges' round 2: the dimmed
  * grey it used to take on a Pro device read as disabled).
  *
  * Errors are one plain line under the field ([PromoRefusal.text]), never the server's own
@@ -743,7 +743,7 @@ private fun PromoEditingRow(
  * drawn by [UppercaseCodeTransformation], one character for one, so the cursor never moves under
  * the reader and the value the keyboard edits is the one it typed.
  *
- * The field takes focus as it appears (judges' round 2), whether "Have a code?" opened it here or
+ * The field takes focus as it appears (mock judges' round 2), whether "Have a code?" opened it here or
  * Detail's "Have a code? Get Pro" did, so the keyboard is up and the next thing typed is the code.
  * A request the node cannot take yet is dropped rather than thrown.
  */
@@ -877,7 +877,7 @@ private fun NotificationsGroup(
 
 /**
  * The version, the disclaimer every screen owes a reader, the privacy policy, the terms and account
- * deletion (judges' round 2 and the dApp Store listing: each a link row that opens plainticker.com
+ * deletion (mock judges' round 2 and the dApp Store listing: each a link row that opens plainticker.com
  * in the browser, [AboutLinks]), and Fonts and licenses collapsed behind one row: Show opens the
  * three bundled fonts' [LicenseRow]s in place, each able to read its own shipped OFL text (task
  * U11), and Hide folds them away again.

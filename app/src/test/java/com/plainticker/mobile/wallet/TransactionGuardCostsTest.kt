@@ -19,7 +19,7 @@ import java.util.Base64
  * What a swap can cost the wallet in SOL, read from the bytes (security review, 2026-09-27), on the
  * REAL Jupiter orders every other guard test runs on.
  *
- * The judges' counterexample: an order declaring a priority fee of 1,000,000,000 lamports beside a
+ * The mock judges' counterexample: an order declaring a priority fee of 1,000,000,000 lamports beside a
  * signature fee of -999,995,000 and no rent summed to the 5,000 lamports the sheet showed, and the
  * guard compared the bytes' priority fee only with the declared one, which they matched. Every
  * fee and rent field is now a non-negative lamport count that sums without overflow; the fees a
@@ -146,7 +146,7 @@ class TransactionGuardCostsTest {
         assertEquals(4_078_560L, costsOf(readOut(order(reverseDefault))).rentUpperBoundLamports)
     }
 
-    // ---- The judges' counterexample, and its variants ---------------------------------------
+    // ---- The mock judges' counterexample, and its variants ---------------------------------------
 
     @Test
     fun `a negative signature fee hiding a huge priority fee is refused`() = runTest {

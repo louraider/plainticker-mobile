@@ -199,7 +199,7 @@ data class SheetContent(
      */
     val extra: SheetAction? = null,
     /**
-     * What [com.plainticker.mobile.wallet.TransactionGuard] checked on this phone (judges' review,
+     * What [com.plainticker.mobile.wallet.TransactionGuard] checked on this phone (mock judges' review,
      * 2026-09-27): what the bytes spend, where they pay, and the least they accept. On
      * [SwapState.Review], before the wallet opens, and on [SwapState.AwaitingWallet] while it is
      * open; the guard's Allow precedes both.
@@ -291,7 +291,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             notice = amountNotice(),
             primary = SheetAction(
                 // A token Jupiter has no reference price for is asked about, not promised: the
-                // quote answers whether a route exists (judges' review, 2026-09-27).
+                // quote answers whether a route exists (mock judges' review, 2026-09-27).
                 label = if (leg.unpriced && leg.intoToken) {
                     words(R.string.swap_check_availability)
                 } else {
@@ -322,7 +322,7 @@ fun SwapState.sheet(nowMillis: Long, submitSwaps: Boolean): SheetContent? {
             secondary = close,
         )
 
-        // Everything the bytes do, before the wallet opens (judges' review, 2026-09-27). One
+        // Everything the bytes do, before the wallet opens (mock judges' review, 2026-09-27). One
         // decision: continue to the wallet, or cancel with nothing signed.
         is SwapState.Review -> base(
             phase = SheetPhase(
@@ -445,7 +445,7 @@ private fun SwapState.Review.reviewNotice(): Copy? = when {
 }
 
 /**
- * The Review step's cells (judges' review, 2026-09-27): what arrives and the least that may,
+ * The Review step's cells (mock judges' review, 2026-09-27): what arrives and the least that may,
  * what is spent, the all-in cost, the network fee the bytes charge (signature and priority, both
  * read from the message), and the deposit at its upper bound, named as a deposit that comes back.
  */
@@ -625,7 +625,7 @@ private fun costCells(leg: SwapLeg, quote: SwapQuote): List<SheetCell> = listOf(
         // The rent is most of it and it is charged once, for the first account of this mint, so
         // the sub says which of the two this quote is: a new account, or one that already exists.
         // The rent is a deposit held in the new account, not a fee: it comes back if the account
-        // is closed, and the sub says so (judges' review, 2026-09-27).
+        // is closed, and the sub says so (mock judges' review, 2026-09-27).
         sub = if (quote.paidSol.rentFeeLamports > 0L) {
             words(
                 R.string.swap_sol_sub_rent,
@@ -660,7 +660,7 @@ private fun receiveCell(leg: SwapLeg, quote: SwapQuote): SheetCell = SheetCell(
 )
 
 /**
- * The cost cell (judges' review, 2026-09-27). "All-in" only when it is: the route's cost plus the
+ * The cost cell (mock judges' review, 2026-09-27). "All-in" only when it is: the route's cost plus the
  * signature fee, the priority fee and the token account rent this wallet pays, priced at the SOL
  * price read with the quote, with the SOL share named under it. Without a SOL price the figure is
  * the route's alone, so it is called "Route cost", and the sub points at the SOL line beneath,
@@ -704,7 +704,7 @@ private fun SwapState.Landed.quotedAgainstFill(): Copy? {
 /**
  * The SOL this swap cost the wallet, with the refundable rent named, or null when it cost none.
  * Labelled an estimate: the figures are the quote's (the fees the bytes set, the deposit at its
- * upper bound), and the app does not read the landed transaction's own fee (judges' review,
+ * upper bound), and the app does not read the landed transaction's own fee (mock judges' review,
  * 2026-09-27; the forwarder allowlists no method that returns a transaction's meta).
  */
 private fun SwapState.Landed.solPaidCell(): SheetCell? {

@@ -222,7 +222,7 @@ class SwapSheetTest {
         // The receipt's "Swap back" is drawn through that same one call site, never a second
         // primary: a sheet asks for one decision at a time.
         assertTrue("listOfNotNull(content.secondary, content.extra).forEach" in scan.code)
-        // The direction, and on a receipt "View on Solscan" (judges' review, 2026-09-27) with the
+        // The direction, and on a receipt "View on Solscan" (mock judges' review, 2026-09-27) with the
         // Share slot beside it (2026-09-29).
         assertEquals("three text actions: the direction, the explorer link and Share", 3, count("TextAction("))
         assertTrue("Share is drawn without a host's handler", "content.share?.takeIf { actions.onShare != null }" in scan.code)

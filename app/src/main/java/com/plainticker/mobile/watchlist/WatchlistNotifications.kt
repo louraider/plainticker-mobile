@@ -26,7 +26,7 @@ import com.plainticker.mobile.ui.home.HomeTab
  * a refused permission, a blocked channel or a system that declines the post all mean the digest
  * stays on the screen, which it does anyway, and the worker finishes normally.
  *
- * What it posts is [com.plainticker.mobile.watchlist.Digest.notice] (judges' round 2): the most
+ * What it posts is [com.plainticker.mobile.watchlist.Digest.notice] (mock judges' round 2): the most
  * useful line of the day as the title ("AAPLx reports tomorrow", "JEF, which you voted for, is now
  * analysed"), never a generic "Daily digest", and up to two more lines as the body, in a big-text
  * style so they show whole in the shade. The screen under You draws the full paragraph.

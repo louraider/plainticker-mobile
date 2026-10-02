@@ -30,7 +30,7 @@ import com.plainticker.mobile.ui.you.DigestScreen
  * onboarding (once) -> home (list | portfolio | watchlist) -> detail/{ticker}; plus, in debug
  * builds, the component gallery for design QA. The gallery draws sample states and signs nothing.
  * The wallet spike that once sat beside it signed Jupiter bytes without TransactionGuard, and was
- * removed (judges' review, 2026-09-26): every signature this app asks for now goes through a
+ * removed (mock judges' review, 2026-09-26): every signature this app asks for now goes through a
  * guarded flow.
  */
 @Composable
@@ -116,7 +116,7 @@ fun AppNavHost(
                 navArgument(Routes.ARG_TAB) { type = NavType.IntType; defaultValue = HomeTab.LIST.ordinal },
             ),
         ) { entry -> NavScreen {
-            // Detail's "Have a code? Get Pro" (judges' round 2) leaves this flag on the home entry
+            // Detail's "Have a code? Get Pro" (mock judges' round 2) leaves this flag on the home entry
             // it pops back to, rather than building a new home: the reader's place on Today or
             // Stocks survives, and You opens with the code field ready.
             val promoRequested by entry.savedStateHandle

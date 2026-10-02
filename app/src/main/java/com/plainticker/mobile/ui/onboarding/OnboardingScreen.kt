@@ -71,7 +71,7 @@ import com.plainticker.mobile.ui.theme.AmberType
  * until the box is checked; checking writes nothing, the flag is persisted only when the button
  * is pressed, and AppNavHost then starts at home, on Today, for good.
  *
- * Step two (judges' round 2) replaced the five-line tab map that ended on an empty Today: the
+ * Step two (mock judges' round 2) replaced the five-line tab map that ended on an empty Today: the
  * reader picks stocks to watch from real analysed chips and lands on a Today that already has
  * them, or skips to the AAPLx page, the worked example whose every figure is open.
  *
@@ -337,7 +337,7 @@ private fun ControlsPoint(@StringRes lead: Int, @StringRes body: Int, colors: Am
 }
 
 /**
- * Step two (judges' round 2): pick stocks to watch, so onboarding ends on a Today that already has
+ * Step two (mock judges' round 2): pick stocks to watch, so onboarding ends on a Today that already has
  * the reader's own rows, or, skipped, on the AAPLx page whose every figure is open. The chips are
  * real analysed stocks ([onboardingPicks]), never copy. The primary action is live once one is
  * picked; Skip is always there.

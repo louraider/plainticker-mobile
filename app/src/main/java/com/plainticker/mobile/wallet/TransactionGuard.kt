@@ -40,7 +40,7 @@ object TransactionGuard {
 
         /**
          * [reason] is for the debug log only: it names programs, offsets and base units. [why] is
-         * the same refusal in the few plain categories a screen may state (judges' review,
+         * the same refusal in the few plain categories a screen may state (mock judges' review,
          * 2026-09-27: a refused pass read "The server did not build this payment", which was not
          * what happened).
          */
@@ -85,7 +85,7 @@ object TransactionGuard {
 
     /**
      * The most a pass may ever ask, in base units of a six-decimal stablecoin: 12 USDC or 12 USDT
-     * (judges' review, 2026-09-27). The price lives on the server and the server's own summary
+     * (mock judges' review, 2026-09-27). The price lives on the server and the server's own summary
      * states it, so without this a compromised server could put 1,000 USDC in both the summary
      * and the bytes, and every other check here would agree with it. Pinned in the app, so a
      * change of price is an app release, on purpose.
@@ -93,7 +93,7 @@ object TransactionGuard {
     const val PASS_PRICE_CEILING_RAW = 12_000_000L
 
     /**
-     * The widest slippage a swap may allow, in basis points, whatever the order says (judges'
+     * The widest slippage a swap may allow, in basis points, whatever the order says (mock judges'
      * review, 2026-09-27). Every real order captured (five Metis, both directions) carries 100,
      * and the RFQ fill carries 0 because the maker's output is exact. 300 is three times the
      * widest seen: room for Jupiter's own dynamic slippage on a thin hour, and still a hard stop
@@ -260,7 +260,7 @@ object TransactionGuard {
     private const val ROUTE_V2_SLIPPAGE = 24
 
     /**
-     * `platform_fee_bps` is bound to the order's own `feeBps` (judges' review, 2026-09-27): the
+     * `platform_fee_bps` is bound to the order's own `feeBps` (mock judges' review, 2026-09-27): the
      * bytes may not charge a larger fee than the JSON the cost figure is computed from. On every
      * real Metis order the two are equal: 10 on the taker-pays and both reverse orders, 378 on the
      * gasless order, where Jupiter folds the gas it pays into the fee (its `platformFee.feeBps`
@@ -488,7 +488,7 @@ object TransactionGuard {
      * **System instructions are allowlisted by tag (2026-09-26).** One that names the wallet in
      * any slot may only be a 0-lamport Transfer from it; see [checkSwapSystem].
      *
-     * **Token account creates, fees and slippage (judges' review, 2026-09-27).** A create must open
+     * **Token account creates, fees and slippage (mock judges' review, 2026-09-27).** A create must open
      * the wallet's own account for one side of the swap ([checkSwapCreateAta]), at most
      * [MAX_SWAP_ACCOUNT_CREATES] of them, and the wallet may fund no more of them than the order's
      * declared rent covers; `route_v2`'s platform fee may not exceed the order's `feeBps` nor
@@ -809,7 +809,7 @@ object TransactionGuard {
 
     /**
      * What the swap instruction's own bytes promise to deliver, against what the sheet shows
-     * (judges' review, 2026-09-26). The sheet's "at least" comes from Jupiter's JSON; without this
+     * (mock judges' review, 2026-09-26). The sheet's "at least" comes from Jupiter's JSON; without this
      * a server could show a tight floor beside bytes that accept almost nothing back.
      *
      * - `route_v2` carries `quoted_out_amount` and `slippage_bps`, and the program reverts when
@@ -864,7 +864,7 @@ object TransactionGuard {
     }
 
     /**
-     * A top-level System instruction in a swap, by tag rather than by slot (judges' review,
+     * A top-level System instruction in a swap, by tag rather than by slot (mock judges' review,
      * 2026-09-26). The old rule looked only at slot 0, so `WithdrawNonceAccount` and
      * `AuthorizeNonceAccount` with the wallet as the nonce authority, or `TransferWithSeed` with
      * the wallet as the base, passed untouched while the wallet's signature covered them.
@@ -898,7 +898,7 @@ object TransactionGuard {
     }
 
     /**
-     * An associated-token create in a swap (judges' review, 2026-09-27). It used to be checked by
+     * An associated-token create in a swap (mock judges' review, 2026-09-27). It used to be checked by
      * its owner alone, so a create for the wallet of some other mint, funded from the wallet,
      * passed. Now, on the accounts [funder, account, owner, mint, system, token program]:
      *
@@ -1025,7 +1025,7 @@ object TransactionGuard {
 
     /**
      * The transaction a wallet handed back from `sign_transactions`, read as the guard read the
-     * order's own bytes, because /execute sends what the wallet gave back (judges' review,
+     * order's own bytes, because /execute sends what the wallet gave back (mock judges' review,
      * 2026-09-26).
      *
      * It used to have to carry byte for byte the checked message. The first real swap with Seed

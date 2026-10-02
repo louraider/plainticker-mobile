@@ -127,7 +127,7 @@ class AccountViewModelTest {
 
     /**
      * The server this suite talks to, with `POST /api/v1/auth/google/nonce` answered by [nonce]
-     * ahead of [handler]: the server requires its nonce (judges' review, 2026-09-26), so every
+     * ahead of [handler]: the server requires its nonce (mock judges' review, 2026-09-26), so every
      * sign-in fetches one first, and [token] is built on it. A test about the nonce route itself
      * scripts it with [rawMockApi].
      */

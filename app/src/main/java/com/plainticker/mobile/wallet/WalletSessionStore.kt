@@ -17,7 +17,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * What survives process death of a wallet session: the MWA auth token the wallet issued and the
- * account it authorized, never a key (judges' review, 2026-09-26; Beeman: every launch asked to
+ * account it authorized, never a key (mock judges' review, 2026-09-26: every launch asked to
  * connect again).
  *
  * The token is a wallet-issued grant that lets this app ask the same wallet to reauthorize

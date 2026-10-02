@@ -223,7 +223,7 @@ class SwapSheetModelTest {
         assertEquals(R.string.swap_requote_approval, id(wallet.notice))
     }
 
-    // ---- Review (judges' review, 2026-09-27) ------------------------------------------------------
+    // ---- Review (mock judges' review, 2026-09-27) ------------------------------------------------------
 
     /** What the guard read the golden bytes can charge, with one Token-2022 account opened by the wallet. */
     private val costs = TransactionGuard.SwapCosts(
@@ -388,7 +388,7 @@ class SwapSheetModelTest {
     }
 
     /**
-     * Judges' review, 2026-09-27: "All-in cost" excluded the SOL. With a SOL price it now adds the
+     * Mock judges' review, 2026-09-27: "All-in cost" excluded the SOL. With a SOL price it now adds the
      * signature fee, the priority fee and the rent this wallet pays, and names the SOL share.
      */
     @Test
@@ -428,7 +428,7 @@ class SwapSheetModelTest {
         assertEquals(paying.solCost, paying.paidSol)
     }
 
-    /** Voynich, judges' review 2026-09-27: show the guard's result on screen before signing. */
+    /** Voynich, mock judges' review 2026-09-27: show the guard's result on screen before signing. */
     @Test
     fun `while the wallet is open the sheet says what this phone checked in the bytes`() {
         val content = SwapState.AwaitingWallet(leg, funds, amount(), quote, requote = false, timing = timing).shown()
@@ -939,7 +939,7 @@ class SwapSheetModelTest {
             "The transaction did not match this swap, so it never reached the wallet",
             ShippedCopy.render(requireNotNull(failed(SwapFailure.GUARD_REFUSED).result?.detail)),
         )
-        // With the guard's plain reason (judges' review, 2026-09-27), the sheet states it.
+        // With the guard's plain reason (mock judges' review, 2026-09-27), the sheet states it.
         val withWhy = SwapState.Failed(leg, funds, amount(), SwapFailure.GUARD_REFUSED, quote, false, timing, TransactionGuard.Why.WRONG_RECIPIENT).shown()
         val sentence = "This phone refused the transaction before your wallet saw it: it pays somewhere other than the destination shown. Nothing was signed or sent."
         assertEquals(sentence, ShippedCopy.render(requireNotNull(withWhy.result?.detail)))

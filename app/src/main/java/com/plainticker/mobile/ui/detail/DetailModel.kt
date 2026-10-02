@@ -427,7 +427,7 @@ val DetailUiState.liveLine: LiveLine?
         }
         val slot = Fmt.slot(read.slot)
         // Counted from when the node answered, not from when the answer reached this phone: the
-        // forwarder's X-Rpc-Age says how long it sat in its cache (Mert, judges' review 2026-09-27).
+        // forwarder's X-Rpc-Age says how long it sat in its cache (mock judges' review 2026-09-27).
         val observedAt = read.observedAtMillis
         val ageMillis = (nowMillis - observedAt).coerceAtLeast(0L)
         val live = ageMillis <= LIVE_WINDOW_MILLIS
@@ -452,7 +452,7 @@ val DetailUiState.trustLoading: Boolean
 /**
  * The cells of "Backing and controls", in the order DESIGN.md section 5 fixes: the reserves
  * spanning the first row, then the two issuer controls, then the multiplier and the hook. Since
- * the judges' review of 2026-09-27 (Mert) the reserves say they are the issuer's own report, a
+ * the mock judges' review of 2026-09-27 the reserves say they are the issuer's own report, a
  * second full-width row holds that report up against the supply the mint states, and a mint
  * with an active permanent delegate names the delegate's address on a last full-width row.
  *
@@ -485,7 +485,7 @@ internal fun ChainRead.supplyShown(): java.math.BigDecimal {
 }
 
 /**
- * The supply the mint states, with the issuer's circulating count beside it (Mert, judges' review
+ * The supply the mint states, with the issuer's circulating count beside it (mock judges' review
  * 2026-09-27). The value is the mint's own count; the sub line says the two match within
  * [SUPPLY_MATCH_TOLERANCE], or states xStocks' count as it is.
  *
@@ -526,8 +526,8 @@ private fun DetailUiState.supplyCell(): TrustFact {
 }
 
 /**
- * The permanent delegate's address, which [MintFacts] parses and the grid never drew (Mert,
- * judges' review 2026-09-27: name the delegate). Shortened, in the identifier face, and copied
+ * The permanent delegate's address, which [MintFacts] parses and the grid never drew (
+ * mock judges' review 2026-09-27: name the delegate). Shortened, in the identifier face, and copied
  * whole on tap. Only for a delegate that can act; absent otherwise, since the delegate cell
  * already says "None".
  */
@@ -868,7 +868,7 @@ val DetailUiState.swapQuiet: Boolean
 
 /**
  * True when Jupiter answered about this token and has no reference price for it (device QA of
- * 1.3.17: JEFx and AALx). A missing price is not a missing route (judges' review, 2026-09-27), so
+ * 1.3.17: JEFx and AALx). A missing price is not a missing route (mock judges' review, 2026-09-27), so
  * the button is not switched off: it reads "Check swap availability" and opens the same machine,
  * whose quote answers whether a route exists ([com.plainticker.mobile.ui.swap.SwapViewModel.checkAvailability]).
  * A quote that failed (Jupiter refused, a network hiccup) is not this: that is transient, and the

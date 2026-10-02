@@ -35,8 +35,8 @@ import java.util.concurrent.atomic.AtomicLong
  * [accounts], both shared through [WalletSessionHolder], so a reconnect after an Activity
  * recreation is a reauthorize, not a new consent. Since 2026-09-26 both are also saved to
  * [store] after every successful round trip and restored at launch
- * ([WalletSessionHolder.restore]), so a process death no longer forgets the wallet (Beeman, in
- * the judges' review: every launch said "Connect a wallet"). What is saved is the token the
+ * ([WalletSessionHolder.restore]), so a process death no longer forgets the wallet (in
+ * the mock judges' review: every launch said "Connect a wallet"). What is saved is the token the
  * wallet issued and the account's public key and label; never a key, and nothing that can sign.
  *
  * This is the Solana Mobile templates' pattern for clientlib-ktx: keep `authToken`, and let the

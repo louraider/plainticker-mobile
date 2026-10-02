@@ -477,7 +477,7 @@ private fun Swap(receipt: SwapReceipt, first: Boolean, last: Boolean, colors: Am
     val received = row.received.text()
     val cost = row.cost.text()
     val landed = row.landed.text()
-    // The landed transaction on a public explorer (judges' review, 2026-09-27), as the row's
+    // The landed transaction on a public explorer (mock judges' review, 2026-09-27), as the row's
     // trailing action: a fixed short word, the width AmberTickerRow's meta line budgets for.
     val explorer = Explorer.transaction(receipt.signature)
     val open = rememberExplorerOpener()

@@ -100,7 +100,7 @@ class SwapViewModelTest {
     ).base64()
 
     /**
-     * [m] with route_v2's quoted_out_amount set to the golden order's own (judges' review,
+     * [m] with route_v2's quoted_out_amount set to the golden order's own (mock judges' review,
      * 2026-09-26). The guard now reads the output terms from the bytes and holds them to the floor
      * the sheet shows, so bytes from the 2026-09-23 order (quoted 1,319,475, floor 1,306,280) next
      * to the 2026-09-12 golden JSON (floor 1,346,933) are, correctly, refused. 1,360,539 at the
@@ -156,7 +156,7 @@ class SwapViewModelTest {
     private val unsignedBytes: ByteArray = Base64.getDecoder().decode(unsignedBase64)
     /**
      * What a wallet hands back: the same message, with the seeker's signature in its slot (slot 0,
-     * the taker pays). The swap machine now compares the two before /execute (judges' review,
+     * the taker pays). The swap machine now compares the two before /execute (mock judges' review,
      * 2026-09-26), so an arbitrary byte string no longer stands in for a signed transaction.
      */
     private val signedBytes: ByteArray = signAsSeeker(unsignedBytes)
@@ -223,7 +223,7 @@ class SwapViewModelTest {
         secondSource: com.plainticker.mobile.repo.SecondSource = FakeSecondSource(),
         prices: com.plainticker.mobile.repo.PriceRepository = tslaxPriced(),
         /**
-         * Taps "Continue to wallet" whenever the machine stops at Review (judges' review,
+         * Taps "Continue to wallet" whenever the machine stops at Review (mock judges' review,
          * 2026-09-27), so the tests written before that step still drive a whole attempt. The
          * tests about Review itself pass false and tap it themselves.
          */
@@ -551,7 +551,7 @@ class SwapViewModelTest {
             assertEquals(0.586, landed.quote.routeCostPct!!, 0.001)
             assertTrue(landed.routeCostPaidPct!! < landed.quote.routeCostPct!!)
             assertEquals(0.549, landed.routeCostPaidPct!!, 0.001)
-            // All-in adds the SOL this wallet pays, at the SOL price read with the quote (judges'
+            // All-in adds the SOL this wallet pays, at the SOL price read with the quote (mock judges'
             // review, 2026-09-27): 5,000 + 395 + 1,488,440 lamports at SOL_USD, over 5 dollars in,
             // the fees as the bytes set them (security review, 2026-09-27).
             assertEquals(SOL_USD, landed.quote.solUsd!!, 0.0)
@@ -875,7 +875,7 @@ class SwapViewModelTest {
         }
     }
 
-    // ---- Review: nothing is asked of the wallet before Continue (judges' review, 2026-09-27) ------
+    // ---- Review: nothing is asked of the wallet before Continue (mock judges' review, 2026-09-27) ------
 
     @Test
     fun `the machine stops at Review after every check, and the wallet opens only on Continue`() = runTest {
@@ -1038,7 +1038,7 @@ class SwapViewModelTest {
 
     @Test
     fun `an order declaring a negative fee is refused before Review, whatever its fields add up to`() = runTest {
-        // The judges' counterexample: priority 1,000,000,000, signature -999,995,000, rent 0 adds
+        // The mock judges' counterexample: priority 1,000,000,000, signature -999,995,000, rent 0 adds
         // up to the 5,000 lamports a sheet would show, while the transaction could charge a SOL.
         orderResponse = orderResponse
             .replace(""""signatureFeeLamports": 5000""", """"signatureFeeLamports": -999995000""")
@@ -1080,7 +1080,7 @@ class SwapViewModelTest {
         }
     }
 
-    // ---- Unpriced tokens: check whether a route exists (judges' review, 2026-09-27) ---------------
+    // ---- Unpriced tokens: check whether a route exists (mock judges' review, 2026-09-27) ---------------
 
     @Test
     fun `checking availability on an unpriced token with an executable order reaches Review, marked unpriced`() = runTest {
@@ -1361,7 +1361,7 @@ class SwapViewModelTest {
     }
 
     /**
-     * Judges' review, 2026-09-27: without a SOL price the SOL costs cannot be priced, so nothing is
+     * Mock judges' review, 2026-09-27: without a SOL price the SOL costs cannot be priced, so nothing is
      * called all-in; the route's cost stands under its own name, and the swap is not held up.
      */
     @Test
@@ -1402,7 +1402,7 @@ class SwapViewModelTest {
     }
 
     /**
-     * Beeman, judges' review 2026-09-27: sign_transactions is optional in MWA 2.x. A wallet whose
+     * Mock judges' review 2026-09-27: sign_transactions is optional in MWA 2.x. A wallet whose
      * capabilities leave it out is told so plainly, and is never asked to sign.
      */
     @Test

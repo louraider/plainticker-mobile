@@ -42,7 +42,7 @@ class SharedPrefsPendingWatchStore(private val prefs: SharedPreferences) : Pendi
 }
 
 /**
- * Closing the loop per reader (judges' round 2): a stock the reader acted on is one they want to
+ * Closing the loop per reader (mock judges' round 2): a stock the reader acted on is one they want to
  * hear about, so the app watches it for them instead of waiting to be asked.
  *
  * - **A vote that lands** watches its ticker at once when PlainTicker already analyses it, and

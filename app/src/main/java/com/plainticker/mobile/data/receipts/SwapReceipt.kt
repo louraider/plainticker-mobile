@@ -39,7 +39,7 @@ data class SwapReceipt(
      * when the fill was not reported, or when the order priced neither side in dollars, which
      * is not the same fact as zero. Stored under its old name, `allInCostPct`, so receipts
      * written before 2026-09-27 still read: it never counted the SOL the wallet paid, which is
-     * why it is no longer called all-in (judges' review, 2026-09-27).
+     * why it is no longer called all-in (mock judges' review, 2026-09-27).
      */
     @SerialName("allInCostPct")
     val routeCostPct: Double? = null,

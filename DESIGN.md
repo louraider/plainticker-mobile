@@ -102,7 +102,7 @@ rules:
 
 Persisting the session was first declined, on the grounds that the auth token is a bearer grant
 and writing it to disk to make a screen look better is a security decision taken for a cosmetic
-reason. The judges' review (Beeman, 2026-09-26) showed the cost was not cosmetic: every launch
+reason. The mock judges' review (2026-09-26) showed the cost was not cosmetic: every launch
 asked to connect again, before anything the reader came for. What decided it is what the token
 can and cannot do. It lets this app ask the same wallet to reauthorize without a fresh consent
 prompt; it signs nothing, and every transaction still opens the wallet for the person to approve.
@@ -552,7 +552,7 @@ The shared information architecture (Today, Stocks, Vote, Portfolio, You under `
 replacing the old List/Vote/Portfolio/Watchlist tab row and a TopBar "You" action; chapters
 replacing infinite scroll on Stocks) is `docs/design-research-2026-09-21.md` section 3, and it
 shipped as drawn: `HomeScreen` hosts five peer destinations, Watchlist folded into Today's own
-"Yours" block, Stocks gained sticky sector chapters, a jump index and a wrapping filter row (both reshaped in the judges' round 2, below).
+"Yours" block, Stocks gained sticky sector chapters, a jump index and a wrapping filter row (both reshaped in the mock judges' round 2, below).
 Detail's own layout order does not change in any direction the research drew, Amber included; only
 the tokens and components under it do.
 
@@ -662,7 +662,7 @@ screen, beside the digest it delivers.
 **Stocks** (`ListScreen.kt`, mounted by `StocksScreen`) replaced an infinite scroll with search at
 the top, sticky sector chapters (`stickyHeader` items painted opaque so pinned content never shows
 scrolling rows through it) and one horizontally scrolling filter row (Deep pool, Watched, then every
-sector). Judges' round 2 (2026-09-27) removed the chapter jump rail that sat beside the list (its
+sector). Mock judges' round 2 (2026-09-27) removed the chapter jump rail that sat beside the list (its
 "Com", "Dis", "Sta" codes clipped and meant nothing to a beginner, and it narrowed every line beside
 it, the hours banner included) and replaced the wrapping `FlowRow` of chips, which grew to four rows
 and pushed the first stock below the fold. One filter active at a time: a sector chip holds one
@@ -672,7 +672,7 @@ deep rows up (`DEEP_POOL_CHIP_MIN`), or while it is the active filter.
 Plain copy on Stocks (audit 2026-09-26): the first chip reads "Deep pool 21", not "Tracked 21",
 and while it is selected one line under the chips says what it means once ("Deep pool means at
 least $4k sits in the token's trading pool, so its price follows the share closely", the floor
-formatted from `TrackingQuality.MIN_POOL_USD`). An analyzed row's figure reads "62 of 100" (judges'
+formatted from `TrackingQuality.MIN_POOL_USD`). An analyzed row's figure reads "62 of 100" (mock judges'
 round 2; it read "score 66" before, and a bare "66" before that), and one line above the rows says
 what the scale ranks against ("Each number ranks the stock against the others in its sector, from 0
 to 100."). The widest real value, "100 of 100", is 92.538dp at `figureRow`, narrower than the

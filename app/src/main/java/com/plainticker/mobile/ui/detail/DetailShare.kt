@@ -12,7 +12,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * What Detail's Share action hands the system share sheet (judges' round 2): one factual line off
+ * What Detail's Share action hands the system share sheet (mock judges' round 2): one factual line off
  * the "Backing and controls" facts this screen already read, then the stock's page on
  * plainticker.com (the site itself for a stock the web does not analyse). For example: "AAPLx:
  * issuer can move tokens (permanent delegate), reserves reported at 100.8%.

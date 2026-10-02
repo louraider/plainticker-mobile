@@ -142,7 +142,7 @@ fun DetailScreen(
     onViewPortfolio: () -> Unit,
     modifier: Modifier = Modifier,
     /**
-     * The lock's way to Pro (judges' round 2): You, Plan, with the promo code field open and
+     * The lock's way to Pro (mock judges' round 2): You, Plan, with the promo code field open and
      * focused. Null keeps the lock's sentence without the action.
      */
     onGetPro: (() -> Unit)? = null,
@@ -212,7 +212,7 @@ fun DetailScreen(
             }
         },
         // A token Jupiter has no reference price for is asked about, not promised: the same
-        // machine, whose quote answers whether a route exists (judges' review, 2026-09-27).
+        // machine, whose quote answers whether a route exists (mock judges' review, 2026-09-27).
         onSwap = {
             swapToken?.let { token ->
                 if (state.swapUnpriced) swapViewModel.checkAvailability(token) else swapViewModel.open(token)
@@ -220,7 +220,7 @@ fun DetailScreen(
         },
         // The peek's own way to Pro, beside the honest short form rather than in place of it
         // (task A6). It used to lead to Portfolio, which neither sells Pro nor takes a code; since
-        // the judges' round 2 it leads to You's Plan with the code field open.
+        // the mock judges' round 2 it leads to You's Plan with the code field open.
         onGetPro = onGetPro,
         onPull = viewModel::pull,
         modifier = modifier,
@@ -288,7 +288,7 @@ internal fun DetailContent(
                 // After the scroll, so the padding is part of the scrolled content (Insets.kt).
                 .navigationBarsPadding(),
         ) {
-            // Share beside Watch (judges' round 2): one factual line off the trust card and the
+            // Share beside Watch (mock judges' round 2): one factual line off the trust card and the
             // stock's web page, built at the tap from what this screen has read by then. Since the
             // founder's feedback of 2026-09-29 the line rides with a picture of the same facts
             // (ui/share), the text alone when the picture cannot be made.
@@ -366,7 +366,7 @@ internal fun DetailContent(
  * [DetailUiState.verdictBlock] is null in every state this screen already drew nothing extra in: no
  * analysis served, or a served payload with no `verdict` block at all. [VerdictBlock.Loading] draws
  * a skeleton the way [Hero]'s own company line does. [VerdictBlock.Locked] draws a plain lock,
- * "Pro only", where the word would be (judges' round 2: the grey placeholder bar it used to draw
+ * "Pro only", where the word would be (mock judges' round 2: the grey placeholder bar it used to draw
  * read as a page still loading, not as something a reader could get), the one sentence saying
  * where Pro comes from, and "Have a code? Get Pro", which opens You's Plan with the code field
  * ready. The real word never reached this app, so there is still nothing behind the lock to blur.
@@ -729,7 +729,7 @@ private fun TrustBlock(state: DetailUiState) {
                 // The hook cell used to be picked out here by its label, which set its "None" in
                 // mono beside neighbours in the display face (device QA of 1.3.16).
                 valueMono = fact.valueMono,
-                // The delegate's address copies whole on tap (judges' review, 2026-09-27).
+                // The delegate's address copies whole on tap (mock judges' review, 2026-09-27).
                 onTap = copied?.let {
                     { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(copyLabel, it))) } }
                 },

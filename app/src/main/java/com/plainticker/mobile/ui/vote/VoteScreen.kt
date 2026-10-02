@@ -371,7 +371,7 @@ internal fun VoteTabContent(
 internal fun ballotHeadingIndex(searchIndex: Int): Int = (searchIndex - 1).coerceAtLeast(0)
 
 /**
- * The top card (judges' round 2): the round and when it closes in the reader's own time, what a
+ * The top card (mock judges' round 2): the round and when it closes in the reader's own time, what a
  * vote from the connected wallet weighs, and one action that scrolls to the ballot. The honest
  * note on how stake decides left this tab's header for the vote sheet, where a voter reads it at
  * the moment of signing ([VoteSheetModel]'s disclosure), phrased as the roadmap it is. A 28dp

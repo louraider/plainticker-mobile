@@ -529,7 +529,7 @@ private fun TodayReportsBlock(
 }
 
 /**
- * "While New York is closed" (Toly's weekend idea): up to three covered tokens whose onchain price
+ * "While New York is closed" (the weekend idea from the mock judges' round 2): up to three covered tokens whose onchain price
  * sits furthest from their share's last US price, deep pools only, each opening its own page.
  * Drawn only while the exchange is closed ([closedBlock]), from the first frame the venue is known
  * closed: skeletons while the prices are out, one quiet line when nothing sits far. The figure is
@@ -579,7 +579,7 @@ private fun TodayClosedBlock(block: ClosedBlock, onOpenDetail: (String) -> Unit,
 
 /**
  * Next up: one row, the vote leader, the round's close in the reader's own time. With a round open
- * and nobody voted yet, the block still draws (judges' round 2): one line saying so, and the way to
+ * and nobody voted yet, the block still draws (mock judges' round 2): one line saying so, and the way to
  * Vote, because an empty round is exactly when one vote decides it. Undrawn with no round and no
  * leader, where there is nothing true to say.
  */

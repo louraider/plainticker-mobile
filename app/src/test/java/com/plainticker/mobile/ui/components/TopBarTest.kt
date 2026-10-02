@@ -121,7 +121,7 @@ class TopBarTest {
         assertTrue("the mark comes before the wordmark", source.indexOf("ic_brand_mark_tight") < source.indexOf("text = title"))
     }
 
-    // ---- Detail's Share beside Watch (judges' round 2) ------------------------------------------
+    // ---- Detail's Share beside Watch (mock judges' round 2) ------------------------------------------
 
     /**
      * "Share" is five letters to "Watching"'s eight in the same style, so "Watching"'s measured

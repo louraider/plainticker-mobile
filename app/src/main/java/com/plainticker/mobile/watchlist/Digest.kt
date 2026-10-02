@@ -226,7 +226,7 @@ data class Digest(
     val nextReport: WatchedReport?,
 ) {
     /**
-     * True when there is any line at all. The count of what is watched is no longer a line (judges'
+     * True when there is any line at all. The count of what is watched is no longer a line (mock judges'
      * round 2: a digest that opens on "1 stock watched." leads with the one thing the reader
      * already knows), so an empty digest is exactly a day with nothing to say.
      */
