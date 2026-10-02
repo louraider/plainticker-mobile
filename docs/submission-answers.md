@@ -1,7 +1,8 @@
 # Submission answers for the Align form
 
 Refreshed 2026-09-26 against build 1.3.13 and the live API; claims re-checked 2026-09-28 against
-build 1.3.21, on main and the latest release. It replaces the 18 September draft,
+build 1.3.21, and the counts and version refreshed 2026-10-02 against 1.3.27, on main and the
+latest release. It replaces the 18 September draft,
 which predated the vote going live, Pro, sign-in, the Amber redesign and the 7,500 SKR threshold.
 Every question below is verbatim from `docs/hackathon-rules-2026-09-10.md`, section 1, row
 "Submission form fields (Align)". The long-text fields are textareas with `maxLength` 5,000. Each
@@ -28,9 +29,9 @@ one changes, it changes everywhere.
 | Companies covered | 57 companies analysed on plainticker.com, 56 of them with an xStock. Each has its own full page on the web. The app lists the 56: xStocks issues no BABA token, so BABA is covered on the web only. 50 of the 56 carry a classification; ABBV, CMCSA, MA, NKE and V read Not classified (too few companies in their sector to compare fairly) and JEF waits for a sector model | the server's `covered` list (57 tickers) and `GET /api/v1/summary` (51 rows), 28 Sep |
 | xStocks with a Solana mint | 1,124 | live xStocks catalog, commit `22222ea` |
 | Ballot | 898 US-listed xStocks without an analysis (server universe: 916 US tickers) | commit `22222ea`; `GET /api/v1/vote/universe` |
-| Commits | 444 on main since 10 September | `git rev-list --count` at 1.3.21, 28 Sep |
-| Pull requests | 69 opened, 68 merged | `gh pr list --state all`, 28 Sep |
-| Unit tests | 1,967 at 1.3.21 | pull request #69, 28 Sep |
+| Commits | 503 on main since 10 September | `git rev-list --count` at 1.3.27 (`5e8b61f`), 29 Sep |
+| Pull requests | 79 opened, 78 merged | `gh pr list --state all`, by the 1.3.27 release |
+| Unit tests | 2,118 at 1.3.27 | pull request #79; CI green on `5e8b61f` |
 | Mainnet transactions from the app | 5: three swaps (13 and 24 Sep, one of them Swap to USDC), one vote, one pass | README, "Proof on mainnet" |
 | Round 1 | JEF, 878.98 SKR from one voter; its page served from 26 Sep, classification pending a sector model | `GET /api/v1/vote/next-up` (`previous`); `GET /api/v1/vote/rounds/1/ledger` |
 | Round 2 | AAL, 878.98 SKR from one voter, the demo wallet; closed 28 Sep 00:00 UTC | `GET /api/v1/vote/next-up` (`previous`), 28 Sep |
@@ -43,7 +44,7 @@ one changes, it changes everywhere.
 |---|---|---|
 | PROJECT TITLE | `PlainTicker Mobile` | Final. |
 | HAS THE TEAM AND/OR THE PROJECT RECEIVED ANY PRIOR FUNDING FROM A VENTURE CAPITAL FIRM OR ANGEL INVESTOR? | **No** | Solo founder. No equity round, SAFE, SAFT, convertible or token sale. The founder confirms it before the agreement. |
-| HAS YOUR PROJECT BEEN BUILT IN THE LAST 3 MONTHS? | **Yes** | First commit `2a92e98` on 10 September 2026; 444 commits by 28 September. The analysis engine is older, which the porting answer states. |
+| HAS YOUR PROJECT BEEN BUILT IN THE LAST 3 MONTHS? | **Yes** | First commit `2a92e98` on 10 September 2026; 503 commits by 1.3.27 on 29 September. The analysis engine is older, which the porting answer states. |
 | DECK URL | `DECK_URL` | Source: `docs/deck.md`. The founder exports it and fills in the link. |
 | DEMO VIDEO URL | `VIDEO_URL` | Script: `docs/video-script-2026-09-27.md`. Upload the caption track with the video: the platform reads the transcript, not the picture. |
 | REPOSITORY URL | `https://github.com/louraider/plainticker-mobile` | Public (checked 27 September 2026). History stays unsquashed. |
@@ -59,16 +60,16 @@ N/A. This project has not been entered in a previous hackathon and has not won o
 
 ## IF PORTING AN EXISTING APPLICATION OVER TO MOBILE, WHAT MAJOR FEATURES OR NEW SIGNIFICANT MOBILE DEVELOPMENT HAVE YOU DONE?
 
-**4,801 characters.** This is the field that applies, and the one the entry turns on.
+**4,813 characters.** This is the field that applies, and the one the entry turns on.
 
 ```text
-PlainTicker's analysis engine existed on the web before this hackathon. The Android app did not. Every line of it was written from 10 September 2026: 444 commits and 69 pull requests in the linked repository by 28 September.
+PlainTicker's analysis engine existed on the web before this hackathon. The Android app did not. Every line of it was written from 10 September 2026: 503 commits and 79 pull requests in the linked repository by 29 September.
 
 What was reused. www.plainticker.com classifies US companies from their SEC EDGAR filings against their sector by a fixed rule: quality, valuation, momentum and the F-Score. That engine, its database and its cron are the backend. No screen and no line of web UI was ported. The web product has no chain read, no swap and no notification.
 
 What is new, all of it mobile:
 
-1. A native Kotlin and Jetpack Compose app for the Seeker with five tabs: Today, Stocks, Vote, Portfolio and You. Dark and light themes, 1,967 unit tests, version 1.3.21.
+1. A native Kotlin and Jetpack Compose app for the Seeker with five tabs: Today, Stocks, Vote, Portfolio and You. Dark and light themes, 2,118 unit tests, version 1.3.27.
 
 2. Mobile Wallet Adapter 2.2 and the Seed Vault for every signature: swaps, votes and the Pro pass. Every way the wallet round trip can end is handled as its own state; backing out of the connect sheet ends as cancelled within seconds. The release certificate is published in plainticker.com's assetlinks.json, so the Seed Vault Wallet names the app www.plainticker.com before anything is approved.
 
@@ -92,12 +93,12 @@ Proof on mainnet, all made by the app on a Seeker from the public demo wallet 9g
 - 24 Sep, Swap to USDC of the whole TSLAx position: 3pwPVFXG...BuT6xkm
 The full signatures are in the README.
 
-What is not finished. Every transaction so far is the founder's own testing. Coverage is 57 companies analysed on plainticker.com, 56 of them with an xStock, against 1,124 xStocks, and six of the 56 have no classification yet. The app is not yet listed on the dApp Store; the publisher account, KYC and the signing chain are done, and the first submission is targeted for 1 October.
+What is not finished. Every transaction so far is the founder's own testing. Coverage is 57 companies analysed on plainticker.com, 56 of them with an xStock, against 1,124 xStocks, and six of the 56 have no classification yet. The app is not yet listed on the dApp Store; the publisher account, KYC and the signing chain are done, and the first submission, built from 1.3.27, is being prepared.
 ```
 
 ## IF NO, WHAT MAJOR FEATURES OR NEW SIGNIFICANT MOBILE DEVELOPMENT HAVE YOU DONE?
 
-**2,470 characters.** The porting field above is the one that applies. This field carries
+**2,482 characters.** The porting field above is the one that applies. This field carries
 the product side, which has no field of its own: access, the business model and go-to-market.
 Counted with the placeholder `PROMO_CODES` in place; replace it with the codes, comma-separated
 (each `PT-XXXX-XXXX-XXXX` is 17 characters), which leaves the answer far inside the cap.
@@ -112,7 +113,7 @@ Who it is for. Seeker owners who hold, or are about to hold, xStocks. Their wall
 Business model. Free: every stock page, the chain facts, Today, the digest and the vote, and AAPL in full. Pro opens every figure on every covered stock, for 12 USDC per 30 days paid from the wallet, or for as long as 7,500 SKR stays staked. The pass has already been paid once on mainnet (20 September). Accounts are shared with plainticker.com: the app signs in with Google, the web also with a wallet, and Pro bought on either counts on both for the same account.
 
 Go-to-market. The wedge is Seeker owners holding xStocks: people who already have the phone, the wallet and USDC, and no analysis for the tokenized stocks they can already swap. Three channels:
-1. The Solana dApp Store, where tokenized-stock research is a new category. The publisher account and KYC are cleared, the listing copy is written, and the first submission is targeted for 1 October.
+1. The Solana dApp Store, where tokenized-stock research is a new category. The publisher account and KYC are cleared, the listing copy is written, and the first submission, built from 1.3.27, is being prepared.
 2. SKR stakers as the vote community. 46,436 wallets stake SKR. Each weekly round gives them a reason to open the app and ends in a public result: the winning stock is analysed and announced.
 3. plainticker.com, which serves the same engine on the web and shares the account and Pro.
 
