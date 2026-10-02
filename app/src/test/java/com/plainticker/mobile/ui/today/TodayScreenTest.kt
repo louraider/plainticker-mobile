@@ -165,7 +165,7 @@ class TodayScreenTest {
         val fn = body("private fun TodayNextUpBlock(", "private fun TodayHoursSheet(")
         assertTrue("if (leader == null && round == null) return" in fn)
         assertTrue("nextUpLede(round, zone, state.nowMillis)" in fn)
-        // An open round nobody voted in still draws (judges' round 2), with the way to Vote.
+        // An open round nobody voted in still draws (mock judges' round 2), with the way to Vote.
         val empty = fn.substringAfter("} else if (round != null) {")
         assertTrue("the empty-round sentence", "nextUpEmpty(round)" in empty)
         assertTrue("and the action to Vote", "onClick = onOpenVote" in empty)

@@ -21,7 +21,7 @@ import java.math.RoundingMode
  *    once (server/vote/README.md). None of the three is ever collapsed into a bare "Pro" badge.
  * 2. **A stake is a figure, never a verdict.** At or above the entitlement threshold the sentence
  *    states what this wallet has staked and stops there. Below it, on a device that is not Pro
- *    yet, it also says how much more stake opens Pro (Akshay, judges' round 2, 2026-09-27): a
+ *    yet, it also says how much more stake opens Pro (mock judges' round 2, 2026-09-27): a
  *    distance to the server's own published threshold, [PRO_STAKE_THRESHOLD_RAW], never a word
  *    about whether the wallet is good or bad.
  */

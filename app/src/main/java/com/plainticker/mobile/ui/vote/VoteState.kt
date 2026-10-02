@@ -194,7 +194,7 @@ enum class VoteRefusal(@StringRes val text: Int, val retryable: Boolean = false)
     UNAVAILABLE(R.string.vote_unavailable, retryable = true),
 
     /**
-     * The server built a vote and [TransactionGuard] refused it before the wallet saw it (judges'
+     * The server built a vote and [TransactionGuard] refused it before the wallet saw it (mock judges'
      * review, 2026-09-27). The sheet states [VoteState.Refused.why] in plain words.
      */
     GUARD_REFUSED(R.string.guard_refused_not_this_request, retryable = true),

@@ -482,7 +482,7 @@ class TransactionGuardTest {
         assertRefused(checkSwap(o, onlyBudget.transaction(), c.taker), "no Jupiter")
     }
 
-    // ---- Swap output, read from the bytes (judges' review, 2026-09-26) --------------------
+    // ---- Swap output, read from the bytes (mock judges' review, 2026-09-26) --------------------
 
     private val jupiterPrograms = setOf(KnownPrograms.JUPITER_AGGREGATOR_V6, KnownPrograms.JUPITER_RFQ)
 
@@ -598,7 +598,7 @@ class TransactionGuardTest {
         }
     }
 
-    // ---- System instructions, by tag (judges' review, 2026-09-26) -------------------------
+    // ---- System instructions, by tag (mock judges' review, 2026-09-26) -------------------------
 
     private val nonceAccount = "9fX7DHqX5nFzV1aNAKZsfFnbHRyBn2VgXNiMGrbKV1CM"
     private val recentBlockhashes = "SysvarRecentB1ockHashes11111111111111111111"
@@ -679,7 +679,7 @@ class TransactionGuardTest {
         }
     }
 
-    // ---- Token account creates, fees, slippage and the pass price (judges' review, 2026-09-27) ----
+    // ---- Token account creates, fees, slippage and the pass price (mock judges' review, 2026-09-27) ----
 
     private class Create(val accounts: List<String>, val data: ByteArray)
 

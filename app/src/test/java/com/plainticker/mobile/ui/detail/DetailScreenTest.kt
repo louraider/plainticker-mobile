@@ -297,7 +297,7 @@ class DetailScreenTest {
         assertTrue("the degraded state has no preview", "DetailDegradedPreview" in scan.code)
     }
 
-    // ---- The Pro lock (judges' round 2) -------------------------------------------------------
+    // ---- The Pro lock (mock judges' round 2) -------------------------------------------------------
 
     @Test
     fun `a locked classification draws a Pro lock and a way in, not a grey loading bar`() {

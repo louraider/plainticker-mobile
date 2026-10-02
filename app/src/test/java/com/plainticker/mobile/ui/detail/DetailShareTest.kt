@@ -9,7 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
-/** Detail's Share line (judges' round 2): facts the screen read, the web page, nothing else. */
+/** Detail's Share line (mock judges' round 2): facts the screen read, the web page, nothing else. */
 class DetailShareTest {
 
     private val asset = xStock("AAPLx", "AAPL", "mint-AAPL")

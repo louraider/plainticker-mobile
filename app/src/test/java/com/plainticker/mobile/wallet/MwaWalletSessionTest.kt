@@ -13,7 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The wallet session across process death (judges' review, 2026-09-26): restored at launch for
+ * The wallet session across process death (mock judges' review, 2026-09-26): restored at launch for
  * display and reads, reauthorized with the saved token when the wallet is needed, one fresh
  * authorize when the wallet rejects that token, and nothing left on the phone after Disconnect.
  *

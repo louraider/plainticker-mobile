@@ -45,7 +45,7 @@ interface MintRepository {
  * Straight through the forwarder, which already caches 60 s per (method, params) server-side, so
  * this adds no cache of its own: a second open of the same Detail screen costs an edge hit, and
  * the slot it reports stays the slot the node actually answered at. The age of a cached answer
- * comes back in [MintReading.rpcAgeSeconds], so "read N s ago" counts it (Mert, judges' review
+ * comes back in [MintReading.rpcAgeSeconds], so "read N s ago" counts it (mock judges' review
  * 2026-09-27: "8 s ago" ignored the forwarder's 60 s cache).
  */
 class ForwarderMintRepository(

@@ -176,7 +176,7 @@ class PortfolioModelTest {
 
         assertEquals(Copy.Words(R.string.portfolio_row_quantity, listOf("5", "USDC")), row.paid)
         assertEquals(Copy.Words(R.string.portfolio_swap_row_received, listOf("0.01364", "TSLAx")), row.received)
-        // A receipt with no SOL priced in has the route's cost, and says route (judges' review, 2026-09-27).
+        // A receipt with no SOL priced in has the route's cost, and says route (mock judges' review, 2026-09-27).
         assertEquals(Copy.Words(R.string.portfolio_swap_route_cost, listOf("0.09%")), row.cost)
         assertEquals(Copy.Raw("10 Sep 2026 12:57"), row.landed)
     }

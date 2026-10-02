@@ -123,7 +123,7 @@ class TransactionGuardReverseTest {
 
     /**
      * Why wrapped SOL and the route's own hops are among the mints a swap may open an account for
-     * (judges' review, 2026-09-27): both real reverse orders open the taker's own wrapped-SOL
+     * (mock judges' review, 2026-09-27): both real reverse orders open the taker's own wrapped-SOL
      * account, route through it, and close it back to the taker, and the default route
      * (TSLAx, then pool token Bjc..., then SOL, then USDC) also opens the taker's own account for
      * the pool token its route plan names. Input and output alone would refuse a real swap.
@@ -314,7 +314,7 @@ class TransactionGuardReverseTest {
         )
     }
 
-    // ---- The output, read from the bytes (judges' review, 2026-09-26) ----------------------
+    // ---- The output, read from the bytes (mock judges' review, 2026-09-26) ----------------------
 
     private fun u64At(d: ByteArray, at: Int) =
         java.nio.ByteBuffer.wrap(d, at, 8).order(java.nio.ByteOrder.LITTLE_ENDIAN).long

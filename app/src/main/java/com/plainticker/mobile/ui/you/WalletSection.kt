@@ -32,7 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * You's "Wallet" group (judges' round 2, 2026-09-27). The Solana wallet row used to sit under
+ * You's "Wallet" group (mock judges' round 2, 2026-09-27). The Solana wallet row used to sit under
  * "Sign-in methods", beside Google, and a judge read that as a claim of wallet sign-in the app does
  * not make: this row is a Mobile Wallet Adapter connection that signs swaps, votes and Pro
  * payments, not a way into an account. So it is a group of its own now, and Sign-in methods keeps

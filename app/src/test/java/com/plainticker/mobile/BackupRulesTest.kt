@@ -13,7 +13,7 @@ import org.w3c.dom.Element
 
 /**
  * The files that act as credentials never leave the phone in a backup or a device transfer
- * (judges' review, 2026-09-26): the preferences file that keeps the device's Pro code, sent raw
+ * (mock judges' review, 2026-09-26): the preferences file that keeps the device's Pro code, sent raw
  * in X-PT-Code; the signed-in account's DataStore; the saved wallet session. The expected names
  * come from the constants the app writes those files under, so renaming one without its rule
  * fails here.

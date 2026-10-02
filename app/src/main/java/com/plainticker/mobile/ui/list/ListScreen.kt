@@ -85,7 +85,7 @@ import java.time.LocalDate
  * Stocks (docs/design-research-2026-09-21.md section 3): the founder's original complaint, a
  * ticker list scrolled forever, given a top a reader can move through with intent instead. Search
  * at the top, then sticky sector chapters under one horizontally scrolling filter row (Deep pool,
- * Watched, sector; the chapter jump rail was removed in the judges' round 2), roughly 160 analyzed rows chaptered and roughly 670 uncovered ones
+ * Watched, sector; the chapter jump rail was removed in the mock judges' round 2), roughly 160 analyzed rows chaptered and roughly 670 uncovered ones
  * reachable only by search, exactly as the research draws it (section 3, "The list becomes
  * Stocks"). This file is still named `ListScreen` because [com.plainticker.mobile.ui.stocks.StocksScreen]
  * mounts it unchanged as the seam a shell pass left behind; nothing else composes it.
@@ -228,7 +228,7 @@ internal fun ListContent(
         state.analyzed.filter { it.matchesStocksFilter(activeFilter, state.watchedTickers) }.chapteredBySector()
     }
 
-    // No jump rail beside the list any more (judges' round 2, 2026-09-27): its "Com", "Dis", "Sta"
+    // No jump rail beside the list any more (mock judges' round 2, 2026-09-27): its "Com", "Dis", "Sta"
     // codes clipped and meant nothing to a first-time reader, and it took 48dp off every line,
     // the hours banner included. The list takes the full width; a sector chip narrows to one sector.
     // The prices notice is not in the chrome's banner slot (fresh-device QA of 1.3.24, B5): it can
@@ -436,7 +436,7 @@ private fun StocksChrome(
         }
         if (sectors.isEmpty() && cold) ColdFilterRow(colors = colors)
         // What the number on every analyzed row means, said once above the rows rather than
-        // squeezed beside each one (judges' round 2: a bare "score 62" told a beginner nothing).
+        // squeezed beside each one (mock judges' round 2: a bare "score 62" told a beginner nothing).
         if (state.query.isBlank() && (state.analyzed.isNotEmpty() || cold)) {
             Text(
                 text = stringResource(R.string.list_row_score_legend),
@@ -485,7 +485,7 @@ private fun ColdFilterRow(colors: AmberColors) {
 /**
  * The filter row (docs/design-research-2026-09-21.md section 3): Deep pool and Watched first, then
  * every sector, in one horizontally scrolling row. It used to be a [androidx.compose.foundation.layout.FlowRow]
- * that wrapped to four rows of chips and pushed the first stock below the fold (judges' round 2,
+ * that wrapped to four rows of chips and pushed the first stock below the fold (mock judges' round 2,
  * 2026-09-27); a row the reader can swipe costs one line of height, and the chip cut off at the
  * screen edge is itself the sign that more follow. The padding sits inside the scroll, so the
  * first chip lines up with the search field and the last one can scroll clear of the edge.
@@ -652,7 +652,7 @@ private fun AnalyzedRow(
     onOpenDetail: (String) -> Unit,
     pricesPending: Boolean = false,
 ) {
-    // "62 of 100", not "score 62" (judges' round 2, 2026-09-27): a bare "score" named no scale.
+    // "62 of 100", not "score 62" (mock judges' round 2, 2026-09-27): a bare "score" named no scale.
     // What the scale ranks against, the sector, is said once above the rows
     // (list_row_score_legend). Widest real value "100 of 100", figureRow 18sp/600 tnum: 92.538dp
     // at 1.0x, 120.299dp at 1.3x (fontTools, AmberTickerRowTest), still under the price figure.

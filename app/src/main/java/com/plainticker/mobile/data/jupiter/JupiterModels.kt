@@ -93,7 +93,7 @@ data class SwapOrder(
     /**
      * What the route cost: dollars in against dollars out, fees Jupiter takes from the tokens
      * included. Not all-in: the SOL the wallet pays (signature, priority, token account rent) is
-     * outside it, and the swap sheet adds it at the SOL price (judges' review, 2026-09-27).
+     * outside it, and the swap sheet adds it at the SOL price (mock judges' review, 2026-09-27).
      */
     val routeCostPct: Double
         get() = if (inUsdValue > 0) (inUsdValue - outUsdValue) / inUsdValue * 100.0 else 0.0

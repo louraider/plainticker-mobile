@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Beeman, judges' review 2026-09-27: sign_transactions is optional in MWA 2.x. */
+/** Mock judges' review 2026-09-27: sign_transactions is optional in MWA 2.x. */
 class SwapWalletCapabilitiesTest {
 
     @Test

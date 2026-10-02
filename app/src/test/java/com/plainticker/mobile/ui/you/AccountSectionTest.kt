@@ -58,7 +58,7 @@ class AccountSectionTest {
         // in this file. The rule holds more strictly now: the hero is the only place You draws a
         // fill (Sign in with Google is its AmberPrimaryAction when there is no identity), and this
         // group's Sign in and Sign out, and the Wallet group's Connect and Disconnect (their own
-        // group since the judges' round 2), are all text actions.
+        // group since the mock judges' round 2), are all text actions.
         val code = sectionScan.code
         assertEquals("no filled action in the section", 0, code.split("AmberPrimaryAction(").size - 1)
         assertEquals("no filled action in the wallet group", 0, walletScan.code.split("AmberPrimaryAction(").size - 1)
@@ -127,7 +127,7 @@ class AccountSectionTest {
         assertTrue("copy spelled in Kotlin: $sentences", sentences.isEmpty())
     }
 
-    // ---- The Wallet group (judges' round 2) --------------------------------------------------
+    // ---- The Wallet group (mock judges' round 2) --------------------------------------------------
 
     @Test
     fun `the phone's wallet connection is its own group, not a sign-in method`() {

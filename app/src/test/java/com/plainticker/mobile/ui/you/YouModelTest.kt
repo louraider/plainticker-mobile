@@ -426,7 +426,7 @@ class YouModelTest {
         assertTrue(terms.contains("SIL Open Font License 1.1"))
     }
 
-    // ---- About's links (judges' round 2) ------------------------------------------------------
+    // ---- About's links (mock judges' round 2) ------------------------------------------------------
 
     @Test
     fun `about links name plainticker's own privacy, terms and account deletion pages`() {

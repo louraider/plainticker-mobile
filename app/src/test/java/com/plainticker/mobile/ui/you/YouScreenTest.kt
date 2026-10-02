@@ -143,7 +143,7 @@ class YouScreenTest {
         assertTrue("runCatching {" in body("fun YouScreen(", "internal fun YouContent("))
     }
 
-    // ---- Have a code? (judges' round 2) ---------------------------------------------------------
+    // ---- Have a code? (mock judges' round 2) ---------------------------------------------------------
 
     @Test
     fun `have a code is the plan group's first row, in full action colour`() {

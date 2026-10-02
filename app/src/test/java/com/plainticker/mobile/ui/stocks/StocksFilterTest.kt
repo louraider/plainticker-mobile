@@ -90,7 +90,7 @@ class StocksFilterTest {
         assertEquals(StocksFilter.Sector("Watched"), stocksFilterFromSaveKey("Watched"))
     }
 
-    // ---- showsDeepPoolChip (judges' round 2: hide "Deep pool" under five) ------------------
+    // ---- showsDeepPoolChip (mock judges' round 2: hide "Deep pool" under five) ------------------
 
     @Test
     fun `the Deep pool chip is hidden while fewer than five rows have a deep pool`() {

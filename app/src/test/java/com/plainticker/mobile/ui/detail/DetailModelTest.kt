@@ -387,7 +387,7 @@ class DetailModelTest {
         assertEquals(2, cells.last().span)
     }
 
-    // ---- Chain supply and the delegate's address (judges' review, 2026-09-27) ------------------
+    // ---- Chain supply and the delegate's address (mock judges' review, 2026-09-27) ------------------
 
     private fun chainWithSupply(supplyRaw: Long, multiplier: Double = 1.0) = Piece.Ready(
         ChainRead(
@@ -1087,7 +1087,7 @@ class DetailModelTest {
     }
 
     /**
-     * Device QA of 1.3.17: JEFx and AALx, where Jupiter has no price. Judges' review, 2026-09-27: a
+     * Device QA of 1.3.17: JEFx and AALx, where Jupiter has no price. Mock judges' review, 2026-09-27: a
      * missing reference price is not a missing route, so the button is not switched off; it asks
      * "Check swap availability" and the quote answers, with the reason in one line under it.
      */

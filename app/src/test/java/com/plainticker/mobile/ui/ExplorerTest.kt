@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Mert, judges' review 2026-09-27: explorer links, and nothing but a signature or an address in them. */
+/** Mock judges' review 2026-09-27: explorer links, and nothing but a signature or an address in them. */
 class ExplorerTest {
 
     private val signature = "4xQm7gW2kP9vB1cD3eF5hJ6kL7mN8pQ9rS1tU2vW3xY4zA5bC6dE7fG8hJ9kL1mN2pQ3rS4tU5vW6xY7z5oVtHe"

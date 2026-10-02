@@ -140,7 +140,7 @@ class VoteScreenTest {
             .substringBefore(") : OnTicker")
         // The ticker it is about, what a reader calls it, one of this app's own reasons, and, for a
         // guard refusal, the guard's own plain category (TransactionGuard.Why, an enum as well,
-        // judges' review 2026-09-27). No field is a string, so there is nowhere for a server
+        // mock judges' review 2026-09-27). No field is a string, so there is nowhere for a server
         // sentence to travel.
         val fields = Regex("""val (\w+):\s*(\w+)""").findAll(refused).map { it.groupValues[1] to it.groupValues[2] }
         assertEquals(
@@ -268,7 +268,7 @@ class VoteScreenTest {
             setOf("vote_tab_explainer_what", "vote_tab_explainer_how"),
             ids,
         )
-        // Judges' round 2: the stake note moved to the vote sheet, at the moment of signing, as a
+        // Mock judges' round 2: the stake note moved to the vote sheet, at the moment of signing, as a
         // roadmap. The tab itself no longer carries it anywhere.
         assertFalse("the stake note is said on the sheet, not over the tab", "vote_gameable" in voteTabScreen)
         assertTrue("it is still said where a voter signs", "R.string.vote_gameable" in source("ui/vote/VoteSheetModel.kt"))
@@ -482,7 +482,7 @@ class VoteScreenTest {
         return source.substring(start, end)
     }
 
-    // ---- The top card (judges' round 2) -------------------------------------------------------
+    // ---- The top card (mock judges' round 2) -------------------------------------------------------
 
     @Test
     fun `the round card leads the open tab with close time, stake and the vote action, then leaders`() {

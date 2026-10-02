@@ -12,7 +12,7 @@ import com.plainticker.mobile.ui.vote.VoteViewModel
  * rewritten, exactly as it was under the old List tab. [ListScreen] itself is untouched: sector
  * chapters, the search field and the "Next up" strip under "Without analysis" all still work
  * unchanged. This file is the seam, not new content: the filter row lives in [ListScreen]
- * (a chapter jump index was built there and removed again in the judges' round 2).
+ * (a chapter jump index was built there and removed again in the mock judges' round 2).
  */
 @Composable
 fun StocksScreen(

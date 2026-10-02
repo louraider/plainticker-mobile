@@ -171,7 +171,7 @@ fun pastVotesFor(receipts: List<VoteReceipt>, round: VoteRound?, connectedVoter:
 }
 
 /**
- * The connected wallet's own stake, the one figure the Vote tab's top card leads with (judges'
+ * The connected wallet's own stake, the one figure the Vote tab's top card leads with (mock judges'
  * round 2: the vote action and the weight it carries belong at the top, not under an explainer).
  * Read the same way the vote sheet reads it ([com.plainticker.mobile.data.rpc.SkrStakeBound]), so
  * the card and the sheet cannot disagree about what a vote from this wallet weighs.

@@ -172,7 +172,7 @@ enum class UnlinkFailure {
  * 1. [fetchServerNonce] asks the server for a nonce before the sheet opens. The server requires
  *    it (GOOGLE_SIGNIN_NONCE_REQUIRED in production), so a fetch that fails for any reason ends
  *    the attempt on [AccountMessage.NONCE_UNAVAILABLE] before Google is asked anything; there is
- *    no local fallback (judges' review, 2026-09-26);
+ *    no local fallback (mock judges' review, 2026-09-26);
  * 2. that nonce goes into the Google request;
  * 3. the token that comes back must carry that same nonce, or it is refused here;
  * 4. the token goes to `POST /api/v1/auth/google` with this device's code in `X-PT-Code`, and the

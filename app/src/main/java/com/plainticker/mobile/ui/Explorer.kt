@@ -12,7 +12,7 @@ import com.plainticker.mobile.ui.components.TextAction
 
 /**
  * Links to a public explorer, so a person can check on the chain what this app says happened
- * (Mert, judges' review 2026-09-27: "explorer links"). Solscan, because it reads Token-2022 and
+ * (mock judges' review 2026-09-27: "explorer links"). Solscan, because it reads Token-2022 and
  * v0 transactions and names xStock mints.
  *
  * Only a transaction signature or a public address ever goes into the URL, and only one that is

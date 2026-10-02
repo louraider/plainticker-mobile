@@ -147,7 +147,7 @@ class SwapViewModel(
     /**
      * "Check swap availability": USDC into a [token] Jupiter has no reference price for. The same
      * machine; the leg carries [SwapLeg.unpriced], so a refused order reads as no route and an
-     * executable one reaches Review with the value check's limit stated (judges' review,
+     * executable one reaches Review with the value check's limit stated (mock judges' review,
      * 2026-09-27).
      */
     fun checkAvailability(token: SwapToken) = openLeg(SwapLeg.into(token, unpriced = true))
@@ -460,7 +460,7 @@ class SwapViewModel(
             // price the app shows, within SwapTrust.VALUE_BOUND. Swap to USDC only: the other
             // direction spends USDC, whose decimals are pinned in SwapLeg.USDC.
             //
-            // The SOL price the all-in cost needs (judges' review, 2026-09-27) is a call of its own,
+            // The SOL price the all-in cost needs (mock judges' review, 2026-09-27) is a call of its own,
             // started here beside the value check and bounded by [PRICE_TIMEOUT_MS]: slow, refused
             // or unpriced, it costs the all-in figure and never the swap, and the sheet then says
             // "Route cost". The value check keeps its own call, exactly as before that change: the
@@ -545,7 +545,7 @@ class SwapViewModel(
 
             // ---- AwaitingWallet: the round-trip this product rests on.
             _state.value = SwapState.AwaitingWallet(leg, funds, input, quote, requote, timing)
-            // sign_transactions is optional in MWA 2.x (judges' review, 2026-09-27): the wallet's
+            // sign_transactions is optional in MWA 2.x (mock judges' review, 2026-09-27): the wallet's
             // capabilities are read in the same session, after it authorized and before anything
             // is asked of it, and a wallet that says it only signs by sending is told so plainly
             // instead of failing the request with a generic error.
@@ -589,7 +589,7 @@ class SwapViewModel(
                 return fail(leg, funds, input, SwapFailure.WALLET_CHANGED, quote, requote, timing)
             }
 
-            // ---- What the wallet handed back passes the guard too (judges' review, 2026-09-26).
+            // ---- What the wallet handed back passes the guard too (mock judges' review, 2026-09-26).
             // The guard checked the bytes this app gave the wallet; /execute sends the bytes the
             // wallet gave back. A wallet may set its own priority fee or add assertions before it
             // signs (Seed Vault did, 2026-09-29), so the signed bytes are read in full against the

@@ -1,6 +1,6 @@
 # Demo video: script of record
 
-Written 2026-09-27 and updated 2026-09-28 for build 1.3.21, on main and the latest release. It replaces
+Written 2026-09-27, updated 2026-09-28 for build 1.3.21 and 2026-10-02 for build 1.3.27, on main and the latest release. It replaces
 `docs/video-script-2026-09-15.md`, which was written before the redesign, before the vote went live and before Pro existed.
 
 **One person's day on the current app,** filmed on a Seeker, screen capture with voice-over.
@@ -38,6 +38,9 @@ end of this document.
   (`9g3mxMEfDhkX1VuNUgmuZFRj4RDiRt6CTvGUPPumUFoQ`), which holds USDC, SOL and staked SKR.
 - Check before the first take: the demo wallet holds at least 2 USDC and 0.01 SOL, it still has
   SKR staked, and You shows Pro (the pass runs to 20 October; otherwise redeem a promo code).
+  Since 1.3.27 Pro belongs to the Google account: signing in moves the phone's pass or promo days
+  to the demo account, and signing out removes Pro from the phone, so do not sign out between
+  takes.
 - Watch one stock at least a day ahead, so a real digest notification exists and Today has a
   Watched row. Pick a watched stock with a report inside the next two weeks if possible.
 - Film on or after **28 September**, when round 3 opens. Since round 2 closed on 28 September,
@@ -193,7 +196,7 @@ Re-read these against the app before recording, and change the line rather than 
   price* (during the session it reads *NYSE price*): the share's latest US trade from Jupiter,
   which moves before the open and after the close. It is not the NYSE
   close, so no line calls it the close.
-- **Shot 4, the Review step:** Review and **Continue to wallet** are in 1.3.21, and the spoken
+- **Shot 4, the Review step:** Review and **Continue to wallet** are in 1.3.27, and the spoken
   line names them. Hold Review long enough to read the network fee and the "Up to" deposit.
 - **Shot 5b:** the Jefferies line is true of round 1 whatever *Last round* shows, because it names
   the round. "Waits for a sector model" is true while JEFx's page reads *Unavailable* with the
@@ -203,7 +206,7 @@ Re-read these against the app before recording, and change the line rather than 
   wallet has voted yet" for 0. Round 3 opens 28 September 00:00 UTC and closes 5 October 00:00
   UTC, so film after it opens. "Round one had one voter, me" is true of round 1 (the round-1
   ledger lists one vote).
-- If a digest, a label or a screen changes after 1.3.21 before filming, the spoken line follows the
+- If a digest, a label or a screen changes after 1.3.27 before filming, the spoken line follows the
   build that is filmed.
 
 ## If it runs long, cut in this order

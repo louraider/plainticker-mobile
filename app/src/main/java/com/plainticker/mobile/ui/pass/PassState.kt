@@ -112,7 +112,7 @@ enum class PassRefusal(@StringRes val text: Int, val retryable: Boolean = false)
 
     /**
      * The server built a transfer and [TransactionGuard] refused it before the wallet saw it
-     * (judges' review, 2026-09-27). Not [UNAVAILABLE]: the server did answer. The sheet states
+     * (mock judges' review, 2026-09-27). Not [UNAVAILABLE]: the server did answer. The sheet states
      * [PassState.Refused.why] in plain words; [text] is the fallback when it is missing.
      */
     GUARD_REFUSED(R.string.guard_refused_not_this_request, retryable = true),

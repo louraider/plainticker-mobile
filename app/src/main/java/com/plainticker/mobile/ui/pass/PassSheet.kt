@@ -132,7 +132,7 @@ internal fun ColumnScope.PassSheetBody(
 
     content.notice?.let { Sentence(it.text(), colors.textSecondary, NoticeTop) }
 
-    // The landed payment on a public explorer (judges' review, 2026-09-27).
+    // The landed payment on a public explorer (mock judges' review, 2026-09-27).
     content.signature?.let {
         SolscanAction(signature = it, color = colors.actionText, modifier = Modifier.padding(start = Side, top = NoticeTop))
     }

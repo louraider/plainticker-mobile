@@ -8,7 +8,7 @@ import java.math.BigInteger
  * [TransactionGuard].
  *
  * The sheet shows [shownRaw] as "at least"; the guard reads `route_v2`'s own quoted amount and
- * slippage out of the instruction bytes and requires [of] of those to be no lower (judges'
+ * slippage out of the instruction bytes and requires [of] of those to be no lower (mock judges'
  * review, 2026-09-26). One function for both sides, so the figure the reader sees and the figure
  * the bytes are held to can never drift apart through two roundings.
  */

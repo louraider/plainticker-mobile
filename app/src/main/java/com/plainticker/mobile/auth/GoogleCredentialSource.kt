@@ -52,7 +52,7 @@ sealed interface GoogleCredentialResult {
  * token that came back carries it. `AccountViewModel.fetchServerNonce` asks the server for this
  * value before the sheet opens (docs/google-sign-in.md, "The nonce"), and without it no sign-in
  * starts: the local fallback [create] once provided is gone, because the server now requires its
- * own nonce (judges' review, 2026-09-26). This object's own [matches] check still runs: it
+ * own nonce (mock judges' review, 2026-09-26). This object's own [matches] check still runs: it
  * refuses a token whose `nonce` claim is not the one just asked for, which keeps a token minted
  * for some other request out of this flow regardless of what the server does with its copy. The
  * claim is read without verifying the signature: that is the server's job, and this check only

@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
  * web cabinet's own group of the same name): the Google account, then the wallets the server
  * returned as linked to that account, if any. The phone's own Solana wallet connection is not a
  * sign-in method (it is a Mobile Wallet Adapter session that signs transactions), so since the
- * judges' round 2 it is its own group, [WalletSection].
+ * mock judges' round 2 it is its own group, [WalletSection].
  *
  * - **Google**: the email with Sign out, or "Not signed in" with Sign in, or "Signing in". Sign
  *   out is a two-step inline confirm (the web cabinet's rule for anything that drops a link):

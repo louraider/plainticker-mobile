@@ -60,7 +60,7 @@ import java.util.Locale
  *     figures, so it is reviewed and approved again, and the state says so. A second requotable
  *     code, or any other refusal, is Failed and the attempt is over.
  *
- *     Review is the one stop between the checks and the wallet (judges' review, 2026-09-27): the
+ *     Review is the one stop between the checks and the wallet (mock judges' review, 2026-09-27): the
  *     wallet used to open the moment the guard passed, before the person had seen what the bytes
  *     spend and cost. Nothing is in flight there, and nothing is asked of the wallet until
  *     "Continue to wallet".
@@ -154,7 +154,7 @@ sealed interface SwapState {
 
     /**
      * The quote is in hand, the bytes passed [TransactionGuard], the wallet can pay, and nothing
-     * has been asked of the wallet yet (judges' review, 2026-09-27). The sheet states what the
+     * has been asked of the wallet yet (mock judges' review, 2026-09-27). The sheet states what the
      * bytes spend, the least they deliver, the network fees they charge, the most the deposit can
      * be and the all-in cost, and waits for "Continue to wallet".
      *
@@ -308,7 +308,7 @@ data class SwapLeg(
     val output: SwapToken,
     /**
      * Jupiter answered for the xStock and has no reference price for it (JEFx and AALx on
-     * 2026-09-27). A missing price is not a missing route (judges' review, 2026-09-27), so the
+     * 2026-09-27). A missing price is not a missing route (mock judges' review, 2026-09-27), so the
      * sheet asks "Check swap availability" and lets the quote answer: an executable order goes to
      * Review with a line saying the value check is limited to the quote itself, and no route says
      * so. Swap to USDC still refuses without a price ([SwapFailure.VALUE_UNCHECKED]): there the
@@ -466,7 +466,7 @@ data class SwapQuote(
     /**
      * USD per SOL from Jupiter's price, read after the quote and before the wallet, or null when
      * it did not come back. Without it the SOL costs cannot be priced and the sheet says "Route
-     * cost", never "All-in cost" (judges' review, 2026-09-27).
+     * cost", never "All-in cost" (mock judges' review, 2026-09-27).
      */
     val solUsd: Double? = null,
     /**
@@ -507,7 +507,7 @@ data class SwapQuote(
     val rentUsd: Double? get() = usablePrice?.let { paidSol.rentFeeLamports / LAMPORTS_PER_SOL * it }
 
     /**
-     * All-in cost in percent (judges' review, 2026-09-27): the route's cost plus the network fee,
+     * All-in cost in percent (mock judges' review, 2026-09-27): the route's cost plus the network fee,
      * the priority fee and the token account rent this wallet pays, priced at [solUsd], as a share
      * of what goes in. Null when any part is unknown, so the sheet never calls a figure all-in
      * that leaves the SOL out.

@@ -5,7 +5,7 @@ import com.plainticker.mobile.wallet.TransactionGuard
 
 /**
  * What a screen says when [TransactionGuard] refused a transaction before the wallet saw it
- * (judges' review, 2026-09-27). A refused pass used to read "The server did not build this
+ * (mock judges' review, 2026-09-27). A refused pass used to read "The server did not build this
  * payment", which was not what happened: the server built one, and this phone read it and would
  * not hand it on. Every flow that runs the guard (pass, vote, swap) says it the same way, with
  * the reason in the plain category [TransactionGuard.Why] carries; the guard's own reason, which

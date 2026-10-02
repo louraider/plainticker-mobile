@@ -8,7 +8,7 @@ import com.solana.mobilewalletadapter.common.ProtocolContract
  * checks again on the signed bytes, then hands them to Jupiter's /execute
  * ([com.plainticker.mobile.wallet.TransactionGuard.readSigned]).
  *
- * `solana:signTransactions` is an optional feature in MWA 2.x (Beeman, judges' review,
+ * `solana:signTransactions` is an optional feature in MWA 2.x (mock judges' review,
  * 2026-09-27). `getCapabilities` lists optional features only, so absence means something only
  * for an optional id like this one (the mandatory `signMessages` and `signAndSendTransactions`
  * are never listed by a compliant wallet). Seed Vault Wallet on the Seeker lists it (measured
