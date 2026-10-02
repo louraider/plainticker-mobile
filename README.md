@@ -66,16 +66,15 @@ are not available to US persons; the app asks for that self-certification on its
 
 | Today | Stocks | A stock page |
 |---|---|---|
-| ![Today: market status, Watched, Reports next week](docs/img/01-today.png) | ![Stocks: search, Deep pool and sector filters, scores](docs/img/02-stocks.png) | ![AAPLx: classification, token price against its share, live from the mint, backing and controls](docs/img/03-stock-page-aapl.png) |
+| ![Today: market status, Watched, reports this week, the vote](docs/img/01-today.png) | ![Stocks: each covered stock ranked against its sector](docs/img/02-stocks.png) | ![AAPLx: classification, US price, live from the mint, backing and controls](docs/img/03-stock-page-aapl.png) |
 
-| The daily digest | Swaps this app made on mainnet |
-|---|---|
-| ![Daily digest: one short check a day](docs/img/04-daily-digest.png) | ![Recent swaps: three real swaps with their all-in cost](docs/img/05-recent-swaps.png) |
+| Backing and controls, explained | Vote | Portfolio |
+|---|---|---|
+| ![Backing and controls with the Explain sheet open](docs/img/06-backing-explain.png) | ![Vote: the round, leaders, your votes](docs/img/07-vote.png) | ![Portfolio: holdings and swaps this app made on mainnet](docs/img/08-portfolio.png) |
 
-All five screenshots were captured on a Seeker (1200 × 2670) from builds 1.3.8 to 1.3.12, so they
-predate the 1.3.27 labels: the stock page now names its reference *Last US price* while the NYSE
-is shut, and *Backing and controls* has its Explain action. The last one is
-cropped from Portfolio and lists the three swaps in the proof table below.
+These six screenshots were captured on a Seeker from build 1.3.27 (2 Oct) and framed at 1080 × 1920.
+The wallet shown is the public demo wallet. The 16.14% cost on the 2 USDC swap is mostly the
+one-time token-account deposit, which is returned if the account is closed.
 
 ## What it is and who it is for
 
