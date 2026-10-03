@@ -294,8 +294,8 @@ Every transaction below was made by this app on a Seeker, from the public demo w
 
 On 29 September the released 1.3.27 swapped USDC into METAx on a Seeker, signed in the Seed Vault
 Wallet, and landed at slot **451,727,576**, after the signed-by-wallet check (see Security)
-re-read the transaction the wallet signed. It was made from a private wallet, so its address
-and signature are not published here.
+re-read the transaction the wallet signed. It was made from the same public demo wallet as the
+swaps above (signature 2GD5ek…sHk14a, visible in Portfolio on the screenshots).
 
 ## The numbers
 
