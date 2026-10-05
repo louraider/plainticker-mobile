@@ -8,6 +8,14 @@
          the notification and nothing else; the digest is on the Watchlist screen either way. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Pulled in by libraries, never used by this app, and refused by the dApp Store review
+         (PER-001): androidx.biometric arrives with credentials-play-services-auth (Google sign-in
+         needs no biometric prompt; the Seed Vault signs, not this app), and REORDER_TASKS comes
+         from androidx.test. Removed from the merged manifest so the release asks for neither. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
+    <uses-permission android:name="android.permission.REORDER_TASKS" tools:node="remove" />
+
     <application
         android:name=".PlainTickerApp"
         android:allowBackup="true"

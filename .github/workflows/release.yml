@@ -134,6 +134,28 @@ jobs:
             echo "- signing certificate SHA-256 (for \`/.well-known/assetlinks.json\`): \`$colon\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Refuse permissions outside the allowlist
+        # The dApp Store review refused USE_BIOMETRIC and USE_FINGERPRINT, which a library had
+        # merged in. Every permission the release asks for must be on this list.
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          allowed="android.permission.INTERNET
+          android.permission.POST_NOTIFICATIONS
+          android.permission.ACCESS_NETWORK_STATE
+          android.permission.WAKE_LOCK
+          android.permission.RECEIVE_BOOT_COMPLETED
+          android.permission.FOREGROUND_SERVICE
+          com.plainticker.mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          bad=0
+          while read -r p; do
+            if ! printf '%s\n' "$allowed" | sed 's/^ *//' | grep -qx "$p"; then
+              echo "::error::release asks for $p, which is not on the allowlist"; bad=1
+            fi
+          done < <("$TOOLS/aapt2" dump permissions "$APK" | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p")
+          exit $bad
+
       - name: Remove keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks"
