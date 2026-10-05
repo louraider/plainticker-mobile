@@ -229,6 +229,7 @@ fun HomeScreen(
                         // mid flight and this device's entitlement survive a destination switch.
                         passViewModel = viewModel(factory = factory),
                         accountViewModel = viewModel(factory = factory),
+                        lockViewModel = viewModel(factory = factory),
                         onOpenTab = ::selectTab,
                         onOpenDigest = onOpenDigest,
                         header = header,

@@ -86,6 +86,7 @@ import com.plainticker.mobile.R
 import com.plainticker.mobile.data.auth.DeviceCodeStatus
 import com.plainticker.mobile.auth.CredentialManagerGoogleSource
 import com.plainticker.mobile.data.plainticker.EntitlementSource
+import com.plainticker.mobile.lock.AppLockState
 import com.plainticker.mobile.prefs.SignedInAccount
 import com.plainticker.mobile.ui.components.AmberDisabledAction
 import com.plainticker.mobile.ui.components.AmberPreviewCanvas
@@ -134,6 +135,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  *    account, if the server returned any.
  * 4. **Wallet** ([WalletSection]): the phone's Solana wallet connection, its own group since the
  *    mock judges' round 2 because it signs transactions and is not a way to sign in.
+ * 4a. **Security** ([SecuritySection], 1.3.28): the optional app lock's switch, beside Wallet
+ *    because both are about who can act with this phone.
  * 5. **On this device**: swaps, votes and stocks watched, each a row that opens its tab.
  * 6. **Notifications**: the delivery line with Enable, and the daily digest.
  * 7. **About**: version, disclaimer, privacy policy, terms, account deletion (each opening
@@ -160,6 +163,8 @@ fun YouScreen(
     viewModel: YouViewModel,
     passViewModel: PassViewModel,
     accountViewModel: AccountViewModel,
+    /** The app lock's switch (Security). */
+    lockViewModel: AppLockViewModel,
     onOpenTab: (Int) -> Unit,
     modifier: Modifier = Modifier,
     /** The daily digest screen: its own route, reached from here and from Today's "Read it". */
@@ -176,6 +181,7 @@ fun YouScreen(
     val account by accountViewModel.state.collectAsStateWithLifecycle()
     val deviceCodeStatus by accountViewModel.deviceCodeStatus.collectAsStateWithLifecycle()
     val newCodeFailed by accountViewModel.newCodeFailed.collectAsStateWithLifecycle()
+    val lock by lockViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // An Activity context: Credential Manager draws Google's sheet over it.
     val credentials = remember(context) { CredentialManagerGoogleSource(context, BuildConfig.GOOGLE_SERVER_CLIENT_ID) }
@@ -238,6 +244,8 @@ fun YouScreen(
             onSignIn = { accountViewModel.signIn(credentials) },
             onSignOut = accountViewModel::signOut,
             onUnlink = accountViewModel::unlink,
+            lock = lock,
+            onSetLock = lockViewModel::setEnabled,
             onEnableNotifications = {
                 context.startActivity(
                     Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -299,6 +307,10 @@ internal fun YouContent(
     onSignIn: () -> Unit = {},
     onSignOut: () -> Unit = {},
     onUnlink: (String) -> Unit = {},
+    /** The app lock, for the Security group; the default offers no switch (no screen lock known). */
+    lock: AppLockState = AppLockState(),
+    /** You's switch: asks the lock to turn on or off, which it does only after a prompt succeeds. */
+    onSetLock: (Boolean) -> Unit = {},
     /** Opens one of [AboutLinks] in the browser; a no-op in the previews. */
     onOpenLink: (String) -> Unit = {},
     header: @Composable () -> Unit = {},
@@ -445,6 +457,7 @@ internal fun YouContent(
                 noWallet = state.noWalletAt == ConnectPlace.WALLET,
             )
         }
+        item(key = "security") { SecuritySection(lock = lock, onSetLock = onSetLock, colors = colors) }
         item(key = "device") { DeviceGroup(state = state, onOpenTab = onOpenTab, colors = colors) }
         item(key = "notifications") {
             NotificationsGroup(

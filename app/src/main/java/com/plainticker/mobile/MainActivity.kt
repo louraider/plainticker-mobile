@@ -3,21 +3,31 @@ package com.plainticker.mobile
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.lifecycleScope
+import com.plainticker.mobile.lock.AppLockState
+import com.plainticker.mobile.lock.BiometricAuthenticator
+import com.plainticker.mobile.ui.lock.LocalAppLocked
+import com.plainticker.mobile.ui.lock.LockOverlay
 import com.plainticker.mobile.ui.nav.AppNavHost
 import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberLightColors
@@ -25,6 +35,7 @@ import com.plainticker.mobile.ui.theme.AmberTheme
 import com.plainticker.mobile.wallet.MwaWalletSession
 import com.solana.mobilewalletadapter.clientlib.ActivityResultSender
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * The one Activity. Portrait and edge to edge (plan section 13 Pass 6): the manifest locks the
@@ -47,10 +58,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * The manifest starts it in Theme.PlainTicker.Starting (the launcher icon itself over the page
  * ground of the theme the system is in, DESIGN.md section 9, pinned by BrandAssetsTest);
  * installSplashScreen must run before super.onCreate so it can swap in the app theme.
+ *
+ * **The optional app lock** (1.3.28, [com.plainticker.mobile.lock.AppLock]). A FragmentActivity,
+ * because androidx.biometric's BiometricPrompt draws through one. The lock screen ([LockOverlay])
+ * sits over the whole app while locked, with the app still composed beneath it and its semantics
+ * cleared, so a deep link or a notification tap that arrives while locked opens its screen behind
+ * the lock, and that screen is what shows once the person is confirmed. Stop and start tell the
+ * lock the app left and came back; every resume asks whether an automatic prompt is owed (one per
+ * lock, never in a loop). While the lock is on, Recents shows no picture of the app: Android 13 and
+ * later through setRecentsScreenshotEnabled(false), which leaves screenshots and screen recording
+ * alone; below that, FLAG_SECURE while the lock screen is up. With the lock off, neither is set.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private var walletSession: MwaWalletSession? = null
+
+    private var authenticator: BiometricAuthenticator? = null
 
     /**
      * Resumed or not: a wallet request that sees this leave for the wallet and come back without
@@ -89,20 +112,39 @@ class MainActivity : ComponentActivity() {
         val container = appContainer
         // Must be created before the Activity starts: it registers for an activity result.
         val sender = ActivityResultSender(this)
+        val lock = container.appLock
+        // The same rule: the prompt and the screen-lock launcher register before the Activity starts.
+        val prompt = BiometricAuthenticator(this).also {
+            authenticator = it
+            lock.bind(it)
+        }
         lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_RESUME -> inFront.value = true
+                    Lifecycle.Event.ON_START -> lock.returned()
+                    Lifecycle.Event.ON_RESUME -> {
+                        inFront.value = true
+                        if (lock.takeAutoPrompt()) lock.open()
+                    }
                     Lifecycle.Event.ON_PAUSE -> inFront.value = false
+                    Lifecycle.Event.ON_STOP -> {
+                        // Read before the prompt is ended: the keyguard's confirmation is the one
+                        // prompt that stops this Activity on purpose.
+                        val forPrompt = prompt.awayForScreenLock
+                        prompt.onStop()
+                        lock.leftApp(forPrompt)
+                    }
                     else -> Unit
                 }
             },
         )
         walletSession = container.walletSession.bind(sender, inFront)
+        lifecycleScope.launch { lock.state.collect(::keepOutOfRecents) }
 
         setContent {
             val tab by openTab.collectAsState()
             val ticker by openTicker.collectAsState()
+            val lockState by lock.state.collectAsState()
             val darkTheme = isSystemInDarkTheme()
             val colors = if (darkTheme) AmberDarkColors else AmberLightColors
 
@@ -121,13 +163,29 @@ class MainActivity : ComponentActivity() {
 
             AmberTheme(useDarkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize(), color = colors.surfaceGround) {
-                    AppNavHost(
-                        container = container,
-                        openTab = tab,
-                        onTabOpened = { openTab.value = null },
-                        openTicker = ticker,
-                        onTickerOpened = { openTicker.value = null },
-                    )
+                    CompositionLocalProvider(LocalAppLocked provides lockState.locked) {
+                        // Composed whether locked or not, so nothing the reader had open is lost
+                        // and a link that arrived while locked is already open beneath the lock;
+                        // while locked a screen reader is told nothing of it.
+                        val hidden = if (lockState.locked) Modifier.clearAndSetSemantics { } else Modifier
+                        Box(Modifier.fillMaxSize().then(hidden)) {
+                            AppNavHost(
+                                container = container,
+                                openTab = tab,
+                                onTabOpened = { openTab.value = null },
+                                openTicker = ticker,
+                                onTickerOpened = { openTicker.value = null },
+                            )
+                        }
+                        if (lockState.locked) {
+                            LockOverlay(
+                                state = lockState,
+                                onOpen = lock::open,
+                                onLeave = { moveTaskToBack(true) },
+                                colors = colors,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -146,9 +204,29 @@ class MainActivity : ComponentActivity() {
     private fun tickerFrom(intent: Intent?): String? =
         intent?.getStringExtra(EXTRA_TICKER)?.trim()?.takeIf { TICKER.matches(it) }
 
+    /**
+     * No picture of the app in Recents while the lock is on. Android 13 and later keep the
+     * thumbnail out without touching screenshots or screen recording; below that the only tool is
+     * FLAG_SECURE, set only while the lock screen itself is up. With the lock off, neither is set.
+     */
+    private fun keepOutOfRecents(state: AppLockState) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            setRecentsScreenshotEnabled(!state.enabled)
+        } else if (state.locked) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
     override fun onDestroy() {
         walletSession?.let { appContainer.walletSession.unbind(it) }
         walletSession = null
+        authenticator?.let {
+            appContainer.appLock.unbind(it)
+            it.close()
+        }
+        authenticator = null
         super.onDestroy()
     }
 

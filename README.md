@@ -258,8 +258,10 @@ contract here for audit.
 - **Repository hygiene.** `scripts/redaction-guard.sh` hashes every base58 candidate in the tree and
   in the full history against a denylist of identifiers that must never appear. The denylist
   holds digests only. The demo wallet and the signatures below are public on purpose, as evidence.
-- **Two permissions:** internet, and notifications, asked when the first stock is watched. No
-  analytics SDK, no advertising, no tracking.
+- **Few permissions:** internet; notifications, asked when the first stock is watched; and
+  `USE_BIOMETRIC`/`USE_FINGERPRINT`, used only by the optional app lock (You, Security; off by
+  default). The release refuses any permission off its allowlist. No analytics SDK, no
+  advertising, no tracking.
 
 ### What `TransactionGuard` checks, and what it cannot see
 

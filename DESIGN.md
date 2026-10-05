@@ -729,17 +729,36 @@ bottom:
    does not carry it, so it is always one tap away and never drawn twice; Refresh sits where the
    old wallet block offered it (a connected wallet) and on a failed read.
 3. **Sign-in methods** (`AccountSection.kt`), the one-line pitch as the lede: Google (the email
-   with Sign out, or Sign in), the Solana wallet (the short key with Copy and Disconnect, or
-   Connect; "Stays connected between launches. This phone keeps the session token your wallet
-   issued, encrypted, and never a key. Disconnect forgets it."), and the wallets the
+   with Sign out, or Sign in), and the wallets the
    server returned as linked to the Google account, only if there are any. Sign out is a two-step
    inline confirm: the first tap asks in the row, Sign out or Cancel answers it. Every sign-in
    message is drawn under the Google row, or beside the hero's button when the hero offers Sign in.
-4. **On this device**: swaps recorded, votes cast, stocks watched, each a row whose whole width
+4. **Wallet**: the phone's wallet connection, its own group since the mock judges' round 2
+   (`WalletSection.kt`), because it signs transactions and is not a way to sign in: the short key
+   with Copy and Disconnect, or Connect, and what the phone keeps of the connection behind Show
+   ("Stays connected between launches. This phone keeps the session token your wallet issued,
+   encrypted, and never a key. Disconnect forgets it.").
+5. **Security** (1.3.28, `SecuritySection.kt`): the optional app lock, one switch row, "Lock
+   PlainTicker with fingerprint", off by default, with "Asks for your fingerprint or screen lock
+   when the app opens. The Seed Vault still signs every transaction." under it. The whole row is
+   the switch target (`Role.Switch`); the switch shows the stored setting and moves only after the
+   phone confirms its owner, on and off alike. The switch is Amber's: `actionFill` track and
+   `actionOnFill` thumb when on, `surfaceHigh` track with a `textSecondary` thumb and border when
+   off. A phone with neither a fingerprint nor a screen lock gets the same row disabled, "This phone
+   has no fingerprint or screen lock set." The text column is weighted and wraps beside the fixed
+   52dp switch, so nothing in the row can clip.
+6. **On this device**: swaps recorded, votes cast, stocks watched, each a row whose whole width
    opens its tab, the count as an amber `figureRow` on the right.
-5. **Notifications**: the Watchlist's delivery line with Enable while off, and the daily digest.
-6. **About**: version, the disclaimer, and Fonts and licenses as one row whose Show opens the three
+7. **Notifications**: the Watchlist's delivery line with Enable while off, and the daily digest.
+8. **About**: version, the disclaimer, and Fonts and licenses as one row whose Show opens the three
    bundled fonts in place, each still able to read its shipped OFL text.
+
+**The lock screen** (1.3.28, `ui/lock/LockOverlay.kt`), drawn over the whole app while the app
+lock is closed: `surfaceGround` edge to edge, the two-corners mark at 48dp in `actionText`,
+"PlainTicker is locked" in `sectionHead`, the system's reason in `context` when a prompt ended in
+an error, and one `TextAction`, "Open" (section 7 bans the other obvious word). No motion. The app
+stays composed beneath it with its semantics cleared, and `AmberSheet` draws nothing while locked,
+because a modal sheet's own window would otherwise sit above the lock screen.
 
 Every group is a run of `CabinetRow`s (`YouScreen.kt`) in `AmberTickerRowGroup`'s container: a
 56dp minimum, an optional meta label, the value and an optional sub in one weighted column that

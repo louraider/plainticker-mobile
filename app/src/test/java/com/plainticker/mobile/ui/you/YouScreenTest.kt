@@ -95,6 +95,8 @@ class YouScreenTest {
                 "PlanGroup(",
                 "AccountSection(",
                 "WalletSection(",
+                // 1.3.28: the optional app lock, beside Wallet.
+                "SecuritySection(",
                 "DeviceGroup(",
                 "NotificationsGroup(",
                 "AboutGroup(",

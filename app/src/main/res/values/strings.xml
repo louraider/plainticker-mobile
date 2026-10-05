@@ -954,6 +954,25 @@
          the 250.66dp the old first line already fit in. -->
     <string name="you_wallet_note_short">Signs swaps and votes. Not a sign-in.</string>
     <string name="you_wallet_how">What this phone keeps of the connection</string>
+    <!-- The Security group (1.3.28), under Wallet: the optional app lock. The switch moves only
+         after the phone has confirmed its owner, both ways. Shown as a disabled row when the phone
+         has neither a strong biometric nor a screen lock to confirm with. -->
+    <string name="you_heading_security">Security</string>
+    <string name="you_lock_label">Lock PlainTicker with fingerprint</string>
+    <string name="you_lock_note">Asks for your fingerprint or screen lock when the app opens. The Seed Vault still signs every transaction.</string>
+    <string name="you_lock_unavailable">This phone has no fingerprint or screen lock set.</string>
+    <!-- The lock screen over everything while the app lock is closed. Its action reads Open, not
+         the word the founder's brief used: section 7 of DESIGN.md bans that word outright, and
+         CopyLintTest enforces it. -->
+    <string name="lock_title">PlainTicker is locked</string>
+    <string name="lock_open">Open</string>
+    <!-- BiometricPrompt titles, one per reason, and its negative button below Android 11, where the
+         screen lock opens as its own confirmation. -->
+    <string name="lock_prompt_open">Open PlainTicker</string>
+    <string name="lock_prompt_turn_on">Turn on the app lock</string>
+    <string name="lock_prompt_turn_off">Turn off the app lock</string>
+    <string name="lock_prompt_screen_lock">Use screen lock</string>
+    <string name="lock_failed">The phone did not confirm it. Try again.</string>
     <string name="you_action_sign_in">Sign in</string>
     <string name="you_action_connect">Connect</string>
     <string name="you_action_copy">Copy</string>

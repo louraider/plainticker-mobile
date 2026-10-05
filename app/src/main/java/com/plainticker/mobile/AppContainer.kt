@@ -1,6 +1,7 @@
 package com.plainticker.mobile
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.plainticker.mobile.core.Clock
@@ -30,11 +31,14 @@ import com.plainticker.mobile.data.rpc.SolanaRpcApi
 import com.plainticker.mobile.data.xstocks.CatalogCache
 import com.plainticker.mobile.data.xstocks.FileCatalogCache
 import com.plainticker.mobile.data.xstocks.XStocksApi
+import com.plainticker.mobile.lock.AppLock
+import com.plainticker.mobile.lock.PhoneLockAvailability
 import com.plainticker.mobile.prefs.AccountStore
 import com.plainticker.mobile.prefs.DataStoreAccountStore
 import com.plainticker.mobile.prefs.DevicePassStore
 import com.plainticker.mobile.prefs.NotificationPromptStore
 import com.plainticker.mobile.prefs.OnboardingStore
+import com.plainticker.mobile.prefs.SharedPrefsAppLockStore
 import com.plainticker.mobile.prefs.SharedPrefsDevicePassStore
 import com.plainticker.mobile.prefs.SharedPrefsNotificationPromptStore
 import com.plainticker.mobile.prefs.SharedPrefsOnboardingStore
@@ -80,6 +84,8 @@ import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /**
  * Manual dependency graph (plan D9: no Hilt). One instance per process, owned by
@@ -141,6 +147,12 @@ interface AppContainer {
 
     val walletAdapter: MobileWalletAdapter
     val walletSession: WalletSessionHolder
+
+    /**
+     * The optional app lock (You, Security): whether it is on, whether the lock screen is up, and
+     * the prompt that opens it. Process wide, so a new Activity does not lock again by itself.
+     */
+    val appLock: AppLock
 
     val onboardingStore: OnboardingStore
     val watchlistStore: WatchlistStore
@@ -257,6 +269,21 @@ class DefaultAppContainer(context: Context) : AppContainer {
                 java.io.File(app.filesDir, EncryptedFileWalletSessionStore.FILE_NAME),
                 AesGcmSessionCipher { AesGcmSessionCipher.androidKeystoreKey() },
             ),
+        )
+    }
+
+    // The setting rides the preferences file the backup rules exclude whole, beside the device code:
+    // a lock restored onto another phone would be a lock nobody chose there (BackupRulesTest).
+    // Built on first use, which is the first Activity of this process: a process the daily check
+    // started and an Activity opened later still starts locked. Main thread, elapsed realtime, and
+    // every wallet round trip excluded from the time away.
+    override val appLock: AppLock by lazy {
+        AppLock(
+            store = SharedPrefsAppLockStore(prefs),
+            availability = { PhoneLockAvailability.read(app) },
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            now = SystemClock::elapsedRealtime,
+            walletBusy = walletSession.roundTrips.map { it > 0 }.distinctUntilChanged(),
         )
     }
 

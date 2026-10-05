@@ -17,6 +17,7 @@ import com.plainticker.mobile.ui.vote.VoteViewModel
 import com.plainticker.mobile.ui.watchlist.WatchlistViewModel
 import com.plainticker.mobile.ui.you.AccountViewModel
 import com.plainticker.mobile.ui.you.DigestViewModel
+import com.plainticker.mobile.ui.you.AppLockViewModel
 import com.plainticker.mobile.ui.you.YouViewModel
 
 /** One ViewModel per screen, each built from [AppContainer]; the detail ticker comes from the route. */
@@ -141,6 +142,7 @@ fun appViewModelFactory(container: AppContainer): ViewModelProvider.Factory = vi
             snapshot = container.snapshotRepository,
         )
     }
+    initializer { AppLockViewModel(container.appLock) }
     initializer {
         YouViewModel(
             container.walletSession,
