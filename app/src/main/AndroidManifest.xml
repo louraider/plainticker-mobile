@@ -8,6 +8,19 @@
          the notification and nothing else; the digest is on the Watchlist screen either way. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- The optional app lock (You, Security; lock/BiometricAuthenticator.kt): off by default, and
+         when on, PlainTicker asks for the fingerprint or the screen lock when it opens. USE_BIOMETRIC
+         is what androidx.biometric's BiometricPrompt needs; USE_FINGERPRINT is the same prompt's
+         permission on Android 8 and 9, where it draws through FingerprintManager. Neither signs
+         anything: the Seed Vault still signs every transaction. Declared here rather than left to
+         arrive with a library, so the dApp Store review (PER-001) can see what each one is for. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+
+    <!-- Merged in from androidx.test for instrumented tests, never used by the app: removed so the
+         release does not ask for it. -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" tools:node="remove" />
+
     <application
         android:name=".PlainTickerApp"
         android:allowBackup="true"

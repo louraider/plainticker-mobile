@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicLong
@@ -42,6 +43,15 @@ class WalletSessionHolder(
 
     @Volatile
     private var current: WalletSession? = null
+
+    private val trips = MutableStateFlow(0)
+
+    /**
+     * Wallet requests in flight (waiting their turn included): while one is, the wallet may be on
+     * screen because this app opened it. The app lock reads it so a trip to the Seed Vault never
+     * counts as time away ([com.plainticker.mobile.lock.LockTimer]).
+     */
+    val roundTrips: StateFlow<Int> = trips.asStateFlow()
 
     /**
      * @param inFront whether the Activity that owns [sender] is resumed: how a request learns the
@@ -82,11 +92,20 @@ class WalletSessionHolder(
     }
 
     override suspend fun <T> call(block: suspend (AdapterOperations) -> T): WalletOutcome<T> =
-        current?.call(block) ?: noActivity()
+        trip { current?.call(block) } ?: noActivity()
 
-    override suspend fun connect(): WalletOutcome<WalletAccount> = current?.connect() ?: noActivity()
+    override suspend fun connect(): WalletOutcome<WalletAccount> = trip { current?.connect() } ?: noActivity()
 
-    override suspend fun disconnect(): WalletOutcome<Unit> = current?.disconnect() ?: noActivity()
+    override suspend fun disconnect(): WalletOutcome<Unit> = trip { current?.disconnect() } ?: noActivity()
+
+    private suspend fun <R> trip(block: suspend () -> R): R {
+        trips.update { it + 1 }
+        try {
+            return block()
+        } finally {
+            trips.update { it - 1 }
+        }
+    }
 
     private fun noActivity() = WalletOutcome.Error("No screen is open to hand off to the wallet")
 }

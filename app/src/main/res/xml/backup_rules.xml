@@ -16,7 +16,10 @@
      the server; BackupRulesTest pins that DevicePassStore writes every one of its keys here.
      Since 2026-09-27 both codes are sealed at rest (device_pass_code_sealed,
      device_pass_pending_new_code_sealed) with a Keystore key that never leaves the phone; the
-     sealed keys live in this same file, so they are excluded with it.
+     sealed keys live in this same file, so they are excluded with it. Since 1.3.28 the app lock's
+     setting (app_lock_enabled) lives here too, like the other security preferences: a lock
+     restored onto another phone, or onto this one after its screen lock changed, would be a lock
+     nobody chose there.
    - datastore/account.preferences_pb: the signed-in Google account, which only means anything
      next to the device code above.
    - wallet_session.bin (and its .tmp): the saved MWA session. It is sealed with an Android

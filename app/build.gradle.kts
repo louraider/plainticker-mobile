@@ -113,6 +113,12 @@ android {
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    // The optional app lock (lock/BiometricAuthenticator.kt). Declared, not left to arrive with
+    // credentials-play-services-auth, because the app now uses it and USE_BIOMETRIC is asked for it.
+    implementation(libs.androidx.biometric)
+    // MainActivity is a FragmentActivity for BiometricPrompt, and registers activity results;
+    // biometric 1.1.0 still names fragment 1.2.5, older than the ActivityResult APIs allow.
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

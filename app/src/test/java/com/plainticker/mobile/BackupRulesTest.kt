@@ -97,6 +97,30 @@ class BackupRulesTest {
     }
 
     /**
+     * The app lock's setting (1.3.28) is a security preference like the device code's: it lives in
+     * the same excluded file, so a backup can never carry a lock onto a phone that did not choose it.
+     */
+    @Test
+    fun `the app lock setting lives in the excluded preferences file`() {
+        val module = listOf(".", "app").map(::File).first { File(it, "src/main/AndroidManifest.xml").isFile }.canonicalFile
+        val container = File(module, "src/main/java/com/plainticker/mobile/AppContainer.kt").readText()
+        assertTrue("store = SharedPrefsAppLockStore(prefs)" in container)
+        assertTrue("app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)" in container)
+        assertEquals("app_lock_enabled", com.plainticker.mobile.prefs.SharedPrefsAppLockStore.KEY_ENABLED)
+        for (rules in listOf("res/xml/backup_rules.xml", "res/xml/data_extraction_rules.xml")) {
+            val root = parse(rules).documentElement
+            assertTrue(rules, "sharedpref:${DefaultAppContainer.PREFS_NAME}.xml" in excludes(root))
+        }
+        // The store reads and writes that one key, and nothing else.
+        val prefs = com.plainticker.mobile.prefs.FakePrefs()
+        val store = com.plainticker.mobile.prefs.SharedPrefsAppLockStore(prefs)
+        assertEquals(false, store.isEnabled())
+        store.setEnabled(true)
+        assertEquals(setOf("app_lock_enabled"), prefs.all.keys)
+        assertTrue(store.isEnabled())
+    }
+
+    /**
      * The sealed codes (security review, 2026-09-27) live in that same excluded file, under keys
      * of their own, sealed with a Keystore key of their own that is not the wallet session's, so
      * neither the sealed blobs nor anything that could open them can reach a backup. Keystore keys

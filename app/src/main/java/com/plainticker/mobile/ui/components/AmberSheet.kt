@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.plainticker.mobile.ui.lock.LocalAppLocked
 import com.plainticker.mobile.ui.theme.AmberColors
 import com.plainticker.mobile.ui.theme.AmberDarkColors
 import com.plainticker.mobile.ui.theme.AmberSurface
@@ -48,6 +49,10 @@ fun AmberSheet(
     colors: AmberColors = defaultAmberColors(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // A modal sheet draws in a window of its own, over anything the Activity's own composition
+    // draws, the app lock's screen included. While the app is locked the sheet is not drawn at all;
+    // its caller's state keeps it, so it opens again as it was once the app opens (LockOverlay.kt).
+    if (LocalAppLocked.current) return
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
