@@ -12,6 +12,8 @@ import com.plainticker.mobile.data.plainticker.Axis
 import com.plainticker.mobile.data.plainticker.FScore
 import com.plainticker.mobile.data.plainticker.Method
 import com.plainticker.mobile.data.plainticker.NextUpRow
+import com.plainticker.mobile.data.plainticker.SectorModelInfo
+import com.plainticker.mobile.data.net.HttpClientFactory
 import com.plainticker.mobile.data.plainticker.Tone
 import com.plainticker.mobile.data.plainticker.Verdict
 import com.plainticker.mobile.data.rpc.DefaultAccountState
@@ -1015,6 +1017,97 @@ class DetailModelTest {
         assertEquals(9, none.signals.size)
         assertTrue(none.signals.all { it.ok == null })
         assertTrue(none.unavailable)
+        assertFalse("a general-method filer with no data keeps 'not available for this filer'", none.notApplicable)
+        assertNull("its axes keep their rows", served(analysis = AnalysisState.Served(payload(fscore = null))).axesNote)
+    }
+
+    // ---- 1.3.30: a company read by its own sector model (QA of 1.3.29) -----------------------------
+
+    /** What the server sends for JPM, BAC, PGR, GS and JEF since v1.6: `axes: null`, `fscore: null`. */
+    private fun sectorModelState(kind: String?, verdict: Verdict?): DetailUiState =
+        served(
+            analysis = AnalysisState.Served(
+                payload(fscore = null, axes = Axes(), composite = null, verdict = verdict)
+                    .copy(sectorModel = kind?.let { SectorModelInfo(kind = it) }),
+            ),
+        )
+
+    private val lockedVerdict = Verdict(locked = true, classState = "locked", classReason = null)
+
+    @Test
+    fun `JPMx for a free reader, its class locked, reads one sector-model line instead of three Not available rows`() {
+        val state = sectorModelState(kind = "classifying", verdict = lockedVerdict)
+        assertEquals(R.string.detail_axes_sector_model, label(state.axesNote))
+        assertTrue("no Not available rows", state.tracks.isEmpty())
+        val fscore = state.fScore!!
+        assertTrue(fscore.unavailable)
+        assertTrue("the F-Score does not apply, it is not missing", fscore.notApplicable)
+        assertEquals(
+            "This company is read by its sector model, so the general sector axes do not apply.",
+            ShippedCopy.strings.getValue("detail_axes_sector_model"),
+        )
+        assertEquals("Does not apply to banks and insurers", ShippedCopy.strings.getValue("detail_fscore_not_applicable"))
+    }
+
+    @Test
+    fun `GSx and JEFx, described by their model, read the descriptive line`() {
+        val state = sectorModelState(
+            kind = "descriptive",
+            verdict = Verdict(classState = "unavailable", classReason = Verdict.REASON_DESCRIPTIVE_ONLY),
+        )
+        assertEquals(R.string.detail_axes_descriptive, label(state.axesNote))
+        assertTrue(state.tracks.isEmpty())
+        assertTrue(state.fScore!!.notApplicable)
+        assertEquals(
+            "Investment banks are shown descriptively, so the general sector axes do not apply.",
+            ShippedCopy.strings.getValue("detail_axes_descriptive"),
+        )
+    }
+
+    @Test
+    fun `the class reason alone is enough when the payload has no sector_model block`() {
+        val descriptive = sectorModelState(kind = null, verdict = Verdict(classState = "unavailable", classReason = "descriptive-only"))
+        assertEquals(R.string.detail_axes_descriptive, label(descriptive.axesNote))
+        for (reason in listOf("sector-model", "sector-model-unavailable", "model-metric-not-meaningful")) {
+            val state = sectorModelState(kind = null, verdict = Verdict(classState = "classified", classReason = reason))
+            assertEquals(reason, R.string.detail_axes_sector_model, label(state.axesNote))
+            assertTrue(reason, state.fScore!!.notApplicable)
+        }
+    }
+
+    @Test
+    fun `a general-method payload with no axes and no F-Score keeps the rows and the filer line`() {
+        for (verdict in listOf(null, lockedVerdict, Verdict(classState = "unavailable", classReason = "insufficient-data"))) {
+            val state = sectorModelState(kind = null, verdict = verdict)
+            assertNull(state.axesNote)
+            assertEquals(3, state.tracks.size)
+            assertFalse(state.fScore!!.notApplicable)
+        }
+    }
+
+    @Test
+    fun `a sector-model payload that still sends an axis keeps its rows`() {
+        val state = served(
+            analysis = AnalysisState.Served(
+                payload(axes = Axes(quality = Axis(value = 6.0, scale = "0-9", position = 0.66)))
+                    .copy(sectorModel = SectorModelInfo(kind = "classifying")),
+            ),
+        )
+        assertNull(state.axesNote)
+        assertEquals(3, state.tracks.size)
+    }
+
+    @Test
+    fun `sector_model decodes its kind and nothing else, axes null decodes empty`() {
+        val json = """{"ticker":"JPM","axes":null,"fscore":null,
+            "verdict":{"code":null,"locked":true,"class_state":"locked","class_reason":null},
+            "sector_model":{"kind":"classifying","model":{"id":"deposit-bank-v1","cohort_size":13},"metrics":[]}}"""
+        val payload = HttpClientFactory.json.decodeFromString(AnalysisPayload.serializer(), json)
+        assertEquals(SectorModelInfo.KIND_CLASSIFYING, payload.sectorModel?.kind)
+        assertEquals(Axes(), payload.axes)
+        assertNull(payload.fscore)
+        val older = HttpClientFactory.json.decodeFromString(AnalysisPayload.serializer(), """{"ticker":"AAPL"}""")
+        assertNull(older.sectorModel)
     }
 
     // ---- Method -------------------------------------------------------------------------------------

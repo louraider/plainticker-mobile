@@ -58,7 +58,26 @@ data class SummaryRow(
      * never labelled "estimated" itself: only an explicit false earns that word).
      */
     @SerialName("next_report_confirmed") val nextReportConfirmed: Boolean? = null,
+    /**
+     * Whether the method gives this row a class: [CLASS_STATE_CLASSIFIED] or
+     * [CLASS_STATE_UNAVAILABLE] (web 2026-10-06, `class_state` on each `/summary` row). Sent to every
+     * caller: whether a class exists is not Pro information, only the class itself is, and that
+     * stays withheld through [composite], [tone] and [headline]. Null from a server that predates
+     * the field; the list then reads the row the way it did before ([com.plainticker.mobile.ui.list]).
+     */
+    @SerialName("class_state") val classState: String? = null,
+    /**
+     * Why there is no class when [classState] is [CLASS_STATE_UNAVAILABLE], the same value as
+     * [Verdict.classReason] on the ticker's own page (e.g. [Verdict.REASON_DESCRIPTIVE_ONLY] for GS
+     * and JEF); null on a classified row and from a server that predates the field.
+     */
+    @SerialName("class_reason") val classReason: String? = null,
 ) {
+    companion object {
+        const val CLASS_STATE_CLASSIFIED = "classified"
+        const val CLASS_STATE_UNAVAILABLE = "unavailable"
+    }
+
     /**
      * [nextReportDate] parsed, or null when it is absent or is not a calendar day. A bare
      * [LocalDate], never an [Instant]: the server states this as a US Eastern calendar day, and
@@ -103,6 +122,14 @@ data class AnalysisPayload(
      * [Verdict] for what an unentitled caller receives instead of the word itself.
      */
     val verdict: Verdict? = null,
+    /**
+     * API v1.6: the company's own sector model (JPM and BAC deposit banks, PGR a P&C insurer, GS
+     * and JEF investment banks), null for the general method. Only [SectorModelInfo.kind] is read:
+     * it is what says the general axes and the F-Score do not apply to this company (the server
+     * sends `axes` and `fscore` null for it). Present on a free caller's payload too, unlike
+     * [Verdict.classReason], which the lock withholds for JPM, BAC and PGR.
+     */
+    @SerialName("sector_model") val sectorModel: SectorModelInfo? = null,
 ) {
     /** Epoch millis of `as_of`, or null when missing or not ISO-8601. */
     fun asOfEpochMillis(): Long? =
@@ -150,6 +177,20 @@ data class ForwardRaw(
     /** The next scheduled report as an ISO calendar day, e.g. "2026-10-28". */
     val nextEarningsDate: String? = null,
 )
+
+/**
+ * The part of `sector_model` (API v1.6) the app reads: whether the model classifies (deposit banks,
+ * P&C insurers) or only describes (investment banks). The metrics themselves are not modelled.
+ */
+@Serializable
+data class SectorModelInfo(
+    val kind: String? = null,
+) {
+    companion object {
+        const val KIND_CLASSIFYING = "classifying"
+        const val KIND_DESCRIPTIVE = "descriptive"
+    }
+}
 
 /** The three strata the detail screen draws: quality, valuation, momentum. */
 @Serializable

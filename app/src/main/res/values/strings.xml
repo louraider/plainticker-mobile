@@ -396,6 +396,13 @@
     <string name="detail_analysis_incomplete">Analysis incomplete for this filer</string>
     <string name="detail_value_unavailable">unavailable</string>
     <string name="detail_not_available_filer">not available for this filer</string>
+    <!-- F-Score under a company its own sector model reads (QA of 1.3.29: JPMx, BACx, PGRx, GSx, JEFx):
+         the score is not missing, it does not apply. -->
+    <string name="detail_fscore_not_applicable">Does not apply to banks and insurers</string>
+    <!-- One line in place of the three "Against the sector" rows when the server sends no general axes
+         because the company's own sector model reads it (QA of 1.3.29). -->
+    <string name="detail_axes_sector_model">This company is read by its sector model, so the general sector axes do not apply.</string>
+    <string name="detail_axes_descriptive">Investment banks are shown descriptively, so the general sector axes do not apply.</string>
     <!-- An "Against the sector" axis the server sends with no value (API v1.6: no sector valuation
          percentile, no 52-week range). Drawn with no marker: a marker at 0 reads as the worst score. -->
     <string name="detail_axis_not_available">Not available</string>
@@ -521,6 +528,9 @@
     <string name="result_landed_next">%1$s is in your wallet now, and Portfolio shows it.</string>
     <string name="result_failed">Swap failed</string>
     <string name="result_not_connected">No wallet connected</string>
+    <!-- The swap and vote result headline on a phone with no wallet app at all (QA of 1.3.29): nothing
+         failed, there was never a wallet to ask. The no_wallet_app sentence stands under it. -->
+    <string name="result_no_wallet">No wallet on this phone</string>
     <string name="result_pending">Sent, not confirmed yet</string>
 
     <!-- Receipt -->

@@ -789,6 +789,14 @@ private fun FundamentalsBlock(state: DetailUiState) {
         meta = state.compositeMeta?.text(),
         lede = state.compositeLede?.text(),
     )
+    state.axesNote?.let {
+        Text(
+            text = it.text(),
+            style = AmberType.body,
+            color = defaultAmberColors().textSecondary,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Side),
+        )
+    }
     state.tracks.forEach { row ->
         when {
             row.locked -> LockedRow(row.label.text())
@@ -816,7 +824,9 @@ private fun FScoreBlock(fscore: FScoreContent) {
     val colors = defaultAmberColors()
     if (fscore.unavailable) {
         Text(
-            text = stringResource(R.string.detail_not_available_filer),
+            text = stringResource(
+                if (fscore.notApplicable) R.string.detail_fscore_not_applicable else R.string.detail_not_available_filer,
+            ),
             style = AmberType.body,
             color = colors.textSecondary,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Side),

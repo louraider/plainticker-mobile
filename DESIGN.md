@@ -283,6 +283,13 @@ withholds nothing it draws `list_row_sector_model` ("Sector model"), also quiet,
 classified" beside a page that shows a class. "Sector model" is two characters shorter than "Not
 classified", which the slot already draws.
 
+**The row's own class state, added 1.3.30.** Since 2026-10-06 `/summary` names each row's
+`class_state` and, when there is no class, its `class_reason`, to every reader. Where the row
+carries them, the slot follows them and no longer infers from the withheld fields: a class withheld
+from a free reader draws "Pro"; no class draws "Not classified", or "Sector model" when the reason
+is the company's own model (GSx and JEFx, `descriptive-only`); never "Pro" over a company with no
+class to unlock. A row from an older server keeps the reading above.
+
 `AmberTickerRowGroup` is the 16dp tonal container a run of rows sits inside (`surfaceGround` behind
 a 1dp seam, each row's own `surfaceRaised`). It is a non-lazy `Column`, so it fits a small, fixed
 run (Today's "Next up," the onboarding backdrop's four sample rows) and not a list that must stay a
@@ -448,7 +455,12 @@ before this restyle. Measured: `label`'s budget is 197.234dp against the longest
 1.3x). An axis with no value (API v1.6 sends `null` for one the server cannot compute) is
 not a `Track` at all: Detail draws the label and "Not available", with no marker, and `Track`
 itself draws no marker for a null position. A marker is never parked at 0 for missing data, where
-it would read as the worst score (1.3.29).
+it would read as the worst score (1.3.29). A company its own sector model reads (JPMx, BACx, PGRx,
+GSx, JEFx) gets `axes: null` from the server: the general axes do not apply, so the section draws
+one plain sentence in the body type instead of three "Not available" rows (`detail_axes_sector_model`,
+or `detail_axes_descriptive` for the investment banks), and the F-Score says "Does not apply to
+banks and insurers" rather than "not available for this filer", which stays for missing data
+(1.3.30).
 
 **`LiveBar`** (`LiveBar.kt`) is the swap and pass sheets' phase indicator: a 2dp bar that breathes
 (opacity 1 to 0.45, 2.4s ease-in-out) only while `live` is true, static when landed or stale. This
