@@ -661,13 +661,15 @@ private fun AnalyzedRow(
     val figure = when {
         row.locked -> stringResource(R.string.pro_locked_value)
         row.unclassified -> stringResource(R.string.list_row_not_classified)
+        // JPMx, BACx, PGRx, GSx, JEFx: no composite on /summary, the class (if any) on the page.
+        row.sectorModel -> stringResource(R.string.list_row_sector_model)
         else -> row.composite?.let { stringResource(R.string.list_row_score, Fmt.decimal(it, decimals = 0)) }
     }
     AmberTickerRow(
         ticker = row.display,
         company = row.company,
         figure = figure,
-        figureQuiet = row.unclassified && !row.locked,
+        figureQuiet = (row.unclassified || row.sectorModel) && !row.locked,
         context = rowMeta(row, pricesPending),
         colors = colors,
         onClick = { onOpenDetail(row.ticker) },

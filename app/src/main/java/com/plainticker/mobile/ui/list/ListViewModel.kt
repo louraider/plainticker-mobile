@@ -106,9 +106,20 @@ data class ListRow(
      * nothing ([bodyWithholdsComposites]; QA of 1.3.21, JEFx), and for a served row the server
      * gives no class even though it still sends the composite ([classUnavailable]; QA of 1.3.22,
      * JEFx "32 of 100" and GSx "60 of 100" against Detail's "Not classified"), whose [composite]
-     * is then dropped so no surface can print it. Never true together with [locked].
+     * is then dropped so no surface can print it. Never true together with [locked] or
+     * [sectorModel].
      */
     val unclassified: Boolean = false,
+    /**
+     * True for a served row of a company its own sector model reads (methodology v0b.7: JPM, BAC
+     * and PGR classified by it, GS and JEF described by it), in a body that withheld nothing:
+     * `/summary` (`resolveVerdict` in the web's lib/leaderboard/verdict.ts) sends such a row no
+     * composite, no tone and no headline whether or not the model gives a class, and only such a
+     * row, since every general-method row carries its composite. The row cannot tell a class from
+     * none, so it names the model ("Sector model") rather than claim "Not classified" beside a
+     * page that shows a class. Never true together with [locked] or [unclassified].
+     */
+    val sectorModel: Boolean = false,
     /**
      * False for a price-only row whose underlying is not US-listed ([XStockAsset.isUsUnderlying]):
      * the server refuses a vote for it, so the row offers no Vote action. True on every analyzed
@@ -1079,7 +1090,10 @@ class ListViewModel(
         // classified". The body that withholds nothing still carries the composite of a company
         // the method gives no class; its null tone is the class_state "unavailable" (see
         // [classUnavailable]). Such a row says what Detail says, never a score.
-        val noClass = !bare && classUnavailable(withheld)
+        // A row with no composite at all in a body that withheld nothing is a sector model's
+        // ([readBySectorModel]): its class, if any, is on its page, not on /summary.
+        val bySectorModel = !bare && readBySectorModel(withheld)
+        val noClass = !bare && !bySectorModel && classUnavailable(withheld)
         return ListRow(
             ticker = ticker,
             symbol = asset?.symbol,
@@ -1099,7 +1113,8 @@ class ListViewModel(
             // body that withholds nothing (QA of 1.3.21: JEFx drew "Pro" for a Pro reader, its
             // composite null because the method gives it no class): see [bodyWithholdsComposites].
             locked = !bare && withheld && isProLocked(),
-            unclassified = noClass || composite == null && (bare || !withheld || !isProLocked()),
+            unclassified = !bySectorModel && (noClass || composite == null && (bare || !withheld || !isProLocked())),
+            sectorModel = bySectorModel,
         )
     }
 
@@ -1199,6 +1214,18 @@ internal fun SummaryRow.isProLocked(): Boolean =
  */
 internal fun SummaryRow.classUnavailable(withheld: Boolean): Boolean =
     tone == null && (!withheld || ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true))
+
+/**
+ * True when this served row belongs to a company its own sector model reads (methodology v0b.7):
+ * `resolveVerdict` (lib/leaderboard/verdict.ts) nulls `composite`, `tone` and `headline` for every
+ * such company, classified (JPM, BAC, PGR) or descriptive (GS, JEF), while a general-method row
+ * always carries its composite (a payload without one gets no row at all). So in a body that
+ * withholds nothing ([withheld] false), a row with no composite and no tone is a sector model's.
+ * In the withheld body the same nulls are the Pro lock on every row but [OPEN_EXAMPLE_TICKER], and
+ * the lock stays the answer there ([isProLocked]).
+ */
+internal fun SummaryRow.readBySectorModel(withheld: Boolean): Boolean =
+    !withheld && composite == null && tone == null
 
 /**
  * Whether this `/summary` body is the one the Pro-numbers lock withheld composites from. The server

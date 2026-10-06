@@ -275,6 +275,14 @@ being "9,999 voters" at 83.16dp of *context*, beside a figure), so it can only w
 budget it competes with, never narrow it, at 1.0x or at 1.3x (38.82dp). `AmberTickerRowTest` pins
 this arithmetic.
 
+**No class, or a sector model's, added 1.3.21 and 1.3.29.** A covered company the method gives no
+class draws `list_row_not_classified` ("Not classified") in the same slot, in the quiet type. A
+row a sector model reads (JPMx, BACx, PGRx classified by theirs, GSx and JEFx described by theirs)
+gets no composite from `/summary` whether or not it has a class, so for a reader whose body
+withholds nothing it draws `list_row_sector_model` ("Sector model"), also quiet, and never "Not
+classified" beside a page that shows a class. "Sector model" is two characters shorter than "Not
+classified", which the slot already draws.
+
 `AmberTickerRowGroup` is the 16dp tonal container a run of rows sits inside (`surfaceGround` behind
 a 1dp seam, each row's own `surfaceRaised`). It is a non-lazy `Column`, so it fits a small, fixed
 run (Today's "Next up," the onboarding backdrop's four sample rows) and not a list that must stay a
@@ -437,7 +445,10 @@ classification against the sector, not a live reading, and colour stays reserved
 already means something on. The marker settles with a 400ms cubic-bezier tween, unchanged since
 before this restyle. Measured: `label`'s budget is 197.234dp against the longest real `state` word
 ("near 52-week high," 103.812dp) paired with the widest `value`, a 116.279dp margin (46.76dp at
-1.3x).
+1.3x). An axis with no value (API v1.6 sends `null` for one the server cannot compute) is
+not a `Track` at all: Detail draws the label and "Not available", with no marker, and `Track`
+itself draws no marker for a null position. A marker is never parked at 0 for missing data, where
+it would read as the worst score (1.3.29).
 
 **`LiveBar`** (`LiveBar.kt`) is the swap and pass sheets' phase indicator: a 2dp bar that breathes
 (opacity 1 to 0.45, 2.4s ease-in-out) only while `live` is true, static when landed or stale. This

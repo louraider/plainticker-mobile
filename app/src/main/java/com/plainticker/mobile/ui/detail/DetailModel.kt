@@ -134,9 +134,10 @@ data class TrustFact(
 )
 
 /**
- * One axis of "Against the sector". A [value] of null is, ordinarily, a SEC-derived field the
- * filer does not publish (a foreign 20-F filer, a young one): the row says it is not available for
- * this filer and draws no marker, because a marker at zero would be a claim the payload never made.
+ * One axis of "Against the sector". A [value] of null is an axis the server cannot compute (API
+ * v1.6, methodology v0b.8: no sector valuation percentile, no 52-week range, a field the filer
+ * does not publish): the row says "Not available" and draws no marker, [positionPct] null, because
+ * a marker at zero would read as the worst score, a claim the payload never made.
  *
  * [locked] is the other, unrelated reason [value] can be null: the Pro-numbers lock (founder
  * decision 2026-09-23) withholds valuation and momentum from a free, non-AAPL caller, and the
@@ -150,7 +151,11 @@ data class TrackRow(
     val value: String?,
     /** The server's own state word, lowercased. Empty when the payload sent none. */
     val state: String,
-    val positionPct: Float,
+    /**
+     * Where the marker stands, 0 to 100. Null when there is nothing to place: no [value], or no
+     * `position` from the server. Never 0 in place of a missing position.
+     */
+    val positionPct: Float?,
     /** True when [Axis.locked] withheld this axis; see this class's own doc comment. */
     val locked: Boolean = false,
 )
@@ -294,17 +299,7 @@ val DetailUiState.verdictBlock: VerdictBlock?
         is AnalysisState.Served -> {
             val verdict = state.payload.verdict ?: return null
             if (verdict.unavailable) {
-                VerdictBlock.Unavailable(
-                    words(
-                        when (verdict.classReason) {
-                            Verdict.REASON_SECTOR_MODEL_PENDING -> R.string.detail_verdict_unavailable_sector
-                            // QA of 1.3.20: ABBVx read "Not enough data" beside a composite and a
-                            // full read. The data is there; the sector is too small to compare.
-                            Verdict.REASON_THIN_COHORT -> R.string.detail_verdict_unavailable_thin
-                            else -> R.string.detail_verdict_unavailable_data
-                        },
-                    ),
-                )
+                VerdictBlock.Unavailable(words(unavailableReason(verdict.classReason)))
             } else if (verdict.locked) {
                 VerdictBlock.Locked
             } else {
@@ -315,6 +310,28 @@ val DetailUiState.verdictBlock: VerdictBlock?
 
         AnalysisState.NotServed, AnalysisState.Incomplete, AnalysisState.Unavailable -> null
     }
+
+/**
+ * The sentence under "Not classified" for each `verdict.class_reason` the web's `DecisionReason`
+ * names (methodology v0b.11). [Verdict.REASON_CLASSIFIED] and [Verdict.REASON_SECTOR_MODEL] never
+ * reach here: they carry a class ([Verdict.unavailable] is false for them), so the class is drawn.
+ * A reason this build does not know reads neutrally rather than as "Not enough data", so a reason
+ * the server adds later never turns into a false sentence here.
+ */
+@StringRes
+internal fun unavailableReason(classReason: String?): Int = when (classReason) {
+    // Since v0b.7 only brokers wait for their sector model; banks and insurers have theirs.
+    Verdict.REASON_SECTOR_MODEL_PENDING -> R.string.detail_verdict_unavailable_sector
+    Verdict.REASON_DESCRIPTIVE_ONLY -> R.string.detail_verdict_unavailable_descriptive
+    Verdict.REASON_STALE_DATA -> R.string.detail_verdict_unavailable_stale
+    Verdict.REASON_SECTOR_MODEL_UNAVAILABLE -> R.string.detail_verdict_unavailable_peers
+    Verdict.REASON_MODEL_METRIC_NOT_MEANINGFUL -> R.string.detail_verdict_unavailable_metric
+    // QA of 1.3.20: ABBVx read "Not enough data" beside a composite and a full read. The data is
+    // there; the sector is too small to compare.
+    Verdict.REASON_THIN_COHORT -> R.string.detail_verdict_unavailable_thin
+    Verdict.REASON_INSUFFICIENT_DATA -> R.string.detail_verdict_unavailable_data
+    else -> R.string.detail_verdict_unavailable_other
+}
 
 /** The token's own facts can only be drawn once the catalog names a mint for this ticker. */
 val DetailUiState.hasToken: Boolean get() = catalogAsset.valueOrNull?.solanaMint != null
@@ -730,9 +747,21 @@ private fun trackRow(@StringRes label: Int, axis: Axis?): TrackRow = TrackRow(
     label = words(label),
     value = axis?.value?.takeIf { it.isFinite() }?.let { axisValue(it, axis.scale) },
     state = (axis?.labelEn ?: axis?.state).orEmpty().lowercase(),
-    positionPct = ((axis?.position ?: 0.0) * 100.0).toFloat(),
+    positionPct = markerPct(axis),
     locked = axis?.locked == true,
 )
+
+/**
+ * The marker's place on the track, 0 to 100, or null when the axis has no value or no position to
+ * place (spec 2026-10-06, 2.2): the server sends `null` for an axis it cannot compute, and a
+ * missing position is never drawn at the left edge, where it would read as the worst score.
+ */
+internal fun markerPct(axis: Axis?): Float? {
+    if (axis == null || axis.locked) return null
+    if (axis.value?.isFinite() != true) return null
+    val position = axis.position?.takeIf { it.isFinite() } ?: return null
+    return (position * 100.0).toFloat()
+}
 
 /**
  * An axis value in the shape its own scale asks for: "8/9" out of nine, "51" out of a hundred,

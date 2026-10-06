@@ -37,8 +37,8 @@ private val MarkerEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
  * A position, never a filled bar: secondary label left, primary value and a tertiary state word
  * right, over a full-width [AmberColors.surfaceHigh] capsule (the same departures-board track
  * [Gauge] draws, DESIGN.md section 1's signature element) with a 2dp primary-text marker at
- * [positionPct] (0 to 100), standing proud of the capsule the way [Gauge]'s own ticks do. Speaks
- * as one sentence: "Quality: strong, 8 of 9".
+ * [positionPct] (0 to 100), standing proud of the capsule the way [Gauge]'s own ticks do. A null
+ * [positionPct] draws the capsule with no marker. Speaks as one sentence: "Quality: strong, 8 of 9".
  *
  * **Neutral on purpose.** The marker stays [AmberColors.textPrimary], never [AmberColors.actionText]:
  * this draws a classification against the sector, not a live reading, and DESIGN.md section 7's
@@ -77,11 +77,13 @@ fun Track(
     label: String,
     value: String,
     state: String,
-    positionPct: Float,
+    positionPct: Float?,
     modifier: Modifier = Modifier,
     colors: AmberColors = defaultAmberColors(),
 ) {
-    val target = (positionPct / 100f).coerceIn(0f, 1f)
+    // No position, no marker: the capsule alone. Never parked at 0, where it would read as the
+    // worst score (spec 2026-10-06, 2.2).
+    val target = positionPct?.let { (it / 100f).coerceIn(0f, 1f) } ?: 0f
     val motion = rememberMotionEnabled()
     val position by animateFloatAsState(
         targetValue = target,
@@ -134,7 +136,9 @@ fun Track(
                 size = Size(size.width, TrackThickness.toPx()),
                 cornerRadius = CornerRadius(TrackThickness.toPx() / 2f),
             )
-            drawRect(color = colors.textPrimary, topLeft = Offset((size.width - two) * position, 0f), size = Size(two, size.height))
+            if (positionPct != null) {
+                drawRect(color = colors.textPrimary, topLeft = Offset((size.width - two) * position, 0f), size = Size(two, size.height))
+            }
         }
     }
 }

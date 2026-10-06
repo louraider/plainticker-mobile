@@ -158,6 +158,11 @@
     <!-- A covered company with a full page and no classification against its sector (QA of 1.3.20:
          ABBVx, Vx): no score to show and none to lock, so not "Pro". -->
     <string name="list_row_not_classified">Not classified</string>
+    <!-- A served row of a company a sector model reads (JPM, BAC, PGR classified, GS and JEF
+         descriptive, methodology v0b.7): /summary sends it no composite and no tone whether or not
+         the model gives a class, so the row names the model rather than claim "Not classified".
+         The class itself is on the company's page. -->
+    <string name="list_row_sector_model">Sector model</string>
     <string name="list_row_score_legend">Each number ranks the stock against the others in its sector, from 0 to 100.</string>
     <string name="list_state_strong">strong</string>
     <string name="list_state_fair">fair</string>
@@ -202,15 +207,29 @@
     <string name="detail_verdict_label">Classification</string>
     <string name="detail_verdict_qualifier">By the method\'s fixed rule. Not a price forecast or advice.</string>
     <string name="detail_verdict_locked">Pro only</string>
-    <!-- verdict.class_state "unavailable": the method gives no class. The sector line names the
-         reason plainly, after the web's components/ticker/sector-model-copy.ts. The API sends no
-         business profile, so it names every profile the web gates (deposit banks, banks with
-         capital markets, bank-brokers, retail brokers, property and casualty insurers) at once. -->
+    <!-- verdict.class_state "unavailable": the method gives no class, and verdict.class_reason says
+         why (web lib/methodology/decision.ts, DecisionReason, methodology v0b.11). One sentence per
+         reason below; class_reason "classified" and "sector-model" carry a class and draw it. -->
     <!-- "Not classified", the word the Stocks row uses too (QA of 1.3.21: the row said "Not
          classified" and the page it opened said "Unavailable"). -->
     <string name="detail_verdict_unavailable">Not classified</string>
-    <string name="detail_verdict_unavailable_sector">Banks, capital-markets firms, brokers and insurers need their own sector model, which is in progress. The general method\'s debt and cash-flow checks do not read them fairly. The available financial figures are below.</string>
+    <!-- class_reason sector-model-pending: since methodology v0b.7 (4 Oct 2026) only brokers (SCHW,
+         HOOD) wait for their model. Deposit banks and P&amp;C insurers are classified by theirs,
+         investment banks are descriptive-only. -->
+    <string name="detail_verdict_unavailable_sector">Brokers need their own sector model, which is in progress. The general method\'s debt and cash-flow checks do not read them fairly. The available financial figures are below.</string>
+    <!-- class_reason insufficient-data: the company lacks an input the rule needs. -->
     <string name="detail_verdict_unavailable_data">Not enough data to classify this company against its sector. The available figures are below.</string>
+    <!-- class_reason descriptive-only (GS, JEF): fewer than 8 comparable companies, by design. -->
+    <string name="detail_verdict_unavailable_descriptive">Investment banks are shown descriptively: there are too few comparable companies for a class. The figures below are for reference.</string>
+    <!-- class_reason stale-data (v0b.8): the analysis is more than 15 days old today. -->
+    <string name="detail_verdict_unavailable_stale">The data behind this analysis is more than 15 days old, so the class is paused until it is refreshed. The figures below are as of the date shown.</string>
+    <!-- class_reason sector-model-unavailable: our peer group snapshot is missing or out of date. -->
+    <string name="detail_verdict_unavailable_peers">The peer group for this company\'s sector model is temporarily unavailable, so there is no class right now. This is on our side, not a judgement of the company.</string>
+    <!-- class_reason model-metric-not-meaningful: a metric the model needs means nothing this year. -->
+    <string name="detail_verdict_unavailable_metric">One of the measures this sector model needs is not meaningful this year (for example, a loss year), so there is no class.</string>
+    <!-- Any class_reason this build does not know: neutral, so a reason the server adds later never
+         turns into a false "Not enough data". -->
+    <string name="detail_verdict_unavailable_other">Not classified right now. The available figures are below.</string>
     <!-- class_reason thin-cohort: the web's "The sector comparison is too narrow to classify"
          (lib/methodology/decision-copy.ts thinCohortCopy), in plain words (QA of 1.3.20). The
          server's cohort is a business-profile peer group, not the GICS sector the list groups by
@@ -377,6 +396,9 @@
     <string name="detail_analysis_incomplete">Analysis incomplete for this filer</string>
     <string name="detail_value_unavailable">unavailable</string>
     <string name="detail_not_available_filer">not available for this filer</string>
+    <!-- An "Against the sector" axis the server sends with no value (API v1.6: no sector valuation
+         percentile, no 52-week range). Drawn with no marker: a marker at 0 reads as the worst score. -->
+    <string name="detail_axis_not_available">Not available</string>
     <string name="detail_reference_unavailable">Reference price unavailable</string>
     <string name="detail_onchain_unavailable">on-chain data unavailable</string>
     <string name="detail_value_unknown">Unknown</string>

@@ -511,11 +511,13 @@ class ListViewModelTest {
 
     /**
      * QA of 1.3.21: JEFx drew "Pro" for a Pro reader. It is on /summary with no composite and no
-     * tone because the method gives it no class, not because anything was withheld: every other
-     * row of the same body carries its composite, so the body withheld nothing.
+     * tone because a sector model reads it (methodology v0b.7: `resolveVerdict` nulls both for every
+     * sector-model company, classified or not), not because anything was withheld: every other row
+     * of the same body carries its composite, so the body withheld nothing. Since 1.3.29 such a row
+     * names the model rather than claim "Not classified" (JPMx, BACx and PGRx have a class).
      */
     @Test
-    fun `a served row with no composite in a body that withheld nothing is not classified, never Pro`() = runTest {
+    fun `a served row with no composite in a body that withheld nothing is a sector model's, never Pro`() = runTest {
         val jef = SummaryRow(ticker = "TSLA", company = "Tesla, Inc.", composite = null, tone = null, headline = null, stale = false)
         val proBody = summary().let { it.copy(rows = listOf(it.rows[0], it.rows[1], jef)) }
         assertFalse("JPM carries its composite: this body is whole", bodyWithholdsComposites(proBody.rows))
@@ -525,8 +527,9 @@ class ListViewModelTest {
             val state = awaitUntil { !it.refreshing && it.analyzed.any { row -> row.ticker == "TSLA" } }
             val row = state.analyzed.single { it.ticker == "TSLA" }
             assertFalse("nothing was withheld from this reader", row.locked)
-            assertTrue(row.unclassified)
-            assertTrue("the classified rows are untouched", state.analyzed.filter { it.ticker != "TSLA" }.none { it.locked || it.unclassified })
+            assertTrue(row.sectorModel)
+            assertFalse("its page may show a class", row.unclassified)
+            assertTrue("the classified rows are untouched", state.analyzed.filter { it.ticker != "TSLA" }.none { it.locked || it.unclassified || it.sectorModel })
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -624,6 +627,113 @@ class ListViewModelTest {
             assertFalse(state.analyzed.single { it.ticker == "AAPL" }.locked)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // ---- 1.3.29: methodology v0b.11 on the Stocks rows (spec 2026-10-06, 2.1 and 2.4) ------------
+
+    private val pgrMint = "PGRxMint".padEnd(44, '1')
+    private val nvdaMint = "NVDAxMint".padEnd(44, '1')
+
+    /**
+     * The rows `/summary` sends a Pro reader since v0b.8: AAPL classified; JPM and PGR classified by
+     * their sector models and GS described by its own, all three with no composite, tone or headline
+     * (`resolveVerdict`); NVDA stale-data, its composite kept and its headline and tone nulled
+     * (`deriveSummaryRows`, older than 15 days).
+     */
+    private fun proV0b11Body() = SummaryResponse(
+        schema = "v1.6",
+        generatedAt = "2026-10-06T12:00:00.000Z",
+        rows = listOf(
+            SummaryRow(ticker = "AAPL", company = "Apple Inc.", headline = "h", tone = Tone.DANGER, composite = 45.84, sector = "Information Technology"),
+            SummaryRow(ticker = "NVDA", company = "NVIDIA Corporation", headline = null, tone = null, composite = 81.0, sector = "Information Technology", stale = true, ageDays = 16),
+            SummaryRow(ticker = "JPM", company = "JPMorgan Chase & Co.", headline = null, tone = null, composite = null, sector = "Financials"),
+            SummaryRow(ticker = "PGR", company = "The Progressive Corporation", headline = null, tone = null, composite = null, sector = "Financials"),
+            SummaryRow(ticker = "GS", company = "The Goldman Sachs Group, Inc.", headline = null, tone = null, composite = null, sector = "Financials"),
+        ),
+        covered = listOf("AAPL", "NVDA", "JPM", "PGR", "GS"),
+    )
+
+    private fun v0b11Catalog() = listOf(
+        openAsset("AAPLx", "AAPL", aaplMint),
+        openAsset("NVDAx", "NVDA", nvdaMint),
+        openAsset("JPMx", "JPM", jpmMint),
+        openAsset("PGRx", "PGR", pgrMint),
+        openAsset("GSx", "GS", gsMint),
+    )
+
+    @Test
+    fun `JPMx and PGRx, classified by their sector models, never read Not classified for a Pro reader`() = runTest {
+        val body = proV0b11Body()
+        assertFalse(bodyWithholdsComposites(body.rows))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(body)),
+            catalog = FakeCatalogRepository(Result.success(v0b11Catalog())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size == 5 }
+            for (ticker in listOf("JPM", "PGR", "GS")) {
+                val row = state.analyzed.single { it.ticker == ticker }
+                assertTrue("$ticker names its sector model", row.sectorModel)
+                assertFalse("$ticker: the page may show a class", row.unclassified)
+                assertFalse("$ticker: nothing was withheld", row.locked)
+                assertNull("$ticker: no general-method score to print", row.composite)
+                assertEquals("Financials", row.sector)
+            }
+            assertEquals("Sector model", com.plainticker.mobile.ui.ShippedCopy.strings.getValue("list_row_sector_model"))
+            val aapl = state.analyzed.single { it.ticker == "AAPL" }
+            assertFalse(aapl.unclassified || aapl.locked || aapl.sectorModel)
+            assertEquals(45.84, aapl.composite!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a stale-data row, headline and tone null, reads Not classified and keeps no score`() = runTest {
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(proV0b11Body())),
+            catalog = FakeCatalogRepository(Result.success(v0b11Catalog())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size == 5 }
+            val nvda = state.analyzed.single { it.ticker == "NVDA" }
+            assertTrue("no class while the data is stale", nvda.unclassified)
+            assertFalse(nvda.sectorModel || nvda.locked)
+            assertNull("the composite decides nothing, so no surface prints it", nvda.composite)
+            assertNull(nvda.state)
+            assertTrue("still flagged stale for the meta line", nvda.stale)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the same sector-model rows in the free body keep the Pro lock`() = runTest {
+        val body = proV0b11Body().let { pro -> pro.copy(rows = pro.rows.map { if (it.ticker == "AAPL") it else it.locked() }) }
+        assertTrue(bodyWithholdsComposites(body.rows))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(body)),
+            catalog = FakeCatalogRepository(Result.success(v0b11Catalog())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size == 5 }
+            for (ticker in listOf("JPM", "PGR", "GS", "NVDA")) {
+                val row = state.analyzed.single { it.ticker == ticker }
+                assertTrue("$ticker: a withheld body can only be read as the lock", row.locked)
+                assertFalse(row.unclassified || row.sectorModel)
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `readBySectorModel needs a whole body, no composite and no tone`() {
+        val jpm = SummaryRow(ticker = "JPM", composite = null, tone = null, headline = null)
+        assertTrue(jpm.readBySectorModel(withheld = false))
+        assertFalse("in the withheld body the same nulls are the lock", jpm.readBySectorModel(withheld = true))
+        assertFalse("a composite is the general method's", jpm.copy(composite = 81.0).readBySectorModel(withheld = false))
+        assertFalse(jpm.copy(tone = Tone.CAUTION).readBySectorModel(withheld = false))
     }
 
     @Test
