@@ -195,7 +195,9 @@ private fun VoteState.Refused.refusalSentence(): Copy =
  * and says so in the headline ("Vote not sent") beside the caution mark. The one that is not
  * certain is [VoteRefusal.FAILED]: the wallet answered with a failure and no signature, and it
  * signs and sends in one call, so whether the vote reached the chain is not known. That one reads
- * "Vote not confirmed" beside the pending ring, with where to look before voting again.
+ * "Vote not confirmed" beside the pending ring, with where to look before voting again. A phone
+ * with no wallet app at all says that in the headline, as the swap sheet does (QA of 1.3.29): no
+ * vote was ever possible there, so "Vote not sent" answered a question nobody asked.
  */
 private fun VoteState.Refused.refusedResult(): VoteResult = if (reason == VoteRefusal.FAILED) {
     VoteResult(
@@ -206,7 +208,7 @@ private fun VoteState.Refused.refusedResult(): VoteResult = if (reason == VoteRe
 } else {
     VoteResult(
         tone = ResultMarkTone.Failed,
-        headline = words(R.string.vote_result_refused),
+        headline = words(if (reason == VoteRefusal.NO_WALLET) R.string.result_no_wallet else R.string.vote_result_refused),
         sentences = listOf(refusalSentence()),
     )
 }

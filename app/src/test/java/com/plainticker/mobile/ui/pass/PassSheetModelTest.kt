@@ -7,6 +7,7 @@ import com.plainticker.mobile.ui.ShippedCopy
 import com.plainticker.mobile.ui.refusal
 import com.plainticker.mobile.wallet.TransactionGuard
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -138,6 +139,10 @@ class PassSheetModelTest {
         assertEquals(PassActionKind.HaveCode, content.primary?.kind)
         assertEquals("Have a code?", render(content.primary?.label))
         assertEquals(PassActionKind.Close, content.secondary?.kind)
+        // QA of 1.3.29: the swap and vote sheets said "Swap failed" / "Vote not sent" here. The pay
+        // sheet has no result headline at all: its title stays and the sentence is the notice.
+        assertEquals(com.plainticker.mobile.R.string.pass_title, (content.title as Copy.Words).id)
+        assertFalse("nothing failed", "fail" in render(content.title).orEmpty().lowercase())
         assertEquals(
             "one sentence for every wallet flow",
             setOf(com.plainticker.mobile.R.string.no_wallet_app),

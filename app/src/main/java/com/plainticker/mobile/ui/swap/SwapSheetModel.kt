@@ -530,10 +530,14 @@ private fun SwapState.Landed.landedResult(amount: Copy): SheetResult {
  * words, 2026-09-29), picked by the failure's [FailureOutcome]; the detail is the failure's own
  * reason, which says what is certain about the money ("Nothing was swapped", "Nothing was sent").
  * A wallet that was never connected says that instead, since no swap was attempted, and not
- * knowing is its own tone, not a failure: [ResultTone.Pending].
+ * knowing is its own tone, not a failure: [ResultTone.Pending]. A phone with no wallet app at all
+ * says that too (QA of 1.3.29: "Swap failed" over a swap that was never possible), with the same
+ * sentence and actions under it.
  */
 private fun SwapState.Failed.failedResult(): SheetResult {
-    val (tone, headline) = when (reason.outcome) {
+    val (tone, headline) = if (reason == SwapFailure.NO_WALLET) {
+        ResultTone.Failed to words(R.string.result_no_wallet)
+    } else when (reason.outcome) {
         FailureOutcome.NOTHING_SENT -> ResultTone.Failed to words(R.string.result_failed)
         FailureOutcome.NOT_LANDED -> ResultTone.Failed to words(R.string.result_failed)
         FailureOutcome.UNKNOWN -> ResultTone.Pending to words(R.string.result_pending)

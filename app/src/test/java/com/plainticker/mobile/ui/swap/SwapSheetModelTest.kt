@@ -759,6 +759,21 @@ class SwapSheetModelTest {
         assertTrue("no quote, so no cost block", content.cells.isEmpty())
     }
 
+    /** QA of 1.3.29: with no wallet app on the phone the headline said "Swap failed", and nothing had. */
+    @Test
+    fun `no wallet app on the phone says so in the headline, never Swap failed`() {
+        val content = SwapState.Failed(leg, funds = null, input = null, reason = SwapFailure.NO_WALLET).shown()
+        val result = requireNotNull(content.result)
+        assertEquals(R.string.result_no_wallet, id(result.headline))
+        assertEquals("No wallet on this phone", ShippedCopy.render(result.headline))
+        assertEquals("the sentence under it is unchanged", R.string.no_wallet_app, id(result.detail))
+        assertEquals(ResultTone.Failed, result.tone)
+
+        // Every other refusal before anything was sent still says the plain answer.
+        val unread = SwapState.Failed(leg, funds = null, input = null, reason = SwapFailure.CHAIN_UNREAD).shown()
+        assertEquals(R.string.result_failed, id(unread.result?.headline))
+    }
+
     /**
      * The Swap to USDC checks (security audit, 2026-09-26) are refusals before the wallet, so each
      * says nothing was sent. The one for a second source that did not answer is honest about what
@@ -911,7 +926,8 @@ class SwapSheetModelTest {
         // "The swap did not land"; the reason under it still says what happened to the money.
         SwapFailure.entries.forEach { reason ->
             val result = requireNotNull(SwapState.Failed(leg, funds, amount(), reason, quote, false, timing).shown().result)
-            val (tone, headline) = when (reason.outcome) {
+            // QA of 1.3.29: a phone with no wallet app says so; nothing failed there.
+            val (tone, headline) = if (reason == SwapFailure.NO_WALLET) ResultTone.Failed to "No wallet on this phone" else when (reason.outcome) {
                 FailureOutcome.NOTHING_SENT -> ResultTone.Failed to "Swap failed"
                 FailureOutcome.NOT_LANDED -> ResultTone.Failed to "Swap failed"
                 FailureOutcome.UNKNOWN -> ResultTone.Pending to "Sent, not confirmed yet"

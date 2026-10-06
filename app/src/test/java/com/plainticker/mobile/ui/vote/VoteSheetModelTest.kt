@@ -228,6 +228,10 @@ class VoteSheetModelTest {
             if (reason == VoteRefusal.FAILED) {
                 assertEquals("Vote not confirmed", render(result.headline))
                 assertEquals("Check Your votes in about 20 minutes before you vote again.", sentences[1])
+            } else if (reason == VoteRefusal.NO_WALLET) {
+                // QA of 1.3.29: no vote was ever possible, so the headline says what is true.
+                assertEquals("No wallet on this phone", render(result.headline))
+                assertEquals(1, sentences.size)
             } else {
                 assertEquals(reason.name, "Vote not sent", render(result.headline))
                 assertEquals(1, sentences.size)

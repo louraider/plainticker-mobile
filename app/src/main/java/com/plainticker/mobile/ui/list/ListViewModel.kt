@@ -8,6 +8,7 @@ import com.plainticker.mobile.data.jupiter.TrackingQuality
 import com.plainticker.mobile.data.plainticker.NextUpRow
 import com.plainticker.mobile.data.plainticker.SummaryRow
 import com.plainticker.mobile.data.plainticker.Tone
+import com.plainticker.mobile.data.plainticker.Verdict
 import com.plainticker.mobile.data.snapshot.toSummaryRow
 import com.plainticker.mobile.core.Clock
 import com.plainticker.mobile.core.WallClock
@@ -107,7 +108,9 @@ data class ListRow(
      * gives no class even though it still sends the composite ([classUnavailable]; QA of 1.3.22,
      * JEFx "32 of 100" and GSx "60 of 100" against Detail's "Not classified"), whose [composite]
      * is then dropped so no surface can print it. Never true together with [locked] or
-     * [sectorModel].
+     * [sectorModel]. A row whose own `class_state` says "unavailable" (web 2026-10-06,
+     * [SummaryRow.reportedClass]) for a reason that is not a sector model's is unclassified for
+     * every reader, free or Pro.
      */
     val unclassified: Boolean = false,
     /**
@@ -117,7 +120,9 @@ data class ListRow(
      * composite, no tone and no headline whether or not the model gives a class, and only such a
      * row, since every general-method row carries its composite. The row cannot tell a class from
      * none, so it names the model ("Sector model") rather than claim "Not classified" beside a
-     * page that shows a class. Never true together with [locked] or [unclassified].
+     * page that shows a class. Never true together with [locked] or [unclassified]. With the row's
+     * own `class_state` (web 2026-10-06), also true in the withheld body for GS and JEF, whose
+     * `class_reason` names the descriptive model: they have no class, so no "Pro" (QA of 1.3.29).
      */
     val sectorModel: Boolean = false,
     /**
@@ -1092,6 +1097,33 @@ class ListViewModel(
         // [classUnavailable]). Such a row says what Detail says, never a score.
         // A row with no composite at all in a body that withheld nothing is a sector model's
         // ([readBySectorModel]): its class, if any, is on its page, not on /summary.
+        // QA of 1.3.29: a server that names the class state (2026-10-06) settles it per row, with
+        // no inference from the body: GSx and JEFx drew "Pro" on the free list although neither has
+        // a class to unlock. Without the field the reading below is the one 1.3.29 made.
+        when (val known = if (bare) null else reportedClass()) {
+            null -> Unit
+            else -> return ListRow(
+                ticker = ticker,
+                symbol = asset?.symbol,
+                mint = asset?.solanaMint,
+                company = company ?: asset?.name,
+                composite = if (known == ReportedClass.CLASSIFIED) percentile(composite, asFraction) else null,
+                state = tone.toRowState(),
+                stale = stale,
+                ageDays = ageDays,
+                priceUsd = null,
+                referencePriceUsd = null,
+                poolUsd = null,
+                analyzed = true,
+                sector = sector,
+                locked = known == ReportedClass.CLASSIFIED && withheld && isProLocked(),
+                unclassified = known == ReportedClass.NOT_CLASSIFIED,
+                // A classified row with no composite in a body that withheld nothing is a sector
+                // model's: its class is on its page, not on /summary (JPMx, BACx, PGRx for Pro).
+                sectorModel = known == ReportedClass.SECTOR_MODEL ||
+                    known == ReportedClass.CLASSIFIED && composite == null && !(withheld && isProLocked()),
+            )
+        }
         val bySectorModel = !bare && readBySectorModel(withheld)
         val noClass = !bare && !bySectorModel && classUnavailable(withheld)
         return ListRow(
@@ -1200,6 +1232,47 @@ internal const val OPEN_EXAMPLE_TICKER = "AAPL"
  */
 internal fun SummaryRow.isProLocked(): Boolean =
     composite == null && (tone == null || headline == null) && !ticker.equals(OPEN_EXAMPLE_TICKER, ignoreCase = true)
+
+/** What a row's own `class_state` and `class_reason` say, when the server sends them. */
+internal enum class ReportedClass {
+    /** The method gives a class: the score, or "Pro" where the lock withheld it. */
+    CLASSIFIED,
+
+    /** No class, and the company's own sector model is what reads it: "Sector model". */
+    SECTOR_MODEL,
+
+    /** No class: "Not classified", never "Pro" (there is nothing to unlock). */
+    NOT_CLASSIFIED,
+}
+
+/**
+ * The `class_reason` values that name the company's own sector model: the descriptive model of the
+ * investment banks (GS, JEF), and a classifying model that gives no class this time (its peer group
+ * is out of date, or a metric it needs is not meaningful this year). The list said "Sector model"
+ * for these companies before the field existed, and still does.
+ */
+internal val SECTOR_MODEL_REASONS: Set<String> = setOf(
+    Verdict.REASON_DESCRIPTIVE_ONLY,
+    Verdict.REASON_SECTOR_MODEL_UNAVAILABLE,
+    Verdict.REASON_MODEL_METRIC_NOT_MEANINGFUL,
+)
+
+/**
+ * The row's class as the server states it (`class_state` / `class_reason`, web 2026-10-06), or null
+ * when it does not (an older server, or a state this build does not know), in which case the list
+ * keeps reading the row from its withheld fields ([bodyWithholdsComposites], [classUnavailable],
+ * [readBySectorModel]). A reason that names a class wins over the state, as on Detail
+ * ([Verdict.unavailable]).
+ */
+internal fun SummaryRow.reportedClass(): ReportedClass? = when (classState) {
+    SummaryRow.CLASS_STATE_CLASSIFIED -> ReportedClass.CLASSIFIED
+    SummaryRow.CLASS_STATE_UNAVAILABLE -> when (classReason) {
+        Verdict.REASON_CLASSIFIED, Verdict.REASON_SECTOR_MODEL -> ReportedClass.CLASSIFIED
+        in SECTOR_MODEL_REASONS -> ReportedClass.SECTOR_MODEL
+        else -> ReportedClass.NOT_CLASSIFIED
+    }
+    else -> null
+}
 
 /**
  * True when the server gives this row no class (`verdict.class_state` "unavailable" on Detail, for

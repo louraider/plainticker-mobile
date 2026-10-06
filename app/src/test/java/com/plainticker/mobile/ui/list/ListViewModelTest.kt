@@ -833,6 +833,133 @@ class ListViewModelTest {
      * (`app/api/v1/summary/route.ts`'s `withholdVerdictInputs`): composite, tone, headline and
      * setup_score all null together, on an otherwise served, classified row.
      */
+    // ---- 1.3.30: the row's own class_state and class_reason (web 2026-10-06) -------------------
+
+    private val jefMint130 = "JEFxMint130".padEnd(44, '1')
+
+    private fun classStateCatalog() = v0b11Catalog() + openAsset("JEFx", "JEF", jefMint130)
+
+    /**
+     * The body a free reader gets from a server that names the class state: AAPL open; JPM and PGR
+     * classified (sector models) and withheld; GS and JEF with no class (descriptive model); NVDA
+     * past the age rule (stale-data). Every row but AAPL has its composite, tone and headline nulled.
+     */
+    private fun freeClassStateBody() = SummaryResponse(
+        schema = "v1.6",
+        generatedAt = "2026-10-06T12:00:00.000Z",
+        rows = listOf(
+            SummaryRow(ticker = "AAPL", company = "Apple Inc.", headline = "h", tone = Tone.DANGER, composite = 45.84, sector = "Information Technology", classState = "classified"),
+            SummaryRow(ticker = "NVDA", company = "NVIDIA Corporation", composite = null, sector = "Information Technology", classState = "unavailable", classReason = "stale-data"),
+            SummaryRow(ticker = "JPM", company = "JPMorgan Chase & Co.", composite = null, sector = "Financials", classState = "classified"),
+            SummaryRow(ticker = "PGR", company = "The Progressive Corporation", composite = null, sector = "Financials", classState = "classified"),
+            SummaryRow(ticker = "GS", company = "The Goldman Sachs Group, Inc.", composite = null, sector = "Financials", classState = "unavailable", classReason = "descriptive-only"),
+            SummaryRow(ticker = "JEF", company = "Jefferies Financial Group Inc.", composite = null, sector = "Financials", classState = "unavailable", classReason = "descriptive-only"),
+        ),
+        covered = listOf("AAPL", "NVDA", "JPM", "PGR", "GS", "JEF"),
+    )
+
+    @Test
+    fun `QA of 1_3_29, GSx and JEFx have no class, so the free list never draws Pro on them`() = runTest {
+        val body = freeClassStateBody()
+        assertTrue("the free body: every composite but AAPL's is withheld", bodyWithholdsComposites(body.rows))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(body)),
+            catalog = FakeCatalogRepository(Result.success(classStateCatalog())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size == 6 }
+            for (ticker in listOf("GS", "JEF")) {
+                val row = state.analyzed.single { it.ticker == ticker }
+                assertFalse("$ticker has no class to unlock", row.locked)
+                assertTrue("$ticker is read by its sector model, as for a Pro reader", row.sectorModel)
+                assertFalse(row.unclassified)
+                assertNull(row.composite)
+            }
+            for (ticker in listOf("JPM", "PGR")) {
+                val row = state.analyzed.single { it.ticker == ticker }
+                assertTrue("$ticker has a class, withheld from a free reader", row.locked)
+                assertFalse(row.unclassified || row.sectorModel)
+            }
+            val nvda = state.analyzed.single { it.ticker == "NVDA" }
+            assertTrue("stale-data: no class, said in neutral words", nvda.unclassified)
+            assertFalse(nvda.locked || nvda.sectorModel)
+            val aapl = state.analyzed.single { it.ticker == "AAPL" }
+            assertFalse(aapl.locked || aapl.unclassified || aapl.sectorModel)
+            assertEquals(45.84, aapl.composite!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the same companies in a Pro body with class_state read the same, a classified sector model as Sector model`() = runTest {
+        val body = SummaryResponse(
+            schema = "v1.6",
+            generatedAt = "2026-10-06T12:00:00.000Z",
+            rows = listOf(
+                SummaryRow(ticker = "AAPL", company = "Apple Inc.", headline = "h", tone = Tone.DANGER, composite = 45.84, sector = "Information Technology", classState = "classified"),
+                // A stale row keeps its composite on the Pro body; the class is gone, so is the score.
+                SummaryRow(ticker = "NVDA", company = "NVIDIA Corporation", composite = 81.0, sector = "Information Technology", classState = "unavailable", classReason = "stale-data"),
+                SummaryRow(ticker = "JPM", company = "JPMorgan Chase & Co.", composite = null, sector = "Financials", classState = "classified"),
+                SummaryRow(ticker = "PGR", company = "The Progressive Corporation", composite = null, sector = "Financials", classState = "unavailable", classReason = "sector-model-unavailable"),
+                SummaryRow(ticker = "GS", company = "The Goldman Sachs Group, Inc.", composite = null, sector = "Financials", classState = "unavailable", classReason = "descriptive-only"),
+                SummaryRow(ticker = "JEF", company = "Jefferies Financial Group Inc.", composite = 32.4, sector = "Financials", classState = "unavailable", classReason = "thin-cohort"),
+            ),
+            covered = listOf("AAPL", "NVDA", "JPM", "PGR", "GS", "JEF"),
+        )
+        assertFalse(bodyWithholdsComposites(body.rows))
+        val vm = viewModel(
+            summaries = FakeSummaryRepository(Result.success(body)),
+            catalog = FakeCatalogRepository(Result.success(classStateCatalog())),
+        )
+
+        vm.state.test {
+            val state = awaitUntil { !it.refreshing && it.analyzed.size == 6 }
+            fun row(t: String) = state.analyzed.single { it.ticker == t }
+            assertTrue(row("JPM").sectorModel)
+            assertTrue(row("PGR").sectorModel)
+            assertTrue(row("GS").sectorModel)
+            assertTrue("thin-cohort is not a sector model's reason", row("JEF").unclassified)
+            assertNull("an unclassified row carries no score any surface could print", row("JEF").composite)
+            assertTrue(row("NVDA").unclassified)
+            assertNull(row("NVDA").composite)
+            assertTrue(state.analyzed.none { it.locked })
+            assertEquals(45.84, row("AAPL").composite!!, 1e-9)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `reportedClass reads the row's own state, and nothing when the server sends none`() {
+        val base = SummaryRow(ticker = "GS")
+        assertNull("an older server: the list keeps its own reading", base.reportedClass())
+        assertNull("a state this build does not know", base.copy(classState = "locked").reportedClass())
+        assertEquals(ReportedClass.CLASSIFIED, base.copy(classState = "classified").reportedClass())
+        assertEquals(ReportedClass.SECTOR_MODEL, base.copy(classState = "unavailable", classReason = "descriptive-only").reportedClass())
+        assertEquals(ReportedClass.SECTOR_MODEL, base.copy(classState = "unavailable", classReason = "model-metric-not-meaningful").reportedClass())
+        assertEquals(ReportedClass.NOT_CLASSIFIED, base.copy(classState = "unavailable", classReason = "sector-model-pending").reportedClass())
+        assertEquals(ReportedClass.NOT_CLASSIFIED, base.copy(classState = "unavailable", classReason = "insufficient-data").reportedClass())
+        assertEquals("a reason this build does not know reads neutrally", ReportedClass.NOT_CLASSIFIED, base.copy(classState = "unavailable", classReason = "something-new").reportedClass())
+        assertEquals(ReportedClass.NOT_CLASSIFIED, base.copy(classState = "unavailable").reportedClass())
+        assertEquals("a reason that names a class wins, as on Detail", ReportedClass.CLASSIFIED, base.copy(classState = "unavailable", classReason = "sector-model").reportedClass())
+    }
+
+    @Test
+    fun `summary rows decode with and without class_state and class_reason`() {
+        val json = """{"schema":"v1.6","generated_at":"2026-10-06T12:00:00.000Z","rows":[
+            {"ticker":"GS","composite":null,"class_state":"unavailable","class_reason":"descriptive-only"},
+            {"ticker":"JPM","composite":null,"class_state":"classified","class_reason":null},
+            {"ticker":"AAPL","composite":45.8}
+        ]}"""
+        val rows = HttpClientFactory.json.decodeFromString(SummaryResponse.serializer(), json).rows
+        assertEquals("unavailable", rows[0].classState)
+        assertEquals("descriptive-only", rows[0].classReason)
+        assertEquals("classified", rows[1].classState)
+        assertNull(rows[1].classReason)
+        assertNull("an older server's row", rows[2].classState)
+        assertNull(rows[2].classReason)
+    }
+
     private fun SummaryRow.locked() = copy(composite = null, tone = null, headline = null, setupScore = null)
 
     @Test

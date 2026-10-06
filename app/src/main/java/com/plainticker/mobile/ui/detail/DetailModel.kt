@@ -9,6 +9,8 @@ import com.plainticker.mobile.ui.swap.SwapHolding
 import com.plainticker.mobile.ui.swap.SwapToken
 import java.math.BigDecimal
 import com.plainticker.mobile.data.jupiter.TrackingQuality
+import com.plainticker.mobile.data.plainticker.AnalysisPayload
+import com.plainticker.mobile.data.plainticker.SectorModelInfo
 import com.plainticker.mobile.data.plainticker.Verdict
 import com.plainticker.mobile.data.plainticker.Axes
 import com.plainticker.mobile.data.plainticker.Axis
@@ -170,6 +172,12 @@ data class FScoreContent(
     /** The scale, as a number and not as a numeral: it is what selects the plural of "signals". */
     val outOf: Int,
     val signals: List<SignalItem>,
+    /**
+     * True when the company is read by its own sector model (a bank or an insurer): the F-Score
+     * does not apply to it, so the line says that rather than "not available for this filer",
+     * which is kept for a filer whose data is genuinely missing (QA of 1.3.29, JPMx).
+     */
+    val notApplicable: Boolean = false,
 ) {
     /**
      * True when the filer publishes no F-Score at all, which is the SEC-null case: no numeral and
@@ -728,14 +736,62 @@ val DetailUiState.compositeLede: Copy?
 val DetailUiState.verdictSkeletonLines: Int
     get() = if (ticker in com.plainticker.mobile.repo.Coverage.WITHOUT_ROW) 3 else 2
 
+/** How a company read by its own sector model is read: classified by it, or only described. */
+internal enum class SectorModelReading { CLASSIFYING, DESCRIPTIVE }
+
+/** `class_reason` values only a sector model gives (the classifying ones; descriptive is its own). */
+private val CLASSIFYING_MODEL_REASONS = setOf(
+    Verdict.REASON_SECTOR_MODEL,
+    Verdict.REASON_SECTOR_MODEL_UNAVAILABLE,
+    Verdict.REASON_MODEL_METRIC_NOT_MEANINGFUL,
+)
+
+/**
+ * Whether this company is read by its own sector model (methodology v0b.7), from the payload's
+ * `sector_model` block, else from `verdict.class_reason`; null for the general method. The block is
+ * what a free reader has for JPM, BAC and PGR, whose class_reason the lock withholds.
+ */
+internal val AnalysisPayload.sectorModelReading: SectorModelReading?
+    get() {
+        val reason = verdict?.classReason
+        return when {
+            sectorModel?.kind == SectorModelInfo.KIND_DESCRIPTIVE || reason == Verdict.REASON_DESCRIPTIVE_ONLY ->
+                SectorModelReading.DESCRIPTIVE
+            sectorModel != null || reason in CLASSIFYING_MODEL_REASONS -> SectorModelReading.CLASSIFYING
+            else -> null
+        }
+    }
+
+/** The server sent no general axis at all (`axes: null`, decoded to an empty [Axes]). */
+private val Axes.allAbsent: Boolean get() = quality == null && valuation == null && momentum == null
+
+/**
+ * One line in place of the three tracks when the general sector axes do not apply: the company is
+ * read by its own sector model, and the server sends `axes: null` for it (QA of 1.3.29: JPMx, BACx,
+ * PGRx, GSx and JEFx drew three "Not available" rows, which read as missing data). Null for every
+ * other payload, including a general-method one whose axes are missing, which keeps its rows.
+ */
+val DetailUiState.axesNote: Copy?
+    get() {
+        val payload = analysis ?: return null
+        if (!payload.axes.allAbsent) return null
+        return when (payload.sectorModelReading) {
+            SectorModelReading.DESCRIPTIVE -> words(R.string.detail_axes_descriptive)
+            SectorModelReading.CLASSIFYING -> words(R.string.detail_axes_sector_model)
+            null -> null
+        }
+    }
+
 /**
  * Quality, valuation and momentum, in that order, each with the server's own state word lowercased.
  * The v1.1 payload carries no leaf fundamentals, so nothing stands under these three
  * (docs/data-map.md, gap 1): three tracks and the composite in the heading is the whole section.
+ * None when [axesNote] stands in their place.
  */
 val DetailUiState.tracks: List<TrackRow>
     get() {
         val axes = analysis?.axes ?: return emptyList()
+        if (axesNote != null) return emptyList()
         return listOf(
             trackRow(R.string.detail_track_quality, axes.quality),
             trackRow(R.string.detail_track_valuation, axes.valuation),
@@ -790,6 +846,7 @@ val DetailUiState.fScore: FScoreContent?
             score = fscore?.score?.let { Fmt.count(it) },
             outOf = outOf,
             signals = signals,
+            notApplicable = payload.sectorModelReading != null,
         )
     }
 
