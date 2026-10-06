@@ -51,6 +51,22 @@ class TrackTest {
         )
     }
 
+    /**
+     * Spec 2026-10-06, 2.2: since API v1.6 an axis the server cannot compute is null, and the
+     * marker must never be parked at 0 for it, where it reads as the worst score. A null
+     * [positionPct] draws the capsule alone.
+     */
+    @Test
+    fun `a null position draws the capsule with no marker`() {
+        assertTrue("positionPct: Float?," in source)
+        val guard = source.indexOf("if (positionPct != null) {")
+        val marker = source.indexOf("drawRect(color = colors.textPrimary")
+        val capsule = source.indexOf("drawRoundRect(")
+        assertTrue("the marker is drawn only under the null guard", guard in 0 until marker)
+        assertTrue("the capsule is drawn before and outside the guard", capsule in 0 until guard)
+        assertFalse("never a 0 standing in for a missing position", "positionPct ?: 0" in source)
+    }
+
     // ---- The departures-board capsule replaces the hairline ---------------------------------------
 
     @Test

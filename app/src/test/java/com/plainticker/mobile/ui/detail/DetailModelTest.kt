@@ -208,9 +208,10 @@ class DetailModelTest {
         val block = served(analysis = AnalysisState.Served(payload(verdict = pending))).verdictBlock
         assertTrue(block is VerdictBlock.Unavailable)
         assertEquals(R.string.detail_verdict_unavailable_sector, label((block as VerdictBlock.Unavailable).reason))
-        // The reason in plain words, after the web's sector-model copy (JEF is a bank with capital markets).
+        // Since methodology v0b.7 only brokers wait for their model: banks and insurers have theirs.
         val sector = com.plainticker.mobile.ui.ShippedCopy.strings.getValue("detail_verdict_unavailable_sector")
-        assertTrue(sector.startsWith("Banks, capital-markets firms, brokers and insurers need their own sector model, which is in progress."))
+        assertTrue(sector.startsWith("Brokers need their own sector model, which is in progress."))
+        assertFalse("banks and insurers are classified now", "Banks" in sector || "insurers" in sector)
 
         val thin = Verdict(classState = "unavailable", classReason = "insufficient-data")
         val thinBlock = served(analysis = AnalysisState.Served(payload(verdict = thin))).verdictBlock as VerdictBlock.Unavailable
@@ -245,6 +246,120 @@ class DetailModelTest {
         assertNull(served(analysis = AnalysisState.NotServed).verdictBlock)
         assertNull(served(analysis = AnalysisState.Incomplete).verdictBlock)
         assertNull(served(analysis = AnalysisState.Unavailable).verdictBlock)
+    }
+
+    // ---- class_reason, methodology v0b.11 (spec 2026-10-06, 2.1) ---------------------------------
+
+    private fun blockFor(verdict: Verdict): VerdictBlock? =
+        served(analysis = AnalysisState.Served(payload(composite = null, verdict = verdict))).verdictBlock
+
+    private fun unavailableFor(reason: String?): VerdictBlock.Unavailable =
+        blockFor(Verdict(classState = "unavailable", classReason = reason)) as VerdictBlock.Unavailable
+
+    @Test
+    fun `class_reason classified draws the class`() {
+        val verdict = Verdict(code = "partly_passes", labelEn = "Partly passes", tone = Tone.CAUTION, classState = "classified", classReason = "classified")
+        assertEquals("Partly passes", raw((blockFor(verdict) as VerdictBlock.Unlocked).label))
+    }
+
+    @Test
+    fun `class_reason sector-model draws the class the same way, JPMx BACx PGRx`() {
+        val verdict = Verdict(code = "partly_passes", labelEn = "Partly passes", tone = Tone.CAUTION, classState = "classified", classReason = "sector-model")
+        assertEquals("Partly passes", raw((blockFor(verdict) as VerdictBlock.Unlocked).label))
+        // Even a state that disagrees cannot turn a class into "Not classified".
+        val odd = verdict.copy(classState = "unavailable")
+        assertFalse(odd.unavailable)
+        assertEquals("Partly passes", raw((blockFor(odd) as VerdictBlock.Unlocked).label))
+    }
+
+    @Test
+    fun `class_reason sector-model-pending names brokers only`() {
+        assertEquals(R.string.detail_verdict_unavailable_sector, label(unavailableFor("sector-model-pending").reason))
+        assertEquals(
+            "Brokers need their own sector model, which is in progress. The general method's debt and " +
+                "cash-flow checks do not read them fairly. The available financial figures are below.",
+            ShippedCopy.strings.getValue("detail_verdict_unavailable_sector"),
+        )
+    }
+
+    @Test
+    fun `class_reason descriptive-only, GSx JEFx, says descriptive and never not enough data`() {
+        assertEquals(R.string.detail_verdict_unavailable_descriptive, label(unavailableFor("descriptive-only").reason))
+        assertEquals(
+            "Investment banks are shown descriptively: there are too few comparable companies for a class. " +
+                "The figures below are for reference.",
+            ShippedCopy.strings.getValue("detail_verdict_unavailable_descriptive"),
+        )
+    }
+
+    @Test
+    fun `class_reason stale-data says the class is paused`() {
+        assertEquals(R.string.detail_verdict_unavailable_stale, label(unavailableFor("stale-data").reason))
+        assertEquals(
+            "The data behind this analysis is more than 15 days old, so the class is paused until it is refreshed. " +
+                "The figures below are as of the date shown.",
+            ShippedCopy.strings.getValue("detail_verdict_unavailable_stale"),
+        )
+    }
+
+    @Test
+    fun `class_reason sector-model-unavailable says it is on our side`() {
+        assertEquals(R.string.detail_verdict_unavailable_peers, label(unavailableFor("sector-model-unavailable").reason))
+        assertEquals(
+            "The peer group for this company's sector model is temporarily unavailable, so there is no class right now. " +
+                "This is on our side, not a judgement of the company.",
+            ShippedCopy.strings.getValue("detail_verdict_unavailable_peers"),
+        )
+    }
+
+    @Test
+    fun `class_reason model-metric-not-meaningful names the measure`() {
+        assertEquals(R.string.detail_verdict_unavailable_metric, label(unavailableFor("model-metric-not-meaningful").reason))
+        assertEquals(
+            "One of the measures this sector model needs is not meaningful this year (for example, a loss year), " +
+                "so there is no class.",
+            ShippedCopy.strings.getValue("detail_verdict_unavailable_metric"),
+        )
+    }
+
+    @Test
+    fun `class_reason thin-cohort and insufficient-data are unchanged`() {
+        assertEquals(R.string.detail_verdict_unavailable_thin, label(unavailableFor("thin-cohort").reason))
+        assertEquals(R.string.detail_verdict_unavailable_data, label(unavailableFor("insufficient-data").reason))
+        assertEquals(
+            "Not enough data to classify this company against its sector. The available figures are below.",
+            ShippedCopy.strings.getValue("detail_verdict_unavailable_data"),
+        )
+    }
+
+    @Test
+    fun `an unknown class_reason reads neutrally, never as not enough data`() {
+        for (reason in listOf("some-future-reason", "", null)) {
+            assertEquals("reason $reason", R.string.detail_verdict_unavailable_other, label(unavailableFor(reason).reason))
+        }
+        assertEquals(
+            "Not classified right now. The available figures are below.",
+            ShippedCopy.strings.getValue("detail_verdict_unavailable_other"),
+        )
+    }
+
+    @Test
+    fun `every no-class reason the server sends has its own sentence`() {
+        val noClass = listOf(
+            Verdict.REASON_SECTOR_MODEL_PENDING, Verdict.REASON_DESCRIPTIVE_ONLY, Verdict.REASON_STALE_DATA,
+            Verdict.REASON_SECTOR_MODEL_UNAVAILABLE, Verdict.REASON_MODEL_METRIC_NOT_MEANINGFUL,
+            Verdict.REASON_THIN_COHORT, Verdict.REASON_INSUFFICIENT_DATA,
+        )
+        val ids = noClass.map(::unavailableReason)
+        assertEquals("one sentence per reason", noClass.size, ids.toSet().size)
+        assertFalse("none falls through to the neutral line", R.string.detail_verdict_unavailable_other in ids)
+    }
+
+    @Test
+    fun `a locked verdict with no class_reason stays locked, as before`() {
+        // What the server sends an anonymous reader without Pro: class_state locked, class_reason null.
+        val locked = Verdict(locked = true, classState = "locked", classReason = null)
+        assertEquals(VerdictBlock.Locked, blockFor(locked))
     }
 
     // ---- The price row -----------------------------------------------------------------------
@@ -691,16 +806,51 @@ class DetailModelTest {
         )
         assertEquals(listOf("8/9", "51", "0.79"), state.tracks.map { it.value })
         assertEquals(listOf("strong", "moderate", "near 52-week high"), state.tracks.map { it.state })
-        assertEquals(88.89f, state.tracks[0].positionPct, 0.01f)
+        assertEquals(88.89f, state.tracks[0].positionPct!!, 0.01f)
     }
 
     @Test
-    fun `an axis with no value is not available for this filer, and draws no marker`() {
+    fun `an axis with no value is not available, and draws no marker`() {
         val foreign = served(analysis = AnalysisState.Served(payload(axes = Axes(quality = Axis(scale = "0-9")))))
         val rows = foreign.tracks
         assertEquals(3, rows.size)
         assertTrue("no value means no Track at all", rows.all { it.value == null })
-        assertEquals(0f, rows[0].positionPct, 0f)
+        assertTrue("no marker, never one parked at 0", rows.all { it.positionPct == null })
+        assertEquals("Not available", ShippedCopy.strings.getValue("detail_axis_not_available"))
+    }
+
+    /** API v1.6 (methodology v0b.8): an axis the server cannot compute is null, not 0 or 0.5. */
+    @Test
+    fun `Axis value null draws no marker, even with a position beside it`() {
+        val axes = Axes(
+            quality = Axis(value = 8.0, scale = "0-9", position = 0.8889, state = "strong", labelEn = "Strong"),
+            valuation = Axis(value = null, scale = "0-100", position = 0.0, state = null),
+            momentum = Axis(value = null, scale = "0-1", position = null),
+        )
+        val rows = served(analysis = AnalysisState.Served(payload(axes = axes))).tracks
+        assertEquals(88.89f, rows[0].positionPct!!, 0.01f)
+        assertNull(rows[1].value)
+        assertNull("a 0 position beside no value is no data, not the worst score", rows[1].positionPct)
+        assertNull(rows[2].positionPct)
+        assertTrue(rows.none { it.locked })
+        assertNull(markerPct(Axis(value = null)))
+        assertNull(markerPct(null))
+        assertNull("a value with no position has nothing to place either", markerPct(Axis(value = 51.0, scale = "0-100")))
+        assertNull(markerPct(Axis(value = Double.NaN, position = 0.5)))
+        assertEquals(51f, markerPct(Axis(value = 51.0, position = 0.51))!!, 0.01f)
+    }
+
+    @Test
+    fun `a locked axis is unchanged, locked and with no marker`() {
+        val axes = Axes(
+            quality = Axis(value = 8.0, scale = "0-9", position = 0.8889, state = "strong"),
+            valuation = Axis(scale = "0-100", locked = true),
+            momentum = Axis(scale = "0-1", locked = true),
+        )
+        val rows = served(analysis = AnalysisState.Served(payload(axes = axes))).tracks
+        assertEquals(listOf(false, true, true), rows.map { it.locked })
+        assertNull(rows[1].positionPct)
+        assertNull(rows[2].positionPct)
     }
 
     @Test

@@ -1083,9 +1083,10 @@ private fun NoticeLine(text: Copy, hint: Copy? = null) {
 }
 
 /**
- * An axis the filer does not publish. No marker is drawn: a marker at zero would say the company
- * scored nothing, where the payload only said the SEC filing carries nothing (a foreign 20-F
- * filer, a young one).
+ * An axis with no value: one the server cannot compute (API v1.6: no sector valuation percentile,
+ * no 52-week range) or a field the filer does not publish. It says "Not available" and no marker
+ * is drawn: a marker at zero would say the company scored the worst, where the payload only said
+ * there is no figure.
  */
 @Composable
 private fun AbsentRow(label: String) {
@@ -1099,7 +1100,7 @@ private fun AbsentRow(label: String) {
     ) {
         Text(text = label, style = AmberType.body, color = colors.textSecondary, modifier = Modifier.weight(1f))
         Text(
-            text = stringResource(R.string.detail_not_available_filer),
+            text = stringResource(R.string.detail_axis_not_available),
             style = AmberType.context,
             color = colors.textTertiary(AmberSurface.GROUND),
         )

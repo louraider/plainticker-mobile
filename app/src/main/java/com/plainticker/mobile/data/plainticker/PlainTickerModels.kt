@@ -260,18 +260,49 @@ data class Verdict(
      */
     @SerialName("class_state") val classState: String? = null,
     /**
-     * Why a class is unavailable: `sector-model-pending` (banks, brokers, insurers), `thin-cohort`
-     * (too few peers or ranked metrics to compare against, live on ABBV, V and NKE on 28 Sep 2026)
-     * or `insufficient-data`.
+     * Why there is or is not a class, the web's `DecisionReason` (lib/methodology/decision.ts,
+     * methodology v0b.11): [REASON_CLASSIFIED] and [REASON_SECTOR_MODEL] carry a class; the rest
+     * name why there is none. Null on a locked verdict and on a server that predates the field.
+     * Kept a plain string so a reason the server adds later decodes and reads neutrally.
      */
     @SerialName("class_reason") val classReason: String? = null,
 ) {
-    /** The method gives no class for this company; every caller sees it, there is nothing to unlock. */
-    val unavailable: Boolean get() = classState == CLASS_STATE_UNAVAILABLE
+    /**
+     * The method gives no class for this company; every caller sees it, there is nothing to unlock.
+     * A class_reason that names a class ([REASON_CLASSIFIED], [REASON_SECTOR_MODEL]) wins over the
+     * state, so a classified company never reads as "Not classified".
+     */
+    val unavailable: Boolean
+        get() = classState == CLASS_STATE_UNAVAILABLE && classReason != REASON_CLASSIFIED && classReason != REASON_SECTOR_MODEL
 
     companion object {
         const val CLASS_STATE_UNAVAILABLE = "unavailable"
+
+        /** A class, by the general method. */
+        const val REASON_CLASSIFIED = "classified"
+
+        /** A class, by the company's own sector model (deposit banks JPM, BAC; P&C insurer PGR). */
+        const val REASON_SECTOR_MODEL = "sector-model"
+
+        /** No class: brokers (SCHW, HOOD), whose sector model is still in progress. */
         const val REASON_SECTOR_MODEL_PENDING = "sector-model-pending"
+
+        /** No class by design: investment banks (GS, JEF), too few comparable companies. */
+        const val REASON_DESCRIPTIVE_ONLY = "descriptive-only"
+
+        /** No class: the analysis is more than 15 days old today (v0b.8). */
+        const val REASON_STALE_DATA = "stale-data"
+
+        /** No class: the sector model's peer group is missing or out of date, our outage. */
+        const val REASON_SECTOR_MODEL_UNAVAILABLE = "sector-model-unavailable"
+
+        /** No class: a metric the sector model needs is not meaningful this year (a loss year). */
+        const val REASON_MODEL_METRIC_NOT_MEANINGFUL = "model-metric-not-meaningful"
+
+        /** No class: too few peers or ranked metrics to compare against. */
         const val REASON_THIN_COHORT = "thin-cohort"
+
+        /** No class: the company lacks an input the rule needs. */
+        const val REASON_INSUFFICIENT_DATA = "insufficient-data"
     }
 }

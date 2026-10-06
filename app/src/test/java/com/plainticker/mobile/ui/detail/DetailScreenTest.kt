@@ -235,7 +235,7 @@ class DetailScreenTest {
         listOf(
             "action_watch", "action_watching", "detail_heading_backing",
             "detail_heading_sector", "detail_heading_fscore", "detail_heading_method",
-            "detail_not_available_filer", "value_missing",
+            "detail_not_available_filer", "detail_axis_not_available", "value_missing",
         ).forEach { name ->
             assertTrue("$name is not declared in strings.xml", """name="$name"""" in stringsXml)
             assertTrue("DetailScreen.kt does not read R.string.$name", "R.string.$name" in scan.code)
