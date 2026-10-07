@@ -1,0 +1,22 @@
+# gitleaks configuration: every default rule, plus one narrow allowlist.
+#
+# app/src/test/resources/jupiter/ holds answers recorded from Jupiter's public, keyless Swap API
+# (lite-api.jup.ag). Every long value in them is public on-chain data: mint and pool (ammKey)
+# addresses, the taker's wallet address, transaction signatures and the unsigned transaction
+# Jupiter returned. None of it is a credential, and base58 pool addresses next to the word "key"
+# are what trip the generic-api-key rule there. Only that one fixture folder is allowlisted; every
+# other path in the tree, test code included, is still scanned with every default rule.
+#
+# The two fake test tokens that once lived in test code are ignored by fingerprint in
+# .gitleaksignore, so the allowlist below does not have to cover any source file.
+
+title = "plainticker-mobile"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Recorded Jupiter API answers: public on-chain addresses and signatures, not secrets"
+paths = [
+    '''^app/src/test/resources/jupiter/[^/]+\.json$''',
+]

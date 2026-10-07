@@ -29,9 +29,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BRAND = HERE.parent
 sys.path.insert(0, str(BRAND / "attempt-three"))
+sys.path.append(str(BRAND))  # for xml_ns
 
 import marks3  # noqa: E402
 from marks3 import ACCENT, CANVAS, GROUND, INK, INVERTED, Rect  # noqa: E402
+from xml_ns import SVG_NS_URI  # noqa: E402
 
 SVG_DIR = HERE / "svg"
 ICON_DIR = HERE / "icon"
@@ -128,9 +130,10 @@ class Mark(marks3.Concept):
 
     def _doc(self, body, width, height, view, comment):
         return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}" width="{w}" '
+            '<svg xmlns="{svg_ns}" viewBox="{view}" width="{w}" '
             'height="{h}">{nl}{comment}{nl}{body}{nl}</svg>{nl}'
-        ).format(view=view, w=marks3.num(width), h=marks3.num(height), nl=NL,
+        ).format(svg_ns=SVG_NS_URI,
+                 view=view, w=marks3.num(width), h=marks3.num(height), nl=NL,
                  comment=comment, body=body)
 
     def note(self, layer):
@@ -209,12 +212,13 @@ class Mark(marks3.Concept):
         entries = ["      " + plate.svg("#ffffff")]
         entries += ["      " + s.svg("#000000" if s.cut else "#ffffff") for s in shapes]
         return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}" width="{w}" '
+            '<svg xmlns="{svg_ns}" viewBox="{view}" width="{w}" '
             'height="{h}">{nl}{note}{nl}'
             '  <mask id="{key}" maskUnits="userSpaceOnUse">{nl}{body}{nl}  </mask>{nl}'
             '  <g mask="url(#{key})">{nl}    {plate}{nl}  </g>{nl}'
             '</svg>{nl}'
-        ).format(view=self.crop_view(pad), w=marks3.num(width), h=marks3.num(height), nl=NL,
+        ).format(svg_ns=SVG_NS_URI,
+                 view=self.crop_view(pad), w=marks3.num(width), h=marks3.num(height), nl=NL,
                  note=self.note("one colour, currentColor, holes are real holes"),
                  key=self.key + "-mono", body=NL.join(entries),
                  plate=plate.svg("currentColor"))
@@ -233,13 +237,14 @@ class Mark(marks3.Concept):
                 continue
             entries.append("      " + shape.svg("#000000" if shape.cut else "#ffffff"))
         return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" '
+            '<svg xmlns="{svg_ns}" viewBox="0 0 108 108" width="108" '
             'height="108">{nl}{note}{nl}'
             '  <mask id="{key}" maskUnits="userSpaceOnUse" x="0" y="0" width="108" height="108">'
             '{nl}{body}{nl}  </mask>{nl}'
             '  <rect x="0" y="0" width="108" height="108" fill="#FFFFFF" mask="url(#{key})"/>{nl}'
             '</svg>{nl}'
-        ).format(nl=NL, note=self.note("flattened to one colour, themed icon and notification"),
+        ).format(svg_ns=SVG_NS_URI,
+                 nl=NL, note=self.note("flattened to one colour, themed icon and notification"),
                  key=self.key, body=NL.join(entries))
 
     def write(self):

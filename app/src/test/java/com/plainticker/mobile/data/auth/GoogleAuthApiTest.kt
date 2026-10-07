@@ -25,7 +25,8 @@ import org.junit.Test
  */
 class GoogleAuthApiTest {
 
-    private val token = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjMifQ.SIGNATURE-must-never-leak"
+    /** Opaque to the client: it is posted as-is and never parsed, so a plain fake is enough. */
+    private val token = "test-id-token"
 
     private val ok = """
         {"user":{"email":"ann@example.com","name":"Ann"},"linkedWallets":["4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T"],

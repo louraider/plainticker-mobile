@@ -30,18 +30,26 @@ same bundled Bricolage Grotesque the app's TopBar wordmark and the web's TopNav 
 same way Type.kt's own `bricolage()` does.
 
 Run:   PYTHONIOENCODING=utf-8 python design/brand/render_icons.py
-Needs: python -m pip install pillow numpy
+Needs: python -m pip install pillow numpy defusedxml
 Writes: design/brand/candidates/*.xml, design/brand/icon-candidates.png,
         design/brand/store/icon-512.png and design/brand/store/banner-1024x500.png
 """
 import re
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
-import marks as M
+try:
+    import defusedxml.ElementTree as ET  # refuses external entities and entity expansion
+except ImportError as missing:
+    raise ImportError(
+        "design/brand/render_icons.py parses XML with defusedxml, which is not installed. "
+        "Install it with: python -m pip install defusedxml"
+    ) from missing
+
+import marks as M  # noqa: E402
+from xml_ns import ANDROID_NS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -57,7 +65,7 @@ COLORS = ROOT / "app/src/main/res/values/colors.xml"
 STORE_ICON = STORE / "icon-512.png"
 STORE_BANNER = STORE / "banner-1024x500.png"
 
-NS = "{http://schemas.android.com/apk/res/android}"
+NS = ANDROID_NS
 SS = 4              # supersampling factor for the rasterizer
 DENSITY = 3         # the sheet is drawn at 3x, so 48dp is the 144px the Seeker shows
 

@@ -27,7 +27,7 @@ the ones the marks are made of and no more: rect, circle, rectilinear path, and 
 for negative space. Anything else raises.
 
 Run:   PYTHONIOENCODING=utf-8 python design/brand/attempt-three/composite.py
-Needs: python -m pip install pillow numpy
+Needs: python -m pip install pillow numpy defusedxml
 Reads: design/brand/attempt-three/drawer.png, design/brand/attempt-three/svg/*.svg
 Writes: design/brand/attempt-three/render/*.png and design/brand/attempt-three/gallery.html
 """
@@ -35,13 +35,24 @@ import base64
 import io
 import math
 import re
-import xml.etree.ElementTree as ET
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
+try:
+    import defusedxml.ElementTree as ET  # refuses external entities and entity expansion
+except ImportError as missing:
+    raise ImportError(
+        "design/brand/attempt-three/composite.py parses XML with defusedxml, which is not installed. "
+        "Install it with: python -m pip install defusedxml"
+    ) from missing
+
 HERE = Path(__file__).resolve().parent
+sys.path.append(str(HERE.parent))  # design/brand, for xml_ns
+
+from xml_ns import SVG_NS  # noqa: E402
 SVG_DIR = HERE / "svg"
 RENDER = HERE / "render"
 DRAWER = HERE / "drawer.png"
@@ -60,7 +71,6 @@ PLATE = (24, 27, 32)         # the gallery's own plate behind a loose tile
 
 # -- reading the SVG ----------------------------------------------------------------------------
 
-SVG_NS = "{http://www.w3.org/2000/svg}"
 PATH_TOKEN = re.compile(r"[MHVLZ]|-?(?:\d*\.\d+|\d+)")
 
 

@@ -41,11 +41,13 @@ HERE = Path(__file__).resolve().parent
 BRAND = HERE.parent
 sys.path.insert(0, str(BRAND / "attempt-three"))
 sys.path.insert(0, str(BRAND / "logo"))
+sys.path.append(str(BRAND))  # for xml_ns
 
 import marks3  # noqa: E402
 import marks_logo  # noqa: E402
 from marks3 import ACCENT, CANVAS, GROUND, INK, INVERTED, Rect  # noqa: E402
 from marks_logo import INK_LIGHT, PAPER, field  # noqa: E402
+from xml_ns import SVG_NS_URI  # noqa: E402
 
 ICON_DIR = HERE / "icon"
 NL = chr(10)
@@ -148,13 +150,14 @@ class Corners(marks_logo.Mark):
         keep = self.shapes if self.treatment == INVERTED else self.marks()
         entries = ["      " + s.svg("#000000" if s.cut else "#ffffff") for s in keep]
         return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" '
+            '<svg xmlns="{svg_ns}" viewBox="0 0 108 108" width="108" '
             'height="108">{nl}{note}{nl}'
             '  <mask id="{key}" maskUnits="userSpaceOnUse" x="0" y="0" width="108" height="108">'
             '{nl}{body}{nl}  </mask>{nl}'
             '  <rect x="0" y="0" width="108" height="108" fill="#FFFFFF" mask="url(#{key})"/>{nl}'
             '</svg>{nl}'
-        ).format(nl=NL, note=self.note("flattened to one colour, themed icon and notification"),
+        ).format(svg_ns=SVG_NS_URI,
+                 nl=NL, note=self.note("flattened to one colour, themed icon and notification"),
                  key=self.key, body=NL.join(entries))
 
     def mask_clearance(self, exponent):

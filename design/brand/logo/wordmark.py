@@ -35,6 +35,7 @@ BRAND = HERE.parent
 REPO = BRAND.parent.parent
 sys.path.insert(0, str(BRAND / "attempt-three"))
 sys.path.insert(0, str(HERE))
+sys.path.append(str(BRAND))  # for xml_ns
 
 from fontTools.pens.svgPathPen import SVGPathPen        # noqa: E402
 from fontTools.pens.transformPen import TransformPen    # noqa: E402
@@ -43,6 +44,7 @@ from fontTools.ttLib import TTFont                      # noqa: E402
 import marks_logo                                       # noqa: E402
 from marks3 import ACCENT, CANVAS, INK, INVERTED, num    # noqa: E402
 from marks_logo import INK_LIGHT, PAPER                  # noqa: E402
+from xml_ns import SVG_NS_URI                            # noqa: E402
 
 FONT_DIR = REPO / "app" / "src" / "main" / "res" / "font"
 SVG_DIR = HERE / "svg"
@@ -165,9 +167,10 @@ def chosen_setting():
 
 def doc(view, width, height, body, note):
     return (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}" width="{w}" height="{h}">'
+        '<svg xmlns="{svg_ns}" viewBox="{view}" width="{w}" height="{h}">'
         '{nl}{note}{nl}{body}{nl}</svg>{nl}'
-    ).format(view=view, w=num(round(width, 2)), h=num(round(height, 2)), nl=NL, note=note,
+    ).format(svg_ns=SVG_NS_URI,
+             view=view, w=num(round(width, 2)), h=num(round(height, 2)), nl=NL, note=note,
              body=body)
 
 

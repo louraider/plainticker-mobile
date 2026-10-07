@@ -1,0 +1,10 @@
+# gitleaks findings checked by hand and confirmed not to be secrets, by fingerprint
+# (commit:file:rule:line), so a scan of the full history stays clean.
+#
+# Both are fake Google ID tokens written for unit tests at 84c28e9 and replaced with plainly fake,
+# low-entropy values since (GoogleAuthApiTest: "test-id-token"; AccountViewModelTest: the JWT is
+# built at run time around "fake-jwt-signature"). The first decoded to {"alg":"RS256"} and
+# {"sub":"123"} with a made-up signature; the second was the literal "SECRET-SIGNATURE-7f3a9c".
+# Neither was ever issued by Google or accepted by any server.
+84c28e92e4eb89ecd838ea94c6d77ed6bd0f9d7e:app/src/test/java/com/plainticker/mobile/data/auth/GoogleAuthApiTest.kt:generic-api-key:28
+84c28e92e4eb89ecd838ea94c6d77ed6bd0f9d7e:app/src/test/java/com/plainticker/mobile/ui/you/AccountViewModelTest.kt:generic-api-key:364
