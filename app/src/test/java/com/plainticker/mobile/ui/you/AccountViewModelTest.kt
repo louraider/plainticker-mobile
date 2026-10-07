@@ -77,6 +77,9 @@ class AccountViewModelTest {
     private val nonce = "fixed-test-nonce-0123456789abcdef"
     private val deviceCode = "K7M9QRSTXYK7M9QRSTXYK7M9QR"
 
+    /** The JWT's third part: never checked on the phone, only looked for in what the app logs. */
+    private val fakeSignature = "fake-jwt-signature"
+
     /** A JWT-shaped token: a readable payload carrying [nonce], and a signature that must never leak. */
     private fun jwt(nonce: String?): String {
         val enc = Base64.getUrlEncoder().withoutPadding()
@@ -86,7 +89,7 @@ class AccountViewModelTest {
             if (nonce != null) append(""","nonce":"$nonce"""")
             append("}")
         }
-        return "$header.${enc.encodeToString(claims.toByteArray())}.SECRET-SIGNATURE-7f3a9c"
+        return "$header.${enc.encodeToString(claims.toByteArray())}.$fakeSignature"
     }
 
     private val token = jwt(nonce)
@@ -1310,7 +1313,7 @@ class AccountViewModelTest {
         machine(log = log).also { advanceUntilIdle(); it.signIn { throw IllegalStateException(token) }; advanceUntilIdle() }
 
         assertTrue("the recorder saw the failure paths", log.lines.size >= serverCases.size)
-        val secrets = listOf(token, "SECRET-SIGNATURE-7f3a9c", deviceCode)
+        val secrets = listOf(token, fakeSignature, deviceCode)
         log.lines.forEach { line -> secrets.forEach { assertFalse("log line leaks a secret: $line", it in line) } }
         stores.flatMap { it.saved }.forEach { saved -> assertFalse(token in saved.toString()) }
         states.forEach { state -> assertFalse(token in state.toString()) }

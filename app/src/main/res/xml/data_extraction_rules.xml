@@ -3,6 +3,11 @@
    Cloud backup and device-to-device transfer on Android 12 and higher. The same exclusions as
    backup_rules.xml, which explains each one; BackupRulesTest pins that both lists match and that
    both sections here carry them.
+
+   The manifest sets android:allowBackup="false" (security audit, 2026-10-07), so there is no cloud
+   backup and the cloud-backup section is inert, kept so switching backup back on can never carry a
+   credential file. The device-transfer section is live: Android 12 and higher still run a
+   device-to-device transfer when allowBackup is false, and this is what keeps those files out of it.
 -->
 <data-extraction-rules>
     <cloud-backup>

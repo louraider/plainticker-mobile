@@ -17,6 +17,11 @@ import org.w3c.dom.Element
  * in X-PT-Code; the signed-in account's DataStore; the saved wallet session. The expected names
  * come from the constants the app writes those files under, so renaming one without its rule
  * fails here.
+ *
+ * Since the security audit of 2026-10-07 the app makes no backup at all (allowBackup is false).
+ * The rules stay: on Android 12 and higher a device-to-device transfer still runs with backup off,
+ * and the device-transfer section is what keeps the credential files out of it; the rest is the
+ * second line should backup ever be switched back on.
  */
 class BackupRulesTest {
 
@@ -43,6 +48,12 @@ class BackupRulesTest {
     }
 
     @Test
+    fun `the app opts out of backup`() {
+        val application = parse("AndroidManifest.xml").getElementsByTagName("application").item(0) as Element
+        assertEquals("false", application.getAttributeNS(androidNs, "allowBackup"))
+    }
+
+    @Test
     fun `the manifest points at both rule files`() {
         val application = parse("AndroidManifest.xml").getElementsByTagName("application").item(0) as Element
         assertEquals("@xml/backup_rules", application.getAttributeNS(androidNs, "fullBackupContent"))
@@ -50,7 +61,7 @@ class BackupRulesTest {
     }
 
     @Test
-    fun `Android 11 and lower back up everything but the credential files`() {
+    fun `Android 11 and lower would back up everything but the credential files, were backup on`() {
         val root = parse("res/xml/backup_rules.xml").documentElement
         assertEquals("full-backup-content", root.tagName)
         assertEquals(expected, excludes(root))

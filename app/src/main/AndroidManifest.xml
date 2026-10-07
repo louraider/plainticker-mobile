@@ -21,9 +21,16 @@
          release does not ask for it. -->
     <uses-permission android:name="android.permission.REORDER_TASKS" tools:node="remove" />
 
+    <!-- No cloud backup (security audit, 2026-10-07): allowBackup is false, so nothing the app
+         keeps leaves the phone in an Auto Backup, and Android 11 and lower also refuse device
+         transfer and adb backup. Android 12 and higher still run device-to-device transfer with
+         allowBackup false, which is what data_extraction_rules.xml's device-transfer section keeps
+         the credential files out of. backup_rules.xml and the cloud-backup section are inert while
+         this stays false; they are kept so turning backup back on can never carry a credential
+         file. BackupRulesTest pins all of it. -->
     <application
         android:name=".PlainTickerApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -38,7 +45,15 @@
              adjustResize (device QA of 1.3.17): the default panned the whole window up behind the
              keyboard, which took the status-bar scrim off screen, ran text under the clock and hid
              "No xStock matches" behind the keys. Compose now lays out above the keyboard itself
-             (HomeScreen's imePadding). -->
+             (HomeScreen's imePadding).
+             Exported because it is the LAUNCHER activity, which Android requires to be startable
+             by the launcher; it holds no permission and does nothing on its own when another app
+             starts it. It reads exactly two extras, both validated (MainActivity.tabFrom and
+             tickerFrom): EXTRA_TICKER is used only if it matches [A-Za-z0-9.]{1,12} and only opens
+             that ticker's detail screen, and EXTRA_TAB only switches which tab is showing (an
+             unknown number falls back to Today). Neither does anything before onboarding. No
+             extra can start a swap, a vote, a payment or a wallet request: each of those still
+             needs the person's tap and the wallet's own approval. -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"

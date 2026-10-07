@@ -4,6 +4,10 @@
    data_extraction_rules.xml instead; the two lists must stay the same, and BackupRulesTest pins
    that they do.
 
+   Inert since the security audit of 2026-10-07: the manifest sets android:allowBackup="false", so
+   Android 11 and lower make no backup and no device transfer of this app at all. The list is kept
+   as the second line, so switching backup back on can never carry a credential file.
+
    Excluded, because each holds something that works as a credential on its own:
    - plainticker.xml: the shared preferences file DevicePassStore keeps this device's Pro code in,
      sent raw in X-PT-Code. A backup restored elsewhere would be a second device holding the same
@@ -26,8 +30,10 @@
      Keystore key that never leaves this phone, so a copy could not be opened anyway; it is
      excluded so no copy exists.
 
-   Everything else is backed up: the swap, vote and pass receipts are the app's own record of
-   public on-chain transactions, and nothing in them can act for anyone.
+   Nothing else is excluded here: the swap, vote and pass receipts are the app's own record of
+   public on-chain transactions, and nothing in them can act for anyone. With allowBackup false
+   they are not backed up either; on Android 12 and higher they still move to a new phone in a
+   device-to-device transfer, where the credential files above do not.
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="plainticker.xml" />

@@ -253,6 +253,9 @@ contract here for audit.
   pending replacement during a rekey, are encrypted with AES-GCM under an Android Keystore key of
   their own, in preferences that backups exclude. An older plain copy is removed only after the
   sealed copy has been read back and opened.
+- **No cloud backup.** `android:allowBackup` is false, so nothing the app keeps is copied into an
+  Auto Backup. On Android 12 and higher a device-to-device transfer still runs, and the device code's
+  preferences, the account and the wallet session are excluded from it by name (`BackupRulesTest`).
 - **Money moves only in a release build.** Jupiter `/execute` sits behind `BuildConfig.SUBMIT_SWAPS`:
   false in debug, true in release. The unit tests run against debug.
 - **Repository hygiene.** `scripts/redaction-guard.sh` hashes every base58 candidate in the tree and

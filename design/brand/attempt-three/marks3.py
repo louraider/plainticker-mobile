@@ -63,9 +63,14 @@ Run:  PYTHONIOENCODING=utf-8 python design/brand/attempt-three/marks3.py
 Writes: design/brand/attempt-three/svg/NN-key.svg and NN-key-flat.svg
 """
 import math
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.append(str(HERE.parent))  # design/brand, for xml_ns
+
+from xml_ns import SVG_NS_URI  # noqa: E402
+
 SVG_DIR = HERE / "svg"
 
 VIEWPORT = 108.0
@@ -297,9 +302,10 @@ class Concept:
     def colour_svg(self):
         body = NL.join("  " + s.svg() for s in self.shapes)
         return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" '
+            '<svg xmlns="{svg_ns}" viewBox="0 0 108 108" width="108" '
             'height="108">{nl}{header}{nl}{body}{nl}</svg>{nl}'
-        ).format(nl=NL, header=self.header("colour, the tile as a launcher draws it"), body=body)
+        ).format(svg_ns=SVG_NS_URI,
+                 nl=NL, header=self.header("colour, the tile as a launcher draws it"), body=body)
 
     def flat_svg(self):
         """
@@ -315,13 +321,14 @@ class Concept:
                 continue                      # the Canvas field is not part of the monochrome layer
             entries.append("      " + shape.svg("#000000" if shape.cut else "#ffffff"))
         return (
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" '
+            '<svg xmlns="{svg_ns}" viewBox="0 0 108 108" width="108" '
             'height="108">{nl}{header}{nl}'
             '  <mask id="{key}" maskUnits="userSpaceOnUse" x="0" y="0" width="108" height="108">'
             '{nl}{body}{nl}  </mask>{nl}'
             '  <rect x="0" y="0" width="108" height="108" fill="{flat}" mask="url(#{key})"/>{nl}'
             '</svg>{nl}'
-        ).format(nl=NL, header=self.header("flattened to one colour, themed icon and notification"),
+        ).format(svg_ns=SVG_NS_URI,
+                 nl=NL, header=self.header("flattened to one colour, themed icon and notification"),
                  key=self.key, body=NL.join(entries), flat=FLAT)
 
     def write(self):
