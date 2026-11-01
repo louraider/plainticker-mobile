@@ -18,9 +18,11 @@ are not available to US persons; the app asks for that self-certification on its
 
 ## Try it in two minutes
 
-1. **Install the signed APK:**
+1. **Install from the Solana dApp Store**, live since 7 October 2026 with 1.3.30: on a Seeker,
+   search PlainTicker in the store or open `solanadappstore://details?id=com.plainticker.mobile`.
+   **Or install the signed APK:**
    `https://github.com/louraider/plainticker-mobile/releases/latest/download/plainticker.apk`.
-   The link is stable and always serves the latest release (1.3.27 today), built and signed by CI.
+   The link is stable and always serves the latest GitHub release, built and signed by CI.
    The signing certificate's SHA-256 is
    `66ce92eafa2f819b9a2f6e4eeddc33ac51be46644c295a02750231b1229a49af`, the one
    `https://www.plainticker.com/.well-known/assetlinks.json` names, so the Seed Vault Wallet shows
@@ -333,9 +335,6 @@ Measured on 28 September 2026 unless the row says otherwise.
   the available figures and say why.
 - **The vote is decided by the largest stake.** The app says so where the vote is cast. A
   one-Seeker-one-voice weight is on the roadmap.
-- **Not on the Solana dApp Store yet.** The publisher account and KYC are done, the signing chain
-  is live, and the listing copy is written (`docs/dapp-store-publishing.md`). The first release,
-  built from 1.3.27, has not been submitted for review yet (2 October).
 - **Portfolio shows no profit and loss**, because the chain carries no cost basis.
 - **Some figures read "not available for this filer"** for young or loss-making companies, rather
   than being estimated.
