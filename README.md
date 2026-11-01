@@ -6,6 +6,8 @@ reserves xStocks reports, and how the company's SEC filings place it against its
 signed in the Seed Vault through Mobile Wallet Adapter. Staked SKR decides which stock gets
 analysed next.
 
+On the web: [plainticker.com](https://plainticker.com) · [the app](https://plainticker.com/en/seeker) · [how the Piotroski F-Score works](https://plainticker.com/en/learn/piotroski-f-score) · [methodology](https://plainticker.com/en/methodology) · [API](https://plainticker.com/api)
+
 Kotlin and Jetpack Compose, package `com.plainticker.mobile`, built from 10 September 2026 for
 CLOCK IN, the Solana Mobile hackathon. This README describes **1.3.27**, released 29 September,
 on main and the latest published release.
